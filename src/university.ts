@@ -166,20 +166,30 @@ export class University {
   // ================= scene-building helpers =================
   private label3d(scene: THREE.Scene, text: string, color: string, pos: THREE.Vector3, scale = 3.6): void {
     const c = document.createElement('canvas');
-    c.width = 512; c.height = 128;
     const ctx = c.getContext('2d')!;
     ctx.font = 'bold 52px Trebuchet MS';
-    ctx.textAlign = 'center';
-    ctx.lineWidth = 10; ctx.strokeStyle = '#0a0c18';
-    ctx.strokeText(text, 256, 80);
-    ctx.fillStyle = color;
-    ctx.fillText(text, 256, 80);
+    const metrics = ctx.measureText(text);
+    const textWidth = Math.ceil(metrics.width);
+
+    c.width = Math.max(512, textWidth + 64);
+    c.height = 128;
+
+    const ctx2 = c.getContext('2d')!;
+    ctx2.font = 'bold 52px Trebuchet MS';
+    ctx2.textAlign = 'center';
+    ctx2.lineWidth = 10; ctx2.strokeStyle = '#0a0c18';
+    ctx2.strokeText(text, c.width / 2, 80);
+    ctx2.fillStyle = color;
+    ctx2.fillText(text, c.width / 2, 80);
+
     const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
+
     // depthTest off: signage must never be sliced by walls, props or heads
     const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
     sp.renderOrder = 40;
-    sp.scale.set(scale, scale / 4, 1);
+    const aspect = c.width / c.height;
+    sp.scale.set(scale * (aspect / 4), scale / 4, 1);
     sp.position.copy(pos);
     scene.add(sp);
   }
@@ -263,7 +273,7 @@ export class University {
     if (seated) setVoxelSeated(g, true, seatY);
     r.scene.add(g);
     r.npcs.push(g);
-    if (!seated) r.colliders.push({ pos: new THREE.Vector3(x, 0, z), r: 0.55 });
+    r.colliders.push({ pos: new THREE.Vector3(x, 0, z), r: 0.55 });
     if (talk) r.interactables.push({ pos: new THREE.Vector3(x, 0, z), radius: 1.5, label: `Press <b>E</b> — ${talk.label}`, handler: talk.handler });
     return g;
   }
@@ -1590,7 +1600,9 @@ export class University {
       const nz = this.tamer.position.z + (dz / len) * speed * dt;
       const inBounds = (x: number, z: number) => Math.abs(x) <= r.w / 2 - 0.7 && Math.abs(z) <= r.d / 2 - 0.7;
       const free = (x: number, z: number) =>
-        inBounds(x, z) && !r.colliders.some(c => c.r > 0 && Math.hypot(x - c.pos.x, z - c.pos.z) < c.r);
+        inBounds(x, z) &&
+        !r.colliders.some(c => c.r > 0 && Math.hypot(x - c.pos.x, z - c.pos.z) < c.r) &&
+        (this.current !== 'lobby' || !this.wanderers.some(w => Math.hypot(x - w.g.position.x, z - w.g.position.z) < 0.8));
       if (free(nx, nz)) this.tamer.position.set(nx, 0, nz);
       else if (free(nx, this.tamer.position.z)) this.tamer.position.x = nx;
       else if (free(this.tamer.position.x, nz)) this.tamer.position.z = nz;
@@ -1660,19 +1672,17 @@ export class University {
     // ---- labeled room minimap ----
     const stripLabel = (label: string) =>
       label.replace(/Press <b>E<\/b>\s*—\s*/i, '').replace(/<[^>]+>/g, '').slice(0, 22);
-    const mapMarkers: MapMarker[] = r.interactables.map(i => {
-      const lbl = stripLabel(i.label);
-      const door = /door|leave|exit|haven city|grand doors|return/i.test(lbl);
-      return {
-        x: i.pos.x, z: i.pos.z, label: lbl,
-        color: door ? '#e8d9a8' : '#5ab8e8',
-        kind: door ? 'door' as const : 'poi' as const,
-      };
-    });
-    for (const npc of r.npcs) mapMarkers.push({ x: npc.position.x, z: npc.position.z, color: '#aab0c8', kind: 'npc' });
-    if (this.current === 'lobby') {
-      for (const w of this.wanderers) mapMarkers.push({ x: w.g.position.x, z: w.g.position.z, color: '#d8d8e8', kind: 'npc' });
-    }
+    const mapMarkers: MapMarker[] = r.interactables
+      .map(i => {
+        const lbl = stripLabel(i.label);
+        const door = /door|leave|exit|haven city|grand doors|return/i.test(lbl);
+        return {
+          x: i.pos.x, z: i.pos.z, label: lbl,
+          color: door ? '#e8d9a8' : '#5ab8e8',
+          kind: door ? 'door' as const : 'poi' as const,
+        };
+      })
+      .filter(m => m.kind === 'door');
     drawAreaMap(document.getElementById('minimap') as HTMLCanvasElement, {
       shape: 'rect', w: r.w, d: r.d,
       markers: mapMarkers,

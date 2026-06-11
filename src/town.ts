@@ -141,21 +141,31 @@ export class Town {
   private get interactables(): Interactable[] { return this.mode === 'street' ? this.streetInteractables : this.intInteractables; }
   private get colliders() { return this.mode === 'street' ? this.streetColliders : this.intColliders; }
 
-  // ================= street scene =================
   private label3d(scene: THREE.Scene, text: string, color: string, pos: THREE.Vector3, scale = 4.4): void {
     const c = document.createElement('canvas');
-    c.width = 512; c.height = 128;
     const ctx = c.getContext('2d')!;
     ctx.font = 'bold 56px Trebuchet MS';
-    ctx.textAlign = 'center';
-    ctx.lineWidth = 10; ctx.strokeStyle = '#0a0c18';
-    ctx.strokeText(text, 256, 80);
-    ctx.fillStyle = color;
-    ctx.fillText(text, 256, 80);
+    const metrics = ctx.measureText(text);
+    const textWidth = Math.ceil(metrics.width);
+
+    c.width = Math.max(512, textWidth + 64);
+    c.height = 128;
+
+    const ctx2 = c.getContext('2d')!;
+    ctx2.font = 'bold 56px Trebuchet MS';
+    ctx2.textAlign = 'center';
+    ctx2.lineWidth = 10; ctx2.strokeStyle = '#0a0c18';
+    ctx2.strokeText(text, c.width / 2, 80);
+    ctx2.fillStyle = color;
+    ctx2.fillText(text, c.width / 2, 80);
+
     const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
-    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true }));
-    sp.scale.set(scale, scale / 4, 1);
+
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
+    sp.renderOrder = 40;
+    const aspect = c.width / c.height;
+    sp.scale.set(scale * (aspect / 4), scale / 4, 1);
     sp.position.copy(pos);
     scene.add(sp);
   }
@@ -1433,6 +1443,7 @@ export class Town {
       pina.position.set(0, 0, -3.4);
       s.add(pina);
       this.intNpcs.push(pina);
+      this.intColliders.push({ pos: new THREE.Vector3(0, 0, -3.4), r: 0.6 });
       this.intInteractables.push({
         pos: new THREE.Vector3(0, 0, -1.4), radius: 1.8,
         label: 'Press <b>E</b> — browse Pina\'s wares',
@@ -1714,6 +1725,7 @@ export class Town {
     attendant.position.set(0, 0, -3.7);
     s.add(attendant);
     this.intNpcs.push(attendant);
+    this.intColliders.push({ pos: new THREE.Vector3(0, 0, -3.7), r: 0.6 });
     this.intInteractables.push({
       pos: new THREE.Vector3(0, 0, -1.6), radius: 1.9,
       label: 'Press <b>E</b> — Tournament Registration',
@@ -1748,6 +1760,7 @@ export class Town {
     vesna.position.set(-11, 0, 6.7);
     s.add(vesna);
     this.intNpcs.push(vesna);
+    this.intColliders.push({ pos: new THREE.Vector3(-11, 0, 6.7), r: 0.6 });
     this.intInteractables.push({
       pos: new THREE.Vector3(-11, 0, 4.6), radius: 1.8,
       label: 'Press <b>E</b> — Vesna\'s Battle Provisions',
@@ -1761,6 +1774,7 @@ export class Town {
     korr.position.set(11, 0, 6.7);
     s.add(korr);
     this.intNpcs.push(korr);
+    this.intColliders.push({ pos: new THREE.Vector3(11, 0, 6.7), r: 0.6 });
     this.intInteractables.push({
       pos: new THREE.Vector3(11, 0, 4.6), radius: 1.8,
       label: 'Press <b>E</b> — Korr\'s Gem Exchange',
@@ -2118,7 +2132,9 @@ export class Town {
         ? Math.hypot(x, z) <= 39.5
         : Math.abs(x) <= w / 2 - 0.7 && Math.abs(z) <= d / 2 - 0.7;
       const free = (x: number, z: number) =>
-        !this.colliders.some(c => Math.hypot(x - c.pos.x, z - c.pos.z) < c.r) && inBounds(x, z);
+        !this.colliders.some(c => Math.hypot(x - c.pos.x, z - c.pos.z) < c.r) &&
+        (this.mode !== 'street' || !this.walkers.some(w => Math.hypot(x - w.grp.position.x, z - w.grp.position.z) < 0.85)) &&
+        inBounds(x, z);
       const curY = this.tamer.position.y;
       if (free(nx, nz)) this.tamer.position.set(nx, curY, nz);
       else if (free(nx, this.tamer.position.z)) this.tamer.position.x = nx;
@@ -2157,8 +2173,16 @@ export class Town {
           wlk.target = this.nextWanderTarget(wlk.grp.position);
         } else {
           dir.normalize();
-          wlk.grp.position.addScaledVector(dir, 1.7 * dt);
-          wlk.grp.rotation.y = Math.atan2(dir.x, dir.z);
+          const nextX = wlk.grp.position.x + dir.x * 1.7 * dt;
+          const nextZ = wlk.grp.position.z + dir.z * 1.7 * dt;
+          const blocked = this.streetColliders.some(c => Math.hypot(nextX - c.pos.x, nextZ - c.pos.z) < c.r + 0.25) ||
+                          Math.hypot(nextX - this.tamer.position.x, nextZ - this.tamer.position.z) < 0.85;
+          if (blocked) {
+            wlk.pause = 0.8;
+          } else {
+            wlk.grp.position.set(nextX, 0, nextZ);
+            wlk.grp.rotation.y = Math.atan2(dir.x, dir.z);
+          }
         }
         updateVoxelHuman(wlk.grp, wlk.pause <= 0, dt);
       }
