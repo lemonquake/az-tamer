@@ -9,7 +9,7 @@ import { Player, Guardian } from './state';
 import {
   makeTamer, makeVoxelHuman, updateVoxelHuman, makeGuardian, disposeRig, makeCrawler,
   groundTexture, plankTexture, stoneTexture, marbleTexture, tileTexture, bookshelfTexture,
-  skyGradient, type GuardianRig,
+  carpetTexture, wallpaperTexture, skyGradient, type GuardianRig,
 } from './models';
 import {
   say, conversation, choose, askName, toast, updateHUD, showInteractHint, showHotkeys,
@@ -19,6 +19,7 @@ import { mainChain, questState, acceptQuest, completeQuest } from './quests';
 import { GUILD_LORE } from './guilds';
 import { guildJoinCeremony } from './university';
 import { drawAreaMap, hideAreaMap, type MapMarker } from './townmap';
+import { updateTamerAppearance, CLOTHES_DATABASE } from './clothes';
 
 const minimapCanvas = () => document.getElementById('minimap') as HTMLCanvasElement;
 
@@ -229,6 +230,7 @@ export class Town {
     road(0, 0, -26, 0, 2.6);      // shuttle pad
     road(0, 0, 37, 0, 2.8);       // expedition gate
     road(0, 0, 21, -11.5, 2.8);   // the Grand Coliseum
+    road(0, 0, -14, -7, 2.4);     // Boutique road
     road(-14, 7, 0, 18, 1.4);     // market lane
     road(14, 7, 0, 18, 1.4);
 
@@ -940,6 +942,7 @@ export class Town {
     this.buildShopExterior(-14, 7);
     this.buildGarageExterior(14, 7);
     this.buildSanctumExterior(0, 18);
+    this.buildBoutiqueExterior(-14, -7);
     this.buildBountyKiosk(8, 6);
 
     // ---- the Grand Coliseum, north-east of the plaza ----
@@ -1363,7 +1366,7 @@ export class Town {
 
   // ================= merchant interiors =================
   /** Walkable interiors for the shop, garage and sanctum — each with its keeper. */
-  private buildServiceInterior(kind: 'shop' | 'garage' | 'sanctum'): void {
+  private buildServiceInterior(kind: 'shop' | 'garage' | 'sanctum' | 'boutique'): void {
     const s = new THREE.Scene();
     this.interiorScene = s;
     this.intInteractables = [];
@@ -1375,9 +1378,10 @@ export class Town {
     const { w, d } = this.intRoom;
 
     const themes = {
-      shop:    { floor: () => plankTexture('#7a5a36', 4), wall: () => plankTexture('#5a4226', 3), sky: ['#2a2014', '#140e08'] as [string, string], light: 0xffd9a0 },
-      garage:  { floor: () => tileTexture('#5a6070', '#3a4050', 6), wall: () => stoneTexture('#4a5060', '#2a3040', 3), sky: ['#1a2028', '#0a0e14'] as [string, string], light: 0xaad4ff },
-      sanctum: { floor: () => marbleTexture(), wall: () => marbleTexture('#bcc2d2', '#8a90a5', 3), sky: ['#1a2a22', '#0a1410'] as [string, string], light: 0xb8ffd8 },
+      shop:     { floor: () => plankTexture('#7a5a36', 4), wall: () => plankTexture('#5a4226', 3), sky: ['#2a2014', '#140e08'] as [string, string], light: 0xffd9a0 },
+      garage:   { floor: () => tileTexture('#5a6070', '#3a4050', 6), wall: () => stoneTexture('#4a5060', '#2a3040', 3), sky: ['#1a2028', '#0a0e14'] as [string, string], light: 0xaad4ff },
+      sanctum:  { floor: () => marbleTexture(), wall: () => marbleTexture('#bcc2d2', '#8a90a5', 3), sky: ['#1a2a22', '#0a1410'] as [string, string], light: 0xb8ffd8 },
+      boutique: { floor: () => carpetTexture('#4a1a35', '#d9a11a', 2), wall: () => wallpaperTexture('#4a1a35', '#2a0a1e', '#d9a11a', 2), sky: ['#2a1022', '#140510'] as [string, string], light: 0xffe6b8 }
     } as const;
     const th = themes[kind];
     s.background = skyGradient(th.sky[0], th.sky[1]);
@@ -1514,7 +1518,7 @@ export class Town {
         { x: -4, z: -1.5, label: 'Service Lift', color: '#8a93a8', kind: 'poi' },
         { x: 0, z: d / 2, label: 'Exit', color: '#e8d9a8', kind: 'door' },
       ];
-    } else {
+    } else if (kind === 'sanctum') {
       this.intName = 'The Sanctum';
       // the healing spring
       const pool = new THREE.Mesh(new THREE.CylinderGeometry(2.4, 2.6, 0.5, 20),
@@ -1557,6 +1561,70 @@ export class Town {
       this.intMarkers = [
         { x: 2.8, z: -2.6, label: 'Keeper', color: '#5ad88a', kind: 'npc' },
         { x: 0, z: -1.5, label: 'Healing Spring', color: '#5ad88a', kind: 'poi' },
+        { x: 0, z: d / 2, label: 'Exit', color: '#e8d9a8', kind: 'door' },
+      ];
+    } else if (kind === 'boutique') {
+      this.intName = "Madame Celeste's Boutique";
+      
+      // Display racks
+      for (const rx of [-5, 5]) {
+        const rack = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.4, 3.4),
+          new THREE.MeshStandardMaterial({ color: 0x5a4a35, roughness: 0.85 }));
+        rack.position.set(rx, 0.7, 0);
+        s.add(rack);
+        this.intColliders.push({ pos: new THREE.Vector3(rx, 0, 0), r: 1.8 });
+        
+        // Hanger bars
+        const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 3.2, 8),
+          new THREE.MeshStandardMaterial({ color: 0xd9a11a, metalness: 0.8 }));
+        bar.rotation.x = Math.PI / 2;
+        bar.position.set(rx, 1.5, 0);
+        s.add(bar);
+        
+        // Garments
+        for (let i = 0; i < 4; i++) {
+          const col = [0xe85a8a, 0x3a9df2, 0xf2d23a, 0xb18ae8][i % 4];
+          const clothBlock = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.7, 0.4),
+            new THREE.MeshStandardMaterial({ color: col, roughness: 0.9 }));
+          clothBlock.position.set(rx, 1.1, -1.2 + i * 0.8);
+          s.add(clothBlock);
+        }
+      }
+
+      // Changing curtains
+      for (const cx of [-6, 6]) {
+        const curtain = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.0, 2.6, 12, 1, true),
+          new THREE.MeshStandardMaterial({ color: 0x8a2e4a, side: THREE.DoubleSide, roughness: 0.95 }));
+        curtain.position.set(cx, 1.3, -d / 2 + 1.2);
+        s.add(curtain);
+        this.intColliders.push({ pos: new THREE.Vector3(cx, 0, -d / 2 + 1.2), r: 1.2 });
+      }
+
+      // Counter
+      const counter = new THREE.Mesh(new THREE.BoxGeometry(4.2, 1.05, 0.8),
+        new THREE.MeshStandardMaterial({ map: marbleTexture(), roughness: 0.3 }));
+      counter.position.set(0, 0.52, -2.2);
+      s.add(counter);
+      this.intColliders.push({ pos: new THREE.Vector3(0, 0, -2.2), r: 0.9 });
+
+      // NPC Madame Celeste
+      const celeste = makeVoxelHuman({ top: 0x5a1a6a, hair: 0xd8c8f8, cap: 0xb18ae8 });
+      celeste.position.set(0, 0, -3.4);
+      celeste.rotation.y = 0;
+      s.add(celeste);
+      this.intNpcs.push(celeste);
+      this.intColliders.push({ pos: new THREE.Vector3(0, 0, -3.4), r: 0.6 });
+
+      this.intInteractables.push({
+        pos: new THREE.Vector3(0, 0, -1.2), radius: 1.8,
+        label: 'Press <b>E</b> — browse Madame Celeste\'s Boutique',
+        handler: () => this.openBoutique(),
+      });
+
+      this.intMarkers = [
+        { x: 0, z: -3.4, label: 'Madame Celeste', color: '#b18ae8', kind: 'npc' },
+        { x: -5, z: 0, label: 'Clothing Rack', color: '#d9a11a', kind: 'poi' },
+        { x: 5, z: 0, label: 'Clothing Rack', color: '#d9a11a', kind: 'poi' },
         { x: 0, z: d / 2, label: 'Exit', color: '#e8d9a8', kind: 'door' },
       ];
     }
@@ -1828,7 +1896,7 @@ export class Town {
     });
   }
 
-  private async enterService(kind: 'shop' | 'garage' | 'sanctum' | 'coliseum'): Promise<void> {
+  private async enterService(kind: 'shop' | 'garage' | 'sanctum' | 'coliseum' | 'boutique'): Promise<void> {
     this.busy = true;
     this.exitSpot.copy(this.tamer.position);
     if (kind === 'coliseum') this.buildColiseumInterior();
@@ -2337,6 +2405,7 @@ export class Town {
   /** Resolves when the player departs — through the Expedition Gate or the University Shuttle. */
   async run(): Promise<'expedition' | 'university'> {
     this.buildStreet();
+    updateTamerAppearance(this.tamer, this.player.equippedClothes);
     updateHUD(this.player, 'Haven City');
     showHotkeys(true);
     // debug handle for automated testing
@@ -2373,4 +2442,384 @@ export class Town {
       };
     });
   }
+
+  /** Madame Celeste's Boutique — a stylish fashion shop with a purple/gold theme. */
+  private buildBoutiqueExterior(x: number, z: number): void {
+    const s = this.streetScene;
+    const g = new THREE.Group();
+    
+    const body = new THREE.Mesh(new THREE.BoxGeometry(4.8, 2.8, 3.6),
+      new THREE.MeshStandardMaterial({ map: wallpaperTexture('#5a1a45', '#2e0b22', '#d9a11a', 1), roughness: 0.75 }));
+    body.position.y = 1.4;
+    body.castShadow = body.receiveShadow = true;
+    g.add(body);
+    
+    for (let i = 0; i < 6; i++) {
+      const strip = new THREE.Mesh(new THREE.BoxGeometry(0.86, 0.06, 1.8),
+        new THREE.MeshStandardMaterial({ color: i % 2 ? 0xd9a11a : 0x4a1a35, roughness: 0.8 }));
+      strip.position.set(-2.15 + i * 0.86, 2.82 - 0.18, 2.55);
+      strip.rotation.x = 0.28;
+      g.add(strip);
+    }
+    for (const ax of [-2.3, 2.3]) {
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 2.4, 6),
+        new THREE.MeshStandardMaterial({ color: 0xd9a11a, metalness: 0.8 }));
+      pole.position.set(ax, 1.2, 3.25);
+      g.add(pole);
+    }
+    
+    for (const sx of [-1.5, 1.5]) {
+      const windowFrame = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.4, 0.1),
+        new THREE.MeshStandardMaterial({ color: 0xd9a11a, metalness: 0.8 }));
+      windowFrame.position.set(sx, 1.3, 1.82);
+      const windowGlass = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.3, 0.12),
+        new THREE.MeshStandardMaterial({ color: 0xb8ffd8, transparent: true, opacity: 0.45 }));
+      windowGlass.position.set(sx, 1.3, 1.82);
+      g.add(windowFrame, windowGlass);
+    }
+    
+    const sign = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.7, 0.1),
+      new THREE.MeshStandardMaterial({ color: 0x4a1a35, roughness: 0.8 }));
+    sign.position.set(0, 2.2, 1.88);
+    const signGoldBorder = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.8, 0.06),
+      new THREE.MeshStandardMaterial({ color: 0xd9a11a, metalness: 0.9 }));
+    signGoldBorder.position.set(0, 2.2, 1.85);
+    g.add(sign, signGoldBorder);
+    
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(5.3, 0.3, 4.1),
+      new THREE.MeshStandardMaterial({ color: 0x2e0b22, roughness: 0.8 }));
+    roof.position.y = 2.95;
+    roof.castShadow = true;
+    g.add(roof);
+    
+    g.position.set(x, 0, z);
+    g.rotation.y = Math.atan2(-x, -z);
+    s.add(g);
+    
+    this.streetColliders.push({ pos: new THREE.Vector3(x, 0, z), r: 3.1 });
+    this.label3d(s, '🛍️ Boutique', '#b18ae8', new THREE.Vector3(x, 4.5, z));
+    this.streetMarkers.push({ x, z, label: '🛍️ Boutique', color: '#b18ae8', kind: 'building' });
+    
+    const door = new THREE.Vector3(0, 0, 3.4).applyAxisAngle(new THREE.Vector3(0, 1, 0), g.rotation.y).add(g.position);
+    this.streetInteractables.push({
+      pos: door, radius: 2.0,
+      label: 'Press <b>E</b> — enter the Boutique',
+      handler: () => this.enterService('boutique'),
+    });
+  }
+
+  private async openBoutique(): Promise<void> {
+    await say('Madame Celeste', 'Welcome to the Aurel Boutique, darling! Let us find a look worthy of a legendary tamer. Try on anything you like!');
+    this.busy = true;
+
+    await new Promise<void>(resolve => {
+      const p = this.player;
+      let activeTab: 'hat' | 'shirt' | 'pants' | 'gloves' | 'backpack' | 'shoes' = 'shirt';
+      
+      // Temporary previewState which is a clone of the player's equipped clothes.
+      // Trying on an item updates this, but does not save it to p.equippedClothes unless worn.
+      const previewState = { ...p.equippedClothes };
+
+      // Render the main static shell containing containers for dynamic content
+      const el = openScreen(`
+        <h3>🛍️ Boutique — <span id="boutique-shards" class="goldcol">◆${p.shards} Shards</span></h3>
+        <div class="grid2">
+          <div>
+            <div id="boutique-tabs-container" class="panel-tabs" style="margin-bottom:8px"></div>
+            <div id="boutique-list-container" style="max-height:360px;overflow-y:auto;padding-right:4px;"></div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(0,0,0,0.35);border:1px solid var(--ui-border);border-radius:8px;padding:12px;">
+            <h4 style="margin-bottom:8px;color:var(--ui-gold);text-transform:uppercase;font-size:14px;letter-spacing:1px;">Fitting Room</h4>
+            <div id="tamer-preview-container" style="width:260px;height:240px;position:relative;overflow:hidden;background:rgba(6,8,16,0.55);border-radius:6px;border:1px solid #2c3666"></div>
+            <div class="sub" style="margin-top:6px;font-size:11px;color:var(--ui-dim)">3D PREVIEW · DRAG TO ROTATE</div>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;margin-top:14px">
+          <button class="ui-btn primary" id="boutique-close">Leave Boutique</button>
+        </div>`);
+
+      const container = el.querySelector('#tamer-preview-container') as HTMLElement;
+      const previewHandle = initTamerPreview3D(container, previewState);
+
+      const updateUI = () => {
+        // Update Shards count
+        const shardsEl = el.querySelector('#boutique-shards') as HTMLElement;
+        if (shardsEl) shardsEl.innerHTML = `◆${p.shards} Shards`;
+
+        // Render tabs
+        const slots: ('hat' | 'shirt' | 'pants' | 'gloves' | 'backpack' | 'shoes')[] = ['hat', 'shirt', 'pants', 'gloves', 'backpack', 'shoes'];
+        const tabsEl = el.querySelector('#boutique-tabs-container') as HTMLElement;
+        if (tabsEl) {
+          tabsEl.innerHTML = slots.map(slot => {
+            return `<button class="ui-btn tab ${slot === activeTab ? 'primary' : ''}" data-tab-select="${slot}">${slot.toUpperCase()}</button>`;
+          }).join('');
+
+          tabsEl.querySelectorAll<HTMLElement>('[data-tab-select]').forEach(b => b.onclick = () => {
+            activeTab = b.dataset.tabSelect as any;
+            updateUI();
+          });
+        }
+
+        // Render list of clothes for active tab
+        const items = Object.values(CLOTHES_DATABASE).filter(item => item.slot === activeTab);
+        const canBeNone = ['hat', 'gloves', 'backpack'].includes(activeTab);
+        
+        // Item is worn if it is equipped in p.equippedClothes
+        // Item is previewed if it matches previewState
+        const listContainer = el.querySelector('#boutique-list-container') as HTMLElement;
+        if (listContainer) {
+          let rowsHtml = '';
+          
+          if (canBeNone) {
+            const isCurrentlyNoneInPreview = previewState[activeTab] === 'none' || !previewState[activeTab];
+            const isCurrentlyNoneEquipped = p.equippedClothes[activeTab] === 'none' || !p.equippedClothes[activeTab];
+            
+            let actionBtn = '';
+            if (isCurrentlyNoneEquipped) {
+              actionBtn = `<span class="tag" style="background:var(--ui-green);color:#0c1022">EQUIPPED</span>`;
+            } else if (isCurrentlyNoneInPreview) {
+              actionBtn = `<button class="ui-btn primary" data-wear-none="true">Confirm Remove</button>`;
+            } else {
+              actionBtn = `<button class="ui-btn" data-preview-none="true">Try Remove</button>`;
+            }
+            
+            rowsHtml += `
+              <div class="list-row" style="${isCurrentlyNoneInPreview ? 'border: 1px solid var(--ui-green); background: rgba(78, 196, 94, 0.1);' : ''}">
+                <div style="flex:1" data-preview-none="true" style="cursor:pointer;">
+                  <b>None / Default Skin</b>
+                  <div class="sub">Remove any gear in this slot.</div>
+                </div>
+                <div>${actionBtn}</div>
+              </div>`;
+          }
+
+          rowsHtml += items.map(item => {
+            const owned = p.ownedClothes.includes(item.id);
+            const equipped = p.equippedClothes[activeTab] === item.id;
+            const tryingOn = previewState[activeTab] === item.id;
+            
+            let actionBtn = '';
+            if (equipped) {
+              actionBtn = `<button class="ui-btn danger" data-unequip="${item.id}">Remove</button>`;
+            } else if (owned) {
+              if (tryingOn) {
+                actionBtn = `<button class="ui-btn primary" data-equip="${item.id}">Wear</button>`;
+              } else {
+                actionBtn = `<button class="ui-btn secondary" data-try="${item.id}">Try On</button>`;
+              }
+            } else {
+              const canBuy = p.shards >= item.price;
+              if (tryingOn) {
+                actionBtn = `<button class="ui-btn gold" data-buy="${item.id}" ${canBuy ? '' : 'disabled'}>Buy ◆${item.price}</button>`;
+              } else {
+                actionBtn = `<div style="display:flex;gap:4px;">
+                  <button class="ui-btn secondary" data-try="${item.id}">Try</button>
+                  <button class="ui-btn" data-buy="${item.id}" ${canBuy ? '' : 'disabled'}>Buy ◆${item.price}</button>
+                </div>`;
+              }
+            }
+            
+            const styleBadge = item.textureType ? `<span class="tag" style="background:var(--ui-border);color:var(--ui-text);margin-left:5px">${item.textureType.toUpperCase()}</span>` : '';
+            const rowHighlightStyle = tryingOn ? 'border: 1px solid var(--ui-gold); background: rgba(217, 161, 26, 0.1);' : '';
+            const previewBadge = (tryingOn && !equipped) ? `<span class="tag" style="background:var(--ui-gold);color:#0c1022;margin-left:5px">PREVIEWING</span>` : '';
+            const equippedBadge = equipped ? `<span class="tag" style="background:var(--ui-green);color:#0c1022;margin-left:5px">EQUIPPED</span>` : '';
+
+            return `<div class="list-row" style="${rowHighlightStyle}">
+              <div style="flex:1" data-row-select="${item.id}" style="cursor:pointer;">
+                <b>${item.name}</b> ${styleBadge} ${previewBadge} ${equippedBadge}
+                <div class="sub">${item.desc}</div>
+              </div>
+              <div style="margin-left:10px">${actionBtn}</div>
+            </div>`;
+          }).join('');
+
+          listContainer.innerHTML = rowsHtml;
+
+          // Wire up event listeners
+          // Try On when clicking a row or a Try button
+          listContainer.querySelectorAll<HTMLElement>('[data-try]').forEach(b => b.onclick = (e) => {
+            e.stopPropagation();
+            const id = b.dataset.try!;
+            previewState[activeTab] = id;
+            previewHandle.update(previewState);
+            updateUI();
+          });
+
+          listContainer.querySelectorAll<HTMLElement>('[data-row-select]').forEach(elRow => elRow.onclick = () => {
+            const id = elRow.dataset.rowSelect!;
+            previewState[activeTab] = id;
+            previewHandle.update(previewState);
+            updateUI();
+          });
+
+          listContainer.querySelectorAll<HTMLElement>('[data-preview-none]').forEach(b => b.onclick = (e) => {
+            e.stopPropagation();
+            previewState[activeTab] = 'none';
+            previewHandle.update(previewState);
+            updateUI();
+          });
+
+          // Purchase an item
+          listContainer.querySelectorAll<HTMLElement>('[data-buy]').forEach(b => b.onclick = (e) => {
+            e.stopPropagation();
+            const id = b.dataset.buy!;
+            const item = CLOTHES_DATABASE[id];
+            if (p.shards >= item.price) {
+              p.shards -= item.price;
+              p.ownedClothes.push(id);
+              toast(`Bought ${item.name}!`, 'gold');
+              // Automatically wear it in the preview
+              previewState[activeTab] = id;
+              previewHandle.update(previewState);
+              updateUI();
+            }
+          });
+
+          // Equip (Wear) an item
+          listContainer.querySelectorAll<HTMLElement>('[data-equip]').forEach(b => b.onclick = (e) => {
+            e.stopPropagation();
+            const id = b.dataset.equip!;
+            p.equippedClothes[activeTab] = id;
+            toast('Equipped.');
+            updateTamerAppearance(this.tamer, p.equippedClothes);
+            updateUI();
+          });
+
+          // Wear none / remove
+          listContainer.querySelectorAll<HTMLElement>('[data-wear-none]').forEach(b => b.onclick = (e) => {
+            e.stopPropagation();
+            p.equippedClothes[activeTab] = 'none';
+            toast('Unequipped.');
+            updateTamerAppearance(this.tamer, p.equippedClothes);
+            updateUI();
+          });
+
+          // Unequip (Remove) an item
+          listContainer.querySelectorAll<HTMLElement>('[data-unequip]').forEach(b => b.onclick = (e) => {
+            e.stopPropagation();
+            const id = b.dataset.unequip!;
+            p.equippedClothes[activeTab] = 'none';
+            // Also update preview state to match
+            if (previewState[activeTab] === id) {
+              previewState[activeTab] = 'none';
+            }
+            toast('Unequipped.');
+            previewHandle.update(previewState);
+            updateTamerAppearance(this.tamer, p.equippedClothes);
+            updateUI();
+          });
+        }
+      };
+
+      updateUI();
+
+      (el.querySelector('#boutique-close') as HTMLElement).onclick = () => {
+        previewHandle.dispose();
+        closeMenu();
+        resolve();
+      };
+    });
+    this.busy = false;
+    updateHUD(this.player, 'Haven City');
+    this.player.save();
+  }
+}
+
+function initTamerPreview3D(container: HTMLElement, equipped: Record<string, string>): { update: (eq: Record<string, string>) => void; dispose: () => void } {
+  const width = container.clientWidth || 260;
+  const height = container.clientHeight || 240;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  canvas.style.width = '100%';
+  canvas.style.height = '100%';
+  container.appendChild(canvas);
+
+  const scene = new THREE.Scene();
+  scene.background = null;
+
+  const camera = new THREE.PerspectiveCamera(42, width / height, 0.1, 10);
+  camera.position.set(0, 0.95, 2.5);
+
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  renderer.setSize(width, height);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+  scene.add(new THREE.AmbientLight(0xffffff, 1.0));
+  const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
+  dirLight.position.set(2, 4, 3);
+  scene.add(dirLight);
+
+  const tamerGroup = new THREE.Group();
+  tamerGroup.position.set(0, 0.1, 0);
+  updateTamerAppearance(tamerGroup, equipped);
+  scene.add(tamerGroup);
+
+  let active = true;
+  let lastTime = performance.now();
+  let isDragging = false;
+  let previousPointerX = 0;
+
+  const onPointerDown = (e: PointerEvent) => {
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
+    isDragging = true;
+    previousPointerX = e.clientX;
+    canvas.style.cursor = 'grabbing';
+    canvas.setPointerCapture(e.pointerId);
+  };
+
+  const onPointerMove = (e: PointerEvent) => {
+    if (!isDragging) return;
+    const deltaX = e.clientX - previousPointerX;
+    previousPointerX = e.clientX;
+    tamerGroup.rotation.y += deltaX * 0.015;
+  };
+
+  const onPointerUp = (e: PointerEvent) => {
+    if (isDragging) {
+      isDragging = false;
+      canvas.style.cursor = 'grab';
+      canvas.releasePointerCapture(e.pointerId);
+    }
+  };
+
+  canvas.style.cursor = 'grab';
+  canvas.addEventListener('pointerdown', onPointerDown);
+  canvas.addEventListener('pointermove', onPointerMove);
+  canvas.addEventListener('pointerup', onPointerUp);
+  canvas.addEventListener('pointercancel', onPointerUp);
+
+  function animate() {
+    if (!active) return;
+    requestAnimationFrame(animate);
+
+    const now = performance.now();
+    const dt = (now - lastTime) / 1000;
+    lastTime = now;
+
+    if (!isDragging) {
+      tamerGroup.rotation.y += dt * 0.4;
+    }
+    renderer.render(scene, camera);
+  }
+  requestAnimationFrame(animate);
+
+  return {
+    update: (eq: Record<string, string>) => {
+      updateTamerAppearance(tamerGroup, eq);
+    },
+    dispose: () => {
+      active = false;
+      canvas.removeEventListener('pointerdown', onPointerDown);
+      canvas.removeEventListener('pointermove', onPointerMove);
+      canvas.removeEventListener('pointerup', onPointerUp);
+      canvas.removeEventListener('pointercancel', onPointerUp);
+      while (tamerGroup.children.length > 0) {
+        tamerGroup.remove(tamerGroup.children[0]);
+      }
+      renderer.dispose();
+      canvas.remove();
+    }
+  };
 }

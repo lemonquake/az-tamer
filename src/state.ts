@@ -222,6 +222,8 @@ export interface PlayerSave {
   profilePic?: string | null;
   cardNo?: string;
   quests?: Record<string, 'active' | 'done'>;
+  equippedClothes?: Record<string, string>;
+  ownedClothes?: string[];
 }
 
 export class Player {
@@ -239,6 +241,15 @@ export class Player {
   profilePic: string | null = null;   // custom portrait (data URL)
   cardNo = '';                        // guild member number, assigned on joining
   quests: Record<string, 'active' | 'done'> = {};
+  equippedClothes: Record<string, string> = {
+    hat: 'default_cap',
+    shirt: 'default_shirt',
+    pants: 'default_pants',
+    gloves: 'default_gloves',
+    backpack: 'default_backpack',
+    shoes: 'default_shoes'
+  };
+  ownedClothes: string[] = ['default_cap', 'default_shirt', 'default_pants', 'default_gloves', 'default_backpack', 'default_shoes'];
 
   get alive(): Guardian[] { return this.party.filter(g => !g.fainted); }
 
@@ -280,6 +291,8 @@ export class Player {
       houseId: this.houseId, battlesWon: this.battlesWon,
       capturesMade: this.capturesMade, dungeonClears: { ...this.dungeonClears },
       profilePic: this.profilePic, cardNo: this.cardNo, quests: { ...this.quests },
+      equippedClothes: { ...this.equippedClothes },
+      ownedClothes: [...this.ownedClothes],
     };
     localStorage.setItem(SAVE_KEY, JSON.stringify(data));
   }
@@ -303,6 +316,15 @@ export class Player {
       p.profilePic = d.profilePic ?? null;
       p.cardNo = d.cardNo ?? '';
       p.quests = d.quests ?? {};
+      p.equippedClothes = d.equippedClothes ? { ...d.equippedClothes } : {
+        hat: 'default_cap',
+        shirt: 'default_shirt',
+        pants: 'default_pants',
+        gloves: 'default_gloves',
+        backpack: 'default_backpack',
+        shoes: 'default_shoes'
+      };
+      p.ownedClothes = d.ownedClothes ? [...d.ownedClothes] : ['default_cap', 'default_shirt', 'default_pants', 'default_gloves', 'default_backpack', 'default_shoes'];
       return p;
     } catch {
       return null;

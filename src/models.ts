@@ -36,7 +36,7 @@ export function updateTweens(dt: number): void {
 export const wait = (ms: number) => new Promise<void>(res => setTimeout(res, ms));
 
 // ---------------- canvas textures ----------------
-function canvasTex(size: number, draw: (ctx: CanvasRenderingContext2D, s: number) => void, repeat = 1): THREE.Texture {
+export function canvasTex(size: number, draw: (ctx: CanvasRenderingContext2D, s: number) => void, repeat = 1): THREE.Texture {
   const c = document.createElement('canvas');
   c.width = c.height = size;
   const ctx = c.getContext('2d')!;
@@ -49,7 +49,7 @@ function canvasTex(size: number, draw: (ctx: CanvasRenderingContext2D, s: number
 }
 
 // deterministic pseudo-random for texture noise
-function mulberry(seed: number) {
+export function mulberry(seed: number) {
   return () => {
     seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
     let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
@@ -596,6 +596,13 @@ export function makeCrawler(): THREE.Group {
 export interface VoxelHumanOpts {
   skin?: number; hair?: number; top?: number; sleeves?: number;
   bottom?: number; shoes?: number; cap?: number | null; robe?: boolean;
+  topColor?: number; topTex?: THREE.Texture | null;
+  bottomColor?: number; bottomTex?: THREE.Texture | null;
+  sleeveColor?: number; sleeveTex?: THREE.Texture | null;
+  shoeColor?: number; shoeTex?: THREE.Texture | null;
+  capColor?: number; capTex?: THREE.Texture | null;
+  glovesColor?: number; glovesTex?: THREE.Texture | null;
+  backpackColor?: number; backpackTex?: THREE.Texture | null;
 }
 
 function faceTexture(skin: number, smile = true): THREE.Texture {
@@ -621,6 +628,20 @@ function faceTexture(skin: number, smile = true): THREE.Texture {
 
 const vmat = (color: number) => new THREE.MeshStandardMaterial({ color, roughness: 0.75, metalness: 0.05 });
 
+const customMat = (color?: number, tex?: THREE.Texture | null, fallbackColor = 0x888888) => {
+  const opts: THREE.MeshStandardMaterialParameters = {
+    roughness: 0.8,
+    metalness: 0.05
+  };
+  if (tex) {
+    opts.map = tex;
+    opts.color = color !== undefined ? color : 0xffffff;
+  } else {
+    opts.color = color !== undefined ? color : fallbackColor;
+  }
+  return new THREE.MeshStandardMaterial(opts);
+};
+
 /** Blocky voxel-style human, built facing +Z, with pivoted limbs for animation. */
 export function makeVoxelHuman(opts: VoxelHumanOpts = {}): THREE.Group {
   const skin = opts.skin ?? 0xe8b48a;
@@ -641,9 +662,9 @@ export function makeVoxelHuman(opts: VoxelHumanOpts = {}): THREE.Group {
     const hip = new THREE.Group();
     hip.name = name;
     hip.position.set(x, 0, 0);
-    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.5, 0.16), vmat(bottomC));
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.5, 0.16), customMat(opts.bottomColor, opts.bottomTex, bottomC));
     leg.position.y = -0.25;
-    const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.12, 0.22), vmat(shoeC));
+    const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.12, 0.22), customMat(opts.shoeColor, opts.shoeTex, shoeC));
     shoe.position.set(0, -0.53, 0.03);
     hip.add(leg, shoe);
     pelvis.add(hip);
@@ -651,7 +672,7 @@ export function makeVoxelHuman(opts: VoxelHumanOpts = {}): THREE.Group {
 
   // torso
   const torsoH = opts.robe ? 0.78 : 0.55;
-  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.42, torsoH, 0.24), vmat(topC));
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.42, torsoH, 0.24), customMat(opts.topColor, opts.topTex, topC));
   torso.position.y = opts.robe ? 0.18 : 0.28;
   torso.name = 'torso';
   pelvis.add(torso);
@@ -661,18 +682,21 @@ export function makeVoxelHuman(opts: VoxelHumanOpts = {}): THREE.Group {
     pelvis.add(belt);
   }
   // backpack
-  const pack = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.34, 0.14), vmat(0x8a5a2a));
-  pack.position.set(0, 0.3, -0.2);
-  pelvis.add(pack);
+  const hasBackpack = opts.backpackTex !== null && opts.backpackTex !== undefined;
+  if (hasBackpack) {
+    const pack = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.34, 0.14), customMat(opts.backpackColor, opts.backpackTex, 0x8a5a2a));
+    pack.position.set(0, 0.3, -0.2);
+    pelvis.add(pack);
+  }
 
   // arms (pivot at shoulder)
   for (const [name, x] of [['armL', 0.28], ['armR', -0.28]] as const) {
     const shoulder = new THREE.Group();
     shoulder.name = name;
     shoulder.position.set(x, 0.5, 0);
-    const arm = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.42, 0.15), vmat(sleeveC));
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.42, 0.15), customMat(opts.sleeveColor, opts.sleeveTex, sleeveC));
     arm.position.y = -0.18;
-    const hand = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.1, 0.13), vmat(skin));
+    const hand = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.1, 0.13), customMat(opts.glovesColor, opts.glovesTex, skin));
     hand.position.y = -0.43;
     shoulder.add(arm, hand);
     pelvis.add(shoulder);
@@ -696,11 +720,13 @@ export function makeVoxelHuman(opts: VoxelHumanOpts = {}): THREE.Group {
   const fringe = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.07, 0.06), vmat(hairC));
   fringe.position.set(0, 0.3, 0.16);
   headG.add(hairTop, hairBack, fringe);
-  if (opts.cap !== null) {
+  const hasCap = (opts.cap !== null && opts.cap !== undefined) || (opts.capTex !== null && opts.capTex !== undefined);
+  if (hasCap) {
     const capC = opts.cap ?? 0xd84a3a;
-    const cap = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.1, 0.4), vmat(capC));
+    const capMat = customMat(opts.capColor, opts.capTex, capC);
+    const cap = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.1, 0.4), capMat);
     cap.position.y = 0.4;
-    const brim = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.04, 0.18), vmat(capC));
+    const brim = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.04, 0.18), capMat);
     brim.position.set(0, 0.38, 0.27);
     headG.add(cap, brim);
   }

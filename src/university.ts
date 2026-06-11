@@ -23,6 +23,7 @@ import { GUILD_LORE, guildIconCanvas, makeCardNo } from './guilds';
 import { openGuildCard } from './guildcard';
 import { drawAreaMap, hideAreaMap, type MapMarker } from './townmap';
 import type { BattleOptions, BattleResult } from './battle';
+import { updateTamerAppearance } from './clothes';
 
 const ROOM_TITLES: Record<string, string> = {
   lobby: 'University — Grand Lobby', cafeteria: 'University — Cafeteria',
@@ -1751,6 +1752,7 @@ export class University {
   /** Resolves when the player departs through the Grand Doors. */
   async run(): Promise<void> {
     this.builders.lobby();
+    updateTamerAppearance(this.tamer, this.player.equippedClothes);
     this.current = 'lobby';
     this.room.scene.add(this.tamer);
     this.tamer.position.set(0, 0, 11.5);

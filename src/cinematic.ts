@@ -127,11 +127,14 @@ export class Cinematic {
       ctx.fillStyle = '#1c2438'; ctx.fillRect(0, 0, 512, 256);
       ctx.strokeStyle = '#c8b282'; ctx.lineWidth = 8; ctx.strokeRect(10, 10, 492, 236);
       ctx.fillStyle = '#e9d9a8'; ctx.textAlign = 'center';
-      ctx.font = 'bold 56px Georgia, serif';
-      ctx.fillText('TAMER ACADEMY', 256, 110);
-      ctx.font = 'italic 28px Georgia, serif';
+      ctx.font = 'bold 42px Georgia, serif';
+      ctx.fillText('TAMER ACADEMY', 256, 95);
+      ctx.font = 'italic 24px Georgia, serif';
       ctx.fillStyle = '#8a96b8';
-      ctx.fillText('“Trust is trained, never forced.”', 256, 170);
+      ctx.fillText('“Trust is trained, never forced.”', 256, 155);
+      ctx.font = 'italic 20px Georgia, serif';
+      ctx.fillStyle = '#c8b282'; // Gold color to match the border and feel premium
+      ctx.fillText('— Aljay Leodones', 256, 195);
     }
     const crestTex = new THREE.CanvasTexture(crest);
     crestTex.colorSpace = THREE.SRGBColorSpace;

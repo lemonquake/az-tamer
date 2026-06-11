@@ -10,6 +10,7 @@ import { Player } from './state';
 import { makeTamer, updateVoxelHuman, globeTexture, skyGradient } from './models';
 import { updateHUD, showInteractHint, showHotkeys, isDialogueOpen, isMenuOpen, openPauseMenu, openPanel, type PanelKind } from './ui';
 import { drawAreaMap, hideAreaMap, type MapMarker } from './townmap';
+import { updateTamerAppearance } from './clothes';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
 
@@ -362,6 +363,7 @@ export class Overworld {
   /** Resolves with the chosen dungeon, or null to return to Haven City. */
   run(): Promise<DungeonDef | null> {
     this.buildScene();
+    updateTamerAppearance(this.tamer, this.player.equippedClothes);
     // debug handle for automated testing
     (window as unknown as Record<string, unknown>).__ow = this;
     updateHUD(this.player, 'Overworld of Aurel');
