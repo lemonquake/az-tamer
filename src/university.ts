@@ -1675,7 +1675,7 @@ export class University {
     const mapMarkers: MapMarker[] = r.interactables
       .map(i => {
         const lbl = stripLabel(i.label);
-        const door = /door|leave|exit|haven city|grand doors|return/i.test(lbl);
+        const door = i.label.includes('🚪') || /door|leave|exit|haven city|grand doors|return/i.test(lbl);
         return {
           x: i.pos.x, z: i.pos.z, label: lbl,
           color: door ? '#e8d9a8' : '#5ab8e8',
