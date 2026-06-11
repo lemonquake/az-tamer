@@ -33,7 +33,7 @@ const ROOM_TITLES: Record<string, string> = {
 
 type RoomId = 'lobby' | 'cafeteria' | 'classroom' | 'library' | 'lockers' | 'training' | 'officers' | 'infirmary';
 
-interface Interactable { pos: THREE.Vector3; radius: number; label: string; handler: () => Promise<void> | void; }
+interface Interactable { pos: THREE.Vector3; radius: number; label: string; handler: () => Promise<void> | void; isDoor?: boolean; }
 interface Collider { pos: THREE.Vector3; r: number; }
 interface Wanderer { g: THREE.Group; target: THREE.Vector3; pause: number; speed: number; }
 
@@ -262,7 +262,7 @@ export class University {
     }
 
     const stand = pos.clone().add(new THREE.Vector3(Math.sin(rotY), 0, Math.cos(rotY)).multiplyScalar(1.3));
-    r.interactables.push({ pos: stand, radius: 1.7, label: `Press <b>E</b> — ${label}`, handler });
+    r.interactables.push({ pos: stand, radius: 1.7, label: `Press <b>E</b> — ${label}`, handler, isDoor: true });
   }
 
   private npc(r: RoomData, opts: VoxelHumanOpts, x: number, z: number, rotY: number,
@@ -1675,7 +1675,7 @@ export class University {
     const mapMarkers: MapMarker[] = r.interactables
       .map(i => {
         const lbl = stripLabel(i.label);
-        const door = i.label.includes('🚪') || /door|leave|exit|haven city|grand doors|return/i.test(lbl);
+        const door = !!i.isDoor;
         return {
           x: i.pos.x, z: i.pos.z, label: lbl,
           color: door ? '#e8d9a8' : '#5ab8e8',
