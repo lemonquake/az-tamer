@@ -7,7 +7,8 @@
 import * as THREE from 'three';
 import { DUNGEONS, SPECIES, TYPE_CSS, type DungeonDef } from './data';
 import { Player } from './state';
-import { makeTamer, updateVoxelHuman, globeTexture, skyGradient } from './models';
+import { makeTamer, updateVoxelHuman, globeTexture, skyGradient, leafTexture, plankTexture } from './models';
+import { AGDAO_LORE } from './lore';
 import { updateHUD, showInteractHint, showHotkeys, isDialogueOpen, isMenuOpen, openPauseMenu, openPanel, type PanelKind } from './ui';
 import { drawAreaMap, hideAreaMap, type MapMarker } from './townmap';
 import { updateTamerAppearance } from './clothes';
@@ -16,6 +17,10 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getEl
 
 const R = 30;                       // globe radius
 const CITY_COORDS: [number, number] = [22, 0];
+const AGDAO_COORDS: [number, number] = [-6, -44];
+
+/** Where the overworld can send the player. */
+export type OverworldDest = DungeonDef | 'agdao' | null;
 
 function dirFromLatLon(lat: number, lon: number): THREE.Vector3 {
   const la = THREE.MathUtils.degToRad(lat), lo = THREE.MathUtils.degToRad(lon);
@@ -24,9 +29,10 @@ function dirFromLatLon(lat: number, lon: number): THREE.Vector3 {
 
 interface Marker {
   group: THREE.Group;
-  def: DungeonDef | null;      // null = Haven City
+  def: DungeonDef | null;      // null = Haven City (or Agdao, see below)
   dir: THREE.Vector3;          // unit direction in globe-local space
   quest: boolean;
+  agdao?: boolean;             // the tropical island travel marker
 }
 
 export class Overworld {
@@ -43,7 +49,7 @@ export class Overworld {
   private busy = false;
   private nearest: Marker | null = null;
   private t = 0;
-  private resolveExit: ((d: DungeonDef | null) => void) | null = null;
+  private resolveExit: ((d: OverworldDest) => void) | null = null;
 
   constructor(private player: Player) {}
 
@@ -92,10 +98,13 @@ export class Overworld {
     // markers
     this.addMarker(null, CITY_COORDS);
     for (const d of DUNGEONS) {
-      if (d.id === 'trial') continue;
+      if (d.id === 'trial' || d.hidden) continue;
       if (this.isUnlocked(d)) this.addMarker(d, d.coords);
       else this.addCloudCluster(dirFromLatLon(...d.coords), 4, 0.9); // locked gates sleep under cloud
     }
+    // Agdao Island — revealed by Veyl's sea-chart
+    if (this.player.flags['agdao_unlocked']) this.addAgdaoMarker(AGDAO_COORDS);
+    else this.addCloudCluster(dirFromLatLon(...AGDAO_COORDS), 5, 0.9);
     // ambient cloud cover over the unexplored world
     for (let i = 0; i < 26; i++) {
       const dir = new THREE.Vector3().randomDirection();
@@ -183,6 +192,76 @@ export class Overworld {
     this.markers.push({ group: g, def, dir, quest });
   }
 
+  /** A little tropical diorama: sand, lagoon ring, leaning palms, huts. */
+  private addAgdaoMarker(coords: [number, number]): void {
+    const dir = dirFromLatLon(...coords);
+    const g = new THREE.Group();
+    const quest = this.player.quests['story_agdao'] === 'active';
+
+    const lagoon = new THREE.Mesh(new THREE.CylinderGeometry(2.1, 2.3, 0.12, 24),
+      new THREE.MeshStandardMaterial({ color: 0x3ad8c8, emissive: 0x1a8a80, emissiveIntensity: 0.5, roughness: 0.15, transparent: true, opacity: 0.9 }));
+    lagoon.position.y = 0.06;
+    const sand = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.7, 0.22, 20),
+      new THREE.MeshStandardMaterial({ color: 0xeed9a0, roughness: 0.9 }));
+    sand.position.y = 0.18;
+    const hill = new THREE.Mesh(new THREE.SphereGeometry(0.9, 14, 10),
+      new THREE.MeshStandardMaterial({ map: leafTexture('#3a9a52', '#5ec46a', '#2a6a3a', 7), roughness: 0.9 }));
+    hill.scale.set(1.2, 0.55, 1);
+    hill.position.y = 0.4;
+    g.add(lagoon, sand, hill);
+
+    // leaning palms
+    const trunkMat = new THREE.MeshStandardMaterial({ map: plankTexture('#8a6a42', 1), roughness: 0.9 });
+    const frondMat = new THREE.MeshStandardMaterial({ color: 0x3aa84e, roughness: 0.85, side: THREE.DoubleSide });
+    for (const [px, pz, lean] of [[0.9, 0.3, 0.35], [-0.7, 0.6, -0.3], [-0.2, -0.9, 0.25]]) {
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.09, 1.3, 6), trunkMat);
+      trunk.position.set(px, 0.85, pz);
+      trunk.rotation.z = lean;
+      g.add(trunk);
+      const crownX = px - Math.sin(lean) * 0.65, crownY = 1.5;
+      for (let f = 0; f < 5; f++) {
+        const frond = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.7, 4), frondMat);
+        const a = (f / 5) * Math.PI * 2;
+        frond.position.set(crownX + Math.cos(a) * 0.28, crownY, pz + Math.sin(a) * 0.28);
+        frond.rotation.set(Math.sin(a) * 1.25, 0, -Math.cos(a) * 1.25);
+        frond.scale.z = 0.3;
+        g.add(frond);
+      }
+    }
+    // hut cluster
+    for (const [hx, hz] of [[0.55, -0.45], [-0.55, -0.2]]) {
+      const wallsM = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.2, 0.22, 8),
+        new THREE.MeshStandardMaterial({ color: 0xa8845a, roughness: 0.95 }));
+      wallsM.position.set(hx, 0.4, hz);
+      const roof = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.24, 8),
+        new THREE.MeshStandardMaterial({ color: 0xc4a45a, roughness: 1 }));
+      roof.position.set(hx, 0.63, hz);
+      g.add(wallsM, roof);
+    }
+
+    if (quest) {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(2.6, 0.07, 8, 32),
+        new THREE.MeshBasicMaterial({ color: 0x4ee4b8, transparent: true, opacity: 0.8 }));
+      ring.rotation.x = Math.PI / 2;
+      ring.position.y = 0.1;
+      ring.name = 'questring';
+      const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.5, 7, 12, 1, true),
+        new THREE.MeshBasicMaterial({ color: 0x4ee4b8, transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false }));
+      beam.position.y = 3.6;
+      beam.name = 'questbeam';
+      g.add(ring, beam);
+    }
+    const halo = new THREE.PointLight(0x4ee4b8, quest ? 16 : 10, 10);
+    halo.position.y = 2;
+    halo.name = 'halo';
+    g.add(halo);
+
+    g.position.copy(dir).multiplyScalar(R);
+    g.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+    this.globe.add(g);
+    this.markers.push({ group: g, def: null, dir, quest, agdao: true });
+  }
+
   private addCloudCluster(dir: THREE.Vector3, puffs: number, opacity: number, ambient = false): void {
     const cluster = new THREE.Group();
     const mat = new THREE.MeshStandardMaterial({ color: 0xf2f4fa, transparent: true, opacity, roughness: 1, depthWrite: false });
@@ -203,6 +282,22 @@ export class Overworld {
     const m = this.nearest;
     if (!m) { panel.classList.remove('show'); showInteractHint(null); return; }
 
+    if (m.agdao) {
+      showInteractHint('Press <b>E</b> — sail to Agdao Island');
+      if (panel.dataset.current === 'agdao' && panel.classList.contains('show')) return;
+      panel.dataset.current = 'agdao';
+      panel.classList.toggle('quest', m.quest);
+      panel.innerHTML = `
+        ${m.quest ? '<div class="quest-badge">★ QUEST</div>' : ''}
+        <h3>🏝️ ${AGDAO_LORE.name}</h3>
+        <div class="sub" style="margin-bottom:8px">${AGDAO_LORE.desc}</div>
+        <div class="row"><span class="sub">Known as</span><b>${AGDAO_LORE.epithet}</b></div>
+        <div class="row"><span class="sub">First Bond</span><b>~700 years ago</b></div>
+        <div class="row"><span class="sub">Resident Guild</span><b>Circle of the First Fire</b></div>
+        <div class="sub" style="margin-top:8px">The islanders are friendly — and they notice everything. Ask around.</div>`;
+      panel.classList.add('show');
+      return;
+    }
     if (!m.def) {
       panel.classList.remove('show');
       showInteractHint('Press <b>E</b> — return to Haven City');
@@ -301,8 +396,8 @@ export class Overworld {
       const len = Math.hypot(w.x, w.z) || 1;
       mapMarkers.push({
         x: (w.x / len) * a, z: (w.z / len) * a,
-        label: m.def ? m.def.name : '🏠 Haven City',
-        color: m.def ? (m.quest ? '#e85a6a' : '#5ab8e8') : '#c9a24a',
+        label: m.agdao ? '🏝️ Agdao Island' : m.def ? m.def.name : '🏠 Haven City',
+        color: m.agdao ? '#4ee4b8' : m.def ? (m.quest ? '#e85a6a' : '#5ab8e8') : '#c9a24a',
         kind: m.def ? 'poi' : 'building',
       });
     }
@@ -331,7 +426,7 @@ export class Overworld {
     this.keys.add(k);
     if (isDialogueOpen() || isMenuOpen() || this.busy) return;
     if ((k === 'e' || k === 'enter') && this.nearest) {
-      this.finish(this.nearest.def);
+      this.finish(this.nearest.agdao ? 'agdao' : this.nearest.def);
     }
     else if (k === 'p') this.openPanelGuarded('player');
     else if (k === 'i') this.openPanelGuarded('inventory');
@@ -349,7 +444,7 @@ export class Overworld {
   };
   private onKeyUp = (e: KeyboardEvent) => { this.keys.delete(e.key.toLowerCase()); };
 
-  private finish(dest: DungeonDef | null): void {
+  private finish(dest: OverworldDest): void {
     $('ow-panel').classList.remove('show');
     hideAreaMap($('minimap') as unknown as HTMLCanvasElement);
     showInteractHint(null);
@@ -360,8 +455,8 @@ export class Overworld {
     this.resolveExit = null;
   }
 
-  /** Resolves with the chosen dungeon, or null to return to Haven City. */
-  run(): Promise<DungeonDef | null> {
+  /** Resolves with the chosen dungeon, 'agdao' for the island, or null to return to Haven City. */
+  run(): Promise<OverworldDest> {
     this.buildScene();
     updateTamerAppearance(this.tamer, this.player.equippedClothes);
     // debug handle for automated testing
@@ -370,6 +465,6 @@ export class Overworld {
     showHotkeys(true);
     window.addEventListener('keydown', this.onKeyDown);
     window.addEventListener('keyup', this.onKeyUp);
-    return new Promise<DungeonDef | null>(res => { this.resolveExit = res; });
+    return new Promise<OverworldDest>(res => { this.resolveExit = res; });
   }
 }

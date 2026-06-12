@@ -1,18 +1,24 @@
 // ============================================================
 // AZ Tamer — battle engine (3v3, speed-ordered turns, AI,
-// gifting/capture, EXP, evolution) with 3D presentation
+// gifting/capture, EXP, evolution) with 3D presentation.
+// Arenas are dressed per dungeon theme (boss fights get their
+// own seal-ring staging), and every technique carries bespoke
+// elemental VFX: projectiles, eruptions, bolts, shockwaves and
+// screenshake that scales with the damage dealt.
 // ============================================================
 import * as THREE from 'three';
 import {
   TECHS, ITEMS, TYPE_CSS, TYPE_COLORS, TYPE_ELEMENT,
-  elementsOf, elementMult, ELEMENT_ICONS, type Technique,
+  elementsOf, elementMult, ELEMENT_ICONS, type Technique, type GType,
 } from './data';
 import { sfx } from './audio';
 import { Guardian, Player } from './state';
 import {
   makeGuardian, disposeRig, tween, wait, Ease, makeFloatingDamageText,
-  stoneTexture, skyGradient, type GuardianRig,
+  stoneTexture, skyGradient, canvasTex, caveRockTexture, drownedBrickTexture,
+  stormPanelTexture, stormSeamEmissive, type GuardianRig,
 } from './models';
+import { VFX } from './vfx';
 import { say, choose, toast, askName, setStoryInBattle } from './ui';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
@@ -43,24 +49,63 @@ export interface BattleOptions {
   wild?: boolean;            // enemies capturable via gifting
   intro?: string;            // log line at start
   theme?: 'cavern' | 'vault' | 'storm';
+  arena?: string;            // dungeon id — flavors the arena beyond the base theme
   firstStrike?: boolean;     // crawler cannon stun: enemies skip round 1
 }
 
 interface EnemySpec { speciesId: string; level: number; }
 
-const THEME_COLORS: Record<string, { sky: [string, string]; floor: string; fog: number }> = {
-  cavern: { sky: ['#1a1430', '#060810'], floor: '#3a3f52', fog: 0x0a0c18 },
-  vault: { sky: ['#0e2238', '#04101c'], floor: '#2e4a5a', fog: 0x081018 },
-  storm: { sky: ['#2a2440', '#0a0814'], floor: '#3a3a4e', fog: 0x100c20 },
+// ---------------- arena dressing ----------------
+
+/** Glyph-ringed boss seal, drawn once per boss battle. */
+function runeSigilTexture(colorCss: string): THREE.Texture {
+  return canvasTex(512, (ctx, s) => {
+    const cx = s / 2;
+    ctx.strokeStyle = colorCss;
+    ctx.fillStyle = colorCss;
+    ctx.lineWidth = 6;
+    ctx.beginPath(); ctx.arc(cx, cx, s * 0.47, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, cx, s * 0.34, 0, Math.PI * 2); ctx.stroke();
+    const glyphs = 'ᚠᚱᛟᛞᚹᛗᚷᛏᛉᛊᚺᛜᛁᛚᚦᛒ';
+    ctx.font = 'bold 42px serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (let i = 0; i < 16; i++) {
+      const a = (i / 16) * Math.PI * 2;
+      ctx.save();
+      ctx.translate(cx + Math.cos(a) * s * 0.405, cx + Math.sin(a) * s * 0.405);
+      ctx.rotate(a + Math.PI / 2);
+      ctx.fillText(glyphs[i % glyphs.length], 0, 0);
+      ctx.restore();
+    }
+    ctx.beginPath();
+    for (let i = 0; i <= 3; i++) {
+      const a = (i / 3) * Math.PI * 2 - Math.PI / 2;
+      const x = cx + Math.cos(a) * s * 0.3, y = cx + Math.sin(a) * s * 0.3;
+      if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+    }
+    ctx.closePath();
+    ctx.stroke();
+  });
+}
+
+const ARENA_TAGLINES: Record<string, string> = {
+  cavern: 'Torchlight gutters across the proving stones…',
+  mossdeep: 'Spores drift like slow green snow…',
+  vault: 'Drowned light filters through the broken vaults…',
+  storm: 'The spire hums — the old war-engine is listening…',
 };
 
 export class Battle {
   scene = new THREE.Scene();
   camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.1, 100);
+  private fx = new VFX(this.scene);
   private units: Unit[] = [];
   private round = 0;
   private camT = 0;
-  private spotlight!: THREE.PointLight;
+  private camDist = 9.2;
+  private baseFov = 50;
+  private envTick: ((dt: number) => void)[] = [];
 
   constructor(private player: Player, private enemySpecs: EnemySpec[], private opts: BattleOptions) {}
 
@@ -70,55 +115,379 @@ export class Battle {
 
   private updateView(dt: number): void {
     this.camT += dt;
-    // gentle camera drift
-    this.camera.position.x = Math.sin(this.camT * 0.18) * 0.6;
-    this.camera.position.y = 4.6 + Math.sin(this.camT * 0.13) * 0.15;
-    this.camera.lookAt(0, 0.8, 0);
+    this.fx.update(dt);
+    for (const f of this.envTick) f(dt);
+    // gentle camera drift + impact shake (position AND aim — feels punchier)
+    const sh = this.fx.shakeOffset;
+    this.camera.position.set(
+      Math.sin(this.camT * 0.18) * 0.6 + sh.x,
+      4.6 + Math.sin(this.camT * 0.13) * 0.15 + sh.y,
+      this.camDist + sh.z,
+    );
+    this.camera.lookAt(sh.x * 0.6, 0.8 + sh.y * 0.6, 0);
+    const fov = this.baseFov - this.fx.fovKick;
+    if (Math.abs(this.camera.fov - fov) > 0.02) {
+      this.camera.fov = fov;
+      this.camera.updateProjectionMatrix();
+    }
   }
 
-  // ---------- setup ----------
+  // ---------- arena construction ----------
   private buildArena(): void {
-    const theme = THEME_COLORS[this.opts.theme ?? 'cavern'];
-    this.scene.background = skyGradient(theme.sky[0], theme.sky[1]);
-    this.scene.fog = new THREE.Fog(theme.fog, 14, 30);
+    const theme = this.opts.theme ?? 'cavern';
+    const boss = !!this.opts.boss;
+    const floorR = boss ? 8.4 : 7;
 
-    const floor = new THREE.Mesh(
-      new THREE.CylinderGeometry(7, 7.6, 0.5, 36),
-      new THREE.MeshStandardMaterial({ map: stoneTexture(theme.floor, '#1a1e2a', 3), roughness: 0.9 })
-    );
+    // theme-keyed staging: sky, fog, floor material, light palette
+    let sky: [string, string], fog: number, ringColor: number;
+    let floorMat: THREE.MeshStandardMaterial;
+    let ambColor = 0x8a93c0, keyColor = 0xfff0d8, overhead = 0x5a7bd8;
+    // living-green arenas: the Mossdeep burrows and Aurelia's sea-cave nest
+    const verdant = this.opts.arena === 'mossdeep' || this.opts.arena === 'cradle';
+
+    if (theme === 'vault') {
+      sky = boss ? ['#081626', '#020810'] : ['#0e2238', '#04101c'];
+      fog = 0x081018; ringColor = 0x6ad8c4;
+      floorMat = new THREE.MeshStandardMaterial({
+        map: drownedBrickTexture('#2e4a5a', '#16242e', 'rgba(74,164,116,1)', 31, 3),
+        roughness: 0.55,
+      });
+      ambColor = 0x6a93b0; keyColor = 0xc8f0e8; overhead = 0x3aa8b8;
+    } else if (theme === 'storm') {
+      sky = boss ? ['#1c1430', '#070410'] : ['#2a2440', '#0a0814'];
+      fog = 0x100c20; ringColor = 0xb8a8f2;
+      floorMat = new THREE.MeshStandardMaterial({
+        map: stormPanelTexture('#34304a', '#1a1628', 5, 3),
+        emissiveMap: stormSeamEmissive('#8a6af2', 5, 3),
+        emissive: new THREE.Color(0x8a6af2),
+        emissiveIntensity: 0.7,
+        roughness: 0.5, metalness: 0.35,
+      });
+      ambColor = 0x8a83c8; keyColor = 0xd8d0ff; overhead = 0x8a6af2;
+    } else if (verdant) {
+      sky = boss ? ['#0c1a10', '#030804'] : ['#14241a', '#05080a'];
+      fog = 0x0a1410; ringColor = 0x7ae47a;
+      floorMat = new THREE.MeshStandardMaterial({
+        map: caveRockTexture('#2e4434', '#1e3024', '#14201a', 13, 3),
+        roughness: 0.9,
+      });
+      ambColor = 0x7ab088; keyColor = 0xd8f0c8; overhead = 0x4ec45e;
+    } else { // cavern
+      sky = boss ? ['#160e24', '#04050a'] : ['#1a1430', '#060810'];
+      fog = 0x0a0c18; ringColor = 0xf2c14e;
+      floorMat = new THREE.MeshStandardMaterial({
+        map: caveRockTexture('#3a3f52', '#2a2e40', '#1a1e2a', 21, 3),
+        roughness: 0.9,
+      });
+    }
+
+    this.scene.background = skyGradient(sky[0], sky[1]);
+    this.scene.fog = new THREE.Fog(fog, boss ? 12 : 14, boss ? 26 : 30);
+
+    const floor = new THREE.Mesh(new THREE.CylinderGeometry(floorR, floorR + 0.6, 0.5, 40), floorMat);
     floor.position.y = -0.25;
     floor.receiveShadow = true;
     this.scene.add(floor);
 
     const ring = new THREE.Mesh(
-      new THREE.TorusGeometry(6.4, 0.06, 8, 48),
-      new THREE.MeshBasicMaterial({ color: 0xf2c14e, transparent: true, opacity: 0.5 })
+      new THREE.TorusGeometry(floorR - 0.6, 0.06, 8, 48),
+      new THREE.MeshBasicMaterial({ color: boss ? 0xe83a5a : ringColor, transparent: true, opacity: 0.55 })
     );
-    ring.rotation.x = Math.PI / 2; ring.position.y = 0.03;
+    ring.rotation.x = Math.PI / 2;
+    ring.position.y = 0.03;
     this.scene.add(ring);
+    this.envTick.push(dt => { ring.rotation.z += dt * (boss ? 0.4 : 0.12); });
 
-    this.scene.add(new THREE.AmbientLight(0x8a93c0, 0.7));
-    const key = new THREE.DirectionalLight(0xfff0d8, 1.4);
+    const amb = new THREE.AmbientLight(ambColor, boss ? 0.55 : 0.7);
+    this.scene.add(amb);
+    const key = new THREE.DirectionalLight(keyColor, boss ? 1.7 : 1.4);
     key.position.set(4, 9, 5);
     key.castShadow = true;
     key.shadow.mapSize.set(1024, 1024);
     this.scene.add(key);
-    this.spotlight = new THREE.PointLight(0x5a7bd8, 18, 22);
-    this.spotlight.position.set(0, 6, 0);
-    this.scene.add(this.spotlight);
+    const spot = new THREE.PointLight(overhead, 18, 24);
+    spot.position.set(0, 6, 0);
+    this.scene.add(spot);
+    this.envTick.push(dt => { void dt; spot.intensity = 18 + Math.sin(this.camT * 1.7) * 2.5; });
 
-    // floating dust motes
-    const pts = new Float32Array(240);
-    for (let i = 0; i < pts.length; i++) pts[i] = (Math.random() - 0.5) * 14;
-    const dust = new THREE.Points(
-      new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(pts, 3)),
-      new THREE.PointsMaterial({ color: 0x8a93c0, size: 0.05, transparent: true, opacity: 0.5 })
-    );
-    dust.position.y = 3;
-    this.scene.add(dust);
+    // theme set-dressing
+    if (theme === 'vault') this.dressVault(floorR);
+    else if (theme === 'storm') this.dressStorm(floorR, amb);
+    else this.dressCavern(floorR, verdant);
 
-    this.camera.position.set(0, 4.6, 9.2);
+    if (boss) this.dressBossSeal(theme, floorR);
+
+    this.camera.position.set(0, 4.6, this.camDist);
     this.camera.lookAt(0, 0.8, 0);
+  }
+
+  /** Torch-lit proving cavern — stalagmite ring, braziers, drifting dust.
+   *  Mossdeep variant swaps fire for glow-shrooms and spore-light. */
+  private dressCavern(floorR: number, verdant: boolean): void {
+    const rockMat = new THREE.MeshStandardMaterial({
+      map: caveRockTexture(verdant ? '#31493a' : '#454a60', verdant ? '#20301f' : '#30344a', '#181c28', 87, 1),
+      roughness: 0.95,
+    });
+    for (let i = 0; i < 11; i++) {
+      const a = (i / 11) * Math.PI * 2 + 0.3;
+      const r = floorR + 1.6 + Math.random() * 2.2;
+      const h = 1.4 + Math.random() * 2.4;
+      const spire = new THREE.Mesh(new THREE.ConeGeometry(0.4 + Math.random() * 0.35, h, 7), rockMat);
+      spire.position.set(Math.cos(a) * r, h / 2 - 0.5, Math.sin(a) * r);
+      spire.rotation.set((Math.random() - 0.5) * 0.16, Math.random() * Math.PI, (Math.random() - 0.5) * 0.16);
+      this.scene.add(spire);
+    }
+
+    if (!verdant) {
+      // three flickering braziers behind the battle lines
+      for (const [bx, bz] of [[0, -5.6], [-5.2, 3.4], [5.2, 3.4]]) {
+        const bowl = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.34, 0.2, 0.3, 10),
+          new THREE.MeshStandardMaterial({ map: stoneTexture('#4a4256', '#2a2436', 1), roughness: 0.8 }),
+        );
+        bowl.position.set(bx, 0.7, bz);
+        const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.12, 0.7, 8),
+          (bowl.material as THREE.MeshStandardMaterial));
+        stem.position.set(bx, 0.35, bz);
+        const flame = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.55, 8),
+          new THREE.MeshBasicMaterial({ color: 0xffa54e, transparent: true, opacity: 0.85 }));
+        flame.position.set(bx, 1.1, bz);
+        const fire = new THREE.PointLight(0xff9a4e, 9, 8);
+        fire.position.set(bx, 1.3, bz);
+        this.scene.add(bowl, stem, flame, fire);
+        let emberT = Math.random();
+        this.envTick.push(dt => {
+          const flick = 0.8 + Math.sin(this.camT * 11 + bx) * 0.12 + Math.sin(this.camT * 23 + bz) * 0.08;
+          fire.intensity = 9 * flick;
+          flame.scale.set(flick, 0.85 + flick * 0.3, flick);
+          emberT += dt;
+          if (emberT > 0.7) {
+            emberT = 0;
+            this.fx.burst(new THREE.Vector3(bx, 1.15, bz), 0xffb05e,
+              { count: 3, speed: 0.4, up: 1.6, gravity: 0.5, life: 1.1, size: 0.08 });
+          }
+        });
+      }
+    } else {
+      // bioluminescent mushroom clumps pulse slowly
+      for (const [mx, mz] of [[-5.4, 3.2], [5.4, 3.2], [0, -5.8], [-3.4, -4.6], [3.8, -4.2]]) {
+        const clump = new THREE.Group();
+        for (let i = 0; i < 3; i++) {
+          const h = 0.25 + Math.random() * 0.4;
+          const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.08, h, 6),
+            new THREE.MeshStandardMaterial({ color: 0xc8d8b8, roughness: 0.9 }));
+          stem.position.set((Math.random() - 0.5) * 0.5, h / 2, (Math.random() - 0.5) * 0.5);
+          const cap = new THREE.Mesh(new THREE.SphereGeometry(0.16 + Math.random() * 0.1, 10, 8, 0, Math.PI * 2, 0, Math.PI / 2),
+            new THREE.MeshStandardMaterial({ color: 0x5ee4a8, emissive: 0x2a9a5e, emissiveIntensity: 1.1, roughness: 0.4 }));
+          cap.position.set(stem.position.x, h, stem.position.z);
+          clump.add(stem, cap);
+        }
+        clump.position.set(mx, 0, mz);
+        const glow = new THREE.PointLight(0x4ed89a, 5, 6);
+        glow.position.set(mx, 0.6, mz);
+        this.scene.add(clump, glow);
+        const phase = Math.random() * Math.PI * 2;
+        this.envTick.push(() => { glow.intensity = 5 + Math.sin(this.camT * 1.8 + phase) * 2; });
+      }
+    }
+
+    this.addMotes(verdant ? 0x8ae4a0 : 0xc4b08a, 220, 'drift');
+  }
+
+  /** Drowned imperial treasury — broken columns, god-rays, rising bubbles, gold. */
+  private dressVault(floorR: number): void {
+    const colMat = new THREE.MeshStandardMaterial({
+      map: drownedBrickTexture('#3e5a6a', '#1e2e3a', 'rgba(74,164,116,1)', 51, 1),
+      roughness: 0.6,
+    });
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2 + 0.5;
+      const r = floorR + 1.8 + Math.random() * 1.4;
+      const h = 1.8 + Math.random() * 2.6;
+      const col = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.58, h, 12), colMat);
+      col.position.set(Math.cos(a) * r, h / 2 - 0.4, Math.sin(a) * r);
+      this.scene.add(col);
+      if (Math.random() < 0.6) {
+        // its broken capital leans against it
+        const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.52, 0.5, 0.7, 12), colMat);
+        cap.position.set(col.position.x + 0.9, -0.1, col.position.z + 0.5);
+        cap.rotation.set(Math.PI / 2.3, 0, Math.random() * Math.PI);
+        this.scene.add(cap);
+      }
+    }
+    // hoard mounds, still glinting after four hundred drowned years
+    const goldMat = new THREE.MeshStandardMaterial({
+      color: 0xd8a83a, metalness: 0.85, roughness: 0.3, emissive: 0x6a4a10, emissiveIntensity: 0.3,
+    });
+    for (const [gx, gz, gs] of [[-5.8, -3.2, 0.8], [6.2, -2.4, 1.1], [4.8, 4.4, 0.7]]) {
+      const pile = new THREE.Mesh(new THREE.SphereGeometry(gs, 12, 8), goldMat);
+      pile.scale.y = 0.35;
+      pile.position.set(gx, 0.05, gz);
+      this.scene.add(pile);
+    }
+    this.envTick.push(() => { goldMat.emissiveIntensity = 0.3 + Math.max(0, Math.sin(this.camT * 0.9)) * 0.25; });
+
+    // god-rays: slow-pulsing light shafts from the drowned ceiling
+    const rayMat = new THREE.MeshBasicMaterial({
+      color: 0x7ae4d8, transparent: true, opacity: 0.08, depthWrite: false,
+      blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+    });
+    for (const [rx, rz, ph] of [[-3, -2, 0], [3.4, 1.5, 2.1], [0.5, 4, 4.2]]) {
+      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 1.7, 11, 12, 1, true), rayMat.clone());
+      shaft.position.set(rx, 5.5, rz);
+      shaft.rotation.z = 0.12;
+      this.scene.add(shaft);
+      this.envTick.push(() => {
+        (shaft.material as THREE.MeshBasicMaterial).opacity = 0.05 + (Math.sin(this.camT * 0.5 + ph) * 0.5 + 0.5) * 0.07;
+        shaft.rotation.y += 0.0008;
+      });
+    }
+    // caustic wobble — a cool light slowly circling overhead
+    const caustic = new THREE.PointLight(0x5ad8c4, 7, 18);
+    this.scene.add(caustic);
+    this.envTick.push(() => {
+      caustic.position.set(Math.cos(this.camT * 0.4) * 4, 5.5, Math.sin(this.camT * 0.4) * 4);
+    });
+
+    this.addMotes(0x9ae4d8, 260, 'rise');
+  }
+
+  /** The war-spire's dueling platform — tesla pylons, arcing current, rain. */
+  private dressStorm(floorR: number, amb: THREE.AmbientLight): void {
+    const pylonMat = new THREE.MeshStandardMaterial({
+      map: stormPanelTexture('#2e2a44', '#161226', 9, 1),
+      emissiveMap: stormSeamEmissive('#9a7af2', 9, 1),
+      emissive: new THREE.Color(0x9a7af2),
+      emissiveIntensity: 0.8,
+      roughness: 0.45, metalness: 0.5,
+    });
+    const tips: THREE.Vector3[] = [];
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2 + 0.62;
+      const r = floorR + 2.1;
+      const h = 2.6 + (i % 2) * 0.9;
+      const pylon = new THREE.Mesh(new THREE.BoxGeometry(0.55, h, 0.55), pylonMat);
+      pylon.position.set(Math.cos(a) * r, h / 2 - 0.4, Math.sin(a) * r);
+      const orb = new THREE.Mesh(new THREE.SphereGeometry(0.2, 10, 8),
+        new THREE.MeshStandardMaterial({ color: 0xd8c8ff, emissive: 0xb49af2, emissiveIntensity: 2, roughness: 0.2 }));
+      orb.position.set(pylon.position.x, h - 0.25, pylon.position.z);
+      this.scene.add(pylon, orb);
+      tips.push(orb.position.clone());
+    }
+    // current arcs leap between pylon crowns; the sky answers with sheet lightning
+    let arcT = 1.2, flashBoost = 0;
+    const ambBase = amb.intensity;
+    this.envTick.push(dt => {
+      arcT -= dt;
+      if (arcT <= 0) {
+        arcT = 1.6 + Math.random() * 3;
+        const a = Math.floor(Math.random() * tips.length);
+        const b = (a + 1 + Math.floor(Math.random() * (tips.length - 1))) % tips.length;
+        this.fx.bolt(tips[a], tips[b], 0xc8b0ff, { life: 0.28, jitter: 0.7 });
+        this.fx.flash(tips[a].clone().lerp(tips[b], 0.5), 0xb49af2, { intensity: 14, life: 0.3 });
+        if (Math.random() < 0.4) { flashBoost = 0.5; sfx('zap'); }
+      }
+      flashBoost = Math.max(0, flashBoost - dt * 1.4);
+      amb.intensity = ambBase + flashBoost;
+    });
+    // sheared wreckage drifts around the spire on old grav-rails
+    const shardMat = new THREE.MeshStandardMaterial({
+      color: 0x4a4266, emissive: 0x6a5ac8, emissiveIntensity: 0.5, roughness: 0.5, metalness: 0.4,
+    });
+    for (let i = 0; i < 8; i++) {
+      const shard = new THREE.Mesh(new THREE.OctahedronGeometry(0.16 + Math.random() * 0.2), shardMat);
+      const a0 = Math.random() * Math.PI * 2;
+      const r = floorR - 1 + Math.random() * 4.5;
+      const y = 2.2 + Math.random() * 3.4;
+      const speed = 0.08 + Math.random() * 0.12;
+      this.scene.add(shard);
+      this.envTick.push(() => {
+        const a = a0 + this.camT * speed;
+        shard.position.set(Math.cos(a) * r, y + Math.sin(this.camT * 0.8 + a0 * 4) * 0.3, Math.sin(a) * r);
+        shard.rotation.x += 0.01; shard.rotation.y += 0.014;
+      });
+    }
+    this.addMotes(0x8a7ae4, 200, 'rain');
+  }
+
+  /** Boss staging: a rotating rune seal, crimson braziers, dread in the fog. */
+  private dressBossSeal(theme: string, floorR: number): void {
+    const sigilCss = theme === 'vault' ? 'rgba(90,216,196,0.9)' : theme === 'storm' ? 'rgba(180,154,242,0.9)' : 'rgba(232,58,90,0.85)';
+    const sigil = new THREE.Mesh(
+      new THREE.PlaneGeometry(floorR * 1.35, floorR * 1.35),
+      new THREE.MeshBasicMaterial({
+        map: runeSigilTexture(sigilCss), transparent: true, opacity: 0.6,
+        depthWrite: false, blending: THREE.AdditiveBlending,
+      }),
+    );
+    sigil.rotation.x = -Math.PI / 2;
+    sigil.position.y = 0.04;
+    this.scene.add(sigil);
+    this.envTick.push(dt => {
+      sigil.rotation.z += dt * 0.18;
+      (sigil.material as THREE.MeshBasicMaterial).opacity = 0.45 + (Math.sin(this.camT * 1.2) * 0.5 + 0.5) * 0.3;
+    });
+
+    // four seal-fire braziers burn cold crimson
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+      const bx = Math.cos(a) * (floorR - 0.9), bz = Math.sin(a) * (floorR - 0.9);
+      const stand = new THREE.Mesh(new THREE.ConeGeometry(0.26, 0.9, 6),
+        new THREE.MeshStandardMaterial({ color: 0x241a2e, roughness: 0.6, metalness: 0.4 }));
+      stand.position.set(bx, 0.45, bz);
+      const flame = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.5, 8),
+        new THREE.MeshBasicMaterial({ color: 0xe84a6a, transparent: true, opacity: 0.85 }));
+      flame.position.set(bx, 1.1, bz);
+      const light = new THREE.PointLight(0xe83a5a, 7, 7);
+      light.position.set(bx, 1.2, bz);
+      this.scene.add(stand, flame, light);
+      this.envTick.push(() => {
+        const f = 0.8 + Math.sin(this.camT * 13 + i * 2.2) * 0.18;
+        light.intensity = 7 * f;
+        flame.scale.set(f, 0.8 + f * 0.4, f);
+      });
+    }
+    // a cold rim light from behind the master's side
+    const rim = new THREE.DirectionalLight(0xe83a5a, 0.9);
+    rim.position.set(9, 3.5, -4);
+    this.scene.add(rim);
+  }
+
+  /** Ambient particles: drifting dust, rising bubbles, or driving rain. */
+  private addMotes(color: number, count: number, mode: 'drift' | 'rise' | 'rain'): void {
+    const positions = new Float32Array(count * 3);
+    const seed: number[] = [];
+    for (let i = 0; i < count; i++) {
+      positions[i * 3] = (Math.random() - 0.5) * 22;
+      positions[i * 3 + 1] = Math.random() * 8;
+      positions[i * 3 + 2] = (Math.random() - 0.5) * 22;
+      seed.push(Math.random() * Math.PI * 2);
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    const mat = new THREE.PointsMaterial({
+      color, size: mode === 'rain' ? 0.045 : 0.06, transparent: true,
+      opacity: mode === 'rain' ? 0.3 : 0.5, depthWrite: false,
+    });
+    const pts = new THREE.Points(geo, mat);
+    this.scene.add(pts);
+    this.envTick.push(dt => {
+      const arr = geo.attributes.position.array as Float32Array;
+      for (let i = 0; i < count; i++) {
+        if (mode === 'drift') {
+          arr[i * 3] += Math.sin(this.camT * 0.5 + seed[i]) * dt * 0.12;
+          arr[i * 3 + 1] += Math.cos(this.camT * 0.4 + seed[i] * 2) * dt * 0.08;
+        } else if (mode === 'rise') {
+          arr[i * 3 + 1] += dt * (0.25 + (seed[i] % 1) * 0.3);
+          arr[i * 3] += Math.sin(this.camT * 0.8 + seed[i]) * dt * 0.1;
+          if (arr[i * 3 + 1] > 8) arr[i * 3 + 1] = 0;
+        } else {
+          arr[i * 3 + 1] -= dt * (6 + (seed[i] % 1) * 4);
+          if (arr[i * 3 + 1] < 0) arr[i * 3 + 1] = 8;
+        }
+      }
+      geo.attributes.position.needsUpdate = true;
+    });
   }
 
   private slotPos(side: 'player' | 'enemy', slot: number): THREE.Vector3 {
@@ -138,6 +507,12 @@ export class Battle {
       wild: side === 'enemy' && !!this.opts.wild,
     };
     if (g.fainted) { rig.group.visible = false; }
+    else {
+      // materialization flourish
+      const color = TYPE_COLORS[g.species.type];
+      this.fx.ring(rig.group.position, color, { maxR: 1.2, life: 0.5 });
+      this.fx.glow(rig.group.position.clone().setY(0.8), color, { scale: 1.4, life: 0.45 });
+    }
     return u;
   }
 
@@ -183,7 +558,7 @@ export class Battle {
     });
   }
 
-  // ---------- animations ----------
+  // ---------- animation helpers ----------
   /** Rotate a unit to face a world position (models face +Z at rotation 0). */
   private faceTo(u: Unit, pos: THREE.Vector3): void {
     const d = pos.clone().sub(u.rig.group.position);
@@ -194,47 +569,246 @@ export class Battle {
     u.rig.group.rotation.y = u.side === 'player' ? Math.PI / 2 : -Math.PI / 2;
   }
 
-  private async lungeAttack(att: Unit, def: Unit): Promise<void> {
+  private chest(u: Unit): THREE.Vector3 {
+    return u.rig.group.position.clone().add(new THREE.Vector3(0, 1.0, 0));
+  }
+
+  /** Screenshake + lens punch scaled to how much of the target's HP just vanished. */
+  private dmgFeedback(def: Unit, dmg: number, crit: boolean, eff: number): void {
+    const pct = dmg / def.g.stats.hp;
+    const amp = Math.min(0.5, pct * 1.05 + (crit ? 0.07 : 0) + (eff > 1 ? 0.04 : 0));
+    this.fx.shake(amp, 0.28 + pct * 0.55);
+    if (pct > 0.2 || crit) this.fx.punch(5);
+    else if (pct > 0.12) this.fx.punch(2.5);
+  }
+
+  /** Anticipation crouch, then a dash to melee range with motion ghosts. */
+  private async meleeRush(att: Unit, def: Unit, color: number): Promise<void> {
     this.faceTo(att, def.rig.group.position);
     const start = att.rig.group.position.clone();
-    const target = def.rig.group.position.clone().lerp(start, 0.35);
-    await tween(0.22, t => att.rig.group.position.lerpVectors(start, target, t), Ease.inQuad);
-    await tween(0.28, t => att.rig.group.position.lerpVectors(target, start, t), Ease.outQuad);
+    const target = def.rig.group.position.clone().lerp(start, 0.3);
+    await tween(0.12, t => {
+      att.rig.group.scale.set(1 + t * 0.07, 1 - t * 0.15, 1 + t * 0.07);
+    }, Ease.outQuad);
+    sfx('whoosh');
+    await tween(0.13, t => {
+      att.rig.group.position.lerpVectors(start, target, t);
+      att.rig.group.position.y = Math.sin(t * Math.PI) * 0.4;
+      att.rig.group.scale.set(1 + (1 - t) * 0.07, 1 - (1 - t) * 0.15, 1 + (1 - t) * 0.07);
+    }, Ease.inQuad);
+    att.rig.group.scale.setScalar(1);
+    att.rig.group.position.y = 0;
+    for (let i = 1; i <= 3; i++) {
+      this.fx.glow(start.clone().lerp(target, i / 3.5).setY(0.8), color, { scale: 0.8, life: 0.28, grow: 0.3 });
+    }
+  }
+
+  private async meleeReturn(att: Unit, home: THREE.Vector3): Promise<void> {
+    const cur = att.rig.group.position.clone();
+    await tween(0.28, t => {
+      att.rig.group.position.lerpVectors(cur, home, t);
+      att.rig.group.position.y = Math.sin(t * Math.PI) * 0.3;
+    }, Ease.outQuad);
+    att.rig.group.position.copy(home);
     this.faceHome(att);
   }
 
-  private async castFlash(att: Unit, color: number): Promise<void> {
-    const light = new THREE.PointLight(color, 30, 8);
-    light.position.copy(att.rig.group.position).y += 1.5;
-    this.scene.add(light);
+  /** Spell windup: converging motes, swelling glow, rising light. */
+  private async castWindup(att: Unit, color: number): Promise<void> {
+    const p = this.chest(att);
+    sfx('charge');
+    this.fx.spiral(att.rig.group.position.clone(), color, { up: true, dur: 0.5, radius: 0.7, height: 1.4 });
+    const converge = this.fx.implode(p, color, { count: 22, radius: 1.6, life: 0.42 });
+    this.fx.flash(p, color, { intensity: 15, life: 0.5 });
     const s = att.rig.body.scale.x;
-    await tween(0.35, t => {
-      const k = 1 + Math.sin(t * Math.PI) * 0.18;
+    await tween(0.42, t => {
+      const k = 1 + Math.sin(t * Math.PI) * 0.16;
       att.rig.body.scale.setScalar(s * k);
-      light.intensity = 30 * (1 - t);
     });
     att.rig.body.scale.setScalar(s);
-    this.scene.remove(light);
+    await converge;
+    this.fx.glow(p, color, { scale: 1.5, life: 0.22 });
   }
 
-  private async hitReact(def: Unit, dmg: number, eff: number, crit: boolean): Promise<void> {
-    const pos = def.rig.group.position.clone(); pos.y += 1.8;
+  /** The element-styled payload that lands on a target. `big` for heavy arts/crits. */
+  private elementalImpact(tgt: Unit, gt: GType, big: boolean): void {
+    const p = this.chest(tgt);
+    const ground = tgt.rig.group.position;
+    switch (gt) {
+      case 'Blaze':
+        this.fx.glow(p, 0xfff0b0, { scale: big ? 2.3 : 1.4, life: 0.3 });
+        this.fx.burst(p, 0xff8a3a, { count: big ? 42 : 26, speed: big ? 4.6 : 3.2, gravity: -2.5, life: 0.7 });
+        this.fx.burst(p, 0xffd24e, { count: 14, speed: 1.8, gravity: 0.6, life: 1.0, size: 0.1 });
+        this.fx.ring(ground, 0xff8a3a, { maxR: big ? 2.8 : 1.8 });
+        this.fx.flash(p, 0xff8a3a, { intensity: big ? 36 : 22 });
+        sfx('boom');
+        break;
+      case 'Tide':
+        this.fx.glow(p, 0xbfe8ff, { scale: big ? 1.9 : 1.3, life: 0.25 });
+        this.fx.burst(p, 0x6ac4ff, { count: big ? 40 : 28, speed: 3.4, up: 2.6, gravity: -9, life: 0.7 });
+        this.fx.ring(ground, 0x3a9df2, { maxR: big ? 2.5 : 1.9 });
+        this.fx.flash(p, 0x3a9df2, { intensity: 20 });
+        sfx('splash');
+        break;
+      case 'Verdant':
+        this.fx.spikes(ground, 0x3a9a4e, { count: big ? 9 : 6, height: big ? 1.5 : 1.1 });
+        this.fx.burst(p, 0x7ae47a, { count: 22, speed: 2.2, gravity: -1.2, life: 0.85, size: 0.12 });
+        this.fx.glow(p, 0x9af2a0, { scale: 1.3, life: 0.3 });
+        sfx('leaf');
+        break;
+      case 'Volt': {
+        const skyP = p.clone().add(new THREE.Vector3((Math.random() - 0.5) * 1.4, 6.5, (Math.random() - 0.5) * 1.4));
+        this.fx.bolt(skyP, p, 0xfff2a0, { jitter: 0.55 });
+        this.fx.bolt(p, ground.clone().add(new THREE.Vector3(0.7, 0, 0.4)), 0xf2d23a, { life: 0.18, jitter: 0.3, segments: 5 });
+        this.fx.burst(p, 0xf2d23a, { count: big ? 34 : 24, speed: 3.8, gravity: -3, life: 0.5 });
+        this.fx.flash(p, 0xf2d23a, { intensity: big ? 34 : 26, life: 0.22 });
+        this.fx.glow(p, 0xfff8c0, { scale: big ? 2 : 1.3, life: 0.2 });
+        sfx('zap');
+        break;
+      }
+      case 'Gale':
+        this.fx.burst(p, 0x9af2e4, { count: 26, speed: 4.4, gravity: 0, drag: 2.4, spread: 0.35, life: 0.5 });
+        this.fx.ring(ground, 0x7adfd0, { maxR: big ? 2.6 : 2.0, y: 0.9, tube: 0.04 });
+        this.fx.glow(p, 0xc8fff4, { scale: 1.4, life: 0.25 });
+        sfx('whoosh');
+        break;
+      case 'Umbra':
+        this.fx.glow(p, 0x9a5af2, { scale: big ? 2.5 : 1.6, life: 0.4 });
+        this.fx.burst(p, 0xb46af2, { count: big ? 38 : 28, speed: 2.6, gravity: 1.6, drag: 1, life: 0.75 });
+        this.fx.ring(ground, 0x9a5af2, { maxR: big ? 2.6 : 1.8 });
+        this.fx.flash(p, 0x9a5af2, { intensity: 24 });
+        sfx('dark');
+        break;
+    }
+  }
+
+  /** Per-element delivery from caster to a single target (the travel, not the landing). */
+  private async artDelivery(att: Unit, tgt: Unit, gt: GType): Promise<void> {
+    const from = this.chest(att);
+    const to = this.chest(tgt);
+    switch (gt) {
+      case 'Blaze':
+        await this.fx.projectile(from, to, 0xff8a3a, { size: 0.2, dur: 0.34, arc: 0.95 });
+        break;
+      case 'Tide': {
+        const shots = [0, 90, 180].map(d =>
+          wait(d).then(() => this.fx.projectile(from, to, 0x6ac4ff, { size: 0.13, dur: 0.3, arc: 0.4 })));
+        await Promise.all(shots);
+        break;
+      }
+      case 'Verdant':
+        // the ground itself answers — brief tremor, then the eruption at impact
+        this.fx.ring(tgt.rig.group.position, 0x4ec45e, { maxR: 1.1, life: 0.3 });
+        await wait(160);
+        break;
+      case 'Volt':
+        await wait(120); // the sky-bolt IS the impact
+        break;
+      case 'Gale': {
+        sfx('whoosh');
+        const a = this.fx.crescent(from, to, 0x7adfd0);
+        const b = wait(80).then(() =>
+          this.fx.crescent(from.clone().add(new THREE.Vector3(0, 0.45, 0)), to.clone(), 0x9af2e4));
+        await Promise.all([a, b]);
+        break;
+      }
+      case 'Umbra':
+        await this.fx.implode(to, 0x9a5af2, { count: 34, radius: 1.9, life: 0.5 });
+        break;
+    }
+  }
+
+  /** Theatrical prelude for an all-target art, before the per-target landings. */
+  private async artBarragePrelude(att: Unit, targets: Unit[], gt: GType): Promise<void> {
+    if (!targets.length) return;
+    const center = targets.reduce((v, u) => v.add(u.rig.group.position), new THREE.Vector3())
+      .multiplyScalar(1 / targets.length);
+    switch (gt) {
+      case 'Blaze': {
+        // meteors scream down on every foe
+        const drops = targets.map((tgt, i) => wait(i * 130).then(() => {
+          const to = this.chest(tgt);
+          const from = to.clone().add(new THREE.Vector3((Math.random() - 0.5) * 3, 7, (Math.random() - 0.5) * 2));
+          return this.fx.projectile(from, to, 0xff7a3a, { size: 0.24, dur: 0.4, arc: 0 });
+        }));
+        await Promise.all(drops);
+        break;
+      }
+      case 'Tide': {
+        // a wall of seawater sweeps the whole line
+        const dir = att.side === 'player' ? 1 : -1;
+        const from = new THREE.Vector3(center.x - dir * 3.2, 0, center.z);
+        const to = new THREE.Vector3(center.x + dir * 2.6, 0, center.z);
+        sfx('splash');
+        await this.fx.wave(from, to, 0x4ab0f2, { width: 6.2, height: 1.8, dur: 0.5 });
+        break;
+      }
+      case 'Gale': {
+        const from = this.chest(att);
+        await Promise.all(targets.map((tgt, i) =>
+          wait(i * 70).then(() => this.fx.crescent(from.clone(), this.chest(tgt), 0x7adfd0))));
+        break;
+      }
+      case 'Umbra':
+        await Promise.all(targets.map(tgt => this.fx.implode(this.chest(tgt), 0x9a5af2, { count: 24, radius: 1.6, life: 0.45 })));
+        break;
+      case 'Volt':
+      case 'Verdant':
+        await wait(110); // per-target impacts carry the show
+        break;
+    }
+  }
+
+  private async hitReact(def: Unit, dmg: number, eff: number, crit: boolean, from?: THREE.Vector3): Promise<void> {
+    const pct = dmg / def.g.stats.hp;
     const color = crit ? '#ffd24e' : eff > 1 ? '#ff6a5a' : eff < 1 ? '#8b93b8' : '#ffffff';
-    makeFloatingDamageText(this.scene, pos, `${dmg}`, color);
+    const scale = crit || pct > 0.25 ? 1.6 : pct > 0.15 ? 1.25 : 1;
+    const pos = def.rig.group.position.clone(); pos.y += 1.8;
+    makeFloatingDamageText(this.scene, pos, `${dmg}`, color, scale);
+    this.fx.flashMaterials(def.rig.body, eff > 1 ? 0xff6a3a : 0xffffff);
+    this.fx.glow(this.chest(def), 0xffffff, { scale: 0.8 + pct * 2.2, life: 0.2 });
+    sfx(crit ? 'crit' : 'hit');
+    this.dmgFeedback(def, dmg, crit, eff);
+
+    // knockback away from the blow, with squash-and-stretch and a shiver on landing
     const orig = def.rig.group.position.clone();
-    await tween(0.3, t => {
-      def.rig.group.position.x = orig.x + Math.sin(t * Math.PI * 4) * 0.12 * (1 - t);
+    const dir = from
+      ? orig.clone().sub(from).setY(0).normalize()
+      : new THREE.Vector3(def.side === 'enemy' ? 1 : -1, 0, 0);
+    if (!isFinite(dir.x) || dir.lengthSq() < 0.001) dir.set(def.side === 'enemy' ? 1 : -1, 0, 0);
+    const out = orig.clone().add(dir.multiplyScalar(Math.min(0.6, 0.22 + pct * 0.9)));
+    await tween(0.09, t => {
+      def.rig.group.position.lerpVectors(orig, out, t);
+      def.rig.group.scale.set(1 + t * 0.13, 1 - t * 0.2, 1 + t * 0.13);
+    }, Ease.outQuad);
+    await tween(0.26, t => {
+      def.rig.group.position.lerpVectors(out, orig, t);
+      def.rig.group.position.x += Math.sin(t * Math.PI * 5) * 0.05 * (1 - t);
+      def.rig.group.scale.set(1 + (1 - t) * 0.13, 1 - (1 - t) * 0.2, 1 + (1 - t) * 0.13);
     });
     def.rig.group.position.copy(orig);
+    def.rig.group.scale.setScalar(1);
   }
 
   private async koAnim(u: Unit): Promise<void> {
-    await tween(0.6, t => {
+    sfx('ko');
+    const color = TYPE_COLORS[u.g.species.type];
+    this.fx.flashMaterials(u.rig.body, 0xffffff, 0.3);
+    await tween(0.55, t => {
       u.rig.group.rotation.z = (u.side === 'player' ? -1 : 1) * t * Math.PI / 2;
       u.rig.group.position.y = -t * 0.3;
       u.rig.group.scale.setScalar(1 - t * 0.4);
     });
+    // the body gives out in a bloom of type-light
+    const p = u.rig.group.position.clone().setY(0.5);
+    this.fx.burst(p, color, { count: 34, speed: 2.6, gravity: 1.2, drag: 1.2, life: 0.9, size: 0.13 });
+    this.fx.glow(p, color, { scale: 1.9, life: 0.5 });
+    this.fx.ring(u.rig.group.position, color, { maxR: 1.7 });
+    this.fx.shake(0.12, 0.3);
     u.rig.group.visible = false;
+    u.rig.group.rotation.z = 0;
+    u.rig.group.scale.setScalar(1);
+    u.rig.group.position.y = 0;
   }
 
   // ---------- damage ----------
@@ -283,32 +857,48 @@ export class Battle {
 
     if (tech.effect === 'heal') {
       const tgt = target ?? att;
-      await this.castFlash(att, color);
+      await this.castWindup(att, color);
       const amount = Math.floor(tech.power + att.g.stats.wis * 0.6);
       tgt.g.hp = Math.min(tgt.g.stats.hp, tgt.g.hp + amount);
-      makeFloatingDamageText(this.scene, tgt.rig.group.position.clone().setY(2), `+${amount}`, '#5ad88a');
+      sfx('heal');
+      this.fx.spiral(tgt.rig.group.position.clone(), 0x5ad88a, { up: true, dur: 0.9 });
+      this.fx.glow(this.chest(tgt), 0x8af2b0, { scale: 1.6, life: 0.5 });
+      this.fx.burst(this.chest(tgt).setY(2.3), 0x8af2b0, { count: 16, speed: 1.1, gravity: -2, life: 0.9, size: 0.11 });
+      makeFloatingDamageText(this.scene, tgt.rig.group.position.clone().setY(2), `+${amount}`, '#5ad88a', 1.15);
       this.renderCards();
       await wait(500);
       return;
     }
     if (tech.effect === 'buffAtk' || tech.effect === 'buffDef') {
-      await this.castFlash(att, color);
-      if (tech.effect === 'buffAtk') att.mods.atk = Math.min(1.8, att.mods.atk + 0.3);
-      else att.mods.def = Math.min(1.8, att.mods.def + 0.3);
+      await this.castWindup(att, color);
+      sfx('buff');
+      if (tech.effect === 'buffAtk') {
+        att.mods.atk = Math.min(1.8, att.mods.atk + 0.3);
+        this.fx.spiral(att.rig.group.position.clone(), 0xff8a4a, { up: true, dur: 0.8 });
+        this.fx.ring(att.rig.group.position, 0xff8a4a, { maxR: 1.4 });
+      } else {
+        att.mods.def = Math.min(1.8, att.mods.def + 0.3);
+        this.fx.spiral(att.rig.group.position.clone(), 0x5ab8e8, { up: true, dur: 0.8 });
+        this.fx.ring(att.rig.group.position, 0x5ab8e8, { maxR: 1.4, y: 1.0, tube: 0.04 });
+      }
       this.log(`${who}'s ${tech.effect === 'buffAtk' ? 'Attack' : 'Defense'} rose!`);
       await wait(600);
       return;
     }
     if (tech.effect === 'debuffDef' || tech.effect === 'debuffSpd') {
-      await this.castFlash(att, color);
+      await this.castWindup(att, color);
       const foes = this.alive(att.side === 'player' ? 'enemy' : 'player');
+      sfx('debuff');
       for (const f of foes) {
         if (tech.effect === 'debuffDef') f.mods.def = Math.max(0.5, f.mods.def - 0.2);
         else f.mods.spd = Math.max(0.5, f.mods.spd - 0.2);
+        this.fx.spiral(f.rig.group.position.clone(), 0x9a5af2, { up: false, dur: 0.7 });
+        this.fx.flashMaterials(f.rig.body, 0x9a5af2, 0.25);
         if (tech.power > 0) {
           const { dmg, eff, crit } = this.computeDamage(att, f, tech);
           f.g.hp = Math.max(0, f.g.hp - dmg);
-          await this.hitReact(f, dmg, eff, crit);
+          this.elementalImpact(f, tech.type, false);
+          await this.hitReact(f, dmg, eff, crit, att.rig.group.position);
         }
       }
       this.log(`The foes' ${tech.effect === 'debuffDef' ? 'Defense' : 'Speed'} fell!`);
@@ -322,34 +912,61 @@ export class Battle {
     const targets = tech.target === 'all'
       ? this.alive(att.side === 'player' ? 'enemy' : 'player')
       : target ? [target] : [];
-    if (tech.kind === 'phys' && targets.length === 1) await this.lungeAttack(att, targets[0]);
-    else {
-      if (targets.length === 1) this.faceTo(att, targets[0].rig.group.position);
-      await this.castFlash(att, color);
-    }
+    const big = tech.power >= 55 || tech.target === 'all';
 
-    for (const tgt of targets) {
-      if (tgt.g.fainted) continue;
+    if (tech.kind === 'phys' && targets.length === 1) {
+      const tgt = targets[0];
+      const home = att.rig.group.position.clone();
+      await this.meleeRush(att, tgt, color);
       const { dmg, eff, crit } = this.computeDamage(att, tgt, tech);
       tgt.g.hp = Math.max(0, tgt.g.hp - dmg);
-      if (tech.effect === 'drain') {
-        const heal = Math.floor(dmg * 0.5);
-        att.g.hp = Math.min(att.g.stats.hp, att.g.hp + heal);
-        makeFloatingDamageText(this.scene, att.rig.group.position.clone().setY(2), `+${heal}`, '#5ad88a');
-      }
+      this.elementalImpact(tgt, tech.type, big || crit);
+      if (tech.effect === 'drain') this.drainFX(att, tgt, dmg);
       this.log(`<b>${who}</b> uses <b>${tech.name}</b>!${this.effText(eff, crit)}`);
-      await this.hitReact(tgt, dmg, eff, crit);
+      await this.hitReact(tgt, dmg, eff, crit, att.rig.group.position);
+      await this.meleeReturn(att, home);
+    } else {
+      if (targets.length === 1) this.faceTo(att, targets[0].rig.group.position);
+      await this.castWindup(att, color);
+      if (targets.length === 1) {
+        await this.artDelivery(att, targets[0], tech.type);
+      } else {
+        await this.artBarragePrelude(att, targets, tech.type);
+      }
+      for (const tgt of targets) {
+        if (tgt.g.fainted) continue;
+        const { dmg, eff, crit } = this.computeDamage(att, tgt, tech);
+        tgt.g.hp = Math.max(0, tgt.g.hp - dmg);
+        this.elementalImpact(tgt, tech.type, big || crit);
+        if (tech.effect === 'drain') this.drainFX(att, tgt, dmg);
+        this.log(`<b>${who}</b> uses <b>${tech.name}</b>!${this.effText(eff, crit)}`);
+        await this.hitReact(tgt, dmg, eff, crit, att.rig.group.position);
+        if (targets.length > 1) await wait(80);
+      }
+      this.faceHome(att);
     }
-    this.faceHome(att);
     this.renderCards();
     await this.cleanupKOs();
     await wait(420);
   }
 
+  /** Stolen life streams back to the attacker as crimson motes. */
+  private drainFX(att: Unit, tgt: Unit, dmg: number): void {
+    const heal = Math.floor(dmg * 0.5);
+    att.g.hp = Math.min(att.g.stats.hp, att.g.hp + heal);
+    this.fx.projectile(this.chest(tgt), this.chest(att), 0xd84a8a, { size: 0.12, dur: 0.45, arc: 1.3 })
+      .then(() => {
+        this.fx.glow(this.chest(att), 0x5ad88a, { scale: 1.2, life: 0.35 });
+        makeFloatingDamageText(this.scene, att.rig.group.position.clone().setY(2), `+${heal}`, '#5ad88a');
+      });
+  }
+
   private async basicStrike(att: Unit, target: Unit): Promise<void> {
     const who = att.side === 'enemy' ? `Wild ${att.g.nickname}` : att.g.nickname;
     this.log(`<b>${who}</b> strikes!`);
-    await this.lungeAttack(att, target);
+    const color = TYPE_COLORS[att.g.species.type];
+    const home = att.rig.group.position.clone();
+    await this.meleeRush(att, target, color);
     const as = att.g.stats, ds = target.g.stats;
     const variance = 0.9 + Math.random() * 0.2;
     const crit = Math.random() < 0.06;
@@ -360,7 +977,10 @@ export class Battle {
     const dmg = Math.max(1, Math.floor(ds.hp * Math.min(0.45, pct)));
     target.g.hp = Math.max(0, target.g.hp - dmg);
     att.g.sp = Math.min(as.sp, att.g.sp + Math.max(2, Math.floor(as.sp * 0.08))); // striking builds SP
-    await this.hitReact(target, dmg, 1, crit);
+    this.fx.burst(this.chest(target), 0xfff0d0, { count: 14, speed: 2.6, gravity: -3, life: 0.45, size: 0.1 });
+    this.fx.glow(this.chest(target), color, { scale: 1.0, life: 0.22 });
+    await this.hitReact(target, dmg, 1, crit, att.rig.group.position);
+    await this.meleeReturn(att, home);
     this.renderCards();
     await this.cleanupKOs();
     await wait(380);
@@ -434,6 +1054,9 @@ export class Battle {
       if (choice === 2) {
         u.guarding = true;
         u.g.sp = Math.min(u.g.stats.sp, u.g.sp + Math.max(3, Math.floor(u.g.stats.sp * 0.12)));
+        sfx('guard');
+        this.fx.ring(u.rig.group.position, 0x5ab8e8, { maxR: 1.3, y: 0.9, tube: 0.05, life: 0.6 });
+        this.fx.glow(this.chest(u), 0x8ad0f2, { scale: 1.5, life: 0.5, grow: 0.6 });
         this.log(`<b>${u.g.nickname}</b> braces for impact!`);
         this.renderCards();
         await wait(600);
@@ -464,7 +1087,11 @@ export class Battle {
           target.rig.group.rotation.z = 0;
           target.rig.group.scale.setScalar(1);
           target.rig.group.position.copy(this.slotPos('player', target.slot));
+          this.fx.pillar(target.rig.group.position, 0x8af2b0, { height: 4, radius: 0.6, life: 0.8 });
         }
+        sfx('heal');
+        this.fx.spiral(target.rig.group.position.clone(), 0x5ad88a, { up: true, dur: 0.8 });
+        this.fx.glow(this.chest(target), 0x8af2b0, { scale: 1.3, life: 0.4 });
         this.log(`Used <b>${it.name}</b> on ${target.g.nickname}!`);
         makeFloatingDamageText(this.scene, target.rig.group.position.clone().setY(2), '♥', '#5ad88a');
         this.renderCards();
@@ -487,8 +1114,10 @@ export class Battle {
         const reaction = target.favor > 1.15 ? 'devours it joyfully!' : target.favor < 0.95 ? 'sniffs it cautiously…' : 'munches it happily.';
         this.log(`Wild <b>${target.g.nickname}</b> ${reaction} <span style="color:var(--ui-purple)">(bond +${gain})</span>`);
         makeFloatingDamageText(this.scene, target.rig.group.position.clone().setY(2.1), '♥', '#f25aa8');
-        await this.castFlash(target, 0xf25aa8);
-        await wait(500);
+        sfx('heal');
+        this.fx.spiral(target.rig.group.position.clone(), 0xf25aa8, { up: true, dur: 0.9 });
+        this.fx.burst(this.chest(target), 0xf28ac4, { count: 16, speed: 1.4, gravity: -1.4, life: 0.8, size: 0.12 });
+        await wait(700);
         return 'acted';
       }
       if (choice === 5) {
@@ -511,6 +1140,10 @@ export class Battle {
         u.rig.group.rotation.y = Math.PI / 2;
         this.scene.add(u.rig.group);
         u.mods = { atk: 1, def: 1, spd: 1 };
+        const swapColor = TYPE_COLORS[incoming.species.type];
+        this.fx.pillar(u.rig.group.position, swapColor, { height: 4, radius: 0.6, life: 0.7 });
+        this.fx.ring(u.rig.group.position, swapColor, { maxR: 1.5 });
+        sfx('confirm');
         this.log(`Go, <b>${incoming.nickname}</b>!`);
         this.renderCards();
         await wait(600);
@@ -572,6 +1205,8 @@ export class Battle {
     // 4. guard occasionally at low HP
     if (u.g.hp / u.g.stats.hp < 0.25 && Math.random() < 0.3) {
       u.guarding = true;
+      sfx('guard');
+      this.fx.ring(u.rig.group.position, 0x5ab8e8, { maxR: 1.3, y: 0.9, tube: 0.05, life: 0.6 });
       this.log(`Wild <b>${u.g.nickname}</b> turtles up!`);
       await wait(550);
       return;
@@ -650,6 +1285,25 @@ export class Battle {
     return Math.max(1, ...this.player.party.map(g => g.level));
   }
 
+  /** Free everything the arena allocated (the rigs are handled by disposeRig). */
+  private disposeArena(): void {
+    this.fx.dispose();
+    this.envTick.length = 0;
+    this.scene.traverse(o => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh && !(o as THREE.Points).isPoints) return;
+      mesh.geometry?.dispose();
+      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      for (const m of mats) {
+        const std = m as THREE.MeshStandardMaterial;
+        std.map?.dispose();
+        std.emissiveMap?.dispose();
+        m?.dispose();
+      }
+    });
+    (this.scene.background as THREE.Texture | null)?.dispose?.();
+  }
+
   // ---------- main loop ----------
   async run(): Promise<BattleResult> {
     this.buildArena();
@@ -662,12 +1316,34 @@ export class Battle {
       this.units.push(this.spawnUnit(g, 'enemy', i));
     });
     this.renderCards();
-    this.log(this.opts.intro ?? (this.opts.boss ? '⚠️ A powerful presence blocks the way!' : 'Wild Guardians attack!'));
+
+    // boss entrance: the camera pulls in from a dread distance while the seal flares
+    if (this.opts.boss) {
+      this.camDist = 13.5;
+      sfx('boom');
+      this.fx.shake(0.22, 0.9);
+      for (const e of this.units.filter(x => x.side === 'enemy')) {
+        this.fx.pillar(e.rig.group.position, 0xe83a5a, { height: 6, radius: 0.7, life: 1.1 });
+      }
+      tween(1.5, t => { this.camDist = 13.5 + (9.2 - 13.5) * t; }, Ease.inOut);
+    }
+
+    const tagline = ARENA_TAGLINES[this.opts.arena ?? ''] ?? ARENA_TAGLINES[this.opts.theme ?? 'cavern'];
+    this.log(this.opts.intro ?? (this.opts.boss ? '⚠️ A powerful presence blocks the way!' : `${tagline}<br>Wild Guardians attack!`));
     await wait(1100);
 
     let result: BattleResult | null = null;
     let stunned = !!this.opts.firstStrike;
-    if (stunned) { this.log('⚡ The Crawler\'s cannon stunned the foes — free round!'); await wait(900); }
+    if (stunned) {
+      this.log('⚡ The Crawler\'s cannon stunned the foes — free round!');
+      sfx('zap');
+      for (const e of this.alive('enemy')) {
+        this.fx.bolt(this.chest(e).add(new THREE.Vector3(0, 4, 0)), this.chest(e), 0xfff2a0);
+        this.fx.flashMaterials(e.rig.body, 0xf2d23a, 0.4);
+      }
+      this.fx.shake(0.15, 0.4);
+      await wait(900);
+    }
 
     while (!result) {
       this.round++;
@@ -703,6 +1379,7 @@ export class Battle {
     // cleanup
     setStoryInBattle(false);
     this.units.forEach(u => disposeRig(u.rig));
+    this.disposeArena();
     $('battle-ui').style.display = 'none';
     $('battle-menu').style.display = 'none';
     return result;

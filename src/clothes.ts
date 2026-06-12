@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { makeVoxelHuman, canvasTex, mulberry } from './models';
+import { makeVoxelHuman, canvasTex, mulberry, DEFAULT_APPEARANCE, type Appearance } from './models';
 
 export interface ClothesItem {
   id: string;
@@ -53,7 +53,26 @@ export const CLOTHES_DATABASE: Record<string, ClothesItem> = {
   // SHOES (3 items)
   default_shoes: { id: 'default_shoes', name: 'Default Sneakers', slot: 'shoes', price: 0, desc: 'Simple dark tamer boots.', color: 0x23262e },
   leather_boots: { id: 'leather_boots', name: 'Leather Trail Boots', slot: 'shoes', price: 140, desc: 'Heavy-duty brown leather trail boots.', textureType: 'leather', textureColor: '#3a220f' },
-  cyber_boots: { id: 'cyber_boots', name: 'Cybernetic Boots', slot: 'shoes', price: 450, desc: 'Gravitational thruster boots glowing neon green.', textureType: 'cyber', textureColor: '#1c1c24', patternColor: '#3af28a' }
+  cyber_boots: { id: 'cyber_boots', name: 'Cybernetic Boots', slot: 'shoes', price: 450, desc: 'Gravitational thruster boots glowing neon green.', textureType: 'cyber', textureColor: '#1c1c24', patternColor: '#3af28a' },
+
+  // ---- the new Aurel collection ----
+  straw_sunhat: { id: 'straw_sunhat', name: 'Meadow Sunhat', slot: 'hat', price: 90, desc: 'Woven straw from the windmill hill. Smells like summer.', textureType: 'wool', textureColor: '#d9b85a', patternColor: '#b8983a' },
+  aviator_cap: { id: 'aviator_cap', name: 'Skyrider Cap', slot: 'hat', price: 320, desc: 'Oiled leather flight cap, Gale-courier issue.', textureType: 'leather', textureColor: '#4a2d18' },
+  legend_circlet: { id: 'legend_circlet', name: 'Dawnflame Circlet', slot: 'hat', price: 950, desc: 'A Coliseum replica of Aljay\'s circlet — gold with an ember\'s heart.', textureType: 'gold' },
+
+  guild_tunic: { id: 'guild_tunic', name: 'Guild Parade Tunic', slot: 'shirt', price: 260, desc: 'Crisp ceremonial stripes for festival days on the plaza.', textureType: 'stripe', textureColor: '#8a2e4a', patternColor: '#d9a11a' },
+  leather_vest: { id: 'leather_vest', name: 'Wayfarer Vest', slot: 'shirt', price: 240, desc: 'Scuffed expedition leather, pockets included (decorative).', textureType: 'leather', textureColor: '#5a3a1e' },
+  aether_robe: { id: 'aether_robe', name: 'Aetherweave Robe', slot: 'shirt', price: 900, desc: 'Shimmer-cloth said to be dyed in halo-light. Faintly warm.', textureType: 'star', textureColor: '#241030', patternColor: '#ff9ad2' },
+
+  wool_joggers: { id: 'wool_joggers', name: 'Hearth Joggers', slot: 'pants', price: 160, desc: 'Knitted comfort for long evenings at the pond.', textureType: 'wool', textureColor: '#7a5a8e', patternColor: '#5a3a6e' },
+  gold_greaves: { id: 'gold_greaves', name: 'Champion\'s Greaves', slot: 'pants', price: 850, desc: 'Coliseum-finals gold. Heavy. Worth it.', textureType: 'gold' },
+
+  star_gauntlets: { id: 'star_gauntlets', name: 'Nightsky Gauntlets', slot: 'gloves', price: 420, desc: 'Gloves stitched with the constellations over Noruun.', textureType: 'star', textureColor: '#0c1024', patternColor: '#9ad8ff' },
+
+  gem_satchel: { id: 'gem_satchel', name: 'Gemcutter\'s Satchel', slot: 'backpack', price: 380, desc: 'Korr\'s own design — padded for precious cargo.', textureType: 'plaid', textureColor: '#3a2a4a', patternColor: '#1a1228', accentColor: '#d9a11a' },
+
+  plaid_sneakers: { id: 'plaid_sneakers', name: 'Market-Day Plimsolls', slot: 'shoes', price: 130, desc: 'Cheerful plaid canvas, Tilda-approved.', textureType: 'plaid', textureColor: '#b83a3a', patternColor: '#2a2a2a', accentColor: '#f2c14e' },
+  gold_treads: { id: 'gold_treads', name: 'Gilded Striders', slot: 'shoes', price: 780, desc: 'For tamers who want their footsteps remembered.', textureType: 'gold' },
 };
 
 // Cached textures to prevent re-creation
@@ -323,14 +342,19 @@ export function getClothesTexture(itemId: string): THREE.Texture | null {
   return tex;
 }
 
-export function updateTamerAppearance(tamer: THREE.Group, equipped: Record<string, string>): void {
+export function updateTamerAppearance(tamer: THREE.Group, equipped: Record<string, string>, appearance?: Appearance): void {
   // Clear existing tamer hierarchy
   while (tamer.children.length > 0) {
     tamer.remove(tamer.children[0]);
   }
 
-  // Resolve VoxelHumanOpts from active equipment
-  const opts: any = {};
+  // Resolve VoxelHumanOpts from active equipment + the tamer's own look
+  const app = appearance ?? DEFAULT_APPEARANCE;
+  const opts: any = {
+    skin: app.skin,
+    hair: app.hair,
+    hairstyle: app.hairstyle,
+  };
 
   const getMatOrColor = (slot: string, fallbackColor: number) => {
     const itemId = equipped[slot];

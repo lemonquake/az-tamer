@@ -6,13 +6,15 @@ import * as THREE from 'three';
 import { DUNGEONS, type DungeonDef } from './data';
 import { Player, Guardian } from './state';
 import { makeRenderer, updateTweens, updateRigs } from './models';
-import { say, conversation, choose, askName, toast, fadeIn, fadeOut, hideHUD, updateHUD } from './ui';
+import { say, conversation, choose, askName, toast, fadeIn, fadeOut, hideHUD, updateHUD, playStorySequence } from './ui';
 import { Battle, type BattleOptions, type BattleResult } from './battle';
 import { DungeonRun, type DungeonOutcome } from './dungeon';
 import { Town } from './town';
 import { Overworld } from './overworld';
+import { AgdaoIsland } from './agdao';
 import { University } from './university';
 import { Cinematic } from './cinematic';
+import { syncStoryQuests } from './quests';
 import { initAudio, toggleMute } from './audio';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
@@ -168,16 +170,62 @@ async function runUniversity(revisit: boolean): Promise<void> {
   hideHUD();
 }
 
+// ---------------- Agdao Island ----------------
+/** The island loop: explore ↔ Cradle Hollow, until the player sails home. */
+async function runAgdao(): Promise<void> {
+  let spawnAt: 'pier' | 'cave' = 'pier';
+  while (true) {
+    const isle = new AgdaoIsland(player, spawnAt);
+    await fadeOut();
+    setView(isle.view);
+    await fadeIn();
+    const res = await isle.run();
+    if (res.kind === 'dungeon') {
+      const outcome = await runDungeon(res.def);
+      syncStoryQuests(player).forEach(n => toast(n, 'gold'));
+      if (outcome === 'dead') {
+        const lost = Math.floor(player.shards * 0.25);
+        player.shards -= lost;
+        player.healAll();
+        await say('', `The islanders haul you out of the Hollow and patch you up by the First Fire. Mama Imee charges ◆${lost} for "stew, bandages and the fright you gave Kiko".`);
+      }
+      player.save();
+      spawnAt = 'cave';
+      continue; // back to the island
+    }
+    break; // sailed home
+  }
+  await fadeOut();
+  setView(null);
+  hideHUD();
+}
+
 // ---------------- main game loop ----------------
 async function cityLoop(): Promise<never> {
   let firstArrival = !player.flags['arrived_city'];
   while (true) {
     player.flags['arrived_city'] = true;
+
+    // advance the Chronicle (auto-accept / auto-complete story chapters)
+    syncStoryQuests(player).forEach(n => toast(n, 'gold'));
+
     const town = new Town(player, firstArrival);
     firstArrival = false;
     await fadeOut();
     setView(town.view);
     await fadeIn();
+
+    // Chapter I opens with Hale on the Crawler radio, once, over the city
+    if (player.quests['story_roads'] === 'active' && !player.flags['story_ch1_intro']) {
+      player.flags['story_ch1_intro'] = true;
+      player.save();
+      playStorySequence([
+        ['Instructor Hale', `${player.tamerName}! Hale here — yes, I keep graduate frequencies. A diploma isn't a tamer; the wild needs two honest chances to eat you first.`],
+        ['Instructor Hale', `Your road: descend the MOSSDEEP BURROWS to the deepest floor, and conquer the SUNKEN VAULT. Both are on the overworld, past the city gate.`],
+        ['Instructor Hale', `Do that, and go see VEYL at the University library. Historian. Smells of ink and thunderstorms. Trust me — what he's been charting will change your year. Hale out.`],
+      ]);
+    }
+
     const dest = await town.run(); // resolves when the player departs the city
 
     if (dest === 'university') {
@@ -186,7 +234,7 @@ async function cityLoop(): Promise<never> {
     }
 
     // overworld globe: pick an expedition (or walk back to Haven City)
-    let dungeonDef: DungeonDef | null = null;
+    let dungeonDef: DungeonDef | 'agdao' | null = null;
     {
       const overworld = new Overworld(player);
       await fadeOut();
@@ -195,6 +243,10 @@ async function cityLoop(): Promise<never> {
       dungeonDef = await overworld.run();
     }
     if (!dungeonDef) continue; // returned to the city
+    if (dungeonDef === 'agdao') {
+      await runAgdao();
+      continue;
+    }
 
     const outcome = await runDungeon(dungeonDef);
     if (outcome === 'dead') {
@@ -229,6 +281,7 @@ async function cityLoop(): Promise<never> {
       await fadeOut();
       setView(null);
     }
+    syncStoryQuests(player).forEach(n => toast(n, 'gold'));
     player.save();
   }
 }

@@ -66,13 +66,100 @@ function tone(freq: number, dur: number, opts: {
   osc.stop(t0 + dur + 0.05);
 }
 
+// filtered white-noise burst — the percussion section of the battle orchestra
+let noiseBuf: AudioBuffer | null = null;
+function noiseBurst(dur: number, opts: {
+  vol?: number; freq?: number; q?: number; type?: BiquadFilterType; when?: number; slideTo?: number;
+} = {}): void {
+  const c = ensureCtx();
+  if (!c || !master || muted) return;
+  if (!noiseBuf) {
+    noiseBuf = c.createBuffer(1, c.sampleRate, c.sampleRate);
+    const data = noiseBuf.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+  }
+  const { vol = 0.1, freq = 800, q = 0.8, type = 'bandpass', when = 0, slideTo } = opts;
+  const t0 = c.currentTime + when;
+  const src = c.createBufferSource();
+  src.buffer = noiseBuf; src.loop = true;
+  const f = c.createBiquadFilter();
+  f.type = type; f.Q.value = q;
+  f.frequency.setValueAtTime(freq, t0);
+  if (slideTo) f.frequency.exponentialRampToValueAtTime(Math.max(20, slideTo), t0 + dur);
+  const g = c.createGain();
+  g.gain.setValueAtTime(0, t0);
+  g.gain.linearRampToValueAtTime(vol, t0 + 0.012);
+  g.gain.exponentialRampToValueAtTime(0.0008, t0 + dur);
+  src.connect(f).connect(g).connect(master);
+  src.start(t0);
+  src.stop(t0 + dur + 0.05);
+}
+
 // ---------------- sound effects ----------------
 export type SfxName =
   | 'click' | 'confirm' | 'cancel' | 'open' | 'close'
-  | 'blip' | 'toast' | 'toastBad' | 'fanfare' | 'achievement';
+  | 'blip' | 'toast' | 'toastBad' | 'fanfare' | 'achievement'
+  // battle orchestra
+  | 'whoosh' | 'hit' | 'crit' | 'boom' | 'zap' | 'splash'
+  | 'leaf' | 'dark' | 'heal' | 'buff' | 'debuff' | 'charge' | 'ko' | 'guard';
 
 export function sfx(name: SfxName): void {
   switch (name) {
+    case 'whoosh':
+      noiseBurst(0.2, { vol: 0.09, freq: 900, slideTo: 240, q: 0.6 });
+      break;
+    case 'hit':
+      tone(170, 0.1, { type: 'sawtooth', vol: 0.09, slideTo: 80 });
+      noiseBurst(0.07, { vol: 0.1, freq: 1400, type: 'highpass' });
+      break;
+    case 'crit':
+      tone(160, 0.14, { type: 'sawtooth', vol: 0.12, slideTo: 60 });
+      noiseBurst(0.1, { vol: 0.13, freq: 1800, type: 'highpass' });
+      tone(1320, 0.16, { type: 'triangle', vol: 0.08, when: 0.03 });
+      break;
+    case 'boom':
+      tone(72, 0.55, { type: 'sine', vol: 0.22, slideTo: 36 });
+      noiseBurst(0.5, { vol: 0.16, freq: 420, type: 'lowpass', slideTo: 90 });
+      break;
+    case 'zap':
+      tone(1900, 0.16, { type: 'sawtooth', vol: 0.07, slideTo: 180 });
+      noiseBurst(0.12, { vol: 0.09, freq: 2600, type: 'highpass' });
+      tone(90, 0.18, { type: 'square', vol: 0.05, slideTo: 50, when: 0.02 });
+      break;
+    case 'splash':
+      noiseBurst(0.32, { vol: 0.1, freq: 700, slideTo: 1600, q: 0.5 });
+      tone(320, 0.2, { type: 'sine', vol: 0.06, slideTo: 140 });
+      break;
+    case 'leaf':
+      noiseBurst(0.12, { vol: 0.07, freq: 1500, q: 1.2 });
+      noiseBurst(0.12, { vol: 0.06, freq: 1900, q: 1.2, when: 0.07 });
+      break;
+    case 'dark':
+      tone(110, 0.4, { type: 'sine', vol: 0.14, slideTo: 48 });
+      noiseBurst(0.35, { vol: 0.07, freq: 240, type: 'lowpass', slideTo: 70 });
+      break;
+    case 'heal':
+      tone(660, 0.22, { type: 'sine', vol: 0.08 });
+      tone(990, 0.3, { type: 'sine', vol: 0.07, when: 0.1 });
+      break;
+    case 'buff':
+      [392, 523, 659].forEach((f, i) => tone(f, 0.12, { type: 'triangle', vol: 0.07, when: i * 0.06 }));
+      break;
+    case 'debuff':
+      [523, 392, 311].forEach((f, i) => tone(f, 0.12, { type: 'triangle', vol: 0.06, when: i * 0.06 }));
+      break;
+    case 'charge':
+      tone(220, 0.34, { type: 'sine', vol: 0.07, slideTo: 880 });
+      noiseBurst(0.3, { vol: 0.03, freq: 600, slideTo: 2200, q: 2 });
+      break;
+    case 'ko':
+      tone(300, 0.42, { type: 'sawtooth', vol: 0.08, slideTo: 55 });
+      noiseBurst(0.3, { vol: 0.08, freq: 500, type: 'lowpass', slideTo: 100, when: 0.05 });
+      break;
+    case 'guard':
+      tone(240, 0.14, { type: 'triangle', vol: 0.08, slideTo: 420 });
+      noiseBurst(0.08, { vol: 0.05, freq: 900, q: 2 });
+      break;
     case 'click':
       tone(620, 0.06, { type: 'triangle', vol: 0.07 });
       break;

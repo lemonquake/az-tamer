@@ -18,7 +18,7 @@ import {
   say, conversation, choose, askName, toast, updateHUD, showInteractHint, showHotkeys,
   isDialogueOpen, isMenuOpen, openPauseMenu, openPanel, openScreen, closeMenu, type PanelKind,
 } from './ui';
-import { QUESTS, questState, acceptQuest, completeQuest, mainChain } from './quests';
+import { QUESTS, questState, acceptQuest, completeQuest, mainChain, syncStoryQuests } from './quests';
 import { GUILD_LORE, guildIconCanvas, makeCardNo } from './guilds';
 import { openGuildCard } from './guildcard';
 import { drawAreaMap, hideAreaMap, type MapMarker } from './townmap';
@@ -317,6 +317,70 @@ export class University {
       return;
     }
     await say(giver, lines.accepted);
+  }
+
+  // ---------------- Historian Veyl — the Chronicle, chapters II–IV ----------------
+  private async historianTalk(): Promise<void> {
+    const p = this.player;
+
+    // Chapter II — the meeting Hale arranged
+    if (!p.flags['met_historian']) {
+      if (questState(p, 'story_historian') !== 'active') {
+        await say('Historian Veyl', 'Charts. Storm-tracks. Nine years of triangulating a man who does not wish to be triangulated. Unless Instructor Hale sent you, I am — politely — catastrophically busy.');
+        return;
+      }
+      await conversation([
+        ['Historian Veyl', `Hale's graduate. Yes. You have the look — half triumph, half "where exactly am I going". Sit. Don't touch that chart. Or that one. Best keep your hands in the air, honestly.`],
+        ['Historian Veyl', `You want Greggy the Stormheart. Everyone wants Greggy — the Houses, the papers, one EXTREMELY persistent biographer. The difference is that I can actually find him, because I don't chase the man. I chase the WEATHER.`],
+        ['Historian Veyl', `Nine years of storm-tracks, and every anomalous strike pattern bends around one truth: the Stormheart grounds himself where the world's charge gathers. Find tomorrow's lightning, and you find yesterday's legend.`],
+        ['Historian Veyl', `And as it happens — three weeks ago a bog north-east of Haven started catching the SAME lightning every night. Thunderfen Mire, the locals call it now. New on every map, including yours — I've just marked it.`],
+      ]);
+      p.flags['met_historian'] = true;
+      p.flags['historian_intel'] = true;   // the Thunderfen gate wakes on the overworld
+      const summary = completeQuest(p, 'story_historian');
+      toast('✅ Chapter II complete: The Man Who Maps Storms!', 'gold');
+      if (summary) toast(`Received ${summary}`, 'gold');
+      syncStoryQuests(p).forEach(n => toast(n, 'gold'));
+      await conversation([
+        ['Historian Veyl', `Now — the price of my next sentence. The wild Guardians in that mire are shedding STORM-TOUCHED AMBER: fossil resin with a living spark sealed inside. Amber remembers the storm that made it. Bring me one piece and I can read where that storm has been roosting.`],
+        ['Historian Veyl', `One piece. Unbruised. The wilds drop it after an honest scrap. Off you go — and if Hale asks, tell him I was charming.`],
+      ]);
+      updateHUD(p, 'Tamer University');
+      return;
+    }
+
+    // Chapter III — the amber turn-in: the chart to Agdao
+    if (questState(p, 'story_amber') === 'ready') {
+      await conversation([
+        ['Historian Veyl', `You have it. You actually— give it here, GENTLY, it's older than the Compact...`],
+        ['Historian Veyl', `...There. Look at the spark spiral — counter-clockwise, tight, with a western drift. This charge was born over open sea. The Stormheart isn't on any continent at all. He's on an ISLAND.`],
+        ['Historian Veyl', `And there is exactly one island in the western sea where a storm would go to REST. Where everything went to begin. Agdao — the Cradle of Tamers. Aurelia's island. Of course. OF COURSE. Nine years and the answer was a history book.`],
+        ['Historian Veyl', `Take my sea-chart — seven hundred years of corrections, nine inks, one slightly heroic coffee stain. Your overworld map knows the way to Agdao now. Ask the islanders when you land; they notice everything and forgive most of it.`],
+      ]);
+      const summary = completeQuest(p, 'story_amber');   // consumes the amber, grants the chart, unlocks Agdao
+      toast('✅ Chapter III complete: Amber in the Mire!', 'gold');
+      if (summary) toast(`Received ${summary}`, 'gold');
+      toast('🏝️ Agdao Island is now on your overworld map!', 'gold');
+      syncStoryQuests(p).forEach(n => toast(n, 'gold'));
+      await say('Historian Veyl', 'When you find him — and you will — tell him Veyl finally worked it out. He\'ll laugh. It\'s a good laugh. It\'s why nobody minds that he hides.');
+      updateHUD(p, 'Tamer University');
+      return;
+    }
+    if (questState(p, 'story_amber') === 'active') {
+      await say('Historian Veyl', 'The Thunderfen Mire — north-east of Haven, marked on your overworld. The wilds shed the amber after a battle. One piece, unbruised, and mind the bog: it bites back.');
+      return;
+    }
+
+    // ---- post-story states ----
+    if (p.flags['arc1_done']) {
+      await say('Historian Veyl', 'The spire is silent, the engine answered to a NAME, and my storm-charts now matter to exactly everyone. I have been cited four times this week. Tamer, you have made an old librarian dangerous.');
+      return;
+    }
+    if (p.flags['met_greggy']) {
+      await say('Historian Veyl', 'You FOUND him. Nine years of charts vindicated in one boat ride. Did he laugh when you told him? ...He laughed. Excellent. Carry on, tamer — history is watching you with considerable interest.');
+      return;
+    }
+    await say('Historian Veyl', 'Agdao, tamer. The chart knows the way, the tide is patient, and legends do not grow younger. Why are you still in my library?');
   }
 
   // ================= LOBBY =================
@@ -968,6 +1032,37 @@ export class University {
         done: 'The Ledger is back under glass, with a new rule plaque: "NOT LUNCH READING." It\'s working so far.',
       }),
     });
+
+    // ---- Historian Veyl — the man who maps storms (the Chronicle, ch. II–IV) ----
+    {
+      // his chart table: a mess of storm-tracks, calipers and one lit candle
+      const chartTable = new THREE.Group();
+      const top = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.1, 1.2),
+        new THREE.MeshStandardMaterial({ map: plankTexture('#5a3e22', 1), roughness: 0.6 }));
+      top.position.y = 0.9;
+      for (const [lx, lz] of [[-0.95, -0.45], [0.95, -0.45], [-0.95, 0.45], [0.95, 0.45]]) {
+        const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.07, 0.9, 6), sideMat);
+        leg.position.set(lx, 0.45, lz);
+        chartTable.add(leg);
+      }
+      for (let i = 0; i < 4; i++) {
+        const chart = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.45),
+          new THREE.MeshStandardMaterial({ color: [0xe8dcc0, 0xd8ccb0, 0xe0d4b8, 0xc8bca0][i], roughness: 1, side: THREE.DoubleSide }));
+        chart.rotation.x = -Math.PI / 2;
+        chart.rotation.z = (i - 1.5) * 0.4;
+        chart.position.set(-0.6 + i * 0.4, 0.96 + i * 0.005, (i % 2) * 0.3 - 0.15);
+        chartTable.add(chart);
+      }
+      chartTable.add(top);
+      this.prop(r, chartTable, -5, -0.2, 1.3);
+
+      this.npc(r, { top: 0x4a6a9a, hair: 0x8a8a92, robe: true, cap: null, hairstyle: 'classic' }, -5, -1.8, 0, undefined);
+      r.interactables.push({
+        pos: new THREE.Vector3(-5, 0, -1), radius: 2.0,
+        label: 'Press <b>E</b> — talk to Historian Veyl',
+        handler: () => this.historianTalk(),
+      });
+    }
 
     // three lore lecterns
     const LORE_BOOKS: [string, string][] = [
@@ -1751,6 +1846,7 @@ export class University {
   // ================= entry =================
   /** Resolves when the player departs through the Grand Doors. */
   async run(): Promise<void> {
+    syncStoryQuests(this.player).forEach(n => toast(n, 'gold'));
     this.builders.lobby();
     updateTamerAppearance(this.tamer, this.player.equippedClothes);
     this.current = 'lobby';

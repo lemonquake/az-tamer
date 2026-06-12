@@ -5,6 +5,7 @@ import {
   SPECIES, TECHS, ITEMS, CRAWLER_PARTS, expForLevel,
   type SpeciesDef, type Stats, type StatKey, type Technique, type CrawlerPart,
 } from './data';
+import { DEFAULT_APPEARANCE, type Appearance } from './models';
 
 let uidCounter = 1;
 export const uid = () => `g${Date.now().toString(36)}${(uidCounter++).toString(36)}`;
@@ -161,16 +162,23 @@ export class Guardian {
 }
 
 // ---------------- Crawler ----------------
+const DEFAULT_CRAWLER_PARTS: Record<CrawlerPart['slot'], string> = {
+  hull: 'hull1', engine: 'engine1', cargo: 'cargo1', cannon: 'cannon1', scanner: 'scanner1', legs: 'legs1',
+};
+
 export interface CrawlerSaveData {
   parts: Record<CrawlerPart['slot'], string>;
   hull: number; energy: number; owned: string[];
+  paint?: Partial<Record<CrawlerPart['slot'], string>>;
+  ownedPaints?: string[];
 }
 
 export class Crawler {
-  parts: Record<CrawlerPart['slot'], string> = {
-    hull: 'hull1', engine: 'engine1', cargo: 'cargo1', cannon: 'cannon1', scanner: 'scanner1',
-  };
-  owned: string[] = ['hull1', 'engine1', 'cargo1', 'cannon1', 'scanner1'];
+  parts: Record<CrawlerPart['slot'], string> = { ...DEFAULT_CRAWLER_PARTS };
+  owned: string[] = Object.values(DEFAULT_CRAWLER_PARTS);
+  /** paint job applied per part slot (absent = stock finish) */
+  paint: Partial<Record<CrawlerPart['slot'], string>> = {};
+  ownedPaints: string[] = [];
   hull: number;
   energy: number;
 
@@ -185,7 +193,9 @@ export class Crawler {
   get cargoMax(): number { return this.part('cargo').value; }
   get cannonTier(): number { return this.part('cannon').value; }
   get scannerTier(): number { return this.part('scanner').value; }
-  get firstStrikeChance(): number { return [0, 0, 0.10, 0.25][this.cannonTier] ?? 0; }
+  get firstStrikeChance(): number { return [0, 0, 0.10, 0.25, 0.35][this.cannonTier] ?? 0; }
+  /** Chance for a field step to cost no Energy — finer legwork wastes less. */
+  get strideEfficiency(): number { return (this.part('legs').value ?? 0) / 100; }
 
   equip(partId: string): void {
     const p = CRAWLER_PARTS[partId];
@@ -195,14 +205,25 @@ export class Crawler {
     this.energy = Math.min(this.energy, this.energyMax);
   }
 
+  applyPaint(slot: CrawlerPart['slot'], paintId: string | null): void {
+    if (paintId === null) delete this.paint[slot];
+    else if (this.ownedPaints.includes(paintId)) this.paint[slot] = paintId;
+  }
+
   restock(): void { this.hull = this.hullMax; this.energy = this.energyMax; }
 
   save(): CrawlerSaveData {
-    return { parts: { ...this.parts }, hull: this.hull, energy: this.energy, owned: [...this.owned] };
+    return {
+      parts: { ...this.parts }, hull: this.hull, energy: this.energy, owned: [...this.owned],
+      paint: { ...this.paint }, ownedPaints: [...this.ownedPaints],
+    };
   }
   static load(d: CrawlerSaveData): Crawler {
     const c = new Crawler();
-    c.parts = { ...d.parts }; c.owned = [...d.owned];
+    c.parts = { ...DEFAULT_CRAWLER_PARTS, ...d.parts }; // older saves predate the legs slot
+    c.owned = [...new Set([...Object.values(DEFAULT_CRAWLER_PARTS), ...d.owned])];
+    c.paint = { ...(d.paint ?? {}) };
+    c.ownedPaints = [...(d.ownedPaints ?? [])];
     c.hull = d.hull; c.energy = d.energy;
     return c;
   }
@@ -224,6 +245,7 @@ export interface PlayerSave {
   quests?: Record<string, 'active' | 'done'>;
   equippedClothes?: Record<string, string>;
   ownedClothes?: string[];
+  appearance?: Appearance;
 }
 
 export class Player {
@@ -250,6 +272,7 @@ export class Player {
     shoes: 'default_shoes'
   };
   ownedClothes: string[] = ['default_cap', 'default_shirt', 'default_pants', 'default_gloves', 'default_backpack', 'default_shoes'];
+  appearance: Appearance = { ...DEFAULT_APPEARANCE };
 
   get alive(): Guardian[] { return this.party.filter(g => !g.fainted); }
 
@@ -293,6 +316,7 @@ export class Player {
       profilePic: this.profilePic, cardNo: this.cardNo, quests: { ...this.quests },
       equippedClothes: { ...this.equippedClothes },
       ownedClothes: [...this.ownedClothes],
+      appearance: { ...this.appearance },
     };
     localStorage.setItem(SAVE_KEY, JSON.stringify(data));
   }
@@ -325,6 +349,7 @@ export class Player {
         shoes: 'default_shoes'
       };
       p.ownedClothes = d.ownedClothes ? [...d.ownedClothes] : ['default_cap', 'default_shirt', 'default_pants', 'default_gloves', 'default_backpack', 'default_shoes'];
+      p.appearance = d.appearance ? { ...DEFAULT_APPEARANCE, ...d.appearance } : { ...DEFAULT_APPEARANCE };
       return p;
     } catch {
       return null;

@@ -7,7 +7,7 @@ import { ITEMS, CRAWLER_PARTS, TYPE_CSS, STAT_NAMES, HOUSES, DUNGEONS, expForLev
 import { Player, Guardian } from './state';
 import { makeGuardian, disposeRig } from './models';
 import { GUILD_LORE, avatarURL, guildIconURL, rankFor, questsDoneCount } from './guilds';
-import { journalEntries } from './quests';
+import { journalEntries, questProgress, type QuestDef, type QuestState } from './quests';
 import { openGuildCard } from './guildcard';
 import { openGuardianCard } from './guardiancard';
 import { RANKS, rankIndexFor, rankBadgeHTML, rankLadderHTML } from './ranks';
@@ -354,32 +354,7 @@ function renderPanelBody(kind: PanelKind, p: Player, refresh: () => void, ctx: P
   }
 
   if (kind === 'quests') {
-    const { main, side } = journalEntries(p);
-    const badge = (st: string) =>
-      st === 'done' ? '<span class="tag" style="background:var(--ui-green);color:#0c1022">COMPLETE</span>'
-      : st === 'ready' ? '<span class="tag" style="background:var(--ui-gold);color:#0c1022">TURN IN!</span>'
-      : st === 'active' ? '<span class="tag" style="background:var(--ui-blue);color:#0c1022">ACTIVE</span>'
-      : st === 'locked' ? '<span class="tag" style="background:var(--ui-dim);color:#0c1022">LOCKED</span>'
-      : '<span class="tag" style="background:var(--ui-purple);color:#0c1022">NEW</span>';
-    const row = (q: { title: string; giver: string; location: string; brief: string; objective: string }, st: string) => `
-      <div class="list-row quest-row ${st}" style="flex-direction:column;align-items:stretch">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
-          <b>${st === 'done' ? '✅' : st === 'ready' ? '❗' : st === 'active' ? '◆' : '◇'} ${q.title}</b>${badge(st)}
-        </div>
-        ${st === 'locked' ? '<div class="sub">Complete the previous quest in the chain to unlock.</div>' : `
-        <div class="sub" style="margin-top:4px">${q.brief}</div>
-        <div class="sub" style="margin-top:4px"><b style="color:var(--ui-gold)">Objective:</b> ${q.objective} · <b>Giver:</b> ${q.giver} · <b>Where:</b> ${q.location}</div>`}
-      </div>`;
-    const mainHtml = main.length
-      ? main.map(([q, st]) => row(q, st)).join('')
-      : '<div class="sub">Pledge to a Grand House to begin your guild\'s main quest line.</div>';
-    const sideHtml = side.map(([q, st]) => row(q, st)).join('');
-    return `
-      <h3>${PANEL_TITLES.quests}</h3>
-      <div class="grid2">
-        <div><h3>⚔ Guild Main Quests</h3><div style="max-height:420px;overflow-y:auto">${mainHtml}</div></div>
-        <div><h3>🤝 Side Quests</h3><div style="max-height:420px;overflow-y:auto">${sideHtml}</div></div>
-      </div>`;
+    return renderJournal(p);
   }
 
   if (kind === 'inventory') {
@@ -416,7 +391,7 @@ function renderPanelBody(kind: PanelKind, p: Player, refresh: () => void, ctx: P
 
   // crawler
   const c = p.crawler;
-  const slots: ('hull' | 'engine' | 'cargo' | 'cannon' | 'scanner')[] = ['hull', 'engine', 'cargo', 'cannon', 'scanner'];
+  const slots: ('hull' | 'engine' | 'cargo' | 'cannon' | 'scanner' | 'legs')[] = ['hull', 'engine', 'cargo', 'cannon', 'scanner', 'legs'];
   const sections = slots.map(slot => {
     const ownedParts = Object.values(CRAWLER_PARTS).filter(x => x.slot === slot && c.owned.includes(x.id)).sort((a, b) => a.tier - b.tier);
     const rows = ownedParts.map(part => {
@@ -439,14 +414,177 @@ function renderPanelBody(kind: PanelKind, p: Player, refresh: () => void, ctx: P
         <div class="row" style="display:flex;justify-content:space-between"><span class="sub">Cargo capacity</span><b>${p.inventory.size}/${c.cargoMax}</b></div>
         <div class="row" style="display:flex;justify-content:space-between"><span class="sub">Cannon</span><b>T${c.cannonTier} (${Math.round(c.firstStrikeChance * 100)}% first strike)</b></div>
         <div class="row" style="display:flex;justify-content:space-between"><span class="sub">Scanner</span><b>T${c.scannerTier}</b></div>
+        <div class="row" style="display:flex;justify-content:space-between"><span class="sub">Stride</span><b>${Math.round(c.strideEfficiency * 100)}% free steps</b></div>
       </div>
     </div>
     <div style="max-height:300px;overflow-y:auto">${sections}</div>
     <div class="sub" style="margin-top:6px">New parts are sold at Dax's Garage in Haven City.</div>`;
 }
 
+// ================= the Chronicle journal =================
+// Tabbed, two-pane, clickable: quest cards on the left, a full
+// dossier (brief, objective, progress, hint, giver, rewards) on
+// the right. The Chronicle tab adds a chapter track.
+type JournalTab = 'story' | 'main' | 'side';
+let journalTab: JournalTab = 'story';
+let journalSel: string | null = null;
+
+const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
+const roman = (n: number) => ROMAN[n - 1] ?? `${n}`;
+
+function questBadge(st: QuestState): string {
+  return st === 'done' ? '<span class="tag" style="background:var(--ui-green);color:#0c1022">COMPLETE</span>'
+    : st === 'ready' ? '<span class="tag" style="background:var(--ui-gold);color:#0c1022">TURN IN!</span>'
+    : st === 'active' ? '<span class="tag" style="background:var(--ui-blue);color:#0c1022">ACTIVE</span>'
+    : st === 'locked' ? '<span class="tag" style="background:var(--ui-dim);color:#0c1022">LOCKED</span>'
+    : '<span class="tag" style="background:var(--ui-purple);color:#0c1022">NEW</span>';
+}
+
+function questIcon(q: QuestDef, st: QuestState): string {
+  if (st === 'locked') return '🔒';
+  return q.icon ?? (q.kind === 'main' ? '⚔️' : q.kind === 'side' ? '🤝' : '📖');
+}
+
+function rewardChips(q: QuestDef): string {
+  const chips: string[] = [];
+  if (q.reward.shards) chips.push(`<span class="jreward-chip">◆ ${q.reward.shards} Shards</span>`);
+  for (const [id, qty] of q.reward.items ?? []) {
+    chips.push(`<span class="jreward-chip">${ITEMS[id]?.name ?? id}${qty > 1 ? ` ×${qty}` : ''}</span>`);
+  }
+  return chips.join('') || '<span class="sub">—</span>';
+}
+
+function renderJournal(p: Player): string {
+  const { story, main, side } = journalEntries(p);
+  const groups: Record<JournalTab, [QuestDef, QuestState][]> = { story, main, side };
+  const list = groups[journalTab];
+
+  // keep a sensible selection: the loudest quest first
+  if (!journalSel || !list.some(([q]) => q.id === journalSel)) {
+    const pick = list.find(([, st]) => st === 'ready')
+      ?? list.find(([, st]) => st === 'active')
+      ?? list.find(([, st]) => st === 'available')
+      ?? list[0];
+    journalSel = pick ? pick[0].id : null;
+  }
+  const doneOf = (g: [QuestDef, QuestState][]) => g.filter(([, st]) => st === 'done').length;
+  const tabBtn = (tab: JournalTab, label: string, g: [QuestDef, QuestState][]) => `
+    <button class="jtab ${journalTab === tab ? 'on' : ''}" data-jtab="${tab}">
+      ${label} <span class="jcount">${doneOf(g)}/${g.length}</span>
+      ${g.some(([, st]) => st === 'ready') ? ' ❗' : ''}
+    </button>`;
+
+  // ---- left pane: quest cards ----
+  const card = ([q, st]: [QuestDef, QuestState]) => {
+    const prog = st !== 'locked' ? questProgress(p, q.id) : null;
+    const pct = prog ? Math.round((prog[0] / Math.max(1, prog[1])) * 100) : null;
+    const title = q.kind === 'story' && st === 'locked' ? '— ? —' : q.title;
+    return `
+      <div class="jcard ${st} ${q.id === journalSel ? 'sel' : ''}" data-jq="${q.id}">
+        <div class="jcard-top"><span>${questIcon(q, st)}</span><b>${title}</b>${questBadge(st)}</div>
+        ${q.chapter ? `<div class="jchap">Chapter ${roman(q.chapter)}</div>` : ''}
+        ${pct !== null && st !== 'done' ? `<div class="jbar ${pct >= 100 ? 'full' : ''}"><div style="width:${Math.min(100, pct)}%"></div></div>` : ''}
+      </div>`;
+  };
+  const emptyMsg = journalTab === 'main'
+    ? '<div class="sub" style="padding:10px">Pledge to a Grand House in the University\'s Officers\' Hall to begin your guild\'s quest line.</div>'
+    : '<div class="sub" style="padding:10px">Nothing here yet — the world will provide.</div>';
+  const listHtml = list.length ? list.map(card).join('') : emptyMsg;
+
+  // ---- the Chronicle's chapter track ----
+  let trackHtml = '';
+  if (journalTab === 'story' && story.length) {
+    const dots = story.map(([q, st], i) => {
+      const cls = st === 'done' ? 'done' : (st === 'active' || st === 'ready') ? 'cur' : '';
+      const link = i < story.length - 1 ? `<div class="jlink ${st === 'done' ? 'done' : ''}"></div>` : '';
+      return `<div class="jdot ${cls}" title="Chapter ${roman(q.chapter ?? i + 1)}"></div>${link}`;
+    }).join('');
+    trackHtml = `<div class="jtrack">${dots}</div>`;
+  }
+
+  // ---- right pane: the dossier ----
+  let detailHtml = '<div class="sub">Select a quest.</div>';
+  const selEntry = list.find(([q]) => q.id === journalSel);
+  if (selEntry) {
+    const [q, st] = selEntry;
+    const prog = st !== 'locked' ? questProgress(p, q.id) : null;
+    const kicker = q.kind === 'story'
+      ? `The Chronicle — Chapter ${roman(q.chapter ?? 0)}`
+      : q.kind === 'main' ? 'Guild Main Quest' : 'Side Quest';
+    if (q.kind === 'story' && st === 'locked') {
+      detailHtml = `
+        <div class="jdetail-head">
+          <div class="jdetail-icon">🔒</div>
+          <div><div class="jdetail-kicker">${kicker}</div><div class="jdetail-title">— ? —</div></div>
+        </div>
+        <div class="jdetail-brief">The pages of this chapter are still blank. Finish the chapter before it, and the ink will come.</div>`;
+    } else if (st === 'locked') {
+      detailHtml = `
+        <div class="jdetail-head">
+          <div class="jdetail-icon">🔒</div>
+          <div><div class="jdetail-kicker">${kicker}</div><div class="jdetail-title">${q.title}</div></div>
+        </div>
+        <div class="jdetail-brief">Complete the previous quest in the chain to unlock.</div>`;
+    } else {
+      const objMark = st === 'done' ? '✅ ' : st === 'ready' ? '❗ ' : '';
+      const progRow = prog && st !== 'done' ? `
+        <div class="jrow"><span class="jkey">Progress</span>
+          <span class="jval" style="display:flex;align-items:center;gap:8px">
+            <span style="min-width:42px"><b>${prog[0]}</b> / ${prog[1]}</span>
+            <span class="jbar ${prog[0] >= prog[1] ? 'full' : ''}" style="flex:1;margin-top:0"><div style="width:${Math.min(100, (prog[0] / Math.max(1, prog[1])) * 100)}%"></div></span>
+          </span>
+        </div>` : '';
+      const hintRow = q.hint && (st === 'active' || st === 'ready' || st === 'available') ? `
+        <div class="jrow"><span class="jkey">🧭 Hint</span><span class="jval sub">${q.hint}</span></div>` : '';
+      const footer = st === 'ready'
+        ? `<div class="jrow" style="margin-top:12px"><span class="jval" style="color:var(--ui-gold);font-weight:700">❗ Objective complete${q.autoComplete ? '' : ` — return to ${q.giver.split('(')[0].trim()}`}!</span></div>`
+        : st === 'done' ? '<div class="jrow" style="margin-top:12px"><span class="jval" style="color:var(--ui-green);font-weight:700">✅ Completed — well walked, tamer.</span></div>' : '';
+      detailHtml = `
+        <div class="jdetail-head">
+          <div class="jdetail-icon">${questIcon(q, st)}</div>
+          <div style="flex:1">
+            <div class="jdetail-kicker">${kicker}</div>
+            <div class="jdetail-title">${q.title}</div>
+          </div>
+          ${questBadge(st)}
+        </div>
+        <div class="jdetail-brief">${q.brief}</div>
+        <div class="jrow"><span class="jkey">🎯 Objective</span><span class="jval obj">${objMark}${q.objective}</span></div>
+        ${progRow}
+        ${hintRow}
+        <div class="jrow"><span class="jkey">🗣 Giver</span><span class="jval">${q.giver}</span></div>
+        <div class="jrow"><span class="jkey">📍 Where</span><span class="jval">${q.location}</span></div>
+        <div class="jrow"><span class="jkey">🎁 Reward</span><span class="jval">${rewardChips(q)}</span></div>
+        ${footer}`;
+    }
+  }
+
+  return `
+    <h3>${PANEL_TITLES.quests}</h3>
+    <div class="journal-tabs">
+      ${tabBtn('story', '📜 The Chronicle', story)}
+      ${tabBtn('main', '⚔️ Guild', main)}
+      ${tabBtn('side', '🤝 Side', side)}
+    </div>
+    ${trackHtml}
+    <div class="journal-grid">
+      <div class="journal-list">${listHtml}</div>
+      <div class="journal-detail">${detailHtml}</div>
+    </div>`;
+}
+
 function wirePanelBody(kind: PanelKind, el: HTMLElement, p: Player, refresh: () => void, ctx: PanelCtx): void {
-  if (kind === 'evotree') {
+  if (kind === 'quests') {
+    el.querySelectorAll<HTMLElement>('[data-jtab]').forEach(b => b.onclick = () => {
+      journalTab = b.dataset.jtab as JournalTab;
+      journalSel = null;
+      refresh();
+    });
+    el.querySelectorAll<HTMLElement>('[data-jq]').forEach(b => b.onclick = () => {
+      journalSel = b.dataset.jq!;
+      refresh();
+    });
+  } else if (kind === 'evotree') {
     wireEvoTree(el, p);
   } else if (kind === 'player') {
     const btn = el.querySelector<HTMLElement>('#open-guild-card');

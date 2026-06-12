@@ -810,7 +810,7 @@ export const SPECIES: Record<string, SpeciesDef> = Object.fromEntries(([
 ] as SpeciesDef[]).map(s => [s.id, s]));
 
 // ---------------- Items ----------------
-export type ItemKind = 'heal' | 'sp' | 'revive' | 'gift' | 'fuel' | 'repair' | 'boost' | 'evo';
+export type ItemKind = 'heal' | 'sp' | 'revive' | 'gift' | 'fuel' | 'repair' | 'boost' | 'evo' | 'relic';
 
 export interface ItemDef {
   id: string; name: string; kind: ItemKind;
@@ -841,29 +841,79 @@ export const ITEMS: Record<string, ItemDef> = Object.fromEntries([
   I('spd_gem', 'Opal Gem', 'boost', 2, 800, 'Permanently raises a Guardian\'s Speed by 2.', 'spd'),
   I('wis_gem', 'Sapphire Gem', 'boost', 2, 800, 'Permanently raises a Guardian\'s Wisdom by 2.', 'wis'),
   I('hp_gem', 'Garnet Gem', 'boost', 6, 800, 'Permanently raises a Guardian\'s max HP by 6.', 'hp'),
+  // story relics — quest items, never sold, never consumed by accident
+  I('storm_amber', 'Storm-Touched Amber', 'relic', 0, 0, 'Fossil resin from the Thunderfen Mire with a living spark sealed inside. Historian Veyl at the University would trade a great deal to study one.'),
+  I('sea_chart', 'Aurelian Sea-Chart', 'relic', 0, 0, 'Historian Veyl\'s hand-corrected chart of the western sea. Agdao Island — the Cradle of Tamers — is inked at its heart. Your overworld map now knows the way.'),
+  I('stormheart_coil', 'Stormheart Coil', 'relic', 0, 0, 'A grounding coil wound by Greggy the Stormheart himself. It hums faintly when held toward the center of the world.'),
 ].map(i => [i.id, i]));
 
 // ---------------- Crawler parts ----------------
-export interface CrawlerPart { id: string; slot: 'hull' | 'engine' | 'cargo' | 'cannon' | 'scanner'; name: string; tier: number; value: number; price: number; desc: string; }
-const P = (id: string, slot: CrawlerPart['slot'], name: string, tier: number, value: number, price: number, desc: string): CrawlerPart =>
-  ({ id, slot, name, tier, value, price, desc });
+export type CrawlerSlot = 'hull' | 'engine' | 'cargo' | 'cannon' | 'scanner' | 'legs';
+export const CRAWLER_SLOTS: CrawlerSlot[] = ['hull', 'engine', 'cargo', 'cannon', 'scanner', 'legs'];
+export const CRAWLER_SLOT_INFO: Record<CrawlerSlot, { icon: string; label: string; blurb: string }> = {
+  hull:    { icon: '🛡️', label: 'Hull',    blurb: 'The carapace. More Hull means more punishment your Crawler can shrug off.' },
+  engine:  { icon: '⚙️', label: 'Engine',  blurb: 'The abdomen core. Energy is fuel — every step in the field drinks from it.' },
+  cargo:   { icon: '📦', label: 'Cargo',   blurb: 'Saddlebags and trunks. Determines how many item stacks you can haul.' },
+  cannon:  { icon: '💥', label: 'Cannon',  blurb: 'Top-mounted artillery. Breaks rocks; better models stun foes for a free first strike.' },
+  scanner: { icon: '📡', label: 'Scanner', blurb: 'The all-seeing mast. Reveals dungeon floors, pings chests and stairways.' },
+  legs:    { icon: '🦿', label: 'Legs',    blurb: 'The stride itself. Finer legwork wastes less Energy with every step.' },
+};
+
+export interface CrawlerPart {
+  id: string; slot: CrawlerSlot; name: string; tier: number; value: number; price: number; desc: string;
+  /** visual style key consumed by the 3D part builder */
+  style: string;
+}
+const P = (id: string, slot: CrawlerSlot, name: string, tier: number, value: number, price: number, style: string, desc: string): CrawlerPart =>
+  ({ id, slot, name, tier, value, price, style, desc });
 
 export const CRAWLER_PARTS: Record<string, CrawlerPart> = Object.fromEntries([
-  P('hull1', 'hull', 'Scrap Hull', 1, 100, 0, 'Standard-issue academy hull. 100 Hull.'),
-  P('hull2', 'hull', 'Bronzeweave Hull', 2, 180, 500, 'Reinforced plating. 180 Hull.'),
-  P('hull3', 'hull', 'Aegis Hull', 3, 300, 1400, 'Vault-grade armor. 300 Hull.'),
-  P('engine1', 'engine', 'Putter Engine', 1, 100, 0, 'A wheezing starter engine. 100 Energy.'),
-  P('engine2', 'engine', 'Twin-Coil Engine', 2, 180, 500, 'Smooth and steady. 180 Energy.'),
-  P('engine3', 'engine', 'Stormheart Engine', 3, 300, 1400, 'Purrs like a thundercloud. 300 Energy.'),
-  P('cargo1', 'cargo', 'Side Satchel', 1, 12, 0, 'Carry up to 12 item stacks.'),
-  P('cargo2', 'cargo', 'Cargo Rack', 2, 20, 400, 'Carry up to 20 item stacks.'),
-  P('cargo3', 'cargo', 'Vault Trunk', 3, 32, 1100, 'Carry up to 32 item stacks.'),
-  P('cannon1', 'cannon', 'Pop Cannon', 1, 1, 0, 'Breaks cracked rocks blocking passages.'),
-  P('cannon2', 'cannon', 'Bore Cannon', 2, 2, 700, 'Also stuns foes: +10% first-strike chance.'),
-  P('cannon3', 'cannon', 'Howitzer MK-A', 3, 3, 1800, 'Also stuns foes: +25% first-strike chance.'),
-  P('scanner1', 'scanner', 'Tin Sonar', 1, 1, 0, 'Reveals nearby map tiles.'),
-  P('scanner2', 'scanner', 'Owl-Eye Sonar', 2, 2, 600, 'Wider map reveal; chests ping on the map.'),
-  P('scanner3', 'scanner', 'Oracle Array', 3, 3, 1500, 'Full-floor chest & stair pings, wide reveal.'),
+  P('hull1', 'hull', 'Scrap Hull', 1, 100, 0, 'scrap', 'Standard-issue academy hull — welded plates, honest rivets. 100 Hull.'),
+  P('hull2', 'hull', 'Bronzeweave Hull', 2, 180, 500, 'bronzeweave', 'Segmented bronze carapace, banded like a beetle. 180 Hull.'),
+  P('hull3', 'hull', 'Aegis Hull', 3, 300, 1400, 'aegis', 'Vault-grade angular armor with a dorsal blade. 300 Hull.'),
+  P('hull4', 'hull', 'Aurum Royale Hull', 4, 380, 3200, 'royale', 'Pearl-white coachwork with gold inlay. Turns heads, stops claws. 380 Hull.'),
+  P('engine1', 'engine', 'Putter Engine', 1, 100, 0, 'putter', 'A wheezing starter abdomen with twin smokestacks. 100 Energy.'),
+  P('engine2', 'engine', 'Twin-Coil Engine', 2, 180, 500, 'twincoil', 'Copper-wound and smooth as rain. 180 Energy.'),
+  P('engine3', 'engine', 'Stormheart Engine', 3, 300, 1400, 'stormheart', 'Purrs like a thundercloud; the core ring glows with banked lightning. 300 Energy.'),
+  P('engine4', 'engine', 'Aether Core', 4, 400, 3600, 'aethercore', 'A caged shard of folded sky. Dax does not know how it works. It works. 400 Energy.'),
+  P('cargo1', 'cargo', 'Side Satchels', 1, 12, 0, 'satchel', 'Leather saddlebags on both flanks. Carry up to 12 item stacks.'),
+  P('cargo2', 'cargo', 'Cargo Rack', 2, 20, 400, 'rack', 'A strapped-down top rack of crates. Carry up to 20 item stacks.'),
+  P('cargo3', 'cargo', 'Vault Trunk', 3, 32, 1100, 'vault', 'An armored, gold-sealed strongbox. Carry up to 32 item stacks.'),
+  P('cannon1', 'cannon', 'Pop Cannon', 1, 1, 0, 'pop', 'A single cheerful barrel. Breaks cracked rocks blocking passages.'),
+  P('cannon2', 'cannon', 'Bore Cannon', 2, 2, 700, 'bore', 'Twin barrels. Also stuns foes: +10% first-strike chance.'),
+  P('cannon3', 'cannon', 'Howitzer MK-A', 3, 3, 1800, 'howitzer', 'A muzzle-braked monster. Also stuns foes: +25% first-strike chance.'),
+  P('cannon4', 'cannon', 'Tempest Array', 4, 4, 4200, 'tempest', 'A four-tube rocket pod of Stormcall design. +35% first-strike chance.'),
+  P('scanner1', 'scanner', 'Tin Sonar', 1, 1, 0, 'tin', 'A whip antenna with a brave little beacon. Reveals nearby map tiles.'),
+  P('scanner2', 'scanner', 'Owl-Eye Sonar', 2, 2, 600, 'owleye', 'A slow-turning dish that never blinks. Wider reveal; chests ping on the map.'),
+  P('scanner3', 'scanner', 'Oracle Array', 3, 3, 1500, 'oracle', 'Three orbiting auguries. Full-floor chest & stair pings, wide reveal.'),
+  P('legs1', 'legs', 'Scuttler Legs', 1, 0, 0, 'scuttler', 'Four sturdy academy struts. They get you there.'),
+  P('legs2', 'legs', 'Arachno Striders', 2, 15, 900, 'arachno', 'Six armored legs with a smoother gait: 15% of steps cost no Energy.'),
+  P('legs3', 'legs', 'Sovereign Octapods', 3, 30, 2400, 'sovereign', 'Eight gold-jointed clawfeet gliding like silk: 30% of steps cost no Energy.'),
+].map(p => [p.id, p]));
+
+// ---------------- Crawler paint jobs ----------------
+export interface PaintJob {
+  id: string; name: string; price: number; desc: string;
+  color: number; metalness: number; roughness: number;
+  emissive?: number; emissiveIntensity?: number;
+  /** CSS color for UI swatches */
+  swatch: string;
+}
+const PJ = (id: string, name: string, price: number, color: number, metalness: number, roughness: number, swatch: string, desc: string,
+  emissive?: number, emissiveIntensity?: number): PaintJob =>
+  ({ id, name, price, color, metalness, roughness, swatch, desc, emissive, emissiveIntensity });
+
+export const PAINT_JOBS: Record<string, PaintJob> = Object.fromEntries([
+  PJ('p_crimson', 'Crimson Fang', 120, 0xb83232, 0.55, 0.4, '#b83232', 'Aggressive racing red. Wild Guardians respect it. Probably.'),
+  PJ('p_cobalt', 'Cobalt Drift', 120, 0x2a5ad8, 0.55, 0.4, '#2a5ad8', 'Deep harbor blue, Mistveil-approved.'),
+  PJ('p_verdant', 'Verdant Wing', 120, 0x3a8a3a, 0.5, 0.45, '#3a8a3a', 'Forest lacquer mixed with real leaf oil.'),
+  PJ('p_amber', 'Tharkand Amber', 140, 0xc4822a, 0.6, 0.35, '#c4822a', 'Dune-burnished orange from the eastern waste.'),
+  PJ('p_violet', 'Duskwatch Violet', 140, 0x6a3a9a, 0.6, 0.35, '#6a3a9a', 'The color of the hour the lamps come on.'),
+  PJ('p_stealth', 'Midnight Stealth', 220, 0x1c1e26, 0.3, 0.8, '#1c1e26', 'Matte blackout. The scanner mast still gives you away.'),
+  PJ('p_pearl', 'Pearl White', 260, 0xe8e4da, 0.4, 0.2, '#e8e4da', 'Nacre-polished and showroom-proud.'),
+  PJ('p_gold', 'Royal Gold', 480, 0xc9a24a, 0.9, 0.2, '#c9a24a', 'Actual gold leaf. Dax charges extra to even look at it.'),
+  PJ('p_chrome', 'Stormchrome', 420, 0x9aa4b8, 0.95, 0.12, '#b8c2d4', 'Mirror chrome that catches every lightning flash.'),
+  PJ('p_aether', 'Aetherglow', 640, 0xff9ad2, 0.5, 0.3, '#ff9ad2', 'Faintly luminous pink — pigment ground from a fallen halo, allegedly.', 0xff6ab8, 0.35),
 ].map(p => [p.id, p]));
 
 // ---------------- Grand Houses ----------------
@@ -886,6 +936,8 @@ export interface DungeonDef {
   unlockFlag?: string;          // story flag required
   rewardShards: number;
   desc: string;                 // overworld flavor text
+  hidden?: boolean;             // never shown on the overworld globe (entered from elsewhere)
+  drop?: { item: string; chance: number; max?: number };  // wild battles can shed a story relic
   coords: [number, number];     // [latitude, longitude] degrees on the overworld globe
   quest?: boolean;              // story-quest dungeon (red highlight on the overworld)
 }
@@ -903,6 +955,17 @@ export const DUNGEONS: DungeonDef[] = [
   { id: 'stormspire', name: 'Stormspire Depths', floors: 5, levelRange: [15, 22], theme: 'storm',
     pool: ['sparkmote', 'zephlet', 'voltyx', 'galewing', 'duskfang', 'thornbex', 'gearmite', 'smolderhog', 'ampyre', 'skydancer', 'duskweaver', 'bramblelynx'], boss: 'voltigarch', bossLevel: 26, rewardShards: 2200, unlockFlag: 'vault_cleared',
     desc: 'A war-spire that never stopped humming. Its last order was never rescinded.', coords: [38, 96], quest: true },
+  // story chapter III — Veyl's amber lies in the wild sparks of the mire
+  { id: 'thunderfen', name: 'Thunderfen Mire', floors: 3, levelRange: [8, 12], theme: 'storm',
+    pool: ['joltuft', 'sparkmote', 'gearmite', 'ampyre', 'mistling', 'shroomple', 'nimbusyl', 'puddla', 'zephlet'],
+    boss: 'dynamaul', bossLevel: 15, rewardShards: 700, unlockFlag: 'historian_intel',
+    drop: { item: 'storm_amber', chance: 0.4, max: 1 },
+    desc: 'A drowned bog that appeared overnight where lightning keeps striking the same dead trees. The wild Guardians here carry sparks fossilized in amber.', coords: [32, -18], quest: true },
+  // story chapter V — Greggy's test, entered from Agdao Island itself
+  { id: 'cradle', name: 'Cradle Hollow', floors: 3, levelRange: [18, 24], theme: 'cavern', hidden: true,
+    pool: ['coralkit', 'reefrider', 'fernfox', 'shroomple', 'plumelet', 'driftling', 'mournmoth', 'pearlance', 'bramblelynx', 'frostfin'],
+    boss: 'grovetyrant', bossLevel: 27, rewardShards: 1800,
+    desc: 'The sea-cave where Aurelia made the First Bond, seven hundred years ago. Something corrupted has nested in the world\'s gentlest place.', coords: [-6, -44], quest: true },
 ];
 
 export const SHOP_STOCK = ['tonic', 'tonic_plus', 'soda', 'berry', 'honey_roll', 'star_treat', 'revive_leaf', 'cell', 'cell_plus', 'plating', 'elixir', 'soda_plus'];

@@ -1,14 +1,23 @@
 // ============================================================
-// AZ Tamer — Quest engine: guild main-quest chains (a unique
-// storyline per Grand House) and NPC side quests.
+// AZ Tamer — Quest engine: the Chronicle (the epic main story,
+// told in chapters), guild main-quest chains (a unique storyline
+// per Grand House) and NPC side quests.
 // Quest progress lives on Player.quests / Player.flags.
 //
-// All quest lines orbit the same history: fifteen years ago the
-// Corrupted Legion — nine four-element Guardians — massed their
-// armies in Ghandra, the dimension at the center of the world.
-// Aljay, Greggy and Onnel sealed them away. The five Grand
-// Houses of Olivar exist so the world is ready if the seal breaks.
-// The corruption rising in Aurel's ruins is that seal, thinning.
+// The deep history (see lore.ts): Guardians crossed into the
+// world at the First Dawn, ~3,000 years ago. ~700 years ago
+// Aurelia of Agdao Island made the First Bond and the first
+// Tamers rose around her. The Reaching — humans discovering far
+// more than they should, and the bad ones caging what they
+// found — was answered by the Guild Compact: Tamer guilds in
+// every town and city of the world. The five Grand Houses of
+// Olivar are one famous chapter among hundreds.
+//
+// Fifteen years ago the Corrupted Legion massed in Ghandra.
+// Aljay, Greggy and Onnel sealed them away. The seal is
+// thinning — and the Chronicle below is the player's road into
+// that story: to Historian Veyl, to Agdao, to Greggy the
+// Stormheart, and to Aljay's daughters, Azrin and Azrael.
 // ============================================================
 import { ITEMS } from './data';
 import type { Player } from './state';
@@ -17,24 +26,109 @@ export interface QuestReward { shards?: number; items?: [string, number][]; }
 
 export interface QuestDef {
   id: string;
-  kind: 'main' | 'side';
+  kind: 'story' | 'main' | 'side';
   houseId?: string;            // main quests belong to a guild
+  chapter?: number;            // story quests are numbered chapters of the Chronicle
+  icon?: string;               // journal glyph
   title: string;
   giver: string;
   location: string;
   brief: string;               // journal text — the story of the quest
   objective: string;           // short imperative
+  hint?: string;               // journal nudge — where to go, what to try
   check: (p: Player) => boolean;
-  onComplete?: (p: Player) => void;   // consume fetch items etc.
+  progress?: (p: Player) => [number, number];  // numeric progress for journal bars
+  onComplete?: (p: Player) => void;   // consume fetch items, set flags etc.
+  autoComplete?: boolean;      // completes the moment check passes (no turn-in NPC)
   reward: QuestReward;
   requires?: string;           // quest id that must be done first
 }
+
+const M = (q: QuestDef) => q;
+
+// ---------------- THE CHRONICLE — the epic main story ----------------
+// One continuous road: prove yourself in the wild → the historian
+// who maps storms → amber from the mire → the sea-chart to Agdao →
+// Greggy the Stormheart → the First Hollow → the daughters of the
+// Dawnflame → the engine in the spire. Chapter VIII is a door left
+// ajar: Ghandra waits.
+const STORY_QUESTS: QuestDef[] = [
+  M({
+    id: 'story_roads', kind: 'story', chapter: 1, icon: '🗺️',
+    title: 'Two Roads Below', giver: 'Instructor Hale (Crawler radio)', location: 'Mossdeep Burrows · Sunken Vault',
+    brief: 'Hale\'s voice crackled through the Crawler radio the morning after your presentation at the University. "Congratulations, graduate — now forget the applause. A diploma isn\'t a tamer; the wild needs two honest chances to eat you first. Descend the Mossdeep Burrows to their deepest floor, and conquer the Sunken Vault. Do that, and I\'ll point you at something bigger. Write this down: VEYL. University library. You\'ll thank me."',
+    objective: 'Fully descend Mossdeep Burrows and conquer the Sunken Vault',
+    hint: 'Both expeditions are marked on the overworld globe. The Vault opens to Grand House members — pledge to a House in Haven City first.',
+    check: p => (p.dungeonClears['mossdeep'] ?? 0) >= 1 && (p.dungeonClears['sunken'] ?? 0) >= 1,
+    progress: p => [Math.min(1, p.dungeonClears['mossdeep'] ?? 0) + Math.min(1, p.dungeonClears['sunken'] ?? 0), 2],
+    autoComplete: true,
+    reward: { shards: 900, items: [['cell_plus', 1], ['tonic_plus', 1]] },
+  }),
+  M({
+    id: 'story_historian', kind: 'story', chapter: 2, icon: '📜', requires: 'story_roads',
+    title: 'The Man Who Maps Storms', giver: 'Instructor Hale', location: 'University — Library',
+    brief: '"Veyl," Hale said, as if the name were a full sentence. "Historian. Library. Smells of ink and thunderstorms. The man has spent nine years charting every verified sighting of Greggy the Stormheart — where the legend has been, and more importantly, where he hasn\'t. If anyone alive can point you at a living legend, it\'s Veyl. Take the shuttle. Mind your manners. Do NOT touch his charts."',
+    objective: 'Speak with Historian Veyl in the University library',
+    hint: 'Ride the University shuttle from the west side of Haven City plaza, then take the Library door off the lobby.',
+    check: p => !!p.flags['met_historian'],
+    reward: { shards: 300 },
+  }),
+  M({
+    id: 'story_amber', kind: 'story', chapter: 3, icon: '🟠', requires: 'story_historian',
+    title: 'Amber in the Mire', giver: 'Historian Veyl', location: 'Thunderfen Mire',
+    brief: '"A legend\'s trail can be CALCULATED," Veyl said, sweeping a dozen charts off the table to unroll a thirteenth. "Greggy grounds himself — literally — wherever the world\'s charge gathers. Three weeks ago a bog northeast of Haven began catching the same lightning every night. The wild Guardians there are already shedding storm-touched amber. Bring me one piece. Amber remembers the storm that made it — and I can read in it where the Stormheart went."',
+    objective: 'Bring 1 Storm-Touched Amber to Historian Veyl',
+    hint: 'The Thunderfen Mire is now marked on the overworld. Wild Guardians there sometimes shed amber after a battle.',
+    check: p => p.itemCount('storm_amber') >= 1,
+    progress: p => [Math.min(1, p.itemCount('storm_amber')), 1],
+    onComplete: p => { p.removeItem('storm_amber', 1); p.flags['agdao_unlocked'] = true; },
+    reward: { shards: 800, items: [['sea_chart', 1]] },
+  }),
+  M({
+    id: 'story_agdao', kind: 'story', chapter: 4, icon: '🏝️', requires: 'story_amber',
+    title: 'The Cradle of Tamers', giver: 'Historian Veyl', location: 'Agdao Island',
+    brief: 'Veyl held the amber to the lamplight and went very quiet. "Agdao," he breathed. "Of course. Where else does a storm go to rest but the place the First Bond was made?" He pressed his own sea-chart into your hands — seven hundred years of corrections in nine different inks. "Agdao Island, the Cradle of Tamers. Hut villages, the oldest Guild in the world, and people who notice everything. Ask around. The islanders will know where an old thunderhead has parked himself."',
+    objective: 'Sail to Agdao Island and find Greggy the Stormheart',
+    hint: 'Agdao now appears on your overworld map. On the island: ask the villagers, then take the Left Gate west and follow the cliff path up and around to the northeast bluff.',
+    check: p => !!p.flags['met_greggy'],
+    reward: { shards: 1000 },
+  }),
+  M({
+    id: 'story_cradle', kind: 'story', chapter: 5, icon: '🌀', requires: 'story_agdao',
+    title: 'The First Hollow', giver: 'Greggy the Stormheart', location: 'Cradle Hollow, Agdao',
+    brief: '"I was expecting you," Greggy said, before you\'d said a word. "Veyl\'s amber trick. I taught him that." The smile faded fast. "Listen. The sea-cave where Aurelia bonded Cero — the gentlest ground in this world — has something Legion-touched nested in it. I can feel it through my boots. I\'m too loud to go down there; the corruption would hear me coming an island away. You\'re new. You\'re quiet. Cleanse the Cradle Hollow, and I\'ll tell you things about the Dawnflame\'s family that aren\'t in any of Veyl\'s charts."',
+    objective: 'Cleanse Cradle Hollow and return to Greggy',
+    hint: 'The Hollow\'s mouth is on Agdao\'s eastern shore, below Greggy\'s bluff. Its warden is strong — Lv 27. Pack tonics.',
+    check: p => (p.dungeonClears['cradle'] ?? 0) >= 1,
+    progress: p => [Math.min(1, p.dungeonClears['cradle'] ?? 0), 1],
+    reward: { shards: 2000, items: [['stormheart_coil', 1], ['elixir', 1]] },
+  }),
+  M({
+    id: 'story_daughters', kind: 'story', chapter: 6, icon: '🔥', requires: 'story_cradle',
+    title: 'Daughters of the Dawnflame', giver: 'Greggy the Stormheart', location: 'Haven City — Plaza',
+    brief: 'Greggy watched the Hollow\'s light come back to the water for a long time. "Aljay has two daughters," he said at last. "Azrin and Azrael. Tamers — real ones, better than their father at their age, and you may tell them I said the opposite. They\'ve been hunting the same wrongness you just cleansed, following it across three continents. I sent word the moment Veyl\'s amber lit up. They\'re waiting for you by the fountain in Haven City. Go and meet the Dawnflame\'s fire — both colors of it."',
+    objective: 'Meet Azrin and Azrael at the Haven City fountain',
+    hint: 'They\'re waiting in the plaza, by the fountain at the center of Haven City.',
+    check: p => !!p.flags['met_daughters'],
+    reward: { shards: 800, items: [['star_treat', 2]] },
+  }),
+  M({
+    id: 'story_echoes', kind: 'story', chapter: 7, icon: '⚡', requires: 'story_daughters',
+    title: 'Echoes of Ghandra', giver: 'Azrin & Azrael', location: 'Stormspire Depths → Agdao',
+    brief: '"Here\'s what we know," Azrael said, unrolling a chart her father would have recognized. "The Stormspire\'s war-engine isn\'t counting down. It\'s ANSWERING — call and response, and the call comes from inside Ghandra\'s seal." Azrin cracked her knuckles. "So we cut the conversation. You silence the engine — uncle Greggy says you\'re quiet, and we\'re anything but. Then get back to him on Agdao and tell him what the engine\'s last word was. We\'ll handle the rest of the continent\'s panicking."',
+    objective: 'Conquer the Stormspire Depths, then report to Greggy on Agdao',
+    hint: 'The Stormspire Depths sit far to the east on the overworld. Its master is Lv 26 — bring your strongest three.',
+    check: p => (p.dungeonClears['stormspire'] ?? 0) >= 1,
+    progress: p => [Math.min(1, p.dungeonClears['stormspire'] ?? 0), 1],
+    onComplete: p => { p.flags['arc1_done'] = true; },
+    reward: { shards: 5000, items: [['hp_gem', 1], ['atk_gem', 1], ['elixir', 2]] },
+  }),
+];
 
 // ---------------- guild main quests ----------------
 // Every house runs the same spine (prove yourself → the Vault →
 // grow your family → the Stormspire) but tells its own chapter
 // of the Legion story.
-const M = (q: QuestDef) => q;
 
 const MAIN_QUESTS: QuestDef[] = [
   // ===== Pyrelight — the Ember Court =====
@@ -243,10 +337,28 @@ const SIDE_QUESTS: QuestDef[] = [
 
 // ---------------- registry & state helpers ----------------
 export const QUESTS: Record<string, QuestDef> = Object.fromEntries(
-  [...MAIN_QUESTS, ...SIDE_QUESTS].map(q => [q.id, q]));
+  [...STORY_QUESTS, ...MAIN_QUESTS, ...SIDE_QUESTS].map(q => [q.id, q]));
 
 export const mainChain = (houseId: string): QuestDef[] =>
   MAIN_QUESTS.filter(q => q.houseId === houseId);
+
+// derive progress bars for the repeated guild-quest patterns
+const DERIVED_PROGRESS: Record<string, (p: Player) => [number, number]> = {};
+for (const q of MAIN_QUESTS) {
+  if (q.objective === 'Win 3 battles') DERIVED_PROGRESS[q.id] = p => [Math.min(3, p.battlesWon), 3];
+  else if (q.objective.startsWith('Befriend')) DERIVED_PROGRESS[q.id] = p => [Math.min(3, p.capturesMade), 3];
+  else if (q.objective.includes('Sunken Vault')) DERIVED_PROGRESS[q.id] = p => [Math.min(1, p.dungeonClears['sunken'] ?? 0), 1];
+  else if (q.objective.includes('Stormspire')) DERIVED_PROGRESS[q.id] = p => [Math.min(1, p.dungeonClears['stormspire'] ?? 0), 1];
+}
+DERIVED_PROGRESS['side_chef'] = p => [Math.min(3, p.itemCount('berry')), 3];
+DERIVED_PROGRESS['side_niko'] = p => [Math.min(1, p.capturesMade), 1];
+
+/** Numeric progress toward a quest's objective, if it can be counted. */
+export function questProgress(p: Player, id: string): [number, number] | null {
+  const q = QUESTS[id];
+  const fn = q.progress ?? DERIVED_PROGRESS[id];
+  return fn ? fn(p) : null;
+}
 
 export type QuestState = 'locked' | 'available' | 'active' | 'ready' | 'done';
 
@@ -279,8 +391,35 @@ export function completeQuest(p: Player, id: string): string {
 }
 
 /** Everything the journal needs, grouped. */
-export function journalEntries(p: Player): { main: [QuestDef, QuestState][]; side: [QuestDef, QuestState][] } {
+export function journalEntries(p: Player): {
+  story: [QuestDef, QuestState][];
+  main: [QuestDef, QuestState][];
+  side: [QuestDef, QuestState][];
+} {
+  const story = STORY_QUESTS.map(q => [q, questState(p, q.id)] as [QuestDef, QuestState]);
   const main = p.houseId ? mainChain(p.houseId).map(q => [q, questState(p, q.id)] as [QuestDef, QuestState]) : [];
   const side = SIDE_QUESTS.map(q => [q, questState(p, q.id)] as [QuestDef, QuestState]);
-  return { main, side };
+  return { story, main, side };
+}
+
+/**
+ * Drive the Chronicle forward: auto-accept the next available chapter
+ * and auto-complete chapters that need no turn-in. Returns
+ * human-readable notes for the caller to toast. Safe to call often.
+ */
+export function syncStoryQuests(p: Player): string[] {
+  if (!p.flags['exam_done'] || !p.flags['university_done']) return [];
+  const notes: string[] = [];
+  for (const q of STORY_QUESTS) {
+    if (questState(p, q.id) === 'available') {
+      acceptQuest(p, q.id);
+      notes.push(`📖 The Chronicle — Chapter ${q.chapter}: ${q.title}`);
+    }
+    if (q.autoComplete && questState(p, q.id) === 'ready') {
+      const summary = completeQuest(p, q.id);
+      notes.push(`✅ Chapter ${q.chapter} complete: ${q.title}${summary ? ` (${summary})` : ''}`);
+    }
+  }
+  if (notes.length) p.save();
+  return notes;
 }
