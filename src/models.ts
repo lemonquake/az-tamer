@@ -3,6 +3,7 @@
 // ============================================================
 import * as THREE from 'three';
 import { SPECIES, TYPE_COLORS, CRAWLER_PARTS, PAINT_JOBS, type Archetype, type CrawlerSlot, type PaintJob } from './data';
+import { BESPOKE, type BespokeBuild } from './bestiary';
 
 // ---------------- tween system ----------------
 type TweenFn = (t: number) => void;
@@ -658,6 +659,8 @@ interface GuardianRig {
   parts: { head?: THREE.Object3D; tail?: THREE.Object3D; wings?: THREE.Object3D[]; };
   baseY: number;
   phase: number;               // idle anim phase offset
+  /** Bespoke species drive their own idle loop (see bestiary.ts). */
+  animate?: (t: number, dt: number) => void;
 }
 
 const rigs = new Set<GuardianRig>();
@@ -807,7 +810,9 @@ function buildArchetype(arch: Archetype, p: { primary: number; secondary: number
 export function makeGuardian(speciesId: string): GuardianRig {
   const def = SPECIES[speciesId];
   const glow = TYPE_COLORS[def.type];
-  const body = buildArchetype(def.archetype, def.palette, glow);
+  // hand-sculpted species come from the bestiary; the rest use archetypes
+  const bespoke: BespokeBuild | undefined = BESPOKE[speciesId]?.();
+  const body = bespoke ? bespoke.body : buildArchetype(def.archetype, def.palette, glow);
   body.scale.setScalar(def.scale);
 
   // Aether-stage beings carry a radiant double-halo and orbit motes
@@ -833,8 +838,8 @@ export function makeGuardian(speciesId: string): GuardianRig {
     body.add(aLight);
   }
 
-  // Custom Legendary Enhancements!
-  if (['solarex', 'leviathorn', 'yggdranox', 'raidenjin', 'chthonix', 'zephyrax'].includes(speciesId)) {
+  // Custom Legendary Enhancements! (bespoke models carry their own regalia)
+  if (!bespoke && ['solarex', 'leviathorn', 'yggdranox', 'raidenjin', 'chthonix', 'zephyrax'].includes(speciesId)) {
     const accMat = new THREE.MeshStandardMaterial({
       color: def.palette.accent,
       emissive: glow,
@@ -913,13 +918,14 @@ export function makeGuardian(speciesId: string): GuardianRig {
 
   const rig: GuardianRig = {
     group, body,
-    parts: {
+    parts: bespoke?.parts ?? {
       head: body.getObjectByName('head') ?? undefined,
       tail: body.getObjectByName('tail') ?? undefined,
       wings: [body.getObjectByName('wing1'), body.getObjectByName('wing-1')].filter(Boolean) as THREE.Object3D[],
     },
     baseY: 0,
     phase: Math.random() * Math.PI * 2,
+    animate: bespoke?.animate,
   };
   rigs.add(rig);
   return rig;
@@ -991,6 +997,7 @@ let clock = 0;
 export function updateRigs(dt: number): void {
   clock += dt;
   for (const r of rigs) {
+    if (r.animate) { r.animate(clock + r.phase, dt); continue; } // bestiary species
     const t = clock * 2.2 + r.phase;
     r.body.position.y = r.baseY + Math.sin(t) * 0.045;
     if (r.parts.tail) r.parts.tail.rotation.x = Math.sin(t * 1.4) * 0.25;
