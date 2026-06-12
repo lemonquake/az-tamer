@@ -298,6 +298,126 @@ export function marbleTexture(base = '#cfd2dd', vein = '#9aa0b5', repeat = 6): T
   }, repeat);
 }
 
+/**
+ * Polished Aether-marble — ivory stone shot through with veins of gold and
+ * violet starlight. Quarried (so the masons claim) from the one cliff in
+ * Olivar that Ghandra's shadow never touched. Cut for the Legends' Ascendancy.
+ */
+export function aetherMarbleTexture(repeat = 4): THREE.Texture {
+  return canvasTex(256, (ctx, s) => {
+    const rnd = mulberry(2026);
+    const g = ctx.createLinearGradient(0, 0, s, s);
+    g.addColorStop(0, '#f0eadb'); g.addColorStop(0.5, '#e3dccb'); g.addColorStop(1, '#f0eadb');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, s, s);
+    // soft cloudy mottle
+    for (let i = 0; i < 220; i++) {
+      const x = rnd() * s, y = rnd() * s, r = 6 + rnd() * 22;
+      const rg = ctx.createRadialGradient(x, y, 0, x, y, r);
+      rg.addColorStop(0, `rgba(188,180,160,${0.05 + rnd() * 0.08})`);
+      rg.addColorStop(1, 'rgba(188,180,160,0)');
+      ctx.fillStyle = rg;
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+    }
+    // veins — broad gold, fine gold, hairline violet aether
+    const vein = (color: string, width: number, n: number) => {
+      ctx.strokeStyle = color; ctx.lineWidth = width;
+      for (let i = 0; i < n; i++) {
+        ctx.beginPath();
+        let x = rnd() * s, y = rnd() * s;
+        ctx.moveTo(x, y);
+        for (let j = 0; j < 7; j++) { x += rnd() * 46 - 23; y += rnd() * 46 - 23; ctx.lineTo(x, y); }
+        ctx.stroke();
+      }
+    };
+    vein('rgba(192,154,70,0.45)', 2.6, 8);
+    vein('rgba(214,178,94,0.7)', 1.2, 11);
+    vein('rgba(150,110,228,0.32)', 1.0, 9);
+    // aether glints
+    for (let i = 0; i < 90; i++) {
+      ctx.fillStyle = rnd() > 0.5 ? 'rgba(255,245,214,0.8)' : 'rgba(198,162,255,0.55)';
+      ctx.fillRect(rnd() * s, rnd() * s, 1.6, 1.6);
+    }
+  }, repeat);
+}
+
+/**
+ * Carved trophy frieze — midnight stone banded in embossed gold: laurel
+ * branches cradling championship cups, one star per legend overhead.
+ * Wraps the flanks of the Legends' Ascendancy.
+ */
+export function legendFriezeTexture(repeat = 5): THREE.Texture {
+  return canvasTex(256, (ctx, s) => {
+    const rnd = mulberry(522);
+    ctx.fillStyle = '#1b2138'; ctx.fillRect(0, 0, s, s);
+    for (let i = 0; i < 520; i++) {
+      const v = rnd() * 0.1 - 0.05;
+      ctx.fillStyle = v > 0 ? `rgba(255,255,255,${v})` : `rgba(0,0,0,${-v})`;
+      ctx.fillRect(rnd() * s, rnd() * s, 2, 2 + rnd() * 4);
+    }
+    // gold cornice bands, with a darker undershadow for embossed depth
+    ctx.fillStyle = '#8a6a26'; ctx.fillRect(0, 16, s, 3); ctx.fillRect(0, s - 19, s, 3);
+    ctx.fillStyle = '#c79f49'; ctx.fillRect(0, 8, s, 8); ctx.fillRect(0, s - 16, s, 8);
+    ctx.fillStyle = '#e8cf8a'; ctx.fillRect(0, 8, s, 2); ctx.fillRect(0, s - 16, s, 2);
+    // repeating emblem: trophy cup between laurel arcs, star above
+    const emblem = (cx: number, cy: number, shade: boolean) => {
+      const gold = shade ? 'rgba(40,32,12,0.9)' : 'rgba(199,159,73,0.95)';
+      const off = shade ? 2 : 0;
+      ctx.strokeStyle = gold; ctx.fillStyle = gold; ctx.lineWidth = 3;
+      // cup bowl
+      ctx.beginPath(); ctx.arc(cx + off, cy + off, 13, 0, Math.PI, false); ctx.closePath(); ctx.fill();
+      // handles
+      ctx.lineWidth = 2.4;
+      ctx.beginPath(); ctx.arc(cx - 16 + off, cy + 2 + off, 7, Math.PI * 0.6, Math.PI * 1.6); ctx.stroke();
+      ctx.beginPath(); ctx.arc(cx + 16 + off, cy + 2 + off, 7, Math.PI * 1.4, Math.PI * 0.4); ctx.stroke();
+      // stem and base
+      ctx.fillRect(cx - 2 + off, cy + 13 + off, 4, 9);
+      ctx.fillRect(cx - 9 + off, cy + 22 + off, 18, 4);
+      // laurel arcs flanking
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(cx + off, cy + 4 + off, 26, Math.PI * 0.75, Math.PI * 1.3); ctx.stroke();
+      ctx.beginPath(); ctx.arc(cx + off, cy + 4 + off, 26, Math.PI * 1.7, Math.PI * 0.25); ctx.stroke();
+      // leaves along the arcs
+      for (const sgn of [-1, 1]) for (let k = 0; k < 4; k++) {
+        const a = Math.PI * 1.5 + sgn * (0.5 + k * 0.28);
+        const lx = cx + Math.cos(a) * 26, ly = cy + 4 + Math.sin(a) * 26;
+        ctx.beginPath(); ctx.ellipse(lx + off, ly + off, 4.5, 2, a, 0, Math.PI * 2); ctx.fill();
+      }
+      // star overhead
+      ctx.beginPath();
+      for (let p = 0; p < 10; p++) {
+        const ang = -Math.PI / 2 + (p * Math.PI) / 5;
+        const r = p % 2 === 0 ? 7 : 3;
+        const px = cx + Math.cos(ang) * r, py = cy - 26 + Math.sin(ang) * r;
+        if (p === 0) ctx.moveTo(px + off, py + off); else ctx.lineTo(px + off, py + off);
+      }
+      ctx.closePath(); ctx.fill();
+    };
+    for (const cx of [64, 192]) { emblem(cx, s / 2 + 6, true); emblem(cx, s / 2 + 6, false); }
+  }, repeat);
+}
+
+/** Glowing ember cracks on black — emissive map for obsidian set over living fire. */
+export function emberCrackTexture(glow = '#ff7a2a', repeat = 2): THREE.Texture {
+  return canvasTex(256, (ctx, s) => {
+    const rnd = mulberry(909);
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, s, s);
+    ctx.strokeStyle = glow; ctx.lineWidth = 2.2;
+    ctx.shadowColor = glow; ctx.shadowBlur = 8;
+    for (let i = 0; i < 11; i++) {
+      ctx.beginPath();
+      let x = rnd() * s, y = rnd() * s;
+      ctx.moveTo(x, y);
+      for (let j = 0; j < 6; j++) { x += rnd() * 44 - 22; y += rnd() * 44 - 22; ctx.lineTo(x, y); }
+      ctx.stroke();
+    }
+    // hot motes caught in the cracks
+    for (let i = 0; i < 50; i++) {
+      ctx.fillStyle = rnd() > 0.5 ? glow : '#ffd28a';
+      ctx.fillRect(rnd() * s, rnd() * s, 2, 2);
+    }
+  }, repeat);
+}
+
 /** Woven carpet with border pattern. */
 export function carpetTexture(base = '#7a2e35', accent = '#d8b56a', repeat = 1): THREE.Texture {
   return canvasTex(256, (ctx, s) => {

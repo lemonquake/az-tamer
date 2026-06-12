@@ -11,6 +11,8 @@ import {
   makeTree, makeStreetLamp, makeCustomCreature, mulberry,
   plankTexture, stoneTexture, marbleTexture, tileTexture, bookshelfTexture,
   carpetTexture, wallpaperTexture, skyGradient, barkTexture, leafTexture,
+  aetherMarbleTexture, legendFriezeTexture, emberCrackTexture,
+  caveRockTexture, stormPanelTexture, stormSeamEmissive, groundTexture,
   HAIRSTYLES, SKIN_TONES, HAIR_COLORS, type GuardianRig, type TreeKind, type CrawlerLook,
 } from './models';
 import { LEGENDS, WORLD_CIRCUIT, LEGEND_GUARDIANS, DAUGHTERS } from './lore';
@@ -110,6 +112,8 @@ export class Town {
   private intNpcs: THREE.Group[] = [];
   private intRigs: GuardianRig[] = [];
   private intRoom = { w: 18, d: 13 };
+  /** Walkable terrain height inside an interior (stairs, raised daises). Null = flat floor. */
+  private intGroundH: ((x: number, z: number) => number) | null = null;
   private exitSpot = new THREE.Vector3();
 
   // labeled minimap markers
@@ -1991,6 +1995,7 @@ export class Town {
     this.intRigs.forEach(disposeRig);
     this.intRigs = [];
     this.intRoom = { w: 18, d: 13 };
+    this.intGroundH = null;
     const { w, d } = this.intRoom;
     // labeled interior minimap
     this.intName = h.name;
@@ -2208,6 +2213,7 @@ export class Town {
     this.intRigs.forEach(disposeRig);
     this.intRigs = [];
     this.intRoom = { w: 18, d: 13 };
+    this.intGroundH = null;
     const { w, d } = this.intRoom;
 
     const themes = {
@@ -2484,7 +2490,9 @@ export class Town {
     this.intNpcs = [];
     this.intRigs.forEach(disposeRig);
     this.intRigs = [];
-    this.intRoom = { w: 46, d: 38 };
+    // doubled again on the west side to make room for the Legends' Ascendancy
+    this.intRoom = { w: 58, d: 44 };
+    this.intGroundH = null;
     const { w, d } = this.intRoom;
     this.intName = 'Grand Coliseum';
 
@@ -2656,7 +2664,7 @@ export class Town {
         } else if (pick === 1) {
           await say('Attendant Lyssa', 'The Ring seats twenty thousand now and the sound of a final can be heard from the city walls. It stays sealed between tournaments — the two guards up there take their job VERY seriously.');
         } else if (pick === 2) {
-          await say('Attendant Lyssa', 'The gold wall, east side. Aljay — eight championships. Greggy — nine, the longest reign in history. Onnel — five. Their names are immortalized with all nine of their Guardians. The World Circuit board on the west wall is for everyone still chasing them.');
+          await say('Attendant Lyssa', 'The gold wall, east side. Aljay — eight championships. Greggy — nine, the longest reign in history. Onnel — five. And the Ascendancy in the north-west quarter is brand new — Aether-marble, studio crystals, all nine Guardians under spotlight. Climb the stairs and pay your respects. Everyone does.');
         }
       },
     });
@@ -2748,51 +2756,337 @@ export class Town {
       }
     }
 
-    // ---- the Legend alcoves: three golden tamers, nine living statues ----
-    // Gathered in the hall's north-west corner — a quiet gallery beside
-    // the Ring, where the devoted can stand and simply look up.
-    const ALCOVES: [number, number][] = [[-18.5, -14], [-13.5, -10], [-18.5, -6]];
+    // ============================================================
+    // THE LEGENDS' ASCENDANCY — the whole north-west quarter of the
+    // doubled hall, surrendered to one monument. A grand pedestal of
+    // Aether-marble wrapped in a carved trophy frieze, climbed by six
+    // marble stairs under a crimson runner. On the high ground: three
+    // bespoke plinths — obsidian-and-ember, storm-steel, living root —
+    // a golden legend on each, their nine Guardians arrayed before
+    // them under studio spotlights hung from a rigging truss.
+    // ============================================================
+    const PLAT = { x1: -14.5, z0: -21.5, z1: -4.5, h: 1.9 };   // west edge is the hall wall
+    const STAIR = { x0: -14.5, x1: -10.3, z0: -16, z1: -10 };
+    const ascendH = (x: number, z: number): number => {
+      if (x <= PLAT.x1 && z >= PLAT.z0 && z <= PLAT.z1) return PLAT.h;
+      if (x > STAIR.x0 && x <= STAIR.x1 && z >= STAIR.z0 && z <= STAIR.z1)
+        return PLAT.h * (STAIR.x1 - x) / (STAIR.x1 - STAIR.x0);
+      return 0;
+    };
+    this.intGroundH = ascendH;
+    const platCX = (-w / 2 + PLAT.x1) / 2, platCZ = (PLAT.z0 + PLAT.z1) / 2;
+    const platW = PLAT.x1 + w / 2, platD = PLAT.z1 - PLAT.z0;
+    // the grand pedestal: frieze-carved flanks, Aether-marble crown
+    const platBody = new THREE.Mesh(new THREE.BoxGeometry(platW, PLAT.h, platD),
+      new THREE.MeshStandardMaterial({ map: legendFriezeTexture(5), roughness: 0.65, metalness: 0.2 }));
+    platBody.position.set(platCX, PLAT.h / 2, platCZ);
+    platBody.castShadow = platBody.receiveShadow = true;
+    const platTop = new THREE.Mesh(new THREE.PlaneGeometry(platW, platD),
+      new THREE.MeshStandardMaterial({ map: aetherMarbleTexture(5), roughness: 0.25, metalness: 0.15 }));
+    platTop.rotation.x = -Math.PI / 2;
+    platTop.position.set(platCX, PLAT.h + 0.01, platCZ);
+    platTop.receiveShadow = true;
+    // gold cornice ringing the crown, a stone skirt at the foot
+    const cornice = new THREE.Mesh(new THREE.BoxGeometry(platW + 0.3, 0.14, platD + 0.3),
+      new THREE.MeshStandardMaterial({ color: 0xc9a24a, metalness: 0.85, roughness: 0.25 }));
+    cornice.position.set(platCX, PLAT.h - 0.07, platCZ);
+    const skirt = new THREE.Mesh(new THREE.BoxGeometry(platW + 0.5, 0.22, platD + 0.5),
+      new THREE.MeshStandardMaterial({ map: stoneTexture('#2a3048', '#1a2034', 3), roughness: 0.8 }));
+    skirt.position.set(platCX, 0.11, platCZ);
+    s.add(platBody, platTop, cornice, skirt);
+    // inlaid Aether sigil where pilgrims stand among the Guardians
+    const sigil = new THREE.Mesh(new THREE.RingGeometry(1.6, 2.3, 40),
+      new THREE.MeshStandardMaterial({ color: 0x9a7af2, emissive: 0x9a7af2, emissiveIntensity: 0.7, side: THREE.DoubleSide }));
+    sigil.rotation.x = -Math.PI / 2;
+    sigil.position.set(-19.6, PLAT.h + 0.02, platCZ);
+    sigil.name = 'legendpulse';
+    s.add(sigil);
+
+    // six marble stairs under a crimson runner
+    const stairMat = new THREE.MeshStandardMaterial({ map: marbleTexture('#e9e3d3', '#b9ac80', 2), roughness: 0.35 });
+    const runnerMat = new THREE.MeshStandardMaterial({ map: carpetTexture('#7a1e2a', '#d8b56a', 1), roughness: 0.95 });
+    const stairW = STAIR.z1 - STAIR.z0, stepRun = (STAIR.x1 - STAIR.x0) / 6;
+    for (let i = 0; i < 6; i++) {
+      const top = PLAT.h * (i + 1) / 6;
+      const step = new THREE.Mesh(new THREE.BoxGeometry(stepRun, top, stairW), stairMat);
+      step.position.set(STAIR.x1 - stepRun / 2 - stepRun * i, top / 2, (STAIR.z0 + STAIR.z1) / 2);
+      step.receiveShadow = true;
+      const tread = new THREE.Mesh(new THREE.PlaneGeometry(stepRun, 3.0), runnerMat);
+      tread.rotation.x = -Math.PI / 2;
+      tread.position.set(step.position.x, top + 0.012, (STAIR.z0 + STAIR.z1) / 2);
+      s.add(step, tread);
+    }
+    // the runner continues across the hall floor and onto the marble crown
+    const approach = new THREE.Mesh(new THREE.PlaneGeometry(6.0, 3.0), runnerMat);
+    approach.rotation.x = -Math.PI / 2;
+    approach.position.set(STAIR.x1 + 3.0, 0.02, platCZ);
+    const landing = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 3.0), runnerMat);
+    landing.rotation.x = -Math.PI / 2;
+    landing.position.set(PLAT.x1 - 2.3, PLAT.h + 0.02, platCZ);
+    s.add(approach, landing);
+
+    // gilded balustrade — gold posts crowned with aether orbs, glowing rail
+    const postMat = new THREE.MeshStandardMaterial({ color: 0xc9a24a, metalness: 0.85, roughness: 0.3 });
+    const railGlowMat = new THREE.MeshStandardMaterial({ color: 0x9a7af2, emissive: 0x9a7af2, emissiveIntensity: 1.0 });
+    const trussMat = new THREE.MeshStandardMaterial({ color: 0x1c2230, metalness: 0.7, roughness: 0.45 });
+    const baluster = (bx: number, bz: number, baseY: number) => {
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.09, 0.95, 8), postMat);
+      post.position.set(bx, baseY + 0.475, bz);
+      const orb = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 8), railGlowMat);
+      orb.position.set(bx, baseY + 1.0, bz);
+      orb.name = 'legendpulse';
+      s.add(post, orb);
+    };
+    const rail = (a: THREE.Vector3, b: THREE.Vector3) => {
+      const len = a.distanceTo(b);
+      const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, len, 6), railGlowMat);
+      bar.position.copy(a.clone().add(b).multiplyScalar(0.5));
+      bar.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize());
+      s.add(bar);
+    };
+    // east rim (broken by the stair), then the south rim
+    const rimRuns: [number, number, number, number][] = [
+      [-14.4, PLAT.z0 + 0.3, -14.4, STAIR.z0 - 0.25],
+      [-14.4, STAIR.z1 + 0.25, -14.4, PLAT.z1 - 0.3],
+      [-w / 2 + 0.6, PLAT.z1 - 0.1, -15.0, PLAT.z1 - 0.1],
+    ];
+    for (const [x0, z0, x1, z1] of rimRuns) {
+      const len = Math.hypot(x1 - x0, z1 - z0);
+      const n = Math.max(2, Math.round(len / 1.7) + 1);
+      for (let pi = 0; pi < n; pi++) {
+        baluster(x0 + (x1 - x0) * (pi / (n - 1)), z0 + (z1 - z0) * (pi / (n - 1)), PLAT.h);
+      }
+      rail(new THREE.Vector3(x0, PLAT.h + 0.93, z0), new THREE.Vector3(x1, PLAT.h + 0.93, z1));
+      const nc = Math.ceil(len / 1.1);
+      for (let ci = 0; ci <= nc; ci++) {
+        this.intColliders.push({ pos: new THREE.Vector3(x0 + (x1 - x0) * (ci / nc), 0, z0 + (z1 - z0) * (ci / nc)), r: 0.8 });
+      }
+    }
+    // stair cheeks: posts stepping down with the marble, sloping glow-rails
+    for (const cheekZ of [STAIR.z0 - 0.2, STAIR.z1 + 0.2]) {
+      for (const px of [-14.3, -12.9, -11.5, -10.2]) {
+        baluster(px, cheekZ, ascendH(Math.min(px, STAIR.x1 - 0.01), platCZ));
+      }
+      rail(new THREE.Vector3(-14.3, PLAT.h + 0.93, cheekZ), new THREE.Vector3(-10.2, 0.93, cheekZ));
+      for (const px of [-14.0, -13.0, -12.0, -11.0, -10.2]) {
+        this.intColliders.push({ pos: new THREE.Vector3(px, 0, cheekZ), r: 0.65 });
+      }
+    }
+    // queue posts flanking the approach runner
+    for (const qz of [-14.9, -11.1]) {
+      for (const qx of [-8.6, -6.4, -4.2]) {
+        baluster(qx, qz, 0);
+        this.intColliders.push({ pos: new THREE.Vector3(qx, 0, qz), r: 0.5 });
+      }
+      rail(new THREE.Vector3(-8.6, 0.93, qz), new THREE.Vector3(-4.2, 0.93, qz));
+    }
+    // braziers flanking the foot of the stairs
+    const brazier = (bx: number, bz: number) => {
+      const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.26, 0.5, 10),
+        new THREE.MeshStandardMaterial({ color: 0x7a5a26, metalness: 0.8, roughness: 0.35 }));
+      bowl.position.set(bx, 1.05, bz);
+      const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.2, 0.85, 8), postMat);
+      stem.position.set(bx, 0.42, bz);
+      const flame = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.9, 8),
+        new THREE.MeshStandardMaterial({ color: 0xffa23a, emissive: 0xff7a2a, emissiveIntensity: 1.6, transparent: true, opacity: 0.92 }));
+      flame.position.set(bx, 1.7, bz);
+      flame.name = 'flame';
+      const fl = new THREE.PointLight(0xff9a4a, 8, 7);
+      fl.position.set(bx, 2.1, bz);
+      s.add(bowl, stem, flame, fl);
+      this.intColliders.push({ pos: new THREE.Vector3(bx, 0, bz), r: 0.7 });
+    };
+    brazier(-9.4, -16.9);
+    brazier(-9.4, -9.1);
+
+    // the studio rigging truss, hung over the high ground
+    const trussBeam = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.32, platD + 1), trussMat);
+    trussBeam.position.set(-16.4, 9.0, platCZ);
+    s.add(trussBeam);
+    for (const tz of [PLAT.z0 + 0.6, PLAT.z1 - 0.6]) {
+      const trussLeg = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.15, 9.0 - PLAT.h, 8), trussMat);
+      trussLeg.position.set(-16.4, PLAT.h + (9.0 - PLAT.h) / 2, tz);
+      s.add(trussLeg);
+      this.intColliders.push({ pos: new THREE.Vector3(-16.4, 0, tz), r: 0.5 });
+    }
+    for (let bi = 0; bi < 7; bi++) {  // running show-lights along the truss
+      const blink = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.1),
+        new THREE.MeshStandardMaterial({ color: 0xf2c14e, emissive: [0xf2603a, 0xf2d23a, 0x4ec45e][bi % 3], emissiveIntensity: 1.2 }));
+      blink.position.set(-16.4, 9.22, PLAT.z0 + 1.5 + bi * 2.3);
+      blink.name = 'legendpulse';
+      s.add(blink);
+    }
+    // the champions' crown — a great gold ring turning slowly overhead
+    const crown = new THREE.Mesh(new THREE.TorusGeometry(3.4, 0.1, 10, 56),
+      new THREE.MeshStandardMaterial({ color: 0xf2c14e, emissive: 0xf2c14e, emissiveIntensity: 1.2, transparent: true, opacity: 0.9 }));
+    crown.rotation.x = Math.PI / 2;
+    crown.position.set(-25.6, 8.4, platCZ);
+    crown.name = 'stormtip';
+    const crownGlow = new THREE.PointLight(0xf2d49a, 10, 14);
+    crownGlow.position.set(-25.6, 8.0, platCZ);
+    s.add(crown, crownGlow);
+    // loose aether crystals, drifting where twenty-two titles were sworn
+    for (const [cx2, cy2, cz2, ph] of [[-28, 5.0, -19.5, 0], [-27.6, 5.8, -6.4, 2.1], [-17.2, 4.6, -20.3, 4.2], [-16.8, 5.4, -5.6, 1.3], [-22.5, 6.6, -13, 3.4]]) {
+      const cry = new THREE.Mesh(new THREE.OctahedronGeometry(0.22),
+        new THREE.MeshStandardMaterial({ color: 0xb89aff, emissive: 0x9a7af2, emissiveIntensity: 1.1, transparent: true, opacity: 0.95 }));
+      cry.position.set(cx2, cy2, cz2);
+      cry.userData.baseY = cy2;
+      cry.userData.ph = ph;
+      cry.name = 'aetherfloat';
+      s.add(cry);
+    }
+
+    // ---- the three legends on their bespoke plinths ----
+    const LEGEND_SPOTS: { x: number; z: number; pedH: number }[] = [
+      { x: -26.2, z: -18.6, pedH: 1.15 },
+      { x: -26.7, z: -13.0, pedH: 1.45 },   // nine titles: center stage, tallest plinth
+      { x: -26.2, z: -7.4, pedH: 1.15 },
+    ];
     LEGENDS.forEach((leg, i) => {
-      const [ax, az] = ALCOVES[i];
-      const yaw = Math.atan2(0 - ax, 2 - az);   // gazing out over the hall
-      const fwd = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
-      const side = new THREE.Vector3(fwd.z, 0, -fwd.x);
+      const { x: lx, z: lz, pedH } = LEGEND_SPOTS[i];
       const col = parseInt(leg.color.slice(1), 16);
-      // alcove dais
-      const dais = new THREE.Mesh(new THREE.CylinderGeometry(2.4, 2.6, 0.5, 20),
-        new THREE.MeshStandardMaterial({ map: stoneTexture('#6a6276', '#3a3444', 2), roughness: 0.7 }));
-      dais.position.set(ax, 0.25, az);
-      s.add(dais);
-      const halo = new THREE.Mesh(new THREE.TorusGeometry(2.5, 0.07, 8, 36),
-        new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 1.2 }));
-      halo.rotation.x = Math.PI / 2;
-      halo.position.set(ax, 0.56, az);
-      halo.name = 'neon';
-      const alight = new THREE.PointLight(col, 12, 11);
-      alight.position.set(ax, 4, az);
-      s.add(halo, alight);
-      // the legend in gold
+      const topY = PLAT.h + pedH;
+      if (i === 0) {
+        // Aljay: an obsidian heart-stone set over living fire
+        const ped = new THREE.Mesh(new THREE.CylinderGeometry(1.05, 1.3, pedH, 8),
+          new THREE.MeshStandardMaterial({
+            map: caveRockTexture('#241016', '#3a1c20', '#120a0c', 8, 2),
+            emissiveMap: emberCrackTexture('#ff7a2a', 2), emissive: 0xff8a3a, emissiveIntensity: 0.85, roughness: 0.6,
+          }));
+        ped.position.set(lx, PLAT.h + pedH / 2, lz);
+        s.add(ped);
+        const emberRing = new THREE.Mesh(new THREE.TorusGeometry(1.35, 0.07, 8, 32),
+          new THREE.MeshStandardMaterial({ color: 0xf2603a, emissive: 0xf2603a, emissiveIntensity: 1.3 }));
+        emberRing.rotation.x = Math.PI / 2;
+        emberRing.position.set(lx, PLAT.h + 0.1, lz);
+        emberRing.name = 'legendpulse';
+        s.add(emberRing);
+        for (const fz of [-0.9, 0.9]) {   // twin dawn-flames at the shoulders of the stone
+          const flame = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.55, 8),
+            new THREE.MeshStandardMaterial({ color: 0xffb45a, emissive: 0xff7a2a, emissiveIntensity: 1.8, transparent: true, opacity: 0.9 }));
+          flame.position.set(lx + 1.1, topY + 0.2, lz + fz);
+          flame.name = 'flame';
+          s.add(flame);
+        }
+      } else if (i === 1) {
+        // Greggy: a storm-steel dynamo wound in golden coils
+        const ped = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 1.2, pedH, 12),
+          new THREE.MeshStandardMaterial({
+            map: stormPanelTexture('#3a4258', '#222a3a', 5, 2),
+            emissiveMap: stormSeamEmissive('#f2d23a', 5, 2), emissive: 0xf2d23a, emissiveIntensity: 0.7,
+            metalness: 0.6, roughness: 0.4,
+          }));
+        ped.position.set(lx, PLAT.h + pedH / 2, lz);
+        s.add(ped);
+        [0.42, 0.98].forEach((cy, ci) => {
+          const coil = new THREE.Mesh(new THREE.TorusGeometry(1.12 - ci * 0.1, 0.07, 8, 28),
+            new THREE.MeshStandardMaterial({ color: 0xc9a24a, emissive: 0xf2d23a, emissiveIntensity: 0.9, metalness: 0.85, roughness: 0.25 }));
+          coil.rotation.x = Math.PI / 2;
+          coil.position.set(lx, PLAT.h + cy, lz);
+          if (ci === 0) coil.name = 'stormtip';
+          s.add(coil);
+        });
+      } else {
+        // Onnel: a living root-bole, mossy-crowned and blooming
+        const ped = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.4, pedH, 10),
+          new THREE.MeshStandardMaterial({ map: barkTexture('#4a3220', '#2c1d10', '#4a6a36', 17), roughness: 0.95 }));
+        ped.position.set(lx, PLAT.h + pedH / 2, lz);
+        const moss = new THREE.Mesh(new THREE.CylinderGeometry(1.06, 1.0, 0.14, 10),
+          new THREE.MeshStandardMaterial({ map: groundTexture('#3a6a32', '#5a8a44', 2), roughness: 1 }));
+        moss.position.set(lx, topY - 0.07, lz);
+        s.add(ped, moss);
+        for (let bl = 0; bl < 5; bl++) {
+          const ang = (bl / 5) * Math.PI * 2 + 0.6;
+          const blossom = new THREE.Mesh(new THREE.IcosahedronGeometry(0.09),
+            new THREE.MeshStandardMaterial({ color: 0xb8ffd8, emissive: 0x6aff9a, emissiveIntensity: 1.3 }));
+          blossom.position.set(lx + Math.cos(ang) * 1.25, PLAT.h + 0.25 + (bl % 3) * 0.45, lz + Math.sin(ang) * 1.25);
+          blossom.name = 'legendpulse';
+          s.add(blossom);
+        }
+      }
+      // gold name plaque on the plinth's east face
+      const plaque = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.42, 0.95),
+        new THREE.MeshStandardMaterial({ color: 0xc9a24a, metalness: 0.9, roughness: 0.2, emissive: 0x6a521a, emissiveIntensity: 0.3 }));
+      plaque.position.set(lx + 1.22, PLAT.h + pedH * 0.55, lz);
+      s.add(plaque);
+
+      // the legend in gold, gazing east over the hall
       const statue = makeVoxelHuman({
         skin: 0xd8c27a, hair: 0xc9a24a, top: 0xb89a3a, bottom: 0xa8883a, shoes: 0x8a6a2a, cap: null, robe: true,
         hairstyle: i === 0 ? 'spiky' : i === 1 ? 'classic' : 'long',
       });
-      statue.position.set(ax, 0.5, az);
-      statue.rotation.y = yaw;
-      statue.scale.setScalar(1.5);
+      statue.position.set(lx, topY, lz);
+      statue.rotation.y = Math.PI / 2;
+      statue.scale.setScalar(1.6);
       s.add(statue);
       this.intNpcs.push(statue);
-      // their three Guardians, alive with Aether light, arrayed behind
+      // a saint's aureole floating behind the head, in house color
+      const aureole = new THREE.Mesh(new THREE.TorusGeometry(0.85, 0.05, 8, 36),
+        new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 1.3, transparent: true, opacity: 0.9 }));
+      aureole.rotation.y = Math.PI / 2;
+      aureole.position.set(lx - 0.55, topY + 2.3, lz);
+      aureole.name = 'legendpulse';
+      s.add(aureole);
+      this.label3d(s, `👑 ${leg.name} — ${leg.championships}× Champion`, leg.color, new THREE.Vector3(lx, topY + 4.0, lz), 4.6);
+
+      // studio rig: barn-door housing on the truss, hot spot, visible beam
+      const from = new THREE.Vector3(-16.4, 8.85, lz);
+      const to = new THREE.Vector3(lx, topY + 1.1, lz);
+      const beamDir = from.clone().sub(to).normalize();
+      const housing = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.3, 0.6, 10), trussMat);
+      housing.position.copy(from);
+      housing.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), beamDir);
+      s.add(housing);
+      const spot = new THREE.SpotLight(0xfff1d0, 85, 24, 0.34, 0.5, 1.1);
+      spot.position.copy(from);
+      spot.target.position.copy(to);
+      s.add(spot, spot.target);
+      const beamLen = from.distanceTo(to);
+      const cone = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 1.9, beamLen, 18, 1, true),
+        new THREE.MeshBasicMaterial({ color: 0xfff3cf, transparent: true, opacity: 0.09, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false }));
+      cone.position.copy(from.clone().add(to).multiplyScalar(0.5));
+      cone.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), beamDir);
+      s.add(cone);
+      const wash = new THREE.PointLight(col, 9, 9);
+      wash.position.set(lx + 1.4, PLAT.h + 2.6, lz);
+      s.add(wash);
+
+      // their three Guardians, arrayed in front on glowing show-discs
       leg.guardians.forEach((gd, gi) => {
-        const off = fwd.clone().multiplyScalar(gi === 1 ? -1.7 : -1.3).add(side.clone().multiplyScalar((gi - 1) * 1.9));
-        const rig = makeCustomCreature(gd.archetype, gd.palette, gd.glow, gd.scale * 0.6, true, gd.bespoke);
-        rig.group.position.set(ax + off.x, 0.5, az + off.z);
-        rig.group.rotation.y = yaw;
+        const gx = gi === 1 ? -22.0 : -22.8;
+        const gz = lz + (gi - 1) * 2.25;
+        const rig = makeCustomCreature(gd.archetype, gd.palette, gd.glow, gd.scale * 0.62, true, gd.bespoke);
+        rig.group.position.set(gx, PLAT.h, gz);
+        rig.group.rotation.y = Math.PI / 2;
         s.add(rig.group);
         this.intRigs.push(rig);
+        const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.9, 0.05, 18),
+          new THREE.MeshStandardMaterial({ color: 0x2a3048, metalness: 0.5, roughness: 0.4 }));
+        disc.position.set(gx, PLAT.h + 0.025, gz);
+        const discRim = new THREE.Mesh(new THREE.TorusGeometry(0.85, 0.035, 6, 26),
+          new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 1.0 }));
+        discRim.rotation.x = Math.PI / 2;
+        discRim.position.set(gx, PLAT.h + 0.06, gz);
+        discRim.name = 'legendpulse';
+        s.add(disc, discRim);
+        this.intColliders.push({ pos: new THREE.Vector3(gx, 0, gz), r: 0.85 });
       });
-      this.intColliders.push({ pos: new THREE.Vector3(ax, 0, az), r: 2.7 });
+      this.intColliders.push({ pos: new THREE.Vector3(lx, 0, lz), r: 1.75 });
+
+      // banner and gold crest on the wall behind
+      const wallBanner = new THREE.Mesh(new THREE.PlaneGeometry(2.5, 6.4),
+        new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 0.32, roughness: 0.85, side: THREE.DoubleSide }));
+      wallBanner.rotation.y = Math.PI / 2;
+      wallBanner.position.set(-w / 2 + 0.3, 5.6, lz);
+      const crest = new THREE.Mesh(new THREE.CircleGeometry(0.55, 20),
+        new THREE.MeshStandardMaterial({ color: 0xf2c14e, emissive: 0xf2c14e, emissiveIntensity: 0.9, side: THREE.DoubleSide }));
+      crest.rotation.y = Math.PI / 2;
+      crest.position.set(-w / 2 + 0.32, 9.3, lz);
+      s.add(wallBanner, crest);
+
+      // pay respects eye to eye, up on the high ground
       this.intInteractables.push({
-        pos: new THREE.Vector3(ax + fwd.x * 3.2, 0, az + fwd.z * 3.2), radius: 2.2,
+        pos: new THREE.Vector3(-20.7, PLAT.h, lz), radius: 2.3,
         label: `Press <b>E</b> — honor ${leg.name} ${leg.title}`,
         handler: async () => {
           await say(`${leg.name} ${leg.title} — ${leg.championships}× World Champion (${leg.champYears})`, leg.story);
@@ -2803,12 +3097,31 @@ export class Town {
       });
     });
 
-    // the devoted, drinking in the sight of the gallery
-    const admirers: { x: number; z: number; top: number; face: [number, number]; line: string }[] = [
-      { x: -12.5, z: -14.5, top: 0xf2603a, face: [-18.5, -14], line: 'Best thing the Coliseum ever did, gathering the three of them in this corner. You can hear yourself be awestruck now. I come every market day. Twice on rest days.' },
-      { x: -10.2, z: -8.5, top: 0x4ec45e, face: [-13.5, -10], line: 'Watch the little Verdalune behind Onnel — it opens one petal at noon. NOON. EXACTLY. I\'ve timed it for a month. Nobody believes me. You believe me, right?' },
-      { x: -14.8, z: -4.5, top: 0xf2d23a, face: [-18.5, -6], line: 'I proposed to my husband right here, between Aljay and Greggy. Six golden statues for witnesses. He said "obviously". Strongest contract in Olivar.' },
-      { x: -15.8, z: -10.2, top: 0x5ab8e8, face: [-16, -10], line: 'Dad says if I train hard enough, my statue goes in the fourth alcove. There IS no fourth alcove. ...YET. Write my name down somewhere so you can say you knew me.' },
+    // the dedication lectern at the foot of the stairs
+    const lecternPost = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.13, 1.0, 8), postMat);
+    lecternPost.position.set(-4.4, 0.5, -15.4);
+    const lecternTop = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.06, 0.65),
+      new THREE.MeshStandardMaterial({ map: aetherMarbleTexture(1), roughness: 0.3 }));
+    lecternTop.position.set(-4.4, 1.04, -15.4);
+    lecternTop.rotation.z = 0.45;
+    s.add(lecternPost, lecternTop);
+    this.intColliders.push({ pos: new THREE.Vector3(-4.4, 0, -15.4), r: 0.55 });
+    this.intInteractables.push({
+      pos: new THREE.Vector3(-4.4, 0, -15.4), radius: 2.0,
+      label: 'Press <b>E</b> — read the dedication',
+      handler: async () => {
+        await say('The Ascendancy of Legends',
+          'Raised by decree of the Coliseum and paid for with twenty-two years of sold-out finals: one pedestal broad enough for three friends. Aljay the Dawnflame. Greggy the Stormheart. Onnel the Worldroot. Climb the stairs. Stand where they stand. The marble does not mind — it has held far heavier legends.');
+        toast('👑 The Ascendancy of Legends', 'gold');
+      },
+    });
+
+    // the devoted, gathered at the foot of the Ascendancy
+    const admirers: { x: number; z: number; y: number; top: number; face: [number, number]; line: string }[] = [
+      { x: -8.0, z: -12.6, y: 0, top: 0xf2603a, face: [-26, -13], line: 'Best thing the Coliseum ever built. They gave the legends the whole north-west quarter — Aether-marble, studio crystals on a rigging truss, the lot. Now the three of them stand in DAYLIGHT at midnight. I come every market day. Twice on rest days.' },
+      { x: -19.4, z: -10.6, y: PLAT.h, top: 0x4ec45e, face: [-26.2, -7.4], line: 'Watch the little Verdalune before Onnel — it opens one petal at noon. NOON. EXACTLY. I\'ve timed it for a month. Nobody believes me. You believe me, right?' },
+      { x: -6.6, z: -16.6, y: 0, top: 0xf2d23a, face: [-12, -13], line: 'I proposed to my husband on the fourth stair, right under the spotlights. Three golden legends and nine Guardians for witnesses. He said "obviously". Strongest contract in Olivar.' },
+      { x: -9.2, z: -10.4, y: 0, top: 0x5ab8e8, face: [-14, -12], line: 'Dad says if I train hard enough they\'ll widen the great pedestal for a fourth plinth. They WON\'T. ...unless? Write my name down somewhere so you can say you knew me.' },
     ];
     for (const a of admirers) {
       const npc = makeVoxelHuman({
@@ -2816,13 +3129,13 @@ export class Town {
         cap: Math.random() < 0.3 ? 0xc9a24a : null,
         hairstyle: (['classic', 'spiky', 'long', 'buns'] as const)[Math.floor(Math.random() * 4)],
       });
-      npc.position.set(a.x, 0, a.z);
+      npc.position.set(a.x, a.y, a.z);
       npc.rotation.y = Math.atan2(a.face[0] - a.x, a.face[1] - a.z); // transfixed by the gold
       s.add(npc);
       this.intNpcs.push(npc);
-      this.intColliders.push({ pos: npc.position.clone().setY(0), r: 0.55 });
+      this.intColliders.push({ pos: new THREE.Vector3(a.x, 0, a.z), r: 0.55 });
       this.intInteractables.push({
-        pos: npc.position.clone().setY(0), radius: 1.5,
+        pos: new THREE.Vector3(a.x, a.y, a.z), radius: 1.5,
         label: 'Press <b>E</b> — share the view',
         handler: async () => { await say('Admirer of the Legends', a.line); },
       });
@@ -2878,7 +3191,7 @@ export class Town {
       { x: 3.8, z: 12.4, top: 0xf2d23a, line: 'Strategy is everything. Elements, swap timing, SP economy… I have a notebook. Three notebooks.' },
       { x: -9.5, z: -3.5, top: 0x6a4a9a, line: 'Shh — I\'m visualizing my finals entrance. There\'s pyrotechnics. There\'s a slow walk. The crowd goes quiet…' },
       { x: 9.6, z: -3.2, top: 0x4a7a9a, line: 'Aljay fought HERE. Greggy fought HERE. One day someone will whisper that about us. Well. About me.' },
-      { x: -6, z: -8, top: 0xc4582a, line: 'I sat in the Hall of Legends alcove for an hour. The little Vulfenix statue LOOKED at me. I\'m not saying it\'s alive. I\'m not saying it isn\'t.' },
+      { x: -6, z: -8, top: 0xc4582a, line: 'I sat on the Ascendancy stairs for an hour. The little Vulfenix statue LOOKED at me. I\'m not saying it\'s alive. I\'m not saying it isn\'t.' },
       { x: 6.4, z: -8.4, top: 0x2a8a8e, line: 'My coach says watch the World Circuit board until you hate every name on it. Healthy? No. Effective? We\'ll see.' },
     ];
     for (const a of aspirants) {
@@ -2907,9 +3220,10 @@ export class Town {
       { x: 0, z: -3.7, label: 'Registration', color: '#5ab8e8', kind: 'npc' },
       { x: -w / 2 + 1.2, z: 2, label: 'World Circuit', color: '#5ab8e8', kind: 'poi' },
       { x: w / 2 - 1.2, z: 2, label: 'Hall of Legends', color: '#f2c14e', kind: 'poi' },
-      { x: -16, z: d / 2 - 4.6, label: 'Aljay', color: '#f2603a', kind: 'poi' },
-      { x: 0, z: d / 2 - 4.6, label: 'Greggy', color: '#f2d23a', kind: 'poi' },
-      { x: 16, z: d / 2 - 4.6, label: 'Onnel', color: '#4ec45e', kind: 'poi' },
+      { x: -26.2, z: -18.6, label: 'Aljay', color: '#f2603a', kind: 'poi' },
+      { x: -26.7, z: -13, label: 'Greggy', color: '#f2d23a', kind: 'poi' },
+      { x: -26.2, z: -7.4, label: 'Onnel', color: '#4ec45e', kind: 'poi' },
+      { x: -12.4, z: -13, label: 'Ascendancy Stairs', color: '#f2c14e', kind: 'poi' },
       { x: -16, z: 8.5, label: 'Provisions', color: '#d84a3a', kind: 'building' },
       { x: 16, z: 8.5, label: 'Gems', color: '#9a5af2', kind: 'building' },
       { x: 0, z: d / 2, label: 'Exit', color: '#e8d9a8', kind: 'door' },
@@ -3589,7 +3903,7 @@ export class Town {
     if (this.mode === 'street') {
       this.tamer.position.y = this.groundH(this.tamer.position.x, this.tamer.position.z);
     } else {
-      this.tamer.position.y = 0;
+      this.tamer.position.y = this.intGroundH ? this.intGroundH(this.tamer.position.x, this.tamer.position.z) : 0;
     }
     updateVoxelHuman(this.tamer, this.walking, dt);
     this.intNpcs.forEach(npc => updateVoxelHuman(npc, false, dt));
@@ -3661,7 +3975,7 @@ export class Town {
     const t = this.tamer.position;
     const camGoal = this.mode === 'street'
       ? new THREE.Vector3(t.x, t.y + 7.5, t.z + 9)
-      : new THREE.Vector3(t.x * 0.5, 5.6, t.z + 6.4);
+      : new THREE.Vector3(t.x * 0.5, 5.6 + t.y * 0.9, t.z + 6.4);
     this.camera.position.lerp(camGoal, Math.min(1, dt * 4));
     this.camera.lookAt(t.x, t.y + 1, t.z);
 
@@ -3710,6 +4024,14 @@ export class Town {
         o.rotation.x = Math.cos(now * 0.0007 + ph) * 0.025;
       }
       if (o.name === 'banner') { o.rotation.y = Math.sin(now * 0.0016 + o.position.x) * 0.18; }
+      if (o.name === 'legendpulse') {
+        const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial;
+        if (m?.emissive) m.emissiveIntensity = 0.85 + Math.sin(now * 0.0026 + o.position.x * 1.7 + o.position.z * 1.3) * 0.45;
+      }
+      if (o.name === 'aetherfloat') {
+        o.position.y = (o.userData.baseY as number) + Math.sin(now * 0.0011 + (o.userData.ph as number)) * 0.3;
+        o.rotation.y = now * 0.0009 + (o.userData.ph as number);
+      }
       if (o.name === 'pondwater') {
         const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial;
         m.emissiveIntensity = 0.3 + Math.sin(now * 0.0018) * 0.08;
