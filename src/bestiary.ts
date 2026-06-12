@@ -1602,6 +1602,608 @@ function buildMaelstrike(): BespokeBuild {
   return { body: g, parts: { head, tail }, animate };
 }
 
+// ============================================================
+// THE AETHER THREE — Aljay's personal Guardians. They exist
+// nowhere in the wild; the Hall of Legends keeps living statues
+// of them (see makeCustomCreature + LEGENDS in lore.ts).
+// ============================================================
+
+/** Violet cosmos: nebula swirls, spiral arms and pin-prick stars (map + emissive). */
+function nebulaPair(key: string, seed: number): { map: THREE.Texture; glow: THREE.Texture } {
+  const data = (s: number) => {
+    const rnd = rng(seed);
+    const stars: number[][] = [];
+    for (let i = 0; i < 130; i++) stars.push([rnd() * s, rnd() * s, 0.6 + rnd() * 1.6, rnd()]);
+    const arms: number[][] = [];
+    for (let i = 0; i < 7; i++) arms.push([rnd() * s, rnd() * s, 30 + rnd() * 60, rnd() * Math.PI * 2, rnd()]);
+    return { stars, arms };
+  };
+  const spiral = (ctx: CanvasRenderingContext2D, x: number, y: number, r: number, a: number) => {
+    ctx.beginPath();
+    for (let k = 0; k <= 20; k++) {
+      const th = a + k * 0.28;
+      const rr = r * 0.12 + k * (r * 0.035);
+      const px = x + Math.cos(th) * rr, py = y + Math.sin(th) * rr;
+      if (k === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+  };
+  const draw = (mode: 'map' | 'glow') => (ctx: CanvasRenderingContext2D, s: number) => {
+    const { stars, arms } = data(s);
+    if (mode === 'map') {
+      const g = ctx.createLinearGradient(0, 0, 0, s);
+      g.addColorStop(0, '#2e1856'); g.addColorStop(0.5, '#1c0e38'); g.addColorStop(1, '#0e0620');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, s, s);
+      for (const [x, y, r, , hue] of arms) {
+        const grad = ctx.createRadialGradient(x, y, 2, x, y, r);
+        grad.addColorStop(0, hue! < 0.5 ? 'rgba(154,90,242,0.30)' : 'rgba(255,154,210,0.22)');
+        grad.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.lineWidth = 2.2; ctx.strokeStyle = 'rgba(216,200,255,0.20)';
+      for (const [x, y, r, a] of arms) spiral(ctx, x, y, r, a);
+      ctx.fillStyle = 'rgba(255,250,255,0.9)';
+      for (const [x, y, r] of stars) { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); }
+    } else {
+      ctx.fillStyle = '#000'; ctx.fillRect(0, 0, s, s);
+      ctx.lineWidth = 1.6; ctx.strokeStyle = 'rgba(154,106,242,0.35)';
+      for (const [x, y, r, a] of arms) spiral(ctx, x, y, r, a);
+      for (const [x, y, r, b] of stars) {
+        const grad = ctx.createRadialGradient(x, y, 0.2, x, y, r * 3);
+        grad.addColorStop(0, b! < 0.3 ? '#ffd8ec' : '#d8c8ff'); grad.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath(); ctx.arc(x, y, r * 3, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+  };
+  return { map: ctex(`${key}:m`, 256, draw('map')), glow: ctex(`${key}:g`, 256, draw('glow')) };
+}
+
+/** Layered plume rows: soft pointed feathers with a lit spine. */
+function featherTex(key: string, base: string, dark: string, lite: string, seed: number): THREE.Texture {
+  return ctex(key, 256, (ctx, s) => {
+    const rnd = rng(seed);
+    ctx.fillStyle = base; ctx.fillRect(0, 0, s, s);
+    const fw = 26, fh = 38;
+    for (let row = 0; row * fh * 0.55 < s + fh; row++) {
+      const y = row * fh * 0.55 - fh * 0.4;
+      const off = row % 2 ? fw / 2 : 0;
+      for (let x = -fw; x < s + fw; x += fw) {
+        const cx = x + off + (rnd() - 0.5) * 4;
+        const tone = rnd();
+        ctx.beginPath();
+        ctx.moveTo(cx - fw * 0.42, y);
+        ctx.quadraticCurveTo(cx - fw * 0.46, y + fh * 0.5, cx, y + fh);
+        ctx.quadraticCurveTo(cx + fw * 0.46, y + fh * 0.5, cx + fw * 0.42, y);
+        ctx.closePath();
+        ctx.fillStyle = base; ctx.fill();
+        ctx.fillStyle = tone > 0.5 ? `rgba(255,255,255,${0.05 + tone * 0.08})` : `rgba(60,0,40,${0.08 + tone * 0.1})`;
+        ctx.fill();
+        ctx.strokeStyle = dark; ctx.globalAlpha = 0.55; ctx.lineWidth = 1.6; ctx.stroke();
+        ctx.strokeStyle = lite; ctx.globalAlpha = 0.5; ctx.lineWidth = 1.2;
+        ctx.beginPath(); ctx.moveTo(cx, y + 4); ctx.lineTo(cx, y + fh - 3); ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+    }
+  });
+}
+
+// ============================================================
+// FIRGARA — The Dawn Unbroken. A crimson dragonoid knight in
+// mirror-bright scale: polished cuirass, brass trim, swept-back
+// wings, and Daybreak — a greatsword sheathed in living flame
+// that it raises in a slow flourish as it idles.
+// ============================================================
+function buildFirgara(): BespokeBuild {
+  const g = new THREE.Group();
+  const core = new THREE.Group();
+  g.add(core);
+  const flick: Flick[] = [];
+
+  const hideM = std({ map: scaleTex('firg-hide', '#b81e28', '#ff7a5a', '#520410', 71), roughness: 0.24, metalness: 0.55 });
+  const armorM = std({ color: 0xd42832, metalness: 0.8, roughness: 0.18 });
+  const goldM = std({ color: 0xe8b84a, metalness: 0.95, roughness: 0.22 });
+  const hornM = std({ color: 0xf2e4c4, roughness: 0.45, metalness: 0.15 });
+  const darkM = std({ color: 0x2a1014, roughness: 0.6 });
+  const membM = std({ color: 0x8a0e1a, roughness: 0.5, metalness: 0.2, side: THREE.DoubleSide, transparent: true, opacity: 0.92 });
+
+  // digitigrade legs + clawed feet
+  for (const side of [1, -1] as const) {
+    const z = side * 0.17;
+    core.add(bone(hideM, 0.02, 0.62, z, 0.1, 0.36, z * 1.2, 0.105, 0.075));
+    core.add(bone(hideM, 0.1, 0.36, z * 1.2, -0.02, 0.12, z * 1.15, 0.07, 0.055));
+    core.add(orb(armorM, 0.085, 0.06, 0.07, z * 1.15, 1.5, 0.7, 1.05, 10, 8));
+    for (let c = 0; c < 3; c++)
+      core.add(spike(hornM, 0.14, 0.06, z * 1.15 + (c - 1) * 0.05, 0.24, 0.02, z * 1.15 + (c - 1) * 0.07, 0.028));
+  }
+
+  // pelvis, torso, polished cuirass with brass collar + belt
+  core.add(orb(hideM, 0.21, 0, 0.66, 0, 1, 0.85, 0.95));
+  const torso = orb(hideM, 0.3, 0.02, 1.0, 0, 1.0, 1.18, 0.88);
+  core.add(torso);
+  core.add(orb(armorM, 0.26, 0.15, 1.04, 0, 0.72, 1.05, 0.92));
+  const collar = new THREE.Mesh(new THREE.TorusGeometry(0.17, 0.035, 8, 20), goldM);
+  collar.position.set(0.05, 1.32, 0);
+  collar.rotation.x = Math.PI / 2;
+  const belt = new THREE.Mesh(new THREE.TorusGeometry(0.205, 0.03, 8, 20), goldM);
+  belt.position.y = 0.78;
+  belt.rotation.x = Math.PI / 2;
+  core.add(collar, belt);
+
+  // dorsal spikes down the spine
+  for (let i = 0; i < 4; i++)
+    core.add(spike(hornM, -0.2, 1.24 - i * 0.15, 0, -0.36, 1.34 - i * 0.15, 0, 0.038));
+
+  // pauldrons
+  for (const side of [1, -1] as const) {
+    core.add(orb(armorM, 0.13, 0.02, 1.28, side * 0.3, 1.15, 0.85, 1.1));
+    core.add(spike(goldM, 0, 1.34, side * 0.36, -0.06, 1.5, side * 0.48, 0.035));
+  }
+
+  // off hand — relaxed at its side, claws half-curled
+  core.add(bone(hideM, 0.02, 1.24, -0.3, 0.05, 0.98, -0.38, 0.075, 0.06));
+  core.add(bone(hideM, 0.05, 0.98, -0.38, 0.12, 0.76, -0.36, 0.058, 0.05));
+  core.add(orb(hideM, 0.065, 0.13, 0.72, -0.36, 1.1, 0.85, 1));
+  for (let c = 0; c < 3; c++)
+    core.add(spike(hornM, 0.15, 0.7, -0.36 + (c - 1) * 0.035, 0.21, 0.6, -0.36 + (c - 1) * 0.05, 0.02));
+
+  // sword arm — a group so the whole arm can flourish
+  const armR = new THREE.Group();
+  armR.position.set(0.02, 1.24, 0.3);
+  core.add(armR);
+  armR.add(bone(hideM, 0, 0, 0, 0.2, -0.14, 0.1, 0.075, 0.06));
+  armR.add(bone(hideM, 0.2, -0.14, 0.1, 0.34, 0.04, 0.06, 0.058, 0.05));
+  armR.add(orb(hideM, 0.07, 0.36, 0.08, 0.05, 1.1, 0.95, 1));
+
+  // DAYBREAK — the blazing greatsword
+  const sword = new THREE.Group();
+  sword.position.set(0.38, 0.1, 0.05);
+  sword.rotation.z = -0.55;
+  sword.rotation.x = 0.18;
+  armR.add(sword);
+  sword.add(bone(darkM, 0, -0.12, 0, 0, 0.06, 0, 0.028, 0.024));
+  const guard = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.035, 0.24), goldM);
+  guard.position.y = 0.07;
+  sword.add(guard, orb(goldM, 0.035, 0, -0.14, 0));
+  const bladeM = std({ color: 0xfff2d0, emissive: 0xff9a2a, emissiveIntensity: 2.0, roughness: 0.12, metalness: 0.4 });
+  const blade = new THREE.Mesh(new THREE.ConeGeometry(0.062, 0.92, 4), bladeM);
+  blade.position.y = 0.55;
+  blade.scale.z = 0.4;
+  sword.add(blade);
+  const swordFlame = makeFlame(0.95, 0.085, 0xfff0b8, 0xff7a2a);
+  swordFlame.position.y = 0.12;
+  sword.add(swordFlame);
+  flick.push({ g: swordFlame, speed: 7.5, ph: 2, amp: 0.1 });
+  for (const [fy, fh] of [[0.35, 0.16], [0.62, 0.13], [0.86, 0.1]] as const) {
+    const f = makeFlame(fh, fh * 0.34, 0xfff0b8, 0xffb44a);
+    f.position.set(0.045, fy, 0);
+    f.rotation.z = -0.5;
+    sword.add(f);
+    flick.push({ g: f, speed: 10 + fy * 4, ph: fy * 7, amp: 0.2 });
+  }
+
+  // swept-back wings
+  const mkWing = (side: 1 | -1) => {
+    const w = new THREE.Group();
+    w.position.set(-0.2, 1.22, side * 0.14);
+    core.add(w);
+    w.add(bone(hideM, 0, 0, 0, -0.34, 0.28, 0, 0.045, 0.028));
+    w.add(bone(hideM, -0.34, 0.28, 0, -0.66, 0.2, 0, 0.026, 0.01));
+    const sh = new THREE.Shape();
+    sh.moveTo(0, 0);
+    sh.lineTo(-0.34, 0.28);
+    sh.lineTo(-0.66, 0.2);
+    sh.quadraticCurveTo(-0.52, 0.0, -0.56, -0.08);
+    sh.quadraticCurveTo(-0.34, -0.1, -0.26, -0.14);
+    sh.closePath();
+    const memb = new THREE.Mesh(new THREE.ShapeGeometry(sh), membM);
+    memb.userData.noShadow = true;
+    w.add(memb);
+    w.add(spike(hornM, -0.34, 0.28, 0, -0.42, 0.4, 0, 0.02));
+    return w;
+  };
+  const wingL = mkWing(1), wingR = mkWing(-1);
+
+  // tail — three chained segments + brass spade tip
+  const tail = new THREE.Group();
+  tail.position.set(-0.18, 0.6, 0);
+  tail.name = 'tail';
+  core.add(tail);
+  const t1 = new THREE.Group(); tail.add(t1);
+  t1.add(bone(hideM, 0, 0, 0, -0.3, -0.1, 0, 0.085, 0.06));
+  const t2 = new THREE.Group(); t2.position.set(-0.3, -0.1, 0); t1.add(t2);
+  t2.add(bone(hideM, 0, 0, 0, -0.3, -0.04, 0, 0.06, 0.04));
+  const t3 = new THREE.Group(); t3.position.set(-0.3, -0.04, 0); t2.add(t3);
+  t3.add(bone(hideM, 0, 0, 0, -0.24, 0.04, 0, 0.04, 0.02));
+  const spade = new THREE.Mesh(new THREE.OctahedronGeometry(0.085), goldM);
+  spade.position.set(-0.28, 0.06, 0);
+  spade.scale.set(1.4, 0.9, 0.35);
+  t3.add(spade);
+
+  // neck + horned head
+  core.add(bone(hideM, 0.1, 1.3, 0, 0.2, 1.46, 0, 0.1, 0.085));
+  const head = new THREE.Group();
+  head.position.set(0.22, 1.52, 0);
+  head.name = 'head';
+  core.add(head);
+  head.add(orb(hideM, 0.16, 0, 0, 0, 1.05, 0.92, 0.9));
+  head.add(orb(hideM, 0.1, 0.15, -0.04, 0, 1.5, 0.62, 0.78));
+  head.add(orb(darkM, 0.018, 0.29, -0.005, 0.035, 1, 1, 1, 6, 5));
+  head.add(orb(darkM, 0.018, 0.29, -0.005, -0.035, 1, 1, 1, 6, 5));
+  head.add(orb(hideM, 0.07, 0.12, -0.11, 0, 1.5, 0.5, 0.7));
+  head.add(orb(goldM, 0.05, 0.1, 0.1, 0.075, 1.4, 0.5, 0.8));
+  head.add(orb(goldM, 0.05, 0.1, 0.1, -0.075, 1.4, 0.5, 0.8));
+  const eyeL = makeEye(0.045, 0xffc23a, { slit: true, glow: 0.9 });
+  const eyeR = makeEye(0.045, 0xffc23a, { slit: true, glow: 0.9 });
+  eyeL.position.set(0.12, 0.045, 0.085); eyeL.rotation.y = -0.25;
+  eyeR.position.set(0.12, 0.045, -0.085); eyeR.rotation.y = 0.25;
+  head.add(eyeL, eyeR);
+  for (const side of [1, -1] as const) {
+    head.add(bone(hornM, -0.02, 0.1, side * 0.09, -0.2, 0.22, side * 0.13, 0.035, 0.02));
+    head.add(spike(hornM, -0.2, 0.22, side * 0.13, -0.38, 0.26, side * 0.16, 0.02));
+    head.add(spike(hornM, 0, -0.04, side * 0.15, -0.08, -0.12, side * 0.24, 0.022));
+  }
+
+  finishShadows(g);
+
+  const animate = (t: number) => {
+    core.position.y = Math.sin(t * 1.7) * 0.025;
+    torso.scale.set(1.0, 1.18 + Math.sin(t * 1.7) * 0.025, 0.88);
+    head.rotation.y = Math.sin(t * 0.6) * 0.16;
+    head.rotation.z = Math.sin(t * 0.45 + 2) * 0.05;
+    const bl = blinkAt(t, 5.1);
+    eyeL.scale.y = eyeR.scale.y = 1 - bl * 0.92;
+    // low guard sway, then a proud flourish every few breaths
+    const fl = gate(t, 8.4, 7);
+    armR.rotation.z = Math.sin(t * 1.7 + 1) * 0.05 + fl * 0.55;
+    armR.rotation.x = Math.sin(t * 1.2) * 0.04;
+    sword.rotation.x = Math.sin(t * 1.4) * 0.05;
+    bladeM.emissiveIntensity = 1.8 + Math.sin(t * 6.2) * 0.35 + fl * 1.6;
+    flickAll(flick, t);
+    wingL.rotation.y = 0.55 + Math.sin(t * 1.1) * 0.07 + fl * 0.3;
+    wingL.rotation.x = -0.12;
+    wingR.rotation.y = -0.55 - Math.sin(t * 1.1 + 0.6) * 0.07 - fl * 0.3;
+    wingR.rotation.x = 0.12;
+    t1.rotation.y = Math.sin(t * 1.3) * 0.16;
+    t2.rotation.y = Math.sin(t * 1.3 - 0.7) * 0.2;
+    t3.rotation.y = Math.sin(t * 1.3 - 1.4) * 0.24;
+  };
+  return { body: g, parts: { head, tail, wings: [wingL, wingR] }, animate };
+}
+
+// ============================================================
+// ONTHROFA — The Folded Sky. A violet entity of Space and Time:
+// a nebula-skinned core in a spectral mantle, three counter-
+// rotating orbit rings, a slow golden hour-dial with sweeping
+// hands, a drifting hourglass, and the occasional space-fold.
+// ============================================================
+function buildOnthrofa(): BespokeBuild {
+  const g = new THREE.Group();
+  const core = new THREE.Group();
+  core.position.y = 0.85;
+  g.add(core);
+
+  const neb = nebulaPair('onth-neb', 909);
+  const bodyM = std({ map: neb.map, emissiveMap: neb.glow, emissive: 0xffffff, emissiveIntensity: 1.1, roughness: 0.45, metalness: 0.1 });
+  const orbBody = orb(bodyM, 0.34, 0, 0.1, 0, 1, 1.08, 1, 20, 16);
+  core.add(orbBody);
+  // the void face — two slanted light-eyes and a time-gem
+  core.add(orb(std({ color: 0x07030e, roughness: 0.3 }), 0.21, 0.17, 0.16, 0, 1.05, 0.95, 1.05));
+  const eyeM = std({ color: 0xd8c8ff, emissive: 0xd8c8ff, emissiveIntensity: 2.6, roughness: 0.1 });
+  const eyeL = orb(eyeM, 0.05, 0.33, 0.2, 0.085, 0.55, 1.5, 0.9, 8, 6);
+  const eyeR = orb(eyeM, 0.05, 0.33, 0.2, -0.085, 0.55, 1.5, 0.9, 8, 6);
+  eyeL.rotation.x = -0.3; eyeR.rotation.x = 0.3;
+  core.add(eyeL, eyeR);
+  const gem = new THREE.Mesh(new THREE.OctahedronGeometry(0.05),
+    std({ color: 0xff9ad2, emissive: 0xff9ad2, emissiveIntensity: 1.8, roughness: 0.15 }));
+  gem.position.set(0.3, 0.38, 0);
+  gem.scale.set(0.7, 1.3, 0.7);
+  core.add(gem);
+
+  // spectral mantle draping below
+  const pts: THREE.Vector2[] = [];
+  for (let i = 0; i <= 10; i++) {
+    const k = i / 10;
+    pts.push(new THREE.Vector2(0.12 + Math.sin(k * Math.PI * 0.62) * 0.34 + k * k * 0.1, 0.1 - k * 0.62));
+  }
+  const mantle = new THREE.Mesh(new THREE.LatheGeometry(pts, 18),
+    std({ color: 0x3a2070, transparent: true, opacity: 0.6, side: THREE.DoubleSide, roughness: 0.65, emissive: 0x1c0a3e, emissiveIntensity: 0.6 }));
+  mantle.userData.noShadow = true;
+  core.add(mantle);
+
+  // gyroscope of Space — three counter-tilted orbit rings
+  const ringMat = (c: number, o: number) => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: o, blending: THREE.AdditiveBlending, depthWrite: false });
+  const mkRing = (r: number, tube: number, c: number, o: number) => {
+    const m = new THREE.Mesh(new THREE.TorusGeometry(r, tube, 6, 40), ringMat(c, o));
+    m.userData.noShadow = true;
+    core.add(m);
+    return m;
+  };
+  const ring1 = mkRing(0.5, 0.02, 0x9a6af2, 0.8);
+  const ring2 = mkRing(0.6, 0.016, 0xff9ad2, 0.65);
+  const ring3 = mkRing(0.7, 0.013, 0x6a8aff, 0.5);
+  ring1.rotation.set(1.1, 0.3, 0);
+  ring2.rotation.set(-0.7, 0.9, 0.4);
+  ring3.rotation.set(0.4, -0.5, 1.2);
+
+  // the Hour-Dial of Time — a golden clock turning about its waist
+  const dialG = new THREE.Group();
+  dialG.position.y = -0.1;
+  dialG.rotation.x = 0.12;
+  core.add(dialG);
+  const dial = new THREE.Mesh(new THREE.TorusGeometry(0.88, 0.018, 6, 48), ringMat(0xd8b86a, 0.75));
+  dial.rotation.x = Math.PI / 2;
+  dial.userData.noShadow = true;
+  dialG.add(dial);
+  const markM = std({ color: 0xffd88a, emissive: 0xd8a84a, emissiveIntensity: 1.6, roughness: 0.2 });
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2;
+    const mk = new THREE.Mesh(new THREE.OctahedronGeometry(i % 3 === 0 ? 0.038 : 0.024), markM);
+    mk.position.set(Math.cos(a) * 0.88, 0, Math.sin(a) * 0.88);
+    mk.userData.noShadow = true;
+    dialG.add(mk);
+  }
+  const handHour = new THREE.Group();
+  const handMin = new THREE.Group();
+  handHour.add(spike(markM, 0.18, 0, 0, 0.62, 0, 0, 0.022));
+  handMin.add(spike(markM, 0.18, 0, 0, 0.8, 0, 0, 0.016));
+  dialG.add(handHour, handMin);
+
+  // a lone hourglass, drifting the dial's edge, lazily tumbling
+  const hg = new THREE.Group();
+  core.add(hg);
+  const glassM = std({ color: 0xc8d8ff, transparent: true, opacity: 0.28, roughness: 0.05, metalness: 0.1, side: THREE.DoubleSide });
+  const sandM = std({ color: 0xffd88a, emissive: 0xffb84a, emissiveIntensity: 1.5, roughness: 0.3 });
+  const cTop = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.11, 8), glassM);
+  cTop.rotation.z = Math.PI;
+  cTop.position.y = 0.058;
+  const cBot = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.11, 8), glassM);
+  cBot.position.y = -0.058;
+  const capT = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.018, 8), markM);
+  capT.position.y = 0.118;
+  const capB = capT.clone();
+  capB.position.y = -0.118;
+  hg.add(cTop, cBot, capT, capB,
+    orb(sandM, 0.034, 0, 0.052, 0, 1, 0.55, 1, 8, 6),
+    bone(sandM, 0, 0.03, 0, 0, -0.07, 0, 0.006, 0.006, 5),
+    orb(sandM, 0.03, 0, -0.095, 0, 1, 0.6, 1, 8, 6));
+  hg.traverse(o => { o.userData.noShadow = true; });
+
+  // orbiting space-shards
+  const shardM = std({ color: 0x9a6af2, emissive: 0x7a4ae2, emissiveIntensity: 1.4, roughness: 0.2, transparent: true, opacity: 0.9 });
+  const shards: THREE.Mesh[] = [];
+  for (let i = 0; i < 6; i++) {
+    const sh = new THREE.Mesh(new THREE.TetrahedronGeometry(0.045 + (i % 3) * 0.012), shardM);
+    sh.userData.noShadow = true;
+    shards.push(sh);
+    core.add(sh);
+  }
+  const light = new THREE.PointLight(0x9a6af2, 6, 6);
+  light.position.y = 0.2;
+  core.add(light);
+
+  finishShadows(g);
+
+  const animate = (t: number, dt: number) => {
+    core.position.y = 0.85 + Math.sin(t * 1.25) * 0.07;
+    orbBody.rotation.y += dt * 0.22;
+    mantle.rotation.y -= dt * 0.12;
+    mantle.scale.x = mantle.scale.z = 1 + Math.sin(t * 1.6) * 0.045;
+    ring1.rotation.x += dt * 0.6; ring1.rotation.y += dt * 0.23;
+    ring2.rotation.y -= dt * 0.45; ring2.rotation.z += dt * 0.3;
+    ring3.rotation.x -= dt * 0.34; ring3.rotation.z -= dt * 0.5;
+    dialG.rotation.y += dt * 0.06;
+    handHour.rotation.y -= dt * 0.22;
+    handMin.rotation.y -= dt * 1.35;
+    const ha = t * 0.4;
+    hg.position.set(Math.cos(ha) * 0.62, 0.34 + Math.sin(t * 1.7) * 0.05, Math.sin(ha) * 0.62);
+    hg.rotation.y = -ha;
+    hg.rotation.z = Math.sin(t * 0.8) * 0.2;
+    for (let i = 0; i < shards.length; i++) {
+      const a = t * (0.5 + (i % 3) * 0.21) + (i / shards.length) * Math.PI * 2;
+      const rr = 0.46 + (i % 2) * 0.1;
+      shards[i].position.set(Math.cos(a) * rr, Math.sin(a * 0.7 + i) * 0.35 + 0.05, Math.sin(a) * rr);
+      shards[i].rotation.x += dt * 1.3;
+      shards[i].rotation.y += dt * 0.9;
+    }
+    // the Fold — space hiccups, and the world agrees to look away
+    const k = gate(t, 7.6, 16);
+    orbBody.scale.set(1 - k * 0.22, 1.08 + k * 0.12, 1 + k * 0.22);
+    light.intensity = 6 + k * 9 + Math.sin(t * 3.1) * 1.2;
+    gem.rotation.y += dt * (1 + k * 14);
+    const bl = blinkAt(t, 6.3);
+    eyeL.scale.y = eyeR.scale.y = 1.5 * (1 - Math.max(bl, k * 0.55) * 0.85);
+  };
+  return { body: g, parts: { head: orbBody }, animate };
+}
+
+// ============================================================
+// VULFENIX — The Midnight Ember. A rose-fire phoenix that never
+// lands: spread plume wings, three rippling tail ribbons, a
+// crest of pink flame — and a wake of ember motes shed from its
+// wingtips and tail that hang in the air behind it.
+// ============================================================
+function buildVulfenix(): BespokeBuild {
+  const g = new THREE.Group();
+  const core = new THREE.Group();
+  core.position.y = 0.72;
+  g.add(core);
+  const flick: Flick[] = [];
+
+  const plumeM = std({ map: featherTex('vulf-plume', '#ff4f9e', '#b81d68', '#ffd0e8', 313), roughness: 0.6, metalness: 0.05 });
+  const breastM = std({ map: featherTex('vulf-breast', '#ff9ec9', '#d6539b', '#ffd8ec', 314), roughness: 0.65 });
+  const beakM = std({ color: 0xf2b84a, metalness: 0.6, roughness: 0.3 });
+  const addFlame = (parent: THREE.Object3D, x: number, y: number, z: number, h: number, r: number, speed = 9, rz = 0) => {
+    const f = makeFlame(h, r, 0xfff0d8, 0xff5aa8);
+    f.position.set(x, y, z);
+    f.rotation.z = rz;
+    parent.add(f);
+    flick.push({ g: f, speed, ph: Math.random() * 9, amp: 0.18 });
+    return f;
+  };
+
+  // body
+  const chest = orb(plumeM, 0.27, 0, 0, 0, 1.25, 1.02, 0.92);
+  core.add(chest);
+  core.add(orb(breastM, 0.2, 0.14, -0.08, 0, 1.05, 0.92, 0.8));
+
+  // head: golden beak, fire-crest
+  const head = new THREE.Group();
+  head.position.set(0.32, 0.22, 0);
+  head.name = 'head';
+  core.add(head);
+  head.add(orb(plumeM, 0.135, 0, 0, 0, 1.05, 1, 0.95));
+  head.add(orb(breastM, 0.085, 0.08, -0.04, 0, 1.1, 0.8, 0.85));
+  const beak = new THREE.Mesh(new THREE.ConeGeometry(0.045, 0.17, 7), beakM);
+  beak.rotation.z = -Math.PI / 2 - 0.12;
+  beak.position.set(0.19, -0.01, 0);
+  head.add(beak);
+  const eyeL = makeEye(0.045, 0xffd84a, { glow: 0.7 });
+  const eyeR = makeEye(0.045, 0xffd84a, { glow: 0.7 });
+  eyeL.position.set(0.09, 0.04, 0.08); eyeL.rotation.y = -0.3;
+  eyeR.position.set(0.09, 0.04, -0.08); eyeR.rotation.y = 0.3;
+  head.add(eyeL, eyeR);
+  addFlame(head, -0.02, 0.12, 0, 0.2, 0.05, 8, 0.75);
+  addFlame(head, 0.03, 0.13, 0.05, 0.14, 0.04, 10, 0.6);
+  addFlame(head, 0.03, 0.13, -0.05, 0.14, 0.04, 11, 0.6);
+
+  // wings — spread wide in a glide, plume membrane + fire fringe
+  const mkWing = (side: 1 | -1) => {
+    const w = new THREE.Group();
+    w.position.set(0.02, 0.12, side * 0.16);
+    core.add(w);
+    w.add(bone(plumeM, 0, 0, 0, -0.04, 0.16, side * 0.42, 0.05, 0.032));
+    w.add(bone(plumeM, -0.04, 0.16, side * 0.42, -0.1, 0.18, side * 0.78, 0.032, 0.014));
+    const sh = new THREE.Shape();
+    sh.moveTo(0.06, 0);
+    sh.lineTo(0.02, 0.45);
+    sh.lineTo(-0.1, 0.8);
+    sh.quadraticCurveTo(-0.22, 0.7, -0.3, 0.6);
+    sh.quadraticCurveTo(-0.24, 0.46, -0.32, 0.34);
+    sh.quadraticCurveTo(-0.26, 0.22, -0.34, 0.1);
+    sh.quadraticCurveTo(-0.2, 0, -0.12, -0.02);
+    sh.closePath();
+    const memb = new THREE.Mesh(new THREE.ShapeGeometry(sh, 4),
+      std({ map: featherTex('vulf-plume', '#ff4f9e', '#b81d68', '#ffd0e8', 313), side: THREE.DoubleSide, roughness: 0.6, transparent: true, opacity: 0.96 }));
+    memb.rotation.x = side * Math.PI / 2;
+    memb.position.y = 0.08;
+    memb.userData.noShadow = true;
+    w.add(memb);
+    const memb2 = new THREE.Mesh(new THREE.ShapeGeometry(sh, 4),
+      std({ map: featherTex('vulf-breast', '#ff9ec9', '#d6539b', '#ffd8ec', 314), side: THREE.DoubleSide, roughness: 0.65, transparent: true, opacity: 0.9 }));
+    memb2.rotation.x = side * Math.PI / 2;
+    memb2.position.y = 0.045;
+    memb2.scale.setScalar(0.72);
+    memb2.userData.noShadow = true;
+    w.add(memb2);
+    addFlame(w, -0.14, 0.18, side * 0.78, 0.16, 0.045, 9, 1.0);
+    addFlame(w, -0.3, 0.1, side * 0.5, 0.12, 0.04, 11, 1.05);
+    const tip = new THREE.Object3D();
+    tip.position.set(-0.12, 0.18, side * 0.76);
+    w.add(tip);
+    return { w, tip };
+  };
+  const { w: wingL, tip: tipL } = mkWing(1);
+  const { w: wingR, tip: tipR } = mkWing(-1);
+
+  // three rippling tail ribbons, fire at every tip
+  const ribbons: THREE.Group[][] = [];
+  let tailTip: THREE.Object3D = core;
+  for (let rIdx = 0; rIdx < 3; rIdx++) {
+    const segs: THREE.Group[] = [];
+    let parent: THREE.Object3D = core;
+    for (let d = 0; d < 4; d++) {
+      const seg = new THREE.Group();
+      seg.position.set(d === 0 ? -0.26 : -0.21, d === 0 ? -0.02 : -0.05, d === 0 ? (rIdx - 1) * 0.09 : 0);
+      parent.add(seg);
+      const piece = orb(plumeM, 0.05 - d * 0.008, -0.11, -0.02, 0, 2.4, 0.55, 0.8, 8, 6);
+      if (d > 1) piece.userData.noShadow = true;
+      seg.add(piece);
+      segs.push(seg);
+      parent = seg;
+    }
+    ribbons.push(segs);
+    const f = addFlame(segs[3], -0.26, -0.05, 0, 0.12, 0.035, 8 + rIdx, 1.1);
+    void f;
+    if (rIdx === 1) {
+      tailTip = new THREE.Object3D();
+      tailTip.position.set(-0.28, -0.06, 0);
+      segs[3].add(tailTip);
+    }
+  }
+
+  // tucked talons — it has not landed in fifteen years
+  for (const side of [1, -1] as const) {
+    core.add(bone(plumeM, 0.06, -0.2, side * 0.1, 0.12, -0.32, side * 0.1, 0.045, 0.03));
+    core.add(orb(beakM, 0.035, 0.14, -0.34, side * 0.1, 1.3, 0.7, 0.9, 7, 6));
+  }
+
+  const light = new THREE.PointLight(0xff7ac8, 5, 5);
+  light.position.y = 0.1;
+  core.add(light);
+
+  // the ember wake — pooled additive motes shed in flight
+  interface Mote { m: THREE.Mesh; mat: THREE.MeshBasicMaterial; vel: THREE.Vector3; life: number; max: number; }
+  const motes: Mote[] = [];
+  for (let i = 0; i < 18; i++) {
+    const mat = new THREE.MeshBasicMaterial({ color: i % 3 ? 0xff5aa8 : 0xffc23a, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
+    const m = new THREE.Mesh(new THREE.OctahedronGeometry(0.05), mat);
+    m.visible = false;
+    m.userData.noShadow = true;
+    g.add(m);
+    motes.push({ m, mat, vel: new THREE.Vector3(), life: 0, max: 1 });
+  }
+  const emitters = [tipL, tipR, tailTip];
+  let emitClock = 0, emitIdx = 0, nextMote = 0;
+  const tmpV = new THREE.Vector3();
+
+  finishShadows(g);
+
+  const animate = (t: number, dt: number) => {
+    const d = Math.min(dt, 0.05);
+    const flap = Math.sin(t * 2.3);
+    wingL.rotation.x = -0.12 - flap * 0.4;
+    wingR.rotation.x = 0.12 + flap * 0.4;
+    core.position.y = 0.72 + Math.sin(t * 2.3 - 1.3) * 0.05 + Math.sin(t * 0.6) * 0.04;
+    core.rotation.z = Math.sin(t * 0.9) * 0.05;
+    chest.scale.set(1.25, 1.02 + Math.sin(t * 2.3) * 0.025, 0.92);
+    head.rotation.y = Math.sin(t * 0.55) * 0.22;
+    head.rotation.z = gate(t, 7.7, 12) * 0.18;
+    const bl = blinkAt(t, 4.3);
+    eyeL.scale.y = eyeR.scale.y = 1 - bl * 0.9;
+    ribbons.forEach((segs, i) => segs.forEach((seg, dd) => {
+      seg.rotation.y = Math.sin(t * 1.9 - dd * 0.75 + i * 1.8) * 0.16;
+      seg.rotation.z = 0.08 + Math.sin(t * 1.5 - dd * 0.6 + i) * 0.1;
+    }));
+    flickAll(flick, t);
+    light.intensity = 4.5 + Math.sin(t * 3.4) * 1.2 + flap * 0.6;
+    // shed embers from wingtips and tail; let them hang and fade
+    emitClock += d;
+    while (emitClock > 0.07) {
+      emitClock -= 0.07;
+      const em = emitters[emitIdx++ % emitters.length];
+      const mo = motes[nextMote++ % motes.length];
+      em.getWorldPosition(tmpV);
+      mo.m.position.copy(g.worldToLocal(tmpV));
+      mo.vel.set(-0.32 - Math.random() * 0.15, -0.1 - Math.random() * 0.12, (Math.random() - 0.5) * 0.16);
+      mo.life = mo.max = 0.85 + Math.random() * 0.35;
+      mo.m.visible = true;
+    }
+    for (const mo of motes) {
+      if (!mo.m.visible) continue;
+      mo.life -= d;
+      if (mo.life <= 0) { mo.m.visible = false; mo.mat.opacity = 0; continue; }
+      mo.m.position.addScaledVector(mo.vel, d);
+      const k = mo.life / mo.max;
+      mo.mat.opacity = 0.85 * k;
+      mo.m.scale.setScalar(0.4 + k * 0.8);
+      mo.m.rotation.y += d * 3;
+    }
+  };
+  return { body: g, parts: { head, wings: [wingL, wingR] }, animate };
+}
+
 // ---------------- registry ----------------
 export const BESPOKE: Record<string, BespokeBuilder> = {
   cindcub: buildCindcub,
@@ -1612,4 +2214,8 @@ export const BESPOKE: Record<string, BespokeBuilder> = {
   puddla: buildPuddla,
   tidefin: buildTidefin,
   maelstrike: buildMaelstrike,
+  // Aljay's Aether three (Hall of Legends living statues)
+  firgara: buildFirgara,
+  onthrofa: buildOnthrofa,
+  vulfenix: buildVulfenix,
 };

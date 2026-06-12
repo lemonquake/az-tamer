@@ -1932,7 +1932,7 @@ export class Town {
         lines: [
           'I tend the street lamps. Every one walks the roads with you — count them, they keep perfect spacing. Lamplighters take pride.',
           'At dusk the fireflies come up from the pond like the lamps\' little children. I refuse to hear any other explanation.',
-          'Aljay\'s wolf Vulfenix once padded down this very road at midnight, they say. The lamps all leaned to watch. I believe the lamps.',
+          'Aljay\'s phoenix Vulfenix once swept down this very road at midnight, they say — pink fire hanging in the air till dawn. The lamps were jealous for a week. I believe the lamps.',
         ],
       },
     ];
@@ -2728,7 +2728,7 @@ export class Town {
       });
       // pilgrims at the gold wall
       const pilgrims: { x: number; z: number; top: number; line: string }[] = [
-        { x: w / 2 - 3.4, z: 0.4, top: 0xf2603a, line: 'Eight titles. Aljay retired UNDEFEATED in finals. My da was at the last one — says Firgara\'s wings turned night to noon.' },
+        { x: w / 2 - 3.4, z: 0.4, top: 0xf2603a, line: 'Eight titles. Aljay retired UNDEFEATED in finals. My da was at the last one — says when Firgara drew its blazing sword, night turned to noon.' },
         { x: w / 2 - 4.4, z: 2.2, top: 0xf2d23a, line: 'Nine. NINE championships. Greggy\'s record will never fall. I said never! …Serra Vayle worries me, though. Don\'t write that down.' },
         { x: w / 2 - 3.2, z: 3.8, top: 0x4ec45e, line: 'Five for Onnel — and they say the Worldroot only ever entered to keep the other two honest. Imagine being that good out of POLITENESS.' },
         { x: w / 2 - 5.2, z: 1.2, top: 0x9a5af2, line: 'Nine Guardians on that wall — every one carries Aether. The tenth element. My professor says we\'ll never see a tenth being carry it. I\'m going to prove her wrong.' },
@@ -2784,7 +2784,7 @@ export class Town {
       // their three Guardians, alive with Aether light, arrayed behind
       leg.guardians.forEach((gd, gi) => {
         const off = fwd.clone().multiplyScalar(gi === 1 ? -1.7 : -1.3).add(side.clone().multiplyScalar((gi - 1) * 1.9));
-        const rig = makeCustomCreature(gd.archetype, gd.palette, gd.glow, gd.scale * 0.6, true);
+        const rig = makeCustomCreature(gd.archetype, gd.palette, gd.glow, gd.scale * 0.6, true, gd.bespoke);
         rig.group.position.set(ax + off.x, 0.5, az + off.z);
         rig.group.rotation.y = yaw;
         s.add(rig.group);

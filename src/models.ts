@@ -942,10 +942,13 @@ export function makeCustomCreature(
   glow: number,
   scale = 1,
   aether = true,
+  bespokeId?: string,
 ): GuardianRig {
-  const body = buildArchetype(arch, palette, glow);
+  // hand-sculpted one-offs (e.g. Aljay's three) come from the bestiary
+  const bespoke: BespokeBuild | undefined = bespokeId ? BESPOKE[bespokeId]?.() : undefined;
+  const body = bespoke ? bespoke.body : buildArchetype(arch, palette, glow);
   body.scale.setScalar(scale);
-  if (aether) {
+  if (aether && !bespoke) {
     const auraMat = new THREE.MeshStandardMaterial({
       color: palette.accent, emissive: glow, emissiveIntensity: 2.2, roughness: 0.05,
       transparent: true, opacity: 0.9,
@@ -980,13 +983,14 @@ export function makeCustomCreature(
   group.add(ring);
   const rig: GuardianRig = {
     group, body,
-    parts: {
+    parts: bespoke?.parts ?? {
       head: body.getObjectByName('head') ?? undefined,
       tail: body.getObjectByName('tail') ?? undefined,
       wings: [body.getObjectByName('wing1'), body.getObjectByName('wing-1')].filter(Boolean) as THREE.Object3D[],
     },
     baseY: 0,
     phase: Math.random() * Math.PI * 2,
+    animate: bespoke?.animate,
   };
   rigs.add(rig);
   return rig;

@@ -120,6 +120,8 @@ export interface LegendGuardianDef {
   palette: { primary: number; secondary: number; accent: number };
   glow: number;
   scale: number;
+  /** bestiary.ts BESPOKE key — a hand-sculpted model replaces the archetype recipe */
+  bespoke?: string;
 }
 
 export interface LegendDef {
@@ -141,21 +143,24 @@ export const LEGENDS: LegendDef[] = [
     guardians: [
       {
         name: 'Firgara', epithet: 'The Dawn Unbroken', elements: ['Aether', 'Light', 'Fire'],
-        desc: 'Aljay\'s first bond — a phoenix-queen whose wingbeats end the night early. When Firgara banked over the Coliseum, eight finals in a row ended before the crowd had finished standing.',
-        archetype: 'avian', palette: { primary: 0xf2603a, secondary: 0xffd9a0, accent: 0xff9ad2 }, glow: 0xffb45a, scale: 1.35,
+        desc: 'Aljay\'s first bond — a crimson dragonoid knight in mirror-bright scale, bearing Daybreak, a greatsword of living flame. Eight Coliseum finals ended at the drawing of that blade; the crowd swears that when Firgara raises it, night simply gives up and calls itself morning.',
+        archetype: 'brute', palette: { primary: 0xc8202a, secondary: 0xe8b84a, accent: 0xff9ad2 }, glow: 0xffb45a, scale: 1.35,
+        bespoke: 'firgara',
       },
       {
         name: 'Onthrofa', epithet: 'The Folded Sky', elements: ['Space', 'Aether'],
-        desc: 'A being of folded distance. Onthrofa does not dodge — the arena simply agrees that the attack happened somewhere else. Scholars still argue whether it walks or the world moves underneath it.',
-        archetype: 'sprite', palette: { primary: 0x7a8af2, secondary: 0x2a2a5a, accent: 0xff9ad2 }, glow: 0x9ab8ff, scale: 1.2,
+        desc: 'A violet being of folded distance and borrowed hours, wreathed in the slow clockwork of Space and Time — orbit-rings, a golden hour-dial, and one patient hourglass that has never finished pouring. Onthrofa does not dodge: the arena simply agrees the attack happened somewhere else, several seconds ago. Scholars still argue whether it walks or the world moves underneath it.',
+        archetype: 'sprite', palette: { primary: 0x8a4af2, secondary: 0x2a1a5a, accent: 0xff9ad2 }, glow: 0xb18aff, scale: 1.2,
+        bespoke: 'onthrofa',
       },
       {
         name: 'Vulfenix', epithet: 'The Midnight Ember', elements: ['Aether', 'Dark', 'Fire'],
-        desc: 'The wolf that carried Aljay through Ghandra\'s dark on a pelt of black fire. It fights last, says nothing, and has never been seen to lose ground.',
-        archetype: 'beast', palette: { primary: 0x2a1a2e, secondary: 0xf2603a, accent: 0xff9ad2 }, glow: 0xb14aff, scale: 1.3,
+        desc: 'The rose-fire phoenix that lit Aljay\'s way through Ghandra\'s dark — and has not landed since. Vulfenix flies low and silent, shedding ribbons of pink flame that hang in the air long after it has passed; the Legion learned to dread streets that glowed faintly rose.',
+        archetype: 'avian', palette: { primary: 0xff5aa8, secondary: 0x2a1a2e, accent: 0xffd8ec }, glow: 0xff7ac8, scale: 1.3,
+        bespoke: 'vulfenix',
       },
     ],
-    story: 'Leader of the three, and eight-time World Champion of the Grand Coliseum. Aljay walked into Ghandra carrying nothing but a lantern, with Firgara at his shoulder, Onthrofa folding the road ahead, and Vulfenix guarding the dark behind. Children across all four continents reenact his duel with Nyxghul using broom handles. He has not been seen publicly in years — every tamer claims to know someone who has met him.',
+    story: 'Leader of the three, and eight-time World Champion of the Grand Coliseum. Aljay walked into Ghandra carrying nothing but a lantern, with Firgara\'s blazing sword at his shoulder, Onthrofa folding the road ahead, and Vulfenix lighting the dark behind with trails of rose-fire. Children across all four continents reenact his duel with Nyxghul using broom handles. He has not been seen publicly in years — every tamer claims to know someone who has met him.',
   },
   {
     id: 'greggy', name: 'Greggy', title: 'The Stormheart', element: 'Electric', color: '#f2d23a',
