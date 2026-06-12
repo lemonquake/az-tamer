@@ -389,7 +389,7 @@ export function makeEffigy(houseId: string): THREE.Group {
 // ---------------- guild card artwork ----------------
 const CARD_W = 640, CARD_H = 960;
 
-function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
+export function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
   ctx.arcTo(x + w, y, x + w, y + h, r);
@@ -400,7 +400,7 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
 }
 
 /** Per-guild decorative background pattern, drawn over the base gradient. */
-function cardPattern(ctx: CanvasRenderingContext2D, houseId: string, color: string): void {
+export function cardPattern(ctx: CanvasRenderingContext2D, houseId: string, color: string): void {
   ctx.save();
   ctx.globalAlpha = 0.16;
   ctx.strokeStyle = shade(color, 0.4);

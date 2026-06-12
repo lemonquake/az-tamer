@@ -29,6 +29,8 @@ import {
 } from './ui';
 import { drawAreaMap, hideAreaMap, type MapMarker } from './townmap';
 import { updateTamerAppearance } from './clothes';
+import { worldOrbit } from './camorbit';
+import { tagNpc, attachNpcPicker } from './npccard';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
 
@@ -856,6 +858,7 @@ export class AgdaoIsland {
     const y = this.groundH(x, z);
     g.position.set(x, y, z);
     g.rotation.y = Math.atan2(faceTo[0] - x, faceTo[1] - z);
+    tagNpc(g, name === 'Bayan' ? 'Fisher Bayan' : name);
     this.scene.add(g);
     this.npcs.push(g);
     this.colliders.push({ pos: new THREE.Vector3(x, 0, z), r: 0.55 });
@@ -1004,6 +1007,7 @@ export class AgdaoIsland {
     greggy.position.set(x, y, z);
     greggy.rotation.y = Math.PI * 0.85; // gazing south-west, over his island
     greggy.scale.setScalar(1.08);
+    tagNpc(greggy, 'Greggy the Stormheart');
     this.scene.add(greggy);
     this.npcs.push(greggy);
     this.colliders.push({ pos: new THREE.Vector3(x, 0, z), r: 0.6 });
@@ -1178,9 +1182,11 @@ export class AgdaoIsland {
     // camera
     const t = this.tamer.position;
     const camGoal = new THREE.Vector3(t.x, t.y + 7.5, t.z + 9);
-    this.camera.position.lerp(camGoal, Math.min(1, dt * 4));
+    worldOrbit.update(dt);
+    const lookT = new THREE.Vector3(t.x, t.y + 1, t.z);
+    this.camera.position.lerp(worldOrbit.orbited(camGoal, lookT), Math.min(1, dt * 4));
     this.camera.position.add(this.vfx.shakeOffset);
-    this.camera.lookAt(t.x, t.y + 1, t.z);
+    this.camera.lookAt(lookT);
 
     // interact hint
     if (isDialogueOpen() || isMenuOpen() || this.busy) { showInteractHint(null); }
@@ -1234,10 +1240,14 @@ export class AgdaoIsland {
   };
   private onKeyUp = (e: KeyboardEvent) => { this.keys.delete(e.key.toLowerCase()); };
 
+  private detachPicker: (() => void) | null = null;
+
   private finish(result: AgdaoResult): void {
     hideAreaMap($('minimap') as unknown as HTMLCanvasElement);
     showInteractHint(null);
     showHotkeys(false);
+    this.detachPicker?.();
+    this.detachPicker = null;
     window.removeEventListener('keydown', this.onKeyDown);
     window.removeEventListener('keyup', this.onKeyUp);
     this.rigs.forEach(disposeRig);
@@ -1254,6 +1264,11 @@ export class AgdaoIsland {
     showHotkeys(true);
     window.addEventListener('keydown', this.onKeyDown);
     window.addEventListener('keyup', this.onKeyUp);
+    this.detachPicker = attachNpcPicker({
+      camera: () => this.camera,
+      roots: () => this.npcs,
+      blocked: () => isDialogueOpen() || isMenuOpen() || this.busy,
+    });
     if (!this.player.flags['agdao_arrived']) {
       this.player.flags['agdao_arrived'] = true;
       this.player.save();

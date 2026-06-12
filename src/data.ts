@@ -845,6 +845,9 @@ export const ITEMS: Record<string, ItemDef> = Object.fromEntries([
   I('storm_amber', 'Storm-Touched Amber', 'relic', 0, 0, 'Fossil resin from the Thunderfen Mire with a living spark sealed inside. Historian Veyl at the University would trade a great deal to study one.'),
   I('sea_chart', 'Aurelian Sea-Chart', 'relic', 0, 0, 'Historian Veyl\'s hand-corrected chart of the western sea. Agdao Island — the Cradle of Tamers — is inked at its heart. Your overworld map now knows the way.'),
   I('stormheart_coil', 'Stormheart Coil', 'relic', 0, 0, 'A grounding coil wound by Greggy the Stormheart himself. It hums faintly when held toward the center of the world.'),
+  // Act V — the Foretales arc
+  I('override_ledger', 'Override Ledger', 'relic', 0, 0, 'Three proofs bound in river-twine: Esta\'s relay logs stamped FT-PRIME, Dalisay\'s unedited festival crystal, and a Foretales stringer\'s assignment book. Together they say one thing: the news is written before it happens.'),
+  I('continuity_reel', 'The Continuity Reel', 'relic', 0, 0, 'The Mirrorhouse\'s master spool — sixteen years of front pages filed BEFORE the events they report. The last frame is a standing directive on the Big Three: "GLAZE. DO NOT TOUCH. NOT YET. SOON."'),
 ].map(i => [i.id, i]));
 
 // ---------------- Crawler parts ----------------
@@ -940,7 +943,26 @@ export interface DungeonDef {
   drop?: { item: string; chance: number; max?: number };  // wild battles can shed a story relic
   coords: [number, number];     // [latitude, longitude] degrees on the overworld globe
   quest?: boolean;              // story-quest dungeon (red highlight on the overworld)
+  region?: string;              // overworld region id (default 'aurel')
 }
+
+// ---------------- Overworld regions ----------------
+// The world is bigger than one globe. Regions unlock through the
+// Chronicle; the Region Atlas (T on the overworld) travels between them.
+export interface RegionDef {
+  id: string; name: string; icon: string; desc: string;
+  unlockFlag?: string;          // story flag required to travel there
+  /** atlas hint shown while the region is still locked */
+  lockedHint: string;
+}
+export const REGIONS: RegionDef[] = [
+  { id: 'aurel', name: 'Overworld of Aurel', icon: '🌍',
+    desc: 'The Capital Region — Haven City, the University, and the proving grounds of every new Tamer.',
+    lockedHint: '' },
+  { id: 'turmal', name: 'The Floating Island of Turmal', icon: '🏝️', unlockFlag: 'turmal_unlocked',
+    desc: 'An island adrift above the western sea. Home of the Seasonal Tournament — and of older things beneath its keel.',
+    lockedHint: 'The Chronicle will carry you there, in time.' },
+];
 
 export const DUNGEONS: DungeonDef[] = [
   { id: 'trial', name: 'Trial Caverns', floors: 2, levelRange: [3, 5], theme: 'cavern',
@@ -966,6 +988,12 @@ export const DUNGEONS: DungeonDef[] = [
     pool: ['coralkit', 'reefrider', 'fernfox', 'shroomple', 'plumelet', 'driftling', 'mournmoth', 'pearlance', 'bramblelynx', 'frostfin'],
     boss: 'grovetyrant', bossLevel: 27, rewardShards: 1800,
     desc: 'The sea-cave where Aurelia made the First Bond, seven hundred years ago. Something corrupted has nested in the world\'s gentlest place.', coords: [-6, -44], quest: true },
+  // Act V chapter XXIII — the Foretales relay-bastion above New Salmonan,
+  // entered from the valley's ridge stair (never shown on the globe)
+  { id: 'mirrorhouse', name: 'The Mirrorhouse', floors: 5, levelRange: [46, 52], theme: 'storm', hidden: true,
+    pool: ['gloomite', 'mournmoth', 'duskweaver', 'nightloom', 'cryptling', 'sarcophang', 'gearmite', 'ampyre', 'teslarch', 'voltyx', 'nocthowl'],
+    boss: 'phantasmoth', bossLevel: 54, rewardShards: 6500,
+    desc: 'The Foretales relay-bastion where the eastern valleys\' news is made — before it happens. Dark glass, dead-light conduits, and a print floor that has never once stopped.', coords: [12, 70], quest: true },
 ];
 
 export const SHOP_STOCK = ['tonic', 'tonic_plus', 'soda', 'berry', 'honey_roll', 'star_treat', 'revive_leaf', 'cell', 'cell_plus', 'plating', 'elixir', 'soda_plus'];

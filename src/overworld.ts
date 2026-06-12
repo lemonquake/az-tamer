@@ -5,11 +5,11 @@
 // world sleeps under clouds.
 // ============================================================
 import * as THREE from 'three';
-import { DUNGEONS, SPECIES, TYPE_CSS, type DungeonDef } from './data';
+import { DUNGEONS, REGIONS, SPECIES, TYPE_CSS, type DungeonDef } from './data';
 import { Player } from './state';
 import { makeTamer, updateVoxelHuman, globeTexture, skyGradient, leafTexture, plankTexture } from './models';
-import { AGDAO_LORE } from './lore';
-import { updateHUD, showInteractHint, showHotkeys, isDialogueOpen, isMenuOpen, openPauseMenu, openPanel, type PanelKind } from './ui';
+import { AGDAO_LORE, SALMONAN_LORE } from './lore';
+import { updateHUD, showInteractHint, showHotkeys, isDialogueOpen, isMenuOpen, openPauseMenu, openPanel, choose, say, type PanelKind } from './ui';
 import { drawAreaMap, hideAreaMap, type MapMarker } from './townmap';
 import { updateTamerAppearance } from './clothes';
 
@@ -18,9 +18,10 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getEl
 const R = 30;                       // globe radius
 const CITY_COORDS: [number, number] = [22, 0];
 const AGDAO_COORDS: [number, number] = [-6, -44];
+const SALMONAN_COORDS: [number, number] = [8, 62];
 
 /** Where the overworld can send the player. */
-export type OverworldDest = DungeonDef | 'agdao' | null;
+export type OverworldDest = DungeonDef | 'agdao' | 'salmonan' | { travel: string } | null;
 
 function dirFromLatLon(lat: number, lon: number): THREE.Vector3 {
   const la = THREE.MathUtils.degToRad(lat), lo = THREE.MathUtils.degToRad(lon);
@@ -33,6 +34,7 @@ interface Marker {
   dir: THREE.Vector3;          // unit direction in globe-local space
   quest: boolean;
   agdao?: boolean;             // the tropical island travel marker
+  salmonan?: boolean;          // the river-valley town travel marker
 }
 
 export class Overworld {
@@ -51,7 +53,11 @@ export class Overworld {
   private t = 0;
   private resolveExit: ((d: OverworldDest) => void) | null = null;
 
-  constructor(private player: Player) {}
+  constructor(private player: Player, private regionId = 'aurel') {}
+
+  private get regionName(): string {
+    return REGIONS.find(r => r.id === this.regionId)?.name ?? 'Overworld';
+  }
 
   get view() {
     return { scene: this.scene, camera: this.camera, update: (dt: number) => this.update(dt) };
@@ -95,16 +101,21 @@ export class Overworld {
     this.cloudLayer.position.copy(this.globe.position);
     this.scene.add(this.globe, this.cloudLayer);
 
-    // markers
-    this.addMarker(null, CITY_COORDS);
+    // markers — only this region's gates appear on this globe
+    if (this.regionId === 'aurel') this.addMarker(null, CITY_COORDS);
     for (const d of DUNGEONS) {
-      if (d.id === 'trial' || d.hidden) continue;
+      if (d.id === 'trial' || d.hidden || (d.region ?? 'aurel') !== this.regionId) continue;
       if (this.isUnlocked(d)) this.addMarker(d, d.coords);
       else this.addCloudCluster(dirFromLatLon(...d.coords), 4, 0.9); // locked gates sleep under cloud
     }
     // Agdao Island — revealed by Veyl's sea-chart
-    if (this.player.flags['agdao_unlocked']) this.addAgdaoMarker(AGDAO_COORDS);
-    else this.addCloudCluster(dirFromLatLon(...AGDAO_COORDS), 5, 0.9);
+    if (this.regionId === 'aurel') {
+      if (this.player.flags['agdao_unlocked']) this.addAgdaoMarker(AGDAO_COORDS);
+      else this.addCloudCluster(dirFromLatLon(...AGDAO_COORDS), 5, 0.9);
+      // New Salmonan — the valley opens with Act V (the Foretales arc)
+      if (this.player.flags['salmonan_unlocked']) this.addSalmonanMarker(SALMONAN_COORDS);
+      else this.addCloudCluster(dirFromLatLon(...SALMONAN_COORDS), 5, 0.9);
+    }
     // ambient cloud cover over the unexplored world
     for (let i = 0; i < 26; i++) {
       const dir = new THREE.Vector3().randomDirection();
@@ -262,6 +273,73 @@ export class Overworld {
     this.markers.push({ group: g, def: null, dir, quest, agdao: true });
   }
 
+  /** A little river-valley diorama: green terraces, a blue river, red roofs, the relay mast. */
+  private addSalmonanMarker(coords: [number, number]): void {
+    const dir = dirFromLatLon(...coords);
+    const g = new THREE.Group();
+    const quest = this.player.quests['story_veilfall'] === 'active' || this.player.quests['story_mirrorhouse'] === 'active';
+
+    // terraced hill: stacked green discs
+    for (let i = 0; i < 3; i++) {
+      const step = new THREE.Mesh(new THREE.CylinderGeometry(1.7 - i * 0.45, 1.9 - i * 0.45, 0.3, 18),
+        new THREE.MeshStandardMaterial({ map: leafTexture('#4aa052', '#6cc45e', '#2a703a', 11 + i), roughness: 0.9 }));
+      step.position.y = 0.15 + i * 0.3;
+      g.add(step);
+      // paddy water gleam on each terrace lip
+      const gleam = new THREE.Mesh(new THREE.TorusGeometry(1.55 - i * 0.45, 0.05, 6, 24),
+        new THREE.MeshStandardMaterial({ color: 0x7ad8c8, emissive: 0x2a8a7a, emissiveIntensity: 0.5, roughness: 0.2 }));
+      gleam.rotation.x = Math.PI / 2;
+      gleam.position.y = 0.31 + i * 0.3;
+      g.add(gleam);
+    }
+    // the river: a blue ribbon across the diorama
+    const river = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.08, 4),
+      new THREE.MeshStandardMaterial({ color: 0x3a9ab8, emissive: 0x1a5a74, emissiveIntensity: 0.5, roughness: 0.15 }));
+    river.position.set(1.6, 0.1, 0);
+    g.add(river);
+    // red-roofed houses
+    for (const [hx, hz] of [[0.6, 0.7], [-0.7, 0.4], [-0.2, -0.8]]) {
+      const walls = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.22, 0.3),
+        new THREE.MeshStandardMaterial({ color: 0xa8845a, roughness: 0.95 }));
+      walls.position.set(hx, 1.05, hz);
+      const roof = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.24, 4),
+        new THREE.MeshStandardMaterial({ color: 0xb03a2a, roughness: 0.9 }));
+      roof.position.set(hx, 1.28, hz);
+      roof.rotation.y = Math.PI / 4;
+      g.add(walls, roof);
+    }
+    // the battered relay mast, blinking
+    const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.05, 1.4, 5),
+      new THREE.MeshStandardMaterial({ color: 0x8a8a96, metalness: 0.7, roughness: 0.4 }));
+    mast.position.set(-0.9, 1.6, -0.5);
+    const tip = new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 6),
+      new THREE.MeshStandardMaterial({ color: 0xe85a4a, emissive: 0xe83a2a, emissiveIntensity: 1.4 }));
+    tip.position.set(-0.9, 2.35, -0.5);
+    g.add(mast, tip);
+
+    if (quest) {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(2.6, 0.07, 8, 32),
+        new THREE.MeshBasicMaterial({ color: 0xf2a64e, transparent: true, opacity: 0.8 }));
+      ring.rotation.x = Math.PI / 2;
+      ring.position.y = 0.1;
+      ring.name = 'questring';
+      const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.5, 7, 12, 1, true),
+        new THREE.MeshBasicMaterial({ color: 0xf2a64e, transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false }));
+      beam.position.y = 3.6;
+      beam.name = 'questbeam';
+      g.add(ring, beam);
+    }
+    const halo = new THREE.PointLight(0xf2c14e, quest ? 16 : 10, 10);
+    halo.position.y = 2;
+    halo.name = 'halo';
+    g.add(halo);
+
+    g.position.copy(dir).multiplyScalar(R);
+    g.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+    this.globe.add(g);
+    this.markers.push({ group: g, def: null, dir, quest, salmonan: true });
+  }
+
   private addCloudCluster(dir: THREE.Vector3, puffs: number, opacity: number, ambient = false): void {
     const cluster = new THREE.Group();
     const mat = new THREE.MeshStandardMaterial({ color: 0xf2f4fa, transparent: true, opacity, roughness: 1, depthWrite: false });
@@ -295,6 +373,22 @@ export class Overworld {
         <div class="row"><span class="sub">First Bond</span><b>~700 years ago</b></div>
         <div class="row"><span class="sub">Resident Guild</span><b>Circle of the First Fire</b></div>
         <div class="sub" style="margin-top:8px">The islanders are friendly — and they notice everything. Ask around.</div>`;
+      panel.classList.add('show');
+      return;
+    }
+    if (m.salmonan) {
+      showInteractHint('Press <b>E</b> — ride downriver to New Salmonan');
+      if (panel.dataset.current === 'salmonan' && panel.classList.contains('show')) return;
+      panel.dataset.current = 'salmonan';
+      panel.classList.toggle('quest', m.quest);
+      panel.innerHTML = `
+        ${m.quest ? '<div class="quest-badge">★ QUEST</div>' : ''}
+        <h3>🏞️ ${SALMONAN_LORE.name}</h3>
+        <div class="sub" style="margin-bottom:8px">${SALMONAN_LORE.desc}</div>
+        <div class="row"><span class="sub">Known as</span><b>${SALMONAN_LORE.epithet}</b></div>
+        <div class="row"><span class="sub">Broadcast signal</span><b>none — and proud of it</b></div>
+        <div class="row"><span class="sub">Resident champion</span><b>Ivan Lawrence (cleared, loudly)</b></div>
+        <div class="sub" style="margin-top:8px">The inn is free for tamers, the market opens at dawn, and the mural by the river gate is repainted every spring.</div>`;
       panel.classList.add('show');
       return;
     }
@@ -396,8 +490,8 @@ export class Overworld {
       const len = Math.hypot(w.x, w.z) || 1;
       mapMarkers.push({
         x: (w.x / len) * a, z: (w.z / len) * a,
-        label: m.agdao ? '🏝️ Agdao Island' : m.def ? m.def.name : '🏠 Haven City',
-        color: m.agdao ? '#4ee4b8' : m.def ? (m.quest ? '#e85a6a' : '#5ab8e8') : '#c9a24a',
+        label: m.agdao ? '🏝️ Agdao Island' : m.salmonan ? '🏞️ New Salmonan' : m.def ? m.def.name : '🏠 Haven City',
+        color: m.agdao ? '#4ee4b8' : m.salmonan ? '#f2c14e' : m.def ? (m.quest ? '#e85a6a' : '#5ab8e8') : '#c9a24a',
         kind: m.def ? 'poi' : 'building',
       });
     }
@@ -405,7 +499,7 @@ export class Overworld {
       shape: 'circle', radius: 1.75,
       markers: mapMarkers,
       player: { x: 0, z: 0, rot: this.heading },
-      title: 'Overworld of Aurel',
+      title: this.regionName,
     });
 
     // slight camera breathing
@@ -416,9 +510,36 @@ export class Overworld {
   private openPanelGuarded(kind: PanelKind): void {
     this.busy = true;
     openPanel(kind, this.player, { canSave: true }).then(() => {
-      updateHUD(this.player, 'Overworld of Aurel');
+      updateHUD(this.player, this.regionName);
       this.busy = false;
     });
+  }
+
+  /** The Region Atlas — travel between unlocked overworlds and far destinations. */
+  private async openAtlas(): Promise<void> {
+    this.busy = true;
+    const entries: { label: string; go: () => void | Promise<void> }[] = [];
+    for (const r of REGIONS) {
+      const unlocked = !r.unlockFlag || !!this.player.flags[r.unlockFlag];
+      if (r.id === this.regionId) {
+        entries.push({ label: `${r.icon} ${r.name} — you are here`, go: () => {} });
+      } else if (unlocked) {
+        entries.push({ label: `${r.icon} ${r.name}`, go: () => this.finish({ travel: r.id }) });
+      } else {
+        entries.push({ label: `🔒 ${r.name}`, go: () => say('', r.lockedHint || 'This region is still beyond your charts.') });
+      }
+    }
+    if (this.player.flags['agdao_unlocked']) {
+      entries.push({ label: '🏝️ Agdao Island — the Cradle of Tamers', go: () => this.finish('agdao') });
+    }
+    if (this.player.flags['salmonan_unlocked']) {
+      entries.push({ label: '🏞️ New Salmonan — the Valley of Loud Kitchens', go: () => this.finish('salmonan') });
+    }
+    const pick = await choose('Region Atlas', 'The world is wider than one horizon. Travel where?', [
+      ...entries.map(e => e.label), 'Stay here',
+    ]);
+    if (pick < entries.length) await entries[pick].go();
+    this.busy = false;
   }
 
   private onKeyDown = (e: KeyboardEvent) => {
@@ -426,7 +547,7 @@ export class Overworld {
     this.keys.add(k);
     if (isDialogueOpen() || isMenuOpen() || this.busy) return;
     if ((k === 'e' || k === 'enter') && this.nearest) {
-      this.finish(this.nearest.agdao ? 'agdao' : this.nearest.def);
+      this.finish(this.nearest.agdao ? 'agdao' : this.nearest.salmonan ? 'salmonan' : this.nearest.def);
     }
     else if (k === 'p') this.openPanelGuarded('player');
     else if (k === 'i') this.openPanelGuarded('inventory');
@@ -434,10 +555,11 @@ export class Overworld {
     else if (k === 'c') this.openPanelGuarded('crawler');
     else if (k === 'j') this.openPanelGuarded('quests');
     else if (k === 'v') this.openPanelGuarded('evotree');
+    else if (k === 't') this.openAtlas();
     else if (k === 'escape') {
       this.busy = true;
       openPauseMenu(this.player, { canSave: true }).then(() => {
-        updateHUD(this.player, 'Overworld of Aurel');
+        updateHUD(this.player, this.regionName);
         this.busy = false;
       });
     }
@@ -461,8 +583,8 @@ export class Overworld {
     updateTamerAppearance(this.tamer, this.player.equippedClothes);
     // debug handle for automated testing
     (window as unknown as Record<string, unknown>).__ow = this;
-    updateHUD(this.player, 'Overworld of Aurel');
-    showHotkeys(true);
+    updateHUD(this.player, this.regionName);
+    showHotkeys(true, false, true);
     window.addEventListener('keydown', this.onKeyDown);
     window.addEventListener('keyup', this.onKeyUp);
     return new Promise<OverworldDest>(res => { this.resolveExit = res; });

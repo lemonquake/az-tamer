@@ -12,7 +12,8 @@ import { Player, Guardian } from './state';
 import {
   makeTamer, makeVoxelHuman, updateVoxelHuman, setVoxelSeated, makeGuardian, disposeRig,
   marbleTexture, carpetTexture, tileTexture, wallpaperTexture, bookshelfTexture,
-  plankTexture, stoneTexture, skyGradient, type GuardianRig, type VoxelHumanOpts,
+  plankTexture, stoneTexture, skyGradient, makeGuideBeacon,
+  type GuardianRig, type VoxelHumanOpts, type BeaconRig,
 } from './models';
 import {
   say, conversation, choose, askName, toast, updateHUD, showInteractHint, showHotkeys,
@@ -24,6 +25,9 @@ import { openGuildCard } from './guildcard';
 import { drawAreaMap, hideAreaMap, type MapMarker } from './townmap';
 import type { BattleOptions, BattleResult } from './battle';
 import { updateTamerAppearance } from './clothes';
+import { worldOrbit } from './camorbit';
+import { tagNpc, crowdName, attachNpcPicker } from './npccard';
+import { runBasicsTutorial, isTutorialOpen } from './tutorial';
 
 const ROOM_TITLES: Record<string, string> = {
   lobby: 'University — Grand Lobby', cafeteria: 'University — Cafeteria',
@@ -143,6 +147,9 @@ export class University {
 
   private rooms = new Map<RoomId, RoomData>();
   private current: RoomId = 'lobby';
+  // lobby guidance beacons — Officers' Hall until pledged, then the Grand Doors out
+  private officersBeacon: BeaconRig | null = null;
+  private doorsBeacon: BeaconRig | null = null;
   private wanderers: Wanderer[] = [];
   private chatterIdx = 0;
   private resolveExit: (() => void) | null = null;
@@ -272,6 +279,13 @@ export class University {
     g.position.set(x, 0, z);
     g.rotation.y = rotY;
     if (seated) setVoxelSeated(g, true, seatY);
+    // identity for the click-picker: derive a name from the chat label
+    // ("chat with the resting tamer" → "Resting Tamer"); else from the registry
+    const m = talk?.label.match(/(?:chat with|talk to|speak with|listen to|ask)\s+(.+)$/i);
+    const derived = m
+      ? m[1].replace(/^the\s+/i, '').replace(/<[^>]+>/g, '').replace(/\b\w/g, ch => ch.toUpperCase())
+      : crowdName(`uni:${x.toFixed(1)},${z.toFixed(1)}`);
+    tagNpc(g, derived);
     r.scene.add(g);
     r.npcs.push(g);
     r.colliders.push({ pos: new THREE.Vector3(x, 0, z), r: 0.55 });
@@ -642,6 +656,7 @@ export class University {
       const g = makeVoxelHuman(pal);
       const x = -10 + i * 5, z = -10 + (i % 3) * 8;
       g.position.set(x, 0, z);
+      tagNpc(g, crowdName(`uni-wanderer:${i}`));
       s.add(g);
       this.wanderers.push({ g, target: new THREE.Vector3(x, 0, z), pause: 1 + i, speed: 1.5 + (i % 3) * 0.35 });
       r.interactables.push({
@@ -679,6 +694,14 @@ export class University {
     this.door(r, 'w', -9, '📚 Library', '#b18ae8', () => this.enterRoom('library'));
     this.door(r, 'w', 1, '📖 Classroom', '#5ab8e8', () => this.enterRoom('classroom'));
     this.door(r, 'w', 10, '🔒 Locker Room', '#9aa0b8', () => this.enterRoom('lockers'));
+
+    // ---- guidance beacons: pledge first (Officers' Hall), then the city ----
+    this.officersBeacon = makeGuideBeacon(0xc9a24a);
+    this.officersBeacon.group.position.set(0, 0, -r.d / 2 + 2.2);
+    s.add(this.officersBeacon.group);
+    this.doorsBeacon = makeGuideBeacon(0xf2c14e);
+    this.doorsBeacon.group.position.set(0, 0, r.d / 2 - 2.4);
+    s.add(this.doorsBeacon.group);
   }
 
   // ================= CAFETERIA =================
@@ -725,7 +748,7 @@ export class University {
     for (const px of [-4, -2, 0, 2, 4]) r.colliders.push({ pos: new THREE.Vector3(px, 0, -r.d / 2 + 1.6), r: 1.1 });
 
     // Chef Marlo behind the counter
-    this.npc(r, { top: 0xe8e8e8, hair: 0x6a3a1a, cap: 0xe8e8e8 }, 0, -r.d / 2 + 0.7, 0, undefined);
+    tagNpc(this.npc(r, { top: 0xe8e8e8, hair: 0x6a3a1a, cap: 0xe8e8e8 }, 0, -r.d / 2 + 0.7, 0, undefined), 'Chef Marlo');
     r.interactables.push({
       pos: new THREE.Vector3(0, 0, -r.d / 2 + 2.6), radius: 1.8,
       label: 'Press <b>E</b> — talk to Chef Marlo',
@@ -871,7 +894,7 @@ export class University {
     tdesk.add(tTop, tBody);
     this.prop(r, tdesk, 3, -r.d / 2 + 2.2, 1.5);
 
-    this.npc(r, { top: 0x2a4a6a, hair: 0xd8d8e8, robe: true, cap: null }, 0.4, -r.d / 2 + 2, Math.PI, undefined);
+    tagNpc(this.npc(r, { top: 0x2a4a6a, hair: 0xd8d8e8, robe: true, cap: null }, 0.4, -r.d / 2 + 2, Math.PI, undefined), 'Professor Lyra');
     r.interactables.push({
       pos: new THREE.Vector3(0.4, 0, -r.d / 2 + 3.4), radius: 1.8,
       label: 'Press <b>E</b> — talk to Professor Lyra',
@@ -1014,7 +1037,7 @@ export class University {
     this.prop(r, table, 5, -1.5, 1.4);
 
     // Archivist Wren at a lectern
-    this.npc(r, { top: 0x5a3a9a, hair: 0xc8c8d0, robe: true, cap: null }, 0, -3.4, Math.PI, undefined);
+    tagNpc(this.npc(r, { top: 0x5a3a9a, hair: 0xc8c8d0, robe: true, cap: null }, 0, -3.4, Math.PI, undefined), 'Archivist Wren');
     r.interactables.push({
       pos: new THREE.Vector3(0, 0, -2), radius: 1.8,
       label: 'Press <b>E</b> — talk to Archivist Wren',
@@ -1056,7 +1079,7 @@ export class University {
       chartTable.add(top);
       this.prop(r, chartTable, -5, -0.2, 1.3);
 
-      this.npc(r, { top: 0x4a6a9a, hair: 0x8a8a92, robe: true, cap: null, hairstyle: 'classic' }, -5, -1.8, 0, undefined);
+      tagNpc(this.npc(r, { top: 0x4a6a9a, hair: 0x8a8a92, robe: true, cap: null, hairstyle: 'classic' }, -5, -1.8, 0, undefined), 'Historian Veyl');
       r.interactables.push({
         pos: new THREE.Vector3(-5, 0, -1), radius: 2.0,
         label: 'Press <b>E</b> — talk to Historian Veyl',
@@ -1529,7 +1552,7 @@ export class University {
         stormcall: { top: 0xb09a22, hair: 0x2a2a3a, cap: 0xb09a22 },
         duskwatch: { top: 0x5a3a9a, hair: 0x1a1a26, cap: null },
       };
-      this.npc(r, palettes[h.id], x, z - 1.2, 0, undefined);
+      tagNpc(this.npc(r, palettes[h.id], x, z - 1.2, 0, undefined), lore.officer);
       r.interactables.push({
         pos: new THREE.Vector3(x, 0, z + 1.2), radius: 1.7,
         label: `Press <b>E</b> — ${lore.officer} of ${h.name}`,
@@ -1681,9 +1704,16 @@ export class University {
   // ================= per-frame =================
   private update(dt: number): void {
     const r = this.room;
+    // guidance: Officers' Hall until the player has pledged, then the way out
+    if (this.officersBeacon && this.doorsBeacon) {
+      this.officersBeacon.group.visible = !this.player.houseId;
+      this.doorsBeacon.group.visible = !!this.player.houseId;
+      this.officersBeacon.update(dt);
+      this.doorsBeacon.update(dt);
+    }
     const speed = 5.2;
     let dx = 0, dz = 0;
-    if (!isDialogueOpen() && !isMenuOpen() && !this.busy) {
+    if (!isDialogueOpen() && !isMenuOpen() && !this.busy && !isTutorialOpen()) {
       if (this.keys.has('w') || this.keys.has('arrowup')) dz -= 1;
       if (this.keys.has('s') || this.keys.has('arrowdown')) dz += 1;
       if (this.keys.has('a') || this.keys.has('arrowleft')) dx -= 1;
@@ -1749,11 +1779,13 @@ export class University {
       }
     }
 
-    // camera follow
+    // camera follow — right-drag orbits, drifts home after 10 idle seconds
     const t = this.tamer.position;
     const camGoal = new THREE.Vector3(t.x * 0.7, r.camHeight, t.z + r.camDist);
-    this.camera.position.lerp(camGoal, Math.min(1, dt * 4));
-    this.camera.lookAt(t.x, 1.1, t.z);
+    worldOrbit.update(dt);
+    const lookT = new THREE.Vector3(t.x, 1.1, t.z);
+    this.camera.position.lerp(worldOrbit.orbited(camGoal, lookT), Math.min(1, dt * 4));
+    this.camera.lookAt(lookT);
 
     // ambient animation
     const now = performance.now();
@@ -1802,7 +1834,7 @@ export class University {
   private onKeyDown = (e: KeyboardEvent) => {
     const k = e.key.toLowerCase();
     this.keys.add(k);
-    if (isDialogueOpen() || isMenuOpen() || this.busy) return;
+    if (isDialogueOpen() || isMenuOpen() || this.busy || isTutorialOpen()) return;
     if (k === 'e' || k === 'enter') {
       const near = this.room.interactables.find(i => this.tamer.position.distanceTo(i.pos) < i.radius);
       if (near) {
@@ -1860,6 +1892,15 @@ export class University {
     window.addEventListener('keydown', this.onKeyDown);
     window.addEventListener('keyup', this.onKeyUp);
 
+    // click any soul in the halls to read their card
+    const detachPicker = attachNpcPicker({
+      camera: () => this.camera,
+      roots: () => this.current === 'lobby'
+        ? [...this.room.npcs, ...this.wanderers.map(wd => wd.g)]
+        : this.room.npcs,
+      blocked: () => isDialogueOpen() || isMenuOpen() || this.busy || isTutorialOpen(),
+    });
+
     if (!this.revisit) {
       await conversation([
         ['???', '…and mind the step. Welcome through, graduate!'],
@@ -1871,10 +1912,14 @@ export class University {
       this.player.save();
     }
 
+    // Field Manual I — Hale's mandatory graduate orientation (runs once, ever)
+    await runBasicsTutorial(this.player, () => ({ x: this.tamer.position.x, z: this.tamer.position.z }));
+
     return new Promise<void>(res => {
       this.resolveExit = () => {
         window.removeEventListener('keydown', this.onKeyDown);
         window.removeEventListener('keyup', this.onKeyUp);
+        detachPicker();
         showInteractHint(null);
         showHotkeys(false);
         hideAreaMap(document.getElementById('minimap') as HTMLCanvasElement);

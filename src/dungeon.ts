@@ -17,6 +17,7 @@ import {
 import { VFX } from './vfx';
 import { sfx } from './audio';
 import { say, choose, toast, updateHUD, showInteractHint, showHotkeys, isDialogueOpen, isMenuOpen, openPauseMenu, openPanel, type PanelKind, playStorySequence, hideStory } from './ui';
+import { worldOrbit } from './camorbit';
 import type { BattleOptions, BattleResult } from './battle';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
@@ -169,6 +170,30 @@ const THEMES: Record<string, ThemeDef> = {
     accent: 0xffc46a,
     mote: { color: 0x9af2e4, count: 260, mode: 'rise' },
     decos: ['crystal', 'coins', 'algae', 'fern', 'column'],
+  },
+  // The Mirrorhouse — Foretales' relay-bastion: black glass, dead-light
+  // conduits, the cold flicker of a print floor that never sleeps.
+  mirrorhouse: {
+    wall: () => new THREE.MeshStandardMaterial({
+      map: stormPanelTexture('#2a2a34', '#101018', 41, 1),
+      emissiveMap: stormSeamEmissive('#c8d2ff', 41, 1),
+      emissive: new THREE.Color(0xc8d2ff), emissiveIntensity: 0.5,
+      roughness: 0.25, metalness: 0.6,
+    }),
+    floor: () => new THREE.MeshStandardMaterial({
+      map: stormPanelTexture('#1c1c26', '#0c0c14', 57, 6),
+      emissiveMap: stormSeamEmissive('#8a5af2', 57, 6),
+      emissive: new THREE.Color(0x8a5af2), emissiveIntensity: 0.4,
+      roughness: 0.3, metalness: 0.5,
+    }),
+    sky: ['#14141e', '#04040a'],
+    fog: '#08070f', fogNear: 6, fogFar: 18,
+    hemi: [0x8a8ab0, 0x14141e], hemiIntensity: 0.5,
+    dir: 0xd8e0ff, dirIntensity: 0.55,
+    headlight: 0xe8ecff,
+    accent: 0xb18aff,
+    mote: { color: 0xd8e0ff, count: 130, mode: 'spark' },
+    decos: ['pylon', 'shard', 'rubble', 'shard'],
   },
   storm: {
     wall: () => new THREE.MeshStandardMaterial({
@@ -1025,11 +1050,14 @@ export class DungeonRun {
     for (const f of this.anim) f(dt);
 
     // camera follow (angled top-down, DW2 style) + impact shake
+    // right-drag orbits the Crawler; idle 10s and it glides back home
     const target = new THREE.Vector3(this.crawler.position.x, 0, this.crawler.position.z);
     const camGoal = target.clone().add(new THREE.Vector3(0, 6.4, 4.6));
-    this.camera.position.lerp(camGoal, Math.min(1, dt * 5));
+    worldOrbit.update(dt);
+    const lookT = new THREE.Vector3(target.x, 0.4, target.z);
+    this.camera.position.lerp(worldOrbit.orbited(camGoal, lookT), Math.min(1, dt * 5));
     this.camera.position.add(this.vfx.shakeOffset);
-    this.camera.lookAt(target.x, 0.4, target.z);
+    this.camera.lookAt(lookT);
     this.crawlerLight.position.set(target.x, 2.6, target.z);
 
     // gait, glow pulses and scanner spin are driven by the shared crawler rig

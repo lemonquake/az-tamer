@@ -1134,6 +1134,53 @@ export function updateRigs(dt: number): void {
 export type { GuardianRig };
 
 // ============================================================
+// QUEST GUIDANCE BEACON — a flashing pillar of light with a
+// bobbing down-arrow, planted on whatever the story wants the
+// player to walk to next (the shuttle, the Gate, the Houses…).
+// ============================================================
+export interface BeaconRig { group: THREE.Group; update(dt: number): void; dispose(): void; }
+
+export function makeGuideBeacon(color: number): BeaconRig {
+  const group = new THREE.Group();
+  const beamMat = new THREE.MeshBasicMaterial({
+    color, transparent: true, opacity: 0.2, depthWrite: false,
+    blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+  });
+  const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.95, 9, 14, 1, true), beamMat);
+  beam.position.y = 4.5;
+  const arrowMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.95, depthWrite: false });
+  const arrow = new THREE.Mesh(new THREE.ConeGeometry(0.42, 0.95, 4), arrowMat);
+  arrow.rotation.x = Math.PI; // point at the ground
+  arrow.position.y = 3.1;
+  const ringMat = new THREE.MeshBasicMaterial({
+    color, transparent: true, opacity: 0.5, depthWrite: false, blending: THREE.AdditiveBlending,
+  });
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(1.0, 0.07, 8, 36), ringMat);
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.12;
+  group.add(beam, arrow, ring);
+
+  let t = Math.random() * 7;
+  return {
+    group,
+    update(dt: number) {
+      t += dt;
+      arrow.position.y = 3.1 + Math.sin(t * 2.6) * 0.4;
+      arrow.rotation.y += dt * 1.8;
+      const pulse = 0.5 + Math.sin(t * 2.6) * 0.5;
+      beamMat.opacity = 0.12 + pulse * 0.16;
+      ringMat.opacity = 0.28 + pulse * 0.4;
+      ring.scale.setScalar(1 + pulse * 0.5);
+    },
+    dispose() {
+      group.removeFromParent();
+      [beam, arrow, ring].forEach(m => m.geometry.dispose());
+      [beamMat, arrowMat, ringMat].forEach(m => m.dispose());
+    },
+  };
+}
+
+// ============================================================
 // THE CRAWLER — a modular spider-walker. Every slot (hull,
 // engine, cargo, cannon, scanner, legs) is a swappable 3D part,
 // and every part accepts a paint job. Crawlers register a rig

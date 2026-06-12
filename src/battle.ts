@@ -20,6 +20,7 @@ import {
 } from './models';
 import { VFX } from './vfx';
 import { say, choose, toast, askName, setStoryInBattle } from './ui';
+import { runBattleTutorial } from './tutorial';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
 
@@ -519,6 +520,13 @@ export class Battle {
   // ---------- UI ----------
   private log(msg: string): void { $('battle-log').innerHTML = msg; }
 
+  /** Chance this wild enemy joins after victory, given its current bond. */
+  private captureChance(e: Unit): number {
+    if (!e.wild) return 0;
+    const levelPenalty = Math.max(0, (e.g.level - this.maxPartyLevel()) * 0.04);
+    return Math.max(0, Math.min(0.95, e.g.species.captureBase + e.bond / 90 - levelPenalty));
+  }
+
   private renderCards(): void {
     const wrap = $('battle-parties');
     wrap.innerHTML = '';
@@ -528,9 +536,15 @@ export class Battle {
       const s = u.g.stats;
       const side = u.side === 'enemy' ? `<span style="color:var(--ui-red)">FOE</span> ` : '';
       const els = elementsOf(u.g.speciesId).map(e => ELEMENT_ICONS[e]).join('');
+      // wild foes show their bond meter: the live chance they join you after victory
+      const chance = this.captureChance(u);
+      const bondRow = u.wild && u.g.species.captureBase > 0
+        ? `<div class="minibar bond" title="Bond — chance this Guardian joins you after victory"><div style="width:${Math.round(chance * 100)}%"></div></div>
+           <div class="bond-label">💜 Bond ${u.bond} · <b>${Math.round(chance * 100)}%</b> join chance</div>`
+        : '';
       el.innerHTML = `<div class="nm"><span style="color:${TYPE_CSS[u.g.species.type]}">${side}${u.g.nickname}</span><span><span style="font-size:11px" title="${elementsOf(u.g.speciesId).join(' · ')}">${els}</span> Lv${u.g.level}</span></div>
         <div class="minibar hp"><div style="width:${Math.max(0, (u.g.hp / s.hp)) * 100}%"></div></div>
-        <div class="minibar sp"><div style="width:${Math.max(0, (u.g.sp / s.sp)) * 100}%"></div></div>`;
+        <div class="minibar sp"><div style="width:${Math.max(0, (u.g.sp / s.sp)) * 100}%"></div></div>${bondRow}`;
       u.cardEl = el;
       wrap.appendChild(el);
     };
@@ -1100,23 +1114,37 @@ export class Battle {
       }
       if (choice === 4) {
         const giftIds = [...this.player.inventory.keys()].filter(id => ITEMS[id].kind === 'gift');
+        this.log(`💜 Gifts build <b>Bond</b>. Win the battle, and bonded wild Guardians may ask to <b>join you</b> — watch the pink meter on their card.`);
         const gi = await this.menu([
-          ...giftIds.map(id => ({ label: `${ITEMS[id].name} ×${this.player.itemCount(id)} <span class="sub">${ITEMS[id].desc}</span>` })),
+          ...giftIds.map(id => ({ label: `${ITEMS[id].name} ×${this.player.itemCount(id)} <span class="sub">${ITEMS[id].desc} (+${ITEMS[id].value}~ bond)</span>` })),
           { label: '← Back', cls: 'danger' },
         ]);
         if (gi >= giftIds.length) continue;
-        const target = await this.pickTarget('Gift to which wild Guardian?', this.alive('enemy'));
+        // target pick shows each wild foe's live bond and join chance
+        const cands = this.alive('enemy');
+        let target: Unit | null = cands[0] ?? null;
+        if (cands.length > 1) {
+          this.log('Gift to which wild Guardian?');
+          const ti = await this.menu([
+            ...cands.map(u => ({
+              label: `<span style="color:${TYPE_CSS[u.g.species.type]}">${u.g.nickname}</span> Lv${u.g.level} <span class="sub">💜 bond ${u.bond} · ${Math.round(this.captureChance(u) * 100)}% join chance</span>`,
+            })),
+            { label: '← Back', cls: 'danger' },
+          ]);
+          target = ti < cands.length ? cands[ti] : null;
+        }
         if (!target) continue;
         const it = ITEMS[giftIds[gi]];
         this.player.removeItem(giftIds[gi]);
         const gain = Math.floor(it.value * target.favor);
         target.bond += gain;
         const reaction = target.favor > 1.15 ? 'devours it joyfully!' : target.favor < 0.95 ? 'sniffs it cautiously…' : 'munches it happily.';
-        this.log(`Wild <b>${target.g.nickname}</b> ${reaction} <span style="color:var(--ui-purple)">(bond +${gain})</span>`);
+        this.log(`Wild <b>${target.g.nickname}</b> ${reaction} <span style="color:var(--ui-purple)">(bond +${gain} → ${Math.round(this.captureChance(target) * 100)}% join chance)</span>`);
         makeFloatingDamageText(this.scene, target.rig.group.position.clone().setY(2.1), '♥', '#f25aa8');
         sfx('heal');
         this.fx.spiral(target.rig.group.position.clone(), 0xf25aa8, { up: true, dur: 0.9 });
         this.fx.burst(this.chest(target), 0xf28ac4, { count: 16, speed: 1.4, gravity: -1.4, life: 0.8, size: 0.12 });
+        this.renderCards();
         await wait(700);
         return 'acted';
       }
@@ -1261,23 +1289,88 @@ export class Battle {
       }
     }
 
-    // capture resolution (gifting bonds)
+    // capture resolution (gifting bonds) — bonded wild ones may stay
     for (const e of this.units.filter(x => x.side === 'enemy' && x.wild && x.bond > 0)) {
-      const levelPenalty = Math.max(0, (e.g.level - this.maxPartyLevel()) * 0.04);
-      const chance = Math.min(0.95, e.g.species.captureBase + e.bond / 90 - levelPenalty);
-      if (Math.random() < chance) {
-        const pick = await choose('', `💜 The wild ${e.g.species.name} nudges your Crawler… it wants to join you!`, ['Welcome it', 'Send it home']);
-        if (pick === 0) {
-          const newG = new Guardian(e.g.speciesId, e.g.level);
-          newG.levelCap = Math.max(newG.level + 4, 15 + Math.floor(Math.random() * 12));
-          const name = await askName(`Name your new ${e.g.species.name}`, e.g.species.name);
-          newG.nickname = name;
-          newG.healFull();
-          const where = this.player.addGuardian(newG);
-          this.player.capturesMade++;
-          await say('', `${name} joined your ${where === 'party' ? 'party' : 'reserve'}!`);
-        }
+      if (Math.random() < this.captureChance(e)) {
+        await this.befriendScene(e);
+      } else {
+        await say('', `💔 The wild ${e.g.species.name} looks back at you once… then slips away into the dark. (A higher bond would have kept it.)`);
       }
+    }
+  }
+
+  /** The befriending ceremony: the bonded wild one crosses the arena,
+   *  asks to stay, and — if welcomed — is named under a pillar of light. */
+  private async befriendScene(e: Unit): Promise<void> {
+    const sp = e.g.species;
+    const color = TYPE_COLORS[sp.type];
+
+    // it picks itself back up where it fell
+    e.rig.group.visible = true;
+    e.rig.group.rotation.set(0, -Math.PI / 2, 0);
+    e.rig.group.scale.setScalar(1);
+    const start = this.slotPos('enemy', e.slot);
+    e.rig.group.position.copy(start);
+    this.fx.glow(this.chest(e), color, { scale: 1.4, life: 0.5 });
+    this.fx.ring(start, 0xf25aa8, { maxR: 1.4, life: 0.6 });
+    this.log(`💜 The wild <b>${sp.name}</b> lingers after the battle…`);
+    sfx('heal');
+    await wait(800);
+
+    // …then pads shyly across the arena to your side, in little hops
+    const dest = new THREE.Vector3(-0.8, 0, 0);
+    this.faceTo(e, dest);
+    sfx('whoosh');
+    await tween(1.2, t => {
+      e.rig.group.position.lerpVectors(start, dest, t);
+      e.rig.group.position.y = Math.abs(Math.sin(t * Math.PI * 4)) * 0.18;
+    }, Ease.inOut);
+    e.rig.group.position.copy(dest);
+    this.faceTo(e, new THREE.Vector3(-4, 0, 0));
+
+    // hearts bloom around it
+    this.fx.burst(this.chest(e), 0xf28ac4, { count: 22, speed: 1.5, gravity: -1.6, life: 1.1, size: 0.14 });
+    this.fx.spiral(dest.clone(), 0xf25aa8, { up: true, dur: 1.0 });
+    makeFloatingDamageText(this.scene, dest.clone().setY(2.2), '♥', '#f25aa8', 1.5);
+    this.log(`💜 <b>${sp.name}</b> nudges your Crawler and looks up at you, eyes shining.`);
+    await wait(900);
+
+    const pick = await choose('', `💜 The wild ${sp.name} wants to come with you! The gifts meant something. Welcome it to the family?`, ['Welcome it', 'Send it home gently']);
+    if (pick === 0) {
+      const newG = new Guardian(e.g.speciesId, e.g.level);
+      newG.levelCap = Math.max(newG.level + 4, 15 + Math.floor(Math.random() * 12));
+      const name = await askName(`Name your new ${sp.name}`, sp.name);
+      newG.nickname = name;
+      newG.healFull();
+
+      // the naming ceremony — a pillar of bond-light seals the promise
+      sfx('fanfare');
+      this.fx.pillar(dest, 0xf25aa8, { height: 5, radius: 0.7, life: 1.0 });
+      this.fx.ring(dest, color, { maxR: 2.4, life: 0.8 });
+      this.fx.glow(this.chest(e), 0xfff0f8, { scale: 2.2, life: 0.7 });
+      this.fx.burst(this.chest(e), color, { count: 30, speed: 2.4, gravity: -1, life: 1.0, size: 0.12 });
+      makeFloatingDamageText(this.scene, dest.clone().setY(2.4), name, '#ffd8ec', 1.6);
+      await tween(0.5, t => {
+        const k = 1 + Math.sin(t * Math.PI) * 0.18;
+        e.rig.group.scale.setScalar(k);
+      });
+      e.rig.group.scale.setScalar(1);
+
+      const where = this.player.addGuardian(newG);
+      this.player.capturesMade++;
+      await say('', `✨ From this day on, this ${sp.name} is ${name} — bonded, not caught. ${name} joined your ${where === 'party' ? 'party' : 'reserve'}!`);
+    } else {
+      // it bounds home with a parting sparkle
+      this.faceTo(e, start);
+      this.fx.burst(this.chest(e), 0xf28ac4, { count: 12, speed: 1.2, gravity: -1.2, life: 0.8, size: 0.1 });
+      await tween(0.9, t => {
+        e.rig.group.position.lerpVectors(dest, start.clone().add(new THREE.Vector3(4, 0, 0)), t);
+        e.rig.group.position.y = Math.abs(Math.sin(t * Math.PI * 3)) * 0.25;
+        e.rig.group.scale.setScalar(1 - t * 0.6);
+      }, Ease.inQuad);
+      e.rig.group.visible = false;
+      e.rig.group.scale.setScalar(1);
+      await say('', `The ${sp.name} bounds away home — but it will remember your kindness.`);
     }
   }
 
@@ -1331,6 +1424,9 @@ export class Battle {
     const tagline = ARENA_TAGLINES[this.opts.arena ?? ''] ?? ARENA_TAGLINES[this.opts.theme ?? 'cavern'];
     this.log(this.opts.intro ?? (this.opts.boss ? '⚠️ A powerful presence blocks the way!' : `${tagline}<br>Wild Guardians attack!`));
     await wait(1100);
+
+    // Field Manual III — the very first battle gets the full doctrine briefing
+    if (!this.player.flags['tut_battle']) await runBattleTutorial(this.player);
 
     let result: BattleResult | null = null;
     let stunned = !!this.opts.firstStrike;

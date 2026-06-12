@@ -13,6 +13,7 @@ import {
   carpetTexture, wallpaperTexture, skyGradient, barkTexture, leafTexture,
   aetherMarbleTexture, legendFriezeTexture, emberCrackTexture,
   caveRockTexture, stormPanelTexture, stormSeamEmissive, groundTexture,
+  makeGuideBeacon, type BeaconRig,
   HAIRSTYLES, SKIN_TONES, HAIR_COLORS, type GuardianRig, type TreeKind, type CrawlerLook,
 } from './models';
 import { LEGENDS, WORLD_CIRCUIT, LEGEND_GUARDIANS, DAUGHTERS } from './lore';
@@ -26,6 +27,9 @@ import { GUILD_LORE } from './guilds';
 import { guildJoinCeremony } from './university';
 import { drawAreaMap, hideAreaMap, type MapMarker } from './townmap';
 import { updateTamerAppearance, CLOTHES_DATABASE } from './clothes';
+import { worldOrbit } from './camorbit';
+import { tagNpc, crowdName, attachNpcPicker } from './npccard';
+import { runCityTutorial, isTutorialOpen } from './tutorial';
 
 const minimapCanvas = () => document.getElementById('minimap') as HTMLCanvasElement;
 
@@ -150,6 +154,18 @@ export class Town {
   private fountainJet: THREE.Mesh | null = null;
 
   private resolveExit: ((dest: 'expedition' | 'university') => void) | null = null;
+
+  // quest guidance beacons — flashing pillars on wherever the story
+  // wants the player next (shuttle, Gate, the Houses, the fountain)
+  private guideBeacons: { key: string; rig: BeaconRig }[] = [];
+  private guideTimer = 0;
+
+  // light budget: the forward renderer evaluates every visible point light
+  // in every material's shader, so the street's ~46 lamps/braziers/glows
+  // tank the frame rate. Only the nearest few stay lit each frame.
+  private static readonly MAX_POINT_LIGHTS = 10;
+  private litScene: THREE.Scene | null = null;
+  private scenePointLights: THREE.PointLight[] = [];
 
   constructor(private player: Player, private firstArrival: boolean) {}
 
@@ -1334,7 +1350,13 @@ export class Town {
     {
       const pos = groundGeo.attributes.position as THREE.BufferAttribute;
       for (let i = 0; i < pos.count; i++) {
-        pos.setY(i, this.groundH(pos.getX(i), pos.getZ(i)));
+        const x = pos.getX(i), z = pos.getZ(i);
+        let y = this.groundH(x, z);
+        // the stone terrace box IS the visible floor of the Grand Houses' seat;
+        // inside its footprint the painted ground tucks just beneath it so the
+        // two coplanar surfaces never z-fight
+        if (z <= -24 && z >= -42.5 && Math.abs(x) <= 27.5) y -= 0.08;
+        pos.setY(i, y);
       }
       groundGeo.computeVertexNormals();
     }
@@ -1763,6 +1785,7 @@ export class Town {
       });
       g.position.set(x, this.groundH(x, z), z);
       g.rotation.y = Math.atan2(-x, 6.8 - z);   // watching the south approach
+      tagNpc(g, d.name);
       s.add(g);
       this.staticNpcs.push(g);
       this.streetColliders.push({ pos: new THREE.Vector3(x, 0, z), r: 0.55 });
@@ -1942,6 +1965,7 @@ export class Town {
     ];
     for (const f of folk) {
       const grp = makeVoxelHuman(f.palette);
+      tagNpc(grp, f.name);
       const a = Math.random() * Math.PI * 2, r = 6 + Math.random() * 14;
       grp.position.set(Math.cos(a) * r, 0, Math.abs(Math.sin(a) * r));
       this.streetScene.add(grp);
@@ -2156,6 +2180,7 @@ export class Town {
     const master = makeVoxelHuman(masterPalettes[h.id]);
     master.position.set(0, 0.3, -d / 2 + 2.2);
     master.rotation.y = 0; // faces the door (+Z)
+    tagNpc(master, h.master);
     s.add(master);
     this.intNpcs.push(master);
     this.intColliders.push({ pos: master.position.clone().setY(0), r: 0.7 });
@@ -2168,6 +2193,7 @@ export class Town {
     const attendant = makeVoxelHuman({ top: col, hair: 0x4a3a2a, cap: null });
     attendant.position.set(-3.4, 0, 1.4);
     attendant.rotation.y = Math.PI / 3;
+    tagNpc(attendant, `${h.name} Attendant`);
     s.add(attendant);
     this.intNpcs.push(attendant);
     this.intColliders.push({ pos: attendant.position.clone().setY(0), r: 0.6 });
@@ -2284,6 +2310,7 @@ export class Town {
       // Pina behind the counter
       const pina = makeVoxelHuman({ top: 0xd95a8a, hair: 0x6a3a1a, cap: 0xf2ead0 });
       pina.position.set(0, 0, -3.4);
+      tagNpc(pina, 'Pina');
       s.add(pina);
       this.intNpcs.push(pina);
       this.intColliders.push({ pos: new THREE.Vector3(0, 0, -3.4), r: 0.6 });
@@ -2344,6 +2371,7 @@ export class Town {
       const dax = makeVoxelHuman({ top: 0xe8843a, hair: 0x2a2a3a, cap: 0x4a5468 });
       dax.position.set(-1.2, 0, -1.2);
       dax.rotation.y = -Math.PI / 3;
+      tagNpc(dax, 'Dax');
       s.add(dax);
       this.intNpcs.push(dax);
       this.intColliders.push({ pos: new THREE.Vector3(-1.2, 0, -1.2), r: 0.6 });
@@ -2389,6 +2417,7 @@ export class Town {
       const keeper = makeVoxelHuman({ top: 0x4ec45e, robe: true, hair: 0xd8d8e8, cap: null });
       keeper.position.set(2.8, 0, -2.6);
       keeper.rotation.y = Math.PI / 1.5;
+      tagNpc(keeper, 'Sanctum Keeper');
       s.add(keeper);
       this.intNpcs.push(keeper);
       this.intColliders.push({ pos: new THREE.Vector3(2.8, 0, -2.6), r: 0.6 });
@@ -2450,6 +2479,7 @@ export class Town {
       const celeste = makeVoxelHuman({ top: 0x5a1a6a, hair: 0xd8c8f8, cap: 0xb18ae8 });
       celeste.position.set(0, 0, -3.4);
       celeste.rotation.y = 0;
+      tagNpc(celeste, 'Madame Celeste');
       s.add(celeste);
       this.intNpcs.push(celeste);
       this.intColliders.push({ pos: new THREE.Vector3(0, 0, -3.4), r: 0.6 });
@@ -2620,6 +2650,8 @@ export class Town {
     guardL.position.set(-2.6, 0, -d / 2 + 9.2);
     const guardR = makeVoxelHuman({ top: 0x8a3040, hair: 0x4a3a2a, cap: 0xc9a24a, hairstyle: 'ponytail' });
     guardR.position.set(2.6, 0, -d / 2 + 9.2);
+    tagNpc(guardL, 'Ring Guard');
+    tagNpc(guardR, 'Ring Guard');
     s.add(guardL, guardR);
     this.intNpcs.push(guardL, guardR);
     this.intColliders.push({ pos: guardL.position.clone().setY(0), r: 0.6 }, { pos: guardR.position.clone().setY(0), r: 0.6 });
@@ -2648,6 +2680,7 @@ export class Town {
     this.intColliders.push({ pos: new THREE.Vector3(-1.6, 0, -2.5), r: 1.0 }, { pos: new THREE.Vector3(0, 0, -2.5), r: 1.0 }, { pos: new THREE.Vector3(1.6, 0, -2.5), r: 1.0 });
     const attendant = makeVoxelHuman({ top: 0x5ab8e8, hair: 0x6a3a1a, cap: null, hairstyle: 'buns' });
     attendant.position.set(0, 0, -3.7);
+    tagNpc(attendant, 'Attendant Lyssa');
     s.add(attendant);
     this.intNpcs.push(attendant);
     this.intColliders.push({ pos: new THREE.Vector3(0, 0, -3.7), r: 0.6 });
@@ -2659,8 +2692,8 @@ export class Town {
           'Welcome to the Grand Coliseum of Haven City — rebuilt at twice its old size, and still not big enough on finals night! What would you like to know?',
           ['Register for the Tournament', 'Ask about the Ring', 'Ask about the Hall of Legends', 'Nothing, thanks']);
         if (pick === 0) {
-          await say('Attendant Lyssa', 'Registration is not yet open — the brackets, the prize vault and the broadcast crystals are still being prepared. Keep training, tamer. When the horns sound across Haven City, come straight to me. I\'ll hold a slot for you.');
-          toast('🏟️ The Grand Tournament opens soon!', 'gold');
+          await say('Attendant Lyssa', 'Registration is not yet open — the brackets, the prize vault and the broadcast crystals are still being prepared. And remember how the ladder works now: your Universal Rank moves on TOURNAMENT POINTS alone. Win brackets — here, at the Turmal Seasonal, on any sanctioned circuit — and the rank follows. Nothing else counts. When the horns sound across Haven City, come straight to me. I\'ll hold a slot for you.');
+          toast('🏟️ The Grand Tournament opens soon — Tournament Points await!', 'gold');
         } else if (pick === 1) {
           await say('Attendant Lyssa', 'The Ring seats twenty thousand now and the sound of a final can be heard from the city walls. It stays sealed between tournaments — the two guards up there take their job VERY seriously.');
         } else if (pick === 2) {
@@ -2701,6 +2734,7 @@ export class Town {
         const npc = makeVoxelHuman({ top: f.top, hair: [0x2a2a3a, 0x6a3a1a, 0xd8d8d8][Math.floor(Math.random() * 3)], cap: Math.random() < 0.4 ? 0x2a4a6a : null, hairstyle: (['classic', 'spiky', 'curly'] as const)[Math.floor(Math.random() * 3)] });
         npc.position.set(f.x, 0, f.z);
         npc.rotation.y = -Math.PI / 2; // transfixed by the board
+        tagNpc(npc, crowdName(`circuit-fan:${f.x},${f.z}`));
         s.add(npc);
         this.intNpcs.push(npc);
         this.intColliders.push({ pos: npc.position.clone().setY(0), r: 0.55 });
@@ -2745,6 +2779,7 @@ export class Town {
         const npc = makeVoxelHuman({ top: f.top, hair: [0x2a2a3a, 0x6a3a1a, 0x7a4a2a][Math.floor(Math.random() * 3)], cap: null, hairstyle: (['classic', 'long', 'buns', 'mohawk'] as const)[Math.floor(Math.random() * 4)] });
         npc.position.set(f.x, 0, f.z);
         npc.rotation.y = Math.PI / 2; // gazing at the gold wall
+        tagNpc(npc, crowdName(`hall-pilgrim:${f.x},${f.z}`));
         s.add(npc);
         this.intNpcs.push(npc);
         this.intColliders.push({ pos: npc.position.clone().setY(0), r: 0.55 });
@@ -3131,6 +3166,7 @@ export class Town {
       });
       npc.position.set(a.x, a.y, a.z);
       npc.rotation.y = Math.atan2(a.face[0] - a.x, a.face[1] - a.z); // transfixed by the gold
+      tagNpc(npc, crowdName(`admirer:${a.x},${a.z}`));
       s.add(npc);
       this.intNpcs.push(npc);
       this.intColliders.push({ pos: new THREE.Vector3(a.x, 0, a.z), r: 0.55 });
@@ -3155,6 +3191,7 @@ export class Town {
     stall(-16, 0xd84a3a);
     const vesna = makeVoxelHuman({ top: 0xd84a3a, hair: 0x7a4a2a, cap: 0xf2ead0 });
     vesna.position.set(-16, 0, 9.7);
+    tagNpc(vesna, 'Merchant Vesna');
     s.add(vesna);
     this.intNpcs.push(vesna);
     this.intColliders.push({ pos: new THREE.Vector3(-16, 0, 9.7), r: 0.6 });
@@ -3169,6 +3206,7 @@ export class Town {
     stall(16, 0x9a5af2);
     const korr = makeVoxelHuman({ top: 0x9a5af2, hair: 0x1a1a2e, cap: null });
     korr.position.set(16, 0, 9.7);
+    tagNpc(korr, 'Gemcutter Korr');
     s.add(korr);
     this.intNpcs.push(korr);
     this.intColliders.push({ pos: new THREE.Vector3(16, 0, 9.7), r: 0.6 });
@@ -3202,6 +3240,7 @@ export class Town {
       });
       npc.position.set(a.x, 0, a.z);
       npc.rotation.y = Math.random() * Math.PI * 2;
+      tagNpc(npc, crowdName(`aspirant:${a.x},${a.z}`));
       s.add(npc);
       this.intNpcs.push(npc);
       this.intColliders.push({ pos: npc.position.clone().setY(0), r: 0.55 });
@@ -3869,12 +3908,58 @@ export class Town {
     }
   }
 
+  // ================= quest guidance =================
+  /**
+   * Where should the player walk next? Derived from quest/flag state and
+   * re-checked every couple of seconds; beacons appear and vanish as the
+   * story moves. Keys keep existing beacons stable between checks.
+   */
+  private guidanceTargets(): { key: string; x: number; z: number; color: number }[] {
+    const q = this.player.quests;
+    const f = this.player.flags;
+    const active = (id: string) => q[id] === 'active';
+    if (!this.player.houseId) {
+      // unpledged: the shuttle back to the Officers' Hall, and the Houses' terrace
+      return [
+        { key: 'shuttle', x: -26, z: 0, color: 0xc9a24a },
+        { key: 'terrace', x: 0, z: -21, color: 0xf2c14e },
+      ];
+    }
+    if (active('story_historian') && !f['met_historian']) {
+      return [{ key: 'shuttle', x: -26, z: 0, color: 0xc9a24a }];
+    }
+    if (active('story_daughters') && !f['met_daughters']) {
+      return [{ key: 'fountain', x: 0, z: 2.6, color: 0xf2884e }];
+    }
+    if (active('story_roads') || active('story_amber') || active('story_agdao') || active('story_cradle') || active('story_echoes')) {
+      return [{ key: 'gate', x: 45, z: 0, color: 0x5a7bd8 }];
+    }
+    return [];
+  }
+
+  private syncGuidance(): void {
+    const want = this.guidanceTargets();
+    const wantKeys = want.map(t => t.key).join(',');
+    const haveKeys = this.guideBeacons.map(b => b.key).join(',');
+    if (wantKeys === haveKeys) return;
+    this.guideBeacons.forEach(b => b.rig.dispose());
+    this.guideBeacons = want.map(t => {
+      const rig = makeGuideBeacon(t.color);
+      rig.group.position.set(t.x, this.groundH(t.x, t.z), t.z);
+      this.streetScene.add(rig.group);
+      return { key: t.key, rig };
+    });
+  }
+
   // ================= per-frame =================
   private update(dt: number): void {
     if (!this.sun) return; // a frame can render before run() builds the street
+    this.guideTimer -= dt;
+    if (this.guideTimer <= 0) { this.guideTimer = 2; this.syncGuidance(); }
+    this.guideBeacons.forEach(b => b.rig.update(dt));
     const speed = 5.2;
     let dx = 0, dz = 0;
-    if (!isDialogueOpen() && !isMenuOpen() && !this.busy) {
+    if (!isDialogueOpen() && !isMenuOpen() && !this.busy && !isTutorialOpen()) {
       if (this.keys.has('w') || this.keys.has('arrowup')) dz -= 1;
       if (this.keys.has('s') || this.keys.has('arrowdown')) dz += 1;
       if (this.keys.has('a') || this.keys.has('arrowleft')) dx -= 1;
@@ -3971,13 +4056,15 @@ export class Town {
       }
     }
 
-    // camera follow
+    // camera follow — right-drag orbits, then drifts home after 10 idle seconds
     const t = this.tamer.position;
     const camGoal = this.mode === 'street'
       ? new THREE.Vector3(t.x, t.y + 7.5, t.z + 9)
       : new THREE.Vector3(t.x * 0.5, 5.6 + t.y * 0.9, t.z + 6.4);
-    this.camera.position.lerp(camGoal, Math.min(1, dt * 4));
-    this.camera.lookAt(t.x, t.y + 1, t.z);
+    worldOrbit.update(dt);
+    const lookT = new THREE.Vector3(t.x, t.y + 1, t.z);
+    this.camera.position.lerp(worldOrbit.orbited(camGoal, lookT), Math.min(1, dt * 4));
+    this.camera.lookAt(lookT);
 
     // ---- day/night cycle ----
     let daylight = 1, night = 0;
@@ -4010,6 +4097,28 @@ export class Town {
 
     // ambient prop animation
     const scene = this.mode === 'interior' && this.interiorScene ? this.interiorScene : this.streetScene;
+
+    // ---- point-light budget ----
+    // Re-collect when the active scene changes (street ↔ interior).
+    if (scene !== this.litScene) {
+      this.litScene = scene;
+      this.scenePointLights = [];
+      scene.traverse(o => { if ((o as THREE.PointLight).isPointLight) this.scenePointLights.push(o as THREE.PointLight); });
+    }
+    if (this.scenePointLights.length > Town.MAX_POINT_LIGHTS) {
+      const tp = this.tamer.position;
+      const ranked = this.scenePointLights
+        .map(l => {
+          const e = l.matrixWorld.elements;
+          // dark lights (daytime street lamps) only fill leftover slots —
+          // the slot count stays constant so the shaders compile once.
+          const penalty = l.intensity <= 0.05 ? 1e4 : 0;
+          return { l, score: Math.hypot(e[12] - tp.x, e[14] - tp.z) + penalty };
+        })
+        .sort((a, b) => a.score - b.score);
+      ranked.forEach((r, i) => { r.l.visible = i < Town.MAX_POINT_LIGHTS; });
+    }
+
     const now = performance.now();
     scene.traverse(o => {
       if (o.name === 'flame') { o.scale.y = 1 + Math.sin(now * 0.008 + o.position.x) * 0.18; }
@@ -4140,7 +4249,7 @@ export class Town {
   private onKeyDown = (e: KeyboardEvent) => {
     const k = e.key.toLowerCase();
     this.keys.add(k);
-    if (isDialogueOpen() || isMenuOpen() || this.busy) return;
+    if (isDialogueOpen() || isMenuOpen() || this.busy || isTutorialOpen()) return;
     if (k === 'e' || k === 'enter') {
       const near = this.interactables.find(i => this.tamer.position.distanceTo(i.pos) < i.radius);
       if (near) {
@@ -4222,16 +4331,22 @@ export class Town {
     window.addEventListener('keydown', this.onKeyDown);
     window.addEventListener('keyup', this.onKeyUp);
 
+    // click any soul in the city to read their card
+    const detachPicker = attachNpcPicker({
+      camera: () => this.camera,
+      roots: () => this.mode === 'street'
+        ? [...this.walkers.map(wk => wk.grp), ...this.staticNpcs]
+        : this.intNpcs,
+      blocked: () => isDialogueOpen() || isMenuOpen() || this.busy || isTutorialOpen(),
+    });
+
     if (this.firstArrival) {
+      // Field Manual II — Mara's mandatory city tour, spotlight and all
+      await runCityTutorial(this.player);
       const joined = HOUSES.find(h => h.id === this.player.houseId);
-      await conversation([
-        ['???', 'Hold, graduate! Welcome to Haven City — heart of the Tamer Guilds.'],
-        joined
-          ? ['Guide Mara', `I'm Mara, guild guide — and I see ${joined.name} colors already! Then head north: your house hall stands in the great arc, and the master has orders waiting for members. Check your Quest Journal with J.`]
-          : ['Guide Mara', `I'm Mara, guild guide. Haven't pledged to a Grand House yet? Their five halls stand to the north — speak with any master, or ride the shuttle back to the University's Officers' Hall. A house grants your first true partner and your guild Sigil.`],
-        ['Guide Mara', 'South side has Pina\'s shop, Dax\'s garage for your Crawler, the healing Sanctum, and the Bounty Board. The Expedition Gate is east — and the University Shuttle pad is west, whenever you wish to visit the old halls.'],
-        ['Guide Mara', 'Move with WASD, interact with E. Check your gear anytime: P — tamer data, I — inventory, G — Guardians, C — Crawler, J — quest journal, Esc — menu. Good luck!'],
-      ]);
+      if (joined) {
+        await say('Guide Mara', `And I see ${joined.name} colors already — well done! Head north when you're ready: your house hall stands in the great arc, and the master keeps orders waiting for members. Check your Quest Journal with J.`);
+      }
       this.player.save();
     }
 
@@ -4239,6 +4354,7 @@ export class Town {
       this.resolveExit = dest => {
         window.removeEventListener('keydown', this.onKeyDown);
         window.removeEventListener('keyup', this.onKeyUp);
+        detachPicker();
         showInteractHint(null);
         showHotkeys(false);
         hideAreaMap(minimapCanvas());

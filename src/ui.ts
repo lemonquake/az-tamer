@@ -3,9 +3,9 @@
 // toasts, name input
 // ============================================================
 import * as THREE from 'three';
-import { ITEMS, CRAWLER_PARTS, TYPE_CSS, STAT_NAMES, HOUSES, DUNGEONS, expForLevel, SPECIES, TECHS, elementChipsHTML, type StatKey } from './data';
+import { ITEMS, CRAWLER_PARTS, CRAWLER_SLOTS, CRAWLER_SLOT_INFO, TYPE_CSS, STAT_NAMES, HOUSES, DUNGEONS, expForLevel, SPECIES, TECHS, elementChipsHTML, type StatKey, type CrawlerSlot } from './data';
 import { Player, Guardian } from './state';
-import { makeGuardian, disposeRig } from './models';
+import { makeGuardian, disposeRig, makeCrawler, disposeCrawler } from './models';
 import { GUILD_LORE, avatarURL, guildIconURL, rankFor, questsDoneCount } from './guilds';
 import { journalEntries, questProgress, type QuestDef, type QuestState } from './quests';
 import { openGuildCard } from './guildcard';
@@ -14,6 +14,7 @@ import { RANKS, rankIndexFor, rankBadgeHTML, rankLadderHTML } from './ranks';
 import { evoTreeHTML, wireEvoTree } from './evotree';
 import { checkAchievements, achievementsHTML } from './achievements';
 import { sfx, toggleMute, isMuted } from './audio';
+import { openTutorialReplayMenu } from './tutorial';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
 
@@ -214,12 +215,13 @@ export function updateHUD(player: Player, zone: string, extra?: { floor?: number
 }
 export function hideHUD(): void { $('hud').style.display = 'none'; showHotkeys(false); }
 
-export function showHotkeys(on: boolean, dungeon = false): void {
+export function showHotkeys(on: boolean, dungeon = false, regions = false): void {
   const el = $('hotkeys');
   el.style.display = on ? 'flex' : 'none';
   el.innerHTML = [
     '<b>P</b> Tamer', '<b>I</b> Items', '<b>G</b> Guardians', '<b>C</b> Crawler', '<b>J</b> Journal', '<b>V</b> Evolutions',
     ...(dungeon ? ['<b>M</b> Map'] : []),
+    ...(regions ? ['<b>T</b> Regions'] : []),
     '<b>N</b> Sound', '<b>Esc</b> Menu',
   ].map(s => `<span>${s}</span>`).join('');
 }
@@ -358,15 +360,7 @@ function renderPanelBody(kind: PanelKind, p: Player, refresh: () => void, ctx: P
   }
 
   if (kind === 'inventory') {
-    const rows = [...p.inventory.entries()].map(([id, qty]) => {
-      const it = ITEMS[id];
-      const usable = ['heal', 'sp', 'revive', 'boost'].includes(it.kind);
-      return `<div class="list-row"><div style="flex:1"><b>${it.name}</b> ×${qty}<div class="sub">${it.desc}</div></div>
-        ${usable ? `<button class="ui-btn" data-use="${id}">Use</button>` : ''}</div>`;
-    }).join('') || '<div class="sub">Cargo hold is empty.</div>';
-    return `
-      <h3>${PANEL_TITLES.inventory} — ${p.inventory.size}/${p.crawler.cargoMax} slots</h3>
-      <div style="max-height:420px;overflow-y:auto">${rows}</div>`;
+    return renderInventory(p);
   }
 
   if (kind === 'guardians') {
@@ -390,35 +384,251 @@ function renderPanelBody(kind: PanelKind, p: Player, refresh: () => void, ctx: P
   }
 
   // crawler
+  return renderCrawler(p);
+}
+
+// ================= the Crawler workshop =================
+// A live 3D turntable of YOUR Crawler (current parts and paint),
+// a six-slot loadout board, and a per-slot equip bay.
+let crawlerSlotSel: CrawlerSlot = 'hull';
+
+function renderCrawler(p: Player): string {
   const c = p.crawler;
-  const slots: ('hull' | 'engine' | 'cargo' | 'cannon' | 'scanner' | 'legs')[] = ['hull', 'engine', 'cargo', 'cannon', 'scanner', 'legs'];
-  const sections = slots.map(slot => {
-    const ownedParts = Object.values(CRAWLER_PARTS).filter(x => x.slot === slot && c.owned.includes(x.id)).sort((a, b) => a.tier - b.tier);
-    const rows = ownedParts.map(part => {
-      const equipped = c.parts[slot] === part.id;
-      return `<div class="list-row"><div style="flex:1"><b>${part.name}</b> <span class="sub">T${part.tier}</span><div class="sub">${part.desc}</div></div>
-        ${equipped ? '<span class="tag" style="background:var(--ui-green);color:#0c1022">EQUIPPED</span>' : `<button class="ui-btn" data-equip="${part.id}">Equip</button>`}</div>`;
-    }).join('');
-    return `<h3 style="margin-top:6px">${slot.toUpperCase()}</h3>${rows}`;
+  const maxTier = (slot: CrawlerSlot) => Math.max(...Object.values(CRAWLER_PARTS).filter(x => x.slot === slot).map(x => x.tier));
+
+  const slotCard = (slot: CrawlerSlot) => {
+    const info = CRAWLER_SLOT_INFO[slot];
+    const part = c.part(slot);
+    const top = maxTier(slot);
+    const pips = Array.from({ length: top }, (_, i) => `<span class="${i < part.tier ? 'on' : ''}">●</span>`).join('');
+    const ownedCount = Object.values(CRAWLER_PARTS).filter(x => x.slot === slot && c.owned.includes(x.id)).length;
+    return `
+      <div class="cr-slot ${slot === crawlerSlotSel ? 'sel' : ''}" data-slot="${slot}" title="${info.blurb}">
+        <div class="cr-slot-icon">${info.icon}</div>
+        <div style="flex:1;min-width:0">
+          <div class="cr-slot-label">${info.label}</div>
+          <div class="cr-slot-part">${part.name}</div>
+          <div class="cr-tier">${pips} <span class="sub">T${part.tier}${ownedCount > 1 ? ` · ${ownedCount} owned` : ''}</span></div>
+        </div>
+      </div>`;
+  };
+
+  const info = CRAWLER_SLOT_INFO[crawlerSlotSel];
+  const ownedParts = Object.values(CRAWLER_PARTS)
+    .filter(x => x.slot === crawlerSlotSel && c.owned.includes(x.id)).sort((a, b) => a.tier - b.tier);
+  const bayRows = ownedParts.map(part => {
+    const equipped = c.parts[crawlerSlotSel] === part.id;
+    return `<div class="list-row"><div style="flex:1"><b>${part.name}</b> <span class="sub">T${part.tier}</span><div class="sub">${part.desc}</div></div>
+      ${equipped ? '<span class="tag" style="background:var(--ui-green);color:#0c1022">EQUIPPED</span>' : `<button class="ui-btn" data-equip="${part.id}">Equip</button>`}</div>`;
   }).join('');
+
+  const stat = (label: string, val: string) =>
+    `<div class="row" style="display:flex;justify-content:space-between;padding:2px 0"><span class="sub">${label}</span><b>${val}</b></div>`;
+
   return `
-    <h3>${PANEL_TITLES.crawler}</h3>
-    <div class="grid2" style="margin-bottom:8px">
+    <h3>${PANEL_TITLES.crawler} — Workshop</h3>
+    <div class="cr-layout">
       <div>
-        <div class="row" style="display:flex;justify-content:space-between"><span class="sub">Hull</span><b>${c.hull}/${c.hullMax}</b></div>
+        <div id="crawler-preview-3d" class="cr-preview"></div>
+        <div class="row" style="display:flex;justify-content:space-between;margin-top:8px"><span class="sub">Hull</span><b>${c.hull}/${c.hullMax}</b></div>
         <div class="bar hull"><div style="width:${(c.hull / c.hullMax) * 100}%"></div></div>
         <div class="row" style="display:flex;justify-content:space-between"><span class="sub">Energy</span><b>${c.energy}/${c.energyMax}</b></div>
         <div class="bar energy"><div style="width:${(c.energy / c.energyMax) * 100}%"></div></div>
+        <div style="margin-top:8px">
+          ${stat('Cargo capacity', `${p.inventory.size}/${c.cargoMax} stacks`)}
+          ${stat('Cannon', `T${c.cannonTier} · ${Math.round(c.firstStrikeChance * 100)}% first strike`)}
+          ${stat('Scanner', `T${c.scannerTier} reveal`)}
+          ${stat('Stride', `${Math.round(c.strideEfficiency * 100)}% free steps`)}
+        </div>
       </div>
       <div>
-        <div class="row" style="display:flex;justify-content:space-between"><span class="sub">Cargo capacity</span><b>${p.inventory.size}/${c.cargoMax}</b></div>
-        <div class="row" style="display:flex;justify-content:space-between"><span class="sub">Cannon</span><b>T${c.cannonTier} (${Math.round(c.firstStrikeChance * 100)}% first strike)</b></div>
-        <div class="row" style="display:flex;justify-content:space-between"><span class="sub">Scanner</span><b>T${c.scannerTier}</b></div>
-        <div class="row" style="display:flex;justify-content:space-between"><span class="sub">Stride</span><b>${Math.round(c.strideEfficiency * 100)}% free steps</b></div>
+        <div class="cr-slots">${CRAWLER_SLOTS.map(slotCard).join('')}</div>
+        <div class="cr-bay">
+          <div class="jdetail-kicker" style="margin-bottom:4px">${info.icon} ${info.label} bay</div>
+          <div class="sub" style="margin-bottom:8px">${info.blurb}</div>
+          <div style="max-height:170px;overflow-y:auto">${bayRows}</div>
+        </div>
       </div>
     </div>
-    <div style="max-height:300px;overflow-y:auto">${sections}</div>
-    <div class="sub" style="margin-top:6px">New parts are sold at Dax's Garage in Haven City.</div>`;
+    <div class="sub" style="margin-top:8px">New parts and paint jobs are sold at Dax's Garage, east lane of Haven City.</div>`;
+}
+
+/** Rotating 3D turntable of the player's own Crawler. Self-disposes
+ *  when its canvas leaves the DOM (panel re-render or close). */
+function initCrawlerPreview3D(container: HTMLElement, player: Player): void {
+  const width = container.clientWidth || 320;
+  const height = container.clientHeight || 210;
+  const canvas = document.createElement('canvas');
+  canvas.width = width; canvas.height = height;
+  canvas.style.width = '100%'; canvas.style.height = '100%';
+  container.appendChild(canvas);
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(38, width / height, 0.1, 20);
+  camera.position.set(0, 2.1, 5.4);
+  camera.lookAt(0, 0.7, 0);
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  renderer.setSize(width, height);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  scene.add(new THREE.AmbientLight(0xffffff, 0.9));
+  const key = new THREE.DirectionalLight(0xfff0d8, 1.5);
+  key.position.set(3, 5, 4);
+  scene.add(key);
+  const rim = new THREE.DirectionalLight(0x6a8af2, 0.8);
+  rim.position.set(-3, 2, -4);
+  scene.add(rim);
+
+  const crawler = makeCrawler({ parts: player.crawler.parts, paint: player.crawler.paint });
+  scene.add(crawler);
+
+  let last = performance.now();
+  const dispose = () => {
+    disposeCrawler(crawler);
+    crawler.traverse(o => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      mesh.geometry?.dispose();
+      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      mats.forEach(m => m?.dispose());
+    });
+    renderer.dispose();
+    canvas.remove();
+  };
+  const animate = () => {
+    if (!canvas.isConnected) { dispose(); return; }
+    requestAnimationFrame(animate);
+    const now = performance.now();
+    const dt = (now - last) / 1000;
+    last = now;
+    crawler.rotation.y += dt * 0.5;
+    renderer.render(scene, camera);
+  };
+  requestAnimationFrame(animate);
+}
+
+// ================= the cargo hold (inventory) =================
+// A tabbed grid of item tiles with a detail dossier: select a tile to
+// inspect, Use, or Drop it. Tabs split the hold by item family; Sort
+// cycles ordering. Quest relics can never be dropped.
+type InvTab = 'all' | 'consume' | 'gift' | 'crawler' | 'gem' | 'key';
+type InvSort = 'kind' | 'name' | 'qty';
+let invTab: InvTab = 'all';
+let invSort: InvSort = 'kind';
+let invSel: string | null = null;
+
+const INV_TABS: Record<InvTab, { label: string; icon: string; kinds: string[] }> = {
+  all:     { label: 'All',         icon: '🎒', kinds: [] },
+  consume: { label: 'Consumables', icon: '🧪', kinds: ['heal', 'sp', 'revive'] },
+  gift:    { label: 'Gifts',       icon: '🎁', kinds: ['gift'] },
+  crawler: { label: 'Crawler',     icon: '🛞', kinds: ['fuel', 'repair'] },
+  gem:     { label: 'Gems',        icon: '💎', kinds: ['boost', 'evo'] },
+  key:     { label: 'Key & Quest', icon: '📜', kinds: ['relic'] },
+};
+const KIND_ICONS: Record<string, string> = {
+  heal: '🧪', sp: '🥤', revive: '🍃', gift: '🎁', fuel: '🔋', repair: '🛠️', boost: '💎', evo: '🧬', relic: '📜',
+};
+const ITEM_ICONS: Record<string, string> = {
+  tonic: '🧪', tonic_plus: '⚗️', elixir: '✨', soda: '🥤', soda_plus: '🧋', revive_leaf: '🍃',
+  berry: '🫐', honey_roll: '🥐', star_treat: '🌟', cell: '🔋', cell_plus: '⚡', plating: '🛡️',
+  atk_gem: '🔴', def_gem: '🟡', spd_gem: '⚪', wis_gem: '🔵', hp_gem: '🟢',
+  storm_amber: '🟠', sea_chart: '🗺️', stormheart_coil: '🌀',
+};
+export const itemIcon = (id: string): string => ITEM_ICONS[id] ?? KIND_ICONS[ITEMS[id]?.kind] ?? '📦';
+
+const KIND_LABEL: Record<string, string> = {
+  heal: 'Consumable · Healing', sp: 'Consumable · Spirit', revive: 'Consumable · Revival',
+  gift: 'Gift — builds bond with wild Guardians', fuel: 'Crawler — Energy', repair: 'Crawler — Hull',
+  boost: 'Gem — permanent stat boost', evo: 'Evolution catalyst', relic: 'Quest Relic — cannot be dropped',
+};
+const KIND_ORDER = ['heal', 'sp', 'revive', 'gift', 'fuel', 'repair', 'boost', 'evo', 'relic'];
+
+function renderInventory(p: Player): string {
+  const entries = [...p.inventory.entries()].filter(([id]) => ITEMS[id]);
+  const inTab = (id: string) => invTab === 'all' || INV_TABS[invTab].kinds.includes(ITEMS[id].kind);
+  const list = entries.filter(([id]) => inTab(id));
+  list.sort(([a, qa], [b, qb]) => {
+    if (invSort === 'name') return ITEMS[a].name.localeCompare(ITEMS[b].name);
+    if (invSort === 'qty') return qb - qa;
+    return (KIND_ORDER.indexOf(ITEMS[a].kind) - KIND_ORDER.indexOf(ITEMS[b].kind)) || ITEMS[a].name.localeCompare(ITEMS[b].name);
+  });
+
+  if (invSel && !list.some(([id]) => id === invSel)) invSel = list[0]?.[0] ?? null;
+  if (!invSel && list.length) invSel = list[0][0];
+
+  const tabs = (Object.keys(INV_TABS) as InvTab[]).map(t => {
+    const count = t === 'all' ? entries.length : entries.filter(([id]) => INV_TABS[t].kinds.includes(ITEMS[id].kind)).length;
+    return `<button class="jtab ${invTab === t ? 'on' : ''}" data-itab="${t}">${INV_TABS[t].icon} ${INV_TABS[t].label} <span class="jcount">${count}</span></button>`;
+  }).join('');
+
+  const tiles = list.map(([id, qty]) => `
+    <div class="inv-tile ${id === invSel ? 'sel' : ''} ${ITEMS[id].kind === 'relic' ? 'relic' : ''}" data-item="${id}" title="${ITEMS[id].name}">
+      <div class="inv-icon">${itemIcon(id)}</div>
+      <div class="inv-name">${ITEMS[id].name}</div>
+      <div class="inv-qty">×${qty}</div>
+    </div>`).join('') || '<div class="sub" style="grid-column:1/-1;padding:18px;text-align:center">Nothing in this pocket of the cargo hold.</div>';
+
+  // detail dossier for the selected item
+  let detail = '<div class="sub">Select an item to inspect it.</div>';
+  if (invSel) {
+    const it = ITEMS[invSel];
+    const qty = p.itemCount(invSel);
+    const usable = ['heal', 'sp', 'revive', 'boost'].includes(it.kind);
+    const droppable = it.kind !== 'relic';
+    detail = `
+      <div class="jdetail-head">
+        <div class="jdetail-icon">${itemIcon(invSel)}</div>
+        <div style="flex:1">
+          <div class="jdetail-kicker">${KIND_LABEL[it.kind] ?? it.kind}</div>
+          <div class="jdetail-title">${it.name} <span class="sub" style="font-size:13px">×${qty}</span></div>
+        </div>
+      </div>
+      <div class="jdetail-brief">${it.desc}</div>
+      ${it.price ? `<div class="jrow"><span class="jkey">Value</span><span class="jval goldcol">◆ ${it.price} (sells nowhere — yet)</span></div>` : ''}
+      <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
+        ${usable ? `<button class="ui-btn primary" data-use="${invSel}">Use</button>` : ''}
+        ${droppable ? `<button class="ui-btn danger" data-drop="${invSel}">Drop</button>` : '<span class="sub" style="align-self:center">Quest relics stay with you.</span>'}
+      </div>`;
+  }
+
+  const capPct = Math.min(100, (p.inventory.size / p.crawler.cargoMax) * 100);
+  return `
+    <div style="display:flex;align-items:center;gap:14px">
+      <h3 style="margin:0">${PANEL_TITLES.inventory}</h3>
+      <div style="flex:1;display:flex;align-items:center;gap:8px">
+        <div class="jbar ${capPct >= 100 ? 'full' : ''}" style="flex:1;margin:0"><div style="width:${capPct}%"></div></div>
+        <span class="sub" style="white-space:nowrap">${p.inventory.size}/${p.crawler.cargoMax} stacks</span>
+      </div>
+      <button class="ui-btn" id="inv-sort" style="font-size:12px;padding:5px 12px">⇅ Sort: ${invSort === 'kind' ? 'Type' : invSort === 'name' ? 'Name' : 'Quantity'}</button>
+    </div>
+    <div class="journal-tabs" style="margin-top:10px">${tabs}</div>
+    <div class="inv-layout">
+      <div class="inv-grid">${tiles}</div>
+      <div class="journal-detail" style="max-height:380px">${detail}</div>
+    </div>
+    <div class="sub" style="margin-top:8px">A larger Cargo part at Dax's Garage raises how many stacks you can haul.</div>`;
+}
+
+function wireInventory(el: HTMLElement, p: Player, refresh: () => void): void {
+  el.querySelectorAll<HTMLElement>('[data-itab]').forEach(b => b.onclick = () => { invTab = b.dataset.itab as InvTab; refresh(); });
+  el.querySelectorAll<HTMLElement>('[data-item]').forEach(b => b.onclick = () => { invSel = b.dataset.item!; refresh(); });
+  const sort = el.querySelector<HTMLElement>('#inv-sort');
+  if (sort) sort.onclick = () => {
+    invSort = invSort === 'kind' ? 'name' : invSort === 'name' ? 'qty' : 'kind';
+    refresh();
+  };
+  el.querySelectorAll<HTMLElement>('[data-use]').forEach(b => b.onclick = async () => {
+    await useItemFlow(p, b.dataset.use!, refresh);
+  });
+  el.querySelectorAll<HTMLElement>('[data-drop]').forEach(b => b.onclick = async () => {
+    const id = b.dataset.drop!;
+    const qty = p.itemCount(id);
+    closeMenu();
+    const opts = qty > 1 ? ['Drop one', `Drop all (×${qty})`, 'Keep it'] : ['Drop it', 'Keep it'];
+    const pick = await choose('', `Drop ${ITEMS[id].name}? Whatever you leave behind is gone for good.`, opts);
+    if (pick === 0) { p.removeItem(id, 1); toast(`Dropped 1 ${ITEMS[id].name}.`); }
+    else if (qty > 1 && pick === 1) { p.removeItem(id, qty); toast(`Dropped all ${ITEMS[id].name}.`); }
+    refresh();
+  });
 }
 
 // ================= the Chronicle journal =================
@@ -593,9 +803,7 @@ function wirePanelBody(kind: PanelKind, el: HTMLElement, p: Player, refresh: () 
       refresh(); // reflect a new portrait immediately
     };
   } else if (kind === 'inventory') {
-    el.querySelectorAll<HTMLElement>('[data-use]').forEach(b => b.onclick = async () => {
-      await useItemFlow(p, b.dataset.use!, refresh);
-    });
+    wireInventory(el, p, refresh);
   } else if (kind === 'guardians') {
     el.querySelectorAll<HTMLElement>('[data-bench]').forEach(b => b.onclick = () => {
       const i = parseInt(b.dataset.bench!);
@@ -611,9 +819,15 @@ function wirePanelBody(kind: PanelKind, el: HTMLElement, p: Player, refresh: () 
       showGuardianDetail(g, refresh);
     });
   } else if (kind === 'crawler') {
+    const cont = el.querySelector<HTMLElement>('#crawler-preview-3d');
+    if (cont) initCrawlerPreview3D(cont, p);
+    el.querySelectorAll<HTMLElement>('[data-slot]').forEach(b => b.onclick = () => {
+      crawlerSlotSel = b.dataset.slot as CrawlerSlot;
+      refresh();
+    });
     el.querySelectorAll<HTMLElement>('[data-equip]').forEach(b => b.onclick = () => {
       p.crawler.equip(b.dataset.equip!);
-      toast('Part equipped.');
+      toast(`${CRAWLER_PARTS[b.dataset.equip!].name} equipped.`, 'gold');
       refresh();
     });
   }
@@ -857,6 +1071,7 @@ export function openPauseMenu(player: Player, opts: { canSave: boolean }): Promi
         <button class="ui-btn" data-hub="crawler">🛞 Crawler <span class="sub">(C)</span></button>
         <button class="ui-btn" data-hub="quests">📖 Quest Journal <span class="sub">(J)</span></button>
         <button class="ui-btn" data-hub="evotree">🧬 Evolution Atlas <span class="sub">(V)</span></button>
+        <button class="ui-btn" id="hub-tutorial">🎓 Field Manual <span class="sub">(replay tutorials)</span></button>
         <button class="ui-btn" id="hub-sound">${isMuted() ? '🔇 Sound: OFF' : '🔊 Sound: ON'} <span class="sub">(N)</span></button>
       </div>
       <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px">
@@ -869,6 +1084,19 @@ export function openPauseMenu(player: Player, opts: { canSave: boolean }): Promi
       await openPanel(b.dataset.hub as PanelKind, player, { canSave: opts.canSave });
       resolve();
     });
+    const tut = el.querySelector<HTMLElement>('#hub-tutorial');
+    if (tut) tut.onclick = async () => {
+      window.removeEventListener('keydown', esc);
+      closeMenu();
+      await openTutorialReplayMenu(player);
+      resolve();
+    };
+    // a one-time nudge: the Field Manual lives here now, replayable forever
+    if (player.flags['tut_basics'] && !player.flags['tut_replay_hint']) {
+      player.flags['tut_replay_hint'] = true;
+      player.save();
+      toast('🎓 New: replay any Field Manual chapter from this menu.', 'gold', 3600);
+    }
     const save = el.querySelector<HTMLElement>('#hub-save');
     if (save) save.onclick = () => { player.save(); toast('Game saved.', 'gold'); };
     const snd = el.querySelector<HTMLElement>('#hub-sound');

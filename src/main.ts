@@ -3,8 +3,9 @@
 // by Aljay Leodones
 // ============================================================
 import * as THREE from 'three';
-import { DUNGEONS, type DungeonDef } from './data';
-import { Player, Guardian } from './state';
+import { DUNGEONS, HOUSES, type DungeonDef } from './data';
+import { Player, Guardian, SAVE_SLOTS } from './state';
+import { RANKS } from './ranks';
 import { makeRenderer, updateTweens, updateRigs } from './models';
 import { say, conversation, choose, askName, toast, fadeIn, fadeOut, hideHUD, updateHUD, playStorySequence } from './ui';
 import { Battle, type BattleOptions, type BattleResult } from './battle';
@@ -12,6 +13,7 @@ import { DungeonRun, type DungeonOutcome } from './dungeon';
 import { Town } from './town';
 import { Overworld } from './overworld';
 import { AgdaoIsland } from './agdao';
+import { NewSalmonan } from './salmonan';
 import { University } from './university';
 import { Cinematic } from './cinematic';
 import { syncStoryQuests } from './quests';
@@ -200,6 +202,36 @@ async function runAgdao(): Promise<void> {
   hideHUD();
 }
 
+// ---------------- New Salmonan ----------------
+/** The valley loop: explore ↔ the Mirrorhouse, until the player ferries out. */
+async function runSalmonan(): Promise<void> {
+  let spawnAt: 'pier' | 'ridge' = 'pier';
+  while (true) {
+    const valley = new NewSalmonan({ player, runBattle }, spawnAt);
+    await fadeOut();
+    setView(valley.view);
+    await fadeIn();
+    const res = await valley.run();
+    if (res.kind === 'dungeon') {
+      const outcome = await runDungeon(res.def);
+      syncStoryQuests(player).forEach(n => toast(n, 'gold'));
+      if (outcome === 'dead') {
+        const lost = Math.floor(player.shards * 0.25);
+        player.shards -= lost;
+        player.healAll();
+        await say('', `You wake on the Lawrences' porch under three blankets you don't remember earning. Maris patched your team; Auntie Dalisay catered the vigil and billed ◆${lost} for "soup, bandages and the YEARS you took off Auntie".`);
+      }
+      player.save();
+      spawnAt = 'ridge';
+      continue; // back down the stair, into the valley
+    }
+    break; // ferried home
+  }
+  await fadeOut();
+  setView(null);
+  hideHUD();
+}
+
 // ---------------- main game loop ----------------
 async function cityLoop(): Promise<never> {
   let firstArrival = !player.flags['arrived_city'];
@@ -233,18 +265,33 @@ async function cityLoop(): Promise<never> {
       continue;
     }
 
-    // overworld globe: pick an expedition (or walk back to Haven City)
-    let dungeonDef: DungeonDef | 'agdao' | null = null;
+    // overworld globe: pick an expedition (or walk back to Haven City).
+    // The Region Atlas (T) hops between unlocked overworlds — each hop
+    // rebuilds the globe for the chosen region.
+    let dungeonDef: DungeonDef | 'agdao' | 'salmonan' | null = null;
     {
-      const overworld = new Overworld(player);
-      await fadeOut();
-      setView(overworld.view);
-      await fadeIn();
-      dungeonDef = await overworld.run();
+      let region = 'aurel';
+      while (true) {
+        const overworld = new Overworld(player, region);
+        await fadeOut();
+        setView(overworld.view);
+        await fadeIn();
+        const dest = await overworld.run();
+        if (dest && typeof dest === 'object' && 'travel' in dest) {
+          region = dest.travel;
+          continue;
+        }
+        dungeonDef = dest;
+        break;
+      }
     }
     if (!dungeonDef) continue; // returned to the city
     if (dungeonDef === 'agdao') {
       await runAgdao();
+      continue;
+    }
+    if (dungeonDef === 'salmonan') {
+      await runSalmonan();
       continue;
     }
 
@@ -287,32 +334,59 @@ async function cityLoop(): Promise<never> {
 }
 
 // ---------------- title ----------------
-function titleScreen(): Promise<'new' | 'continue'> {
+/** Three save slots: occupied slots continue (with a delete button), empty slots start fresh. */
+function titleScreen(): Promise<{ mode: 'new' | 'continue'; slot: number }> {
   return new Promise(resolve => {
     const ts = $('title-screen');
     ts.style.display = 'flex';
     const menu = $('title-menu');
-    menu.innerHTML = '';
-    const mk = (label: string, cb: () => void, disabled = false) => {
-      const b = document.createElement('button');
-      b.className = 'ui-btn';
-      b.textContent = label;
-      b.disabled = disabled;
-      b.onclick = cb;
-      menu.appendChild(b);
-    };
-    mk('▶ New Game', () => {
-      if (Player.hasSave() && !confirm('Overwrite the existing save?')) return;
-      Player.deleteSave();
+
+    const pick = (mode: 'new' | 'continue', slot: number) => {
+      Player.setSlot(slot);
       ts.style.display = 'none';
-      resolve('new');
-    });
-    mk('↻ Continue', () => { ts.style.display = 'none'; resolve('continue'); }, !Player.hasSave());
+      resolve({ mode, slot });
+    };
+
+    const render = () => {
+      menu.innerHTML = '';
+      for (let slot = 1; slot <= SAVE_SLOTS; slot++) {
+        const sum = Player.slotSummary(slot);
+        const row = document.createElement('div');
+        row.className = 'slot-row';
+        const main = document.createElement('button');
+        main.className = 'ui-btn slot-main';
+        if (sum) {
+          const rank = [...RANKS].reverse().find(r => sum.tournamentPoints >= r.threshold) ?? RANKS[0];
+          const house = HOUSES.find(h => h.id === sum.houseId);
+          const when = sum.savedAt ? new Date(sum.savedAt).toLocaleDateString() : '';
+          main.innerHTML = `<span class="slot-name">↻ ${sum.tamerName}</span>
+            <span class="sub">Slot ${slot}${house ? ` · ${house.name.replace('House ', '')}` : ''} · <span style="color:${rank.color}">${rank.name}</span> · ◆${sum.shards}${when ? ` · ${when}` : ''}</span>`;
+          main.onclick = () => pick('continue', slot);
+          const del = document.createElement('button');
+          del.className = 'ui-btn danger slot-del';
+          del.textContent = '✕';
+          del.title = 'Delete this save';
+          del.onclick = () => {
+            if (confirm(`Delete Slot ${slot} (${sum.tamerName})? This cannot be undone.`)) {
+              Player.deleteSave(slot);
+              render();
+            }
+          };
+          row.append(main, del);
+        } else {
+          main.innerHTML = `<span class="slot-name">▶ New Game</span><span class="sub">Slot ${slot} — empty</span>`;
+          main.onclick = () => pick('new', slot);
+          row.append(main);
+        }
+        menu.appendChild(row);
+      }
+    };
+    render();
   });
 }
 
 async function boot(): Promise<void> {
-  const mode = await titleScreen();
+  const { mode } = await titleScreen();
 
   if (mode === 'continue') {
     const loaded = Player.load();

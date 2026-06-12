@@ -21,21 +21,29 @@ export interface RankDef {
 
 export const RANKS: RankDef[] = [
   { name: 'Beginner',     color: '#b07b4a', sheen: '#f2d2a8', base: '#5a3a1e', threshold: 0,   epithet: 'Every legend signs its first page.' },
-  { name: 'Expert',       color: '#aab4c4', sheen: '#f2f6ff', base: '#4a5468', threshold: 8,   epithet: 'The basics, sharpened to an edge.' },
-  { name: 'Veteran',      color: '#5a8ab8', sheen: '#cfe8ff', base: '#23405e', threshold: 18,  epithet: 'Scars traded for wisdom.' },
-  { name: 'Professional', color: '#d9a93a', sheen: '#fff0b8', base: '#6e4f12', threshold: 32,  epithet: 'Expeditions run like clockwork.' },
-  { name: 'Elite',        color: '#3ab87a', sheen: '#c8ffe4', base: '#125a38', threshold: 50,  epithet: 'Named in guild dispatches.' },
-  { name: 'Lieutenant',   color: '#3a7de0', sheen: '#c8e0ff', base: '#15346a', threshold: 74,  epithet: 'Others follow your battle calls.' },
-  { name: 'Vice-Captain', color: '#9a5af2', sheen: '#e8d2ff', base: '#42207a', threshold: 104, epithet: 'The right hand of the hall.' },
-  { name: 'Captain',      color: '#f2c14e', sheen: '#fff8d8', base: '#7a5a10', threshold: 142, epithet: 'A banner the city rallies to.' },
-  { name: 'Grand Chief',  color: '#e8243a', sheen: '#ffd2d8', base: '#5e0815', threshold: 190, epithet: 'The ruby seal of Aurel itself.' },
+  { name: 'Expert',       color: '#aab4c4', sheen: '#f2f6ff', base: '#4a5468', threshold: 10,  epithet: 'A first bracket survived.' },
+  { name: 'Veteran',      color: '#5a8ab8', sheen: '#cfe8ff', base: '#23405e', threshold: 25,  epithet: 'The crowd knows your name.' },
+  { name: 'Professional', color: '#d9a93a', sheen: '#fff0b8', base: '#6e4f12', threshold: 45,  epithet: 'Seeded, not drawn.' },
+  { name: 'Elite',        color: '#3ab87a', sheen: '#c8ffe4', base: '#125a38', threshold: 70,  epithet: 'Named in circuit dispatches.' },
+  { name: 'Lieutenant',   color: '#3a7de0', sheen: '#c8e0ff', base: '#15346a', threshold: 100, epithet: 'Quarterfinals fear you.' },
+  { name: 'Vice-Captain', color: '#9a5af2', sheen: '#e8d2ff', base: '#42207a', threshold: 140, epithet: 'A finals-night regular.' },
+  { name: 'Captain',      color: '#f2c14e', sheen: '#fff8d8', base: '#7a5a10', threshold: 190, epithet: 'A banner the Coliseum rallies to.' },
+  { name: 'Grand Chief',  color: '#e8243a', sheen: '#ffd2d8', base: '#5e0815', threshold: 250, epithet: 'The ruby seal of Aurel itself.' },
 ];
 
-/** Career score that drives rank progression — every deed counts. */
+/**
+ * Rank runs on TOURNAMENT POINTS — and nothing else. Battles, captures,
+ * quests and dungeon clears build your career, but the ladder only moves
+ * when you place in sanctioned tournaments: the Grand Coliseum's brackets,
+ * the Turmal Seasonal, and the intercontinental circuits beyond.
+ */
 export function rankScore(p: Player): number {
-  const quests = Object.values(p.quests).filter(v => v === 'done').length;
-  const clears = Object.values(p.dungeonClears).reduce((a, b) => a + b, 0);
-  return p.battlesWon + p.capturesMade * 3 + quests * 6 + clears * 5;
+  return p.tournamentPoints;
+}
+
+/** Award TP from a sanctioned tournament placement. */
+export function awardTournamentPoints(p: Player, points: number): void {
+  p.tournamentPoints += Math.max(0, Math.floor(points));
 }
 
 export function rankIndexFor(p: Player): number {
@@ -295,10 +303,11 @@ export function rankBadgeHTML(index: number, px = 22, withName = false): string 
 /** The full nine-badge ladder with progress bar — for the Tamer Data panel. */
 export function rankLadderHTML(p: Player): string {
   const { index, score, next, pct } = rankProgress(p);
-  let html = `<div class="sub">Career score: <b class="goldcol">${score}</b>${next
+  let html = `<div class="sub">Tournament Points: <b class="goldcol">${score} TP</b>${next
     ? ` · ${next.threshold - score} more to <b style="color:${next.color}">${next.name}</b>`
     : ' · the highest honor in Aurel'}</div>
     <div class="rank-progress"><div style="width:${Math.round(pct * 100)}%"></div></div>
+    <div class="sub" style="font-size:11px;margin:2px 0 4px">Rank moves on tournament placements only — earn TP in the Grand Coliseum's brackets and the circuits beyond.</div>
     <div style="max-height:235px;overflow-y:auto">`;
   html += RANKS.map((r, i) => `
     <div class="rank-ladder-row ${i === index ? 'here' : ''}" style="${i > index ? 'opacity:0.5' : ''}" title="${r.epithet}">

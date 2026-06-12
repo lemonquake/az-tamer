@@ -120,8 +120,46 @@ const STORY_QUESTS: QuestDef[] = [
     hint: 'The Stormspire Depths sit far to the east on the overworld. Its master is Lv 26 — bring your strongest three.',
     check: p => (p.dungeonClears['stormspire'] ?? 0) >= 1,
     progress: p => [Math.min(1, p.dungeonClears['stormspire'] ?? 0), 1],
-    onComplete: p => { p.flags['arc1_done'] = true; },
+    // TODO(acts II–IV): 'salmonan_unlocked' is a temporary bridge so the
+    // Act V chapters below are reachable for testing. When chapters
+    // VIII–XXI land, move this flag to Chapter XXI's onComplete
+    // ('story_ivan' — clearing Ivan's name opens New Salmonan).
+    onComplete: p => { p.flags['arc1_done'] = true; p.flags['salmonan_unlocked'] = true; },
     reward: { shards: 5000, items: [['hp_gem', 1], ['atk_gem', 1], ['elixir', 2]] },
+  }),
+
+  // ============ ACT V — THE FORETALES (the Anomalies Saga, Part Four) ============
+  // After Ivan Lawrence's name is cleared from New Salmonan's relay
+  // tower, the veil starts to fall: the Sponsors were one finger of a
+  // larger hand. Foretales — the network on every crystal and pier —
+  // has been writing the news BEFORE it happens for sixteen years:
+  // buried events, hidden funding, manipulated polls, no proper
+  // continental leaders since. And through it all they glaze the Big
+  // Three with soft-lit documentaries… because they are not allowed
+  // to touch them. Not yet. Soon.
+  // TODO(acts II–IV): re-anchor `requires` to 'story_ivan' (Ch XXI)
+  // once the intervening chapters are implemented.
+  M({
+    id: 'story_veilfall', kind: 'story', chapter: 22, icon: '📡', requires: 'story_echoes',
+    title: 'The Veil, Falling', giver: 'Ivan Lawrence', location: 'New Salmonan',
+    brief: 'Thirty-six hours. That\'s how long the truth got to breathe. Then every broadcast crystal on four continents lit up with the same calm anchors and the same swelling music: "THE LAWRENCE TAPES — A FORGERY?" The valley that watched the real broadcast go out from its own battered tower now watches the world be told it never happened. Ivan isn\'t even angry. "This is the machine, friend. I just never thought I\'d get to show somebody the gears while they turn." Find the gears: the override stamp in Esta\'s relay logs, the festival crystal Auntie Dalisay\'s nephew recorded LIVE before the aired version was rewritten — and the Foretales stringer who has been sketching the mural and asking the children questions.',
+    objective: 'Gather three proofs of the Foretales override in New Salmonan, then bring them to Ivan',
+    hint: 'Relay-Keeper Esta at the tower; Auntie Dalisay in the market; the stranger by the river-gate mural. Then Ivan, on his porch.',
+    check: p => !!p.flags['salm_proof_relay'] && !!p.flags['salm_proof_crystal'] && !!p.flags['salm_proof_stringer'],
+    progress: p => [(p.flags['salm_proof_relay'] ? 1 : 0) + (p.flags['salm_proof_crystal'] ? 1 : 0) + (p.flags['salm_proof_stringer'] ? 1 : 0), 3],
+    onComplete: p => { p.flags['mirrorhouse_unlocked'] = true; },
+    reward: { shards: 6000, items: [['override_ledger', 1], ['elixir', 2]] },
+  }),
+  M({
+    id: 'story_mirrorhouse', kind: 'story', chapter: 23, icon: '🪞', requires: 'story_veilfall',
+    title: 'The Mirrorhouse', giver: 'Ivan Lawrence', location: 'The Mirrorhouse, above New Salmonan',
+    brief: 'Every story the eastern valleys have read for sixteen years passed through one building: a relay-bastion of black glass on the ridge upriver, humming day and night. The locals call it the Mirrorhouse, because whatever you carry up that road, the world is shown something else. Esta\'s logs say the Lawrence rewrite was stamped THERE — same override signature, FT-PRIME, that wiped a certain someone\'s records once. Ivan walks you to the ridge stair and stops at the first step, fists shaking, smiling anyway. "Nine years I couldn\'t look at this building. Go in. Find the master spool — the one they print TOMORROW from. And tamer… check the date on the directive about my match-fixing. I want to know how long before my fall they wrote it."',
+    objective: 'Conquer the Mirrorhouse and extract the Continuity Reel',
+    hint: 'The ridge stair climbs from New Salmonan\'s north-east valley wall. Five floors of dead glass, warden Lv 54 — this is no county printing press. Report back to Ivan.',
+    check: p => (p.dungeonClears['mirrorhouse'] ?? 0) >= 1,
+    progress: p => [Math.min(1, p.dungeonClears['mirrorhouse'] ?? 0), 1],
+    onComplete: p => { p.flags['veil_fallen'] = true; },
+    reward: { shards: 9000, items: [['continuity_reel', 1], ['hp_gem', 1], ['wis_gem', 1], ['elixir', 2]] },
   }),
 ];
 

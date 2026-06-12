@@ -230,7 +230,21 @@ export class Crawler {
 }
 
 // ---------------- Player / GameState ----------------
-const SAVE_KEY = 'az-tamer-save-v1';
+// Save slots: slot 1 keeps the legacy key so old saves keep working.
+const SAVE_KEY_BASE = 'az-tamer-save-v1';
+export const SAVE_SLOTS = 3;
+let activeSlot = 1;
+const slotKey = (slot: number) => (slot <= 1 ? SAVE_KEY_BASE : `${SAVE_KEY_BASE}-s${slot}`);
+
+/** What the title screen needs to describe a slot, without building a Player. */
+export interface SlotSummary {
+  tamerName: string;
+  shards: number;
+  houseId: string | null;
+  tournamentPoints: number;
+  battlesWon: number;
+  savedAt?: number;
+}
 
 export interface PlayerSave {
   tamerName: string; shards: number;
@@ -240,6 +254,8 @@ export interface PlayerSave {
   flags: Record<string, boolean>;
   houseId: string | null;
   battlesWon: number; capturesMade: number; dungeonClears: Record<string, number>;
+  tournamentPoints?: number;
+  savedAt?: number;
   profilePic?: string | null;
   cardNo?: string;
   quests?: Record<string, 'active' | 'done'>;
@@ -260,6 +276,8 @@ export class Player {
   battlesWon = 0;
   capturesMade = 0;
   dungeonClears: Record<string, number> = {};
+  /** Rank currency — earned ONLY by placing in sanctioned tournaments. */
+  tournamentPoints = 0;
   profilePic: string | null = null;   // custom portrait (data URL)
   cardNo = '';                        // guild member number, assigned on joining
   quests: Record<string, 'active' | 'done'> = {};
@@ -313,19 +331,41 @@ export class Player {
       crawler: this.crawler.save(), flags: { ...this.flags },
       houseId: this.houseId, battlesWon: this.battlesWon,
       capturesMade: this.capturesMade, dungeonClears: { ...this.dungeonClears },
+      tournamentPoints: this.tournamentPoints,
+      savedAt: Date.now(),
       profilePic: this.profilePic, cardNo: this.cardNo, quests: { ...this.quests },
       equippedClothes: { ...this.equippedClothes },
       ownedClothes: [...this.ownedClothes],
       appearance: { ...this.appearance },
     };
-    localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+    localStorage.setItem(slotKey(activeSlot), JSON.stringify(data));
   }
 
-  static hasSave(): boolean { return localStorage.getItem(SAVE_KEY) !== null; }
-  static deleteSave(): void { localStorage.removeItem(SAVE_KEY); }
+  /** All subsequent saves/loads target this slot. */
+  static setSlot(slot: number): void { activeSlot = Math.max(1, Math.min(SAVE_SLOTS, slot)); }
+  static get slot(): number { return activeSlot; }
 
-  static load(): Player | null {
-    const raw = localStorage.getItem(SAVE_KEY);
+  static hasSave(slot = activeSlot): boolean { return localStorage.getItem(slotKey(slot)) !== null; }
+  static deleteSave(slot = activeSlot): void { localStorage.removeItem(slotKey(slot)); }
+
+  /** Lightweight peek at a slot for the title screen. */
+  static slotSummary(slot: number): SlotSummary | null {
+    const raw = localStorage.getItem(slotKey(slot));
+    if (!raw) return null;
+    try {
+      const d: PlayerSave = JSON.parse(raw);
+      return {
+        tamerName: d.tamerName ?? 'Tamer', shards: d.shards ?? 0,
+        houseId: d.houseId ?? null, tournamentPoints: d.tournamentPoints ?? 0,
+        battlesWon: d.battlesWon ?? 0, savedAt: d.savedAt,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  static load(slot = activeSlot): Player | null {
+    const raw = localStorage.getItem(slotKey(slot));
     if (!raw) return null;
     try {
       const d: PlayerSave = JSON.parse(raw);
@@ -337,6 +377,7 @@ export class Player {
       p.flags = { ...d.flags }; p.houseId = d.houseId;
       p.battlesWon = d.battlesWon ?? 0; p.capturesMade = d.capturesMade ?? 0;
       p.dungeonClears = d.dungeonClears ?? {};
+      p.tournamentPoints = d.tournamentPoints ?? 0;
       p.profilePic = d.profilePic ?? null;
       p.cardNo = d.cardNo ?? '';
       p.quests = d.quests ?? {};

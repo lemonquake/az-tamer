@@ -71,6 +71,32 @@ export const AGDAO_LORE = {
   firstGuardian: 'Cero, the Surf-Light — the storm-wounded Guardian Aurelia saved. The islanders say it never truly left; that every bright wave-crest on the lagoon is Cero rolling over in its sleep.',
 };
 
+// ---------------- New Salmonan — the valley the crystals can't reach ----------------
+export const SALMONAN_LORE = {
+  name: 'New Salmonan',
+  epithet: 'The Valley of Loud Kitchens',
+  desc: 'A lively rural town of terraced paddies, river piers and market mornings, folded into hills where broadcast crystals lose their signal. Everybody knows everybody, nobody asks where the quiet champion on the hill came from — and the mural of the Big Three by the river gate is repainted every spring.',
+  mural: 'Aljay, Greggy and Onnel saved this valley countless times in the war years — flood, siege, and once, famously, a wedding. The town repaints their mural by the river gate every spring, and the painters argue every spring about whether Greggy\'s grin is wide enough.',
+};
+
+// ---------------- FORETALES — the machine that writes the world ----------------
+// The world's great broadcast-and-broadsheet network. After the
+// Sponsors fell, the Reliquary Ledger's "reputation management"
+// budget line unraveled into something far wider: Foretales was
+// never reporting the world. It was DRAFTING it.
+export const FORETALES_LORE = {
+  name: 'Foretales',
+  epithet: 'Tomorrow\'s News, On Time',
+  /** The public face. */
+  face: 'The network everyone grew up inside: broadcast crystals in every plaza, broadsheets on every pier, the Seasonal brackets, the morning polls, the evening serials. Four continents read the same headlines at the same hour and call it the weather.',
+  /** What the Override Ledger and the Continuity Reel prove. */
+  truth: 'The news is written before it happens. Sabotaged matches, vanished candidates, buried disasters, manufactured darlings — countless events covered or covered UP for scheme and profit. Ivan Lawrence was not their first deletion; he was a rehearsal they finally got to perform in public.',
+  /** The sixteen-year interregnum. */
+  interregnum: 'Sixteen years since any continent seated a proper leader. Every cycle the same arithmetic: the front-runner withdraws, or scandalizes, or simply stops being mentioned — and the polls, every last one of them run through a Foretales subsidiary, discover the public "never really wanted them anyway." It runs deep. It runs wide. It runs violent.',
+  /** The Big Three clause. */
+  glaze: 'And yet the Big Three shine from every crystal — endless retrospectives, soft-lit documentaries, anniversary specials. It is glaze. A standing directive, found spooled at the heart of the Mirrorhouse, names the only three people on four continents Foretales is forbidden to touch: "GLAZE. DO NOT TOUCH. NOT YET. SOON." Aljay never sat for them. Count the true interviews on one hand; everything else is fabricated — and something more.',
+};
+
 // ---------------- the Guilds of the world ----------------
 // The five Grand Houses of Olivar are one famous chapter among
 // hundreds of Guilds bound by the Compact. These are the ones any
@@ -99,12 +125,12 @@ export const DAUGHTERS: DaughterDef[] = [
   {
     id: 'azrin', name: 'Azrin', title: 'The Emberlark', color: '#f2884e',
     look: { top: 0xf2884e, hair: 0x8a3a1a, hairstyle: 'long', bottom: 0x4a3040 },
-    blurb: 'Aljay\'s elder daughter. Laughs first, apologizes never, fights like sunrise — sudden and everywhere at once. She has been hunting rumors of her father across three continents, and is exactly as stubborn as the stories say he was.',
+    blurb: 'Aljay\'s elder daughter — sixteen years old with a shelf of Intercontinental championship trophies and one World Championship already on it. Laughs first, apologizes never, fights like sunrise — sudden and everywhere at once. For her little sister she would walk into anything. Including, one day, three Anomalies at once.',
   },
   {
     id: 'azrael', name: 'Azrael', title: 'The Nightwing', color: '#9a6af2',
     look: { top: 0x6a4a9a, hair: 0x241a2e, hairstyle: 'ponytail', bottom: 0x2a2438 },
-    blurb: 'The younger daughter. Quiet where her sister is loud, and the better strategist by her own measured admission. She keeps her father\'s old lantern on her belt, unlit. "For Ghandra," she says, and does not elaborate.',
+    blurb: 'The younger daughter — her father over again: stubborn past all argument, a quiet genius, and convinced every Guardian is simply a friend she hasn\'t met yet. She keeps his old lantern on her belt, unlit. "For Ghandra," she says, and does not elaborate.',
   },
 ];
 
