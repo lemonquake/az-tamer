@@ -29,6 +29,7 @@ import {
 } from './ui';
 import { drawAreaMap, hideAreaMap, type MapMarker } from './townmap';
 import { updateTamerAppearance } from './clothes';
+import { worldClock, DayNightRig } from './daynight';
 import { worldOrbit } from './camorbit';
 import { tagNpc, attachNpcPicker } from './npccard';
 
@@ -80,8 +81,10 @@ export class AgdaoIsland {
   private rigs: GuardianRig[] = [];
   private markers: MapMarker[] = [];
   private seaTex: THREE.Texture | null = null;
+  private dayNight: DayNightRig | null = null;
   private clouds: THREE.Group[] = [];
   private butterflies: { grp: THREE.Group; anchor: THREE.Vector3; phase: number; wingL: THREE.Object3D; wingR: THREE.Object3D }[] = [];
+  private fireflies: { mesh: THREE.Mesh; anchor: THREE.Vector3; phase: number }[] = [];
   private envTick: ((dt: number) => void)[] = [];
   private resolveExit: ((r: AgdaoResult) => void) | null = null;
 
@@ -110,10 +113,11 @@ export class AgdaoIsland {
   // ================= scene =================
   private buildScene(): void {
     const s = this.scene;
-    // golden-hour tropics
+    // golden-hour tropics — the island lives on the same clock as the mainland
     s.background = skyGradient('#4aa8e0', '#ffe2b0');
     s.fog = new THREE.Fog(0xbfe4ee, 60, 170);
-    s.add(new THREE.HemisphereLight(0xbfe8ff, 0x8a7a52, 0.65));
+    const hemi = new THREE.HemisphereLight(0xbfe8ff, 0x8a7a52, 0.65);
+    s.add(hemi);
     const sun = new THREE.DirectionalLight(0xffe8c0, 1.5);
     sun.position.set(-30, 40, 18);
     sun.castShadow = true;
@@ -121,6 +125,9 @@ export class AgdaoIsland {
     sun.shadow.camera.left = -60; sun.shadow.camera.right = 60;
     sun.shadow.camera.top = 60; sun.shadow.camera.bottom = -60;
     s.add(sun);
+    this.dayNight = new DayNightRig(s, sun, hemi, {
+      sunMax: 1.5, sunMin: 0.14, ambientMax: 0.65, ambientMin: 0.24, sunDay: '#ffe8c0',
+    });
 
     // ---- the island: displaced plane, sand→grass vertex paint ----
     const geo = new THREE.PlaneGeometry(96, 96, 72, 72);
@@ -178,6 +185,7 @@ export class AgdaoIsland {
     this.scatterFlora();
     this.buildShrine();
     this.spawnButterflies();
+    this.spawnFireflies();
     this.driftClouds();
 
     // ---- the cast ----
@@ -309,7 +317,8 @@ export class AgdaoIsland {
     this.envTick.push(() => {
       const f = 0.85 + Math.sin(this.t * 11 + ph) * 0.12 + Math.sin(this.t * 23 + ph * 2) * 0.06;
       flame.scale.set(f, 0.8 + f * 0.35, f);
-      if (light) light.intensity = 6 * f;
+      // torchlight carries further once the sun is down
+      if (light) light.intensity = 6 * f * (0.55 + worldClock.night * 0.95);
     });
   }
 
@@ -344,7 +353,7 @@ export class AgdaoIsland {
     this.envTick.push(dt => {
       const f = 0.85 + Math.sin(this.t * 9) * 0.12 + Math.sin(this.t * 21) * 0.07;
       flame.scale.set(f, 0.85 + f * 0.3, f);
-      fireLight.intensity = 14 * f;
+      fireLight.intensity = 14 * f * (0.6 + worldClock.night * 0.8);
       emberT += dt;
       if (emberT > 0.5) {
         emberT = 0;
@@ -835,6 +844,23 @@ export class AgdaoIsland {
     }
   }
 
+  /** Jungle fireflies — invisible under the sun, drifting embers after dark. */
+  private spawnFireflies(): void {
+    for (let i = 0; i < 14; i++) {
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0xd8ffa8, emissive: 0xbef27a, emissiveIntensity: 0, transparent: true, opacity: 0,
+      });
+      const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.045, 6, 5), mat);
+      const a = Math.random() * Math.PI * 2;
+      const r = 5 + Math.random() * 26;
+      const anchor = new THREE.Vector3(Math.cos(a) * r, 0, Math.sin(a) * r);
+      anchor.y = this.groundH(anchor.x, anchor.z) + 0.7 + Math.random() * 0.9;
+      mesh.position.copy(anchor);
+      this.scene.add(mesh);
+      this.fireflies.push({ mesh, anchor, phase: Math.random() * Math.PI * 2 });
+    }
+  }
+
   private driftClouds(): void {
     for (let i = 0; i < 6; i++) {
       const cl = new THREE.Group();
@@ -1129,6 +1155,7 @@ export class AgdaoIsland {
     if (!this.resolveExit) return;
     this.t += dt;
     this.vfx.update(dt);
+    this.dayNight?.update(dt);
     for (const f of this.envTick) f(dt);
 
     const speed = 5.2;
@@ -1162,7 +1189,8 @@ export class AgdaoIsland {
     updateVoxelHuman(this.tamer, this.walking, dt);
     this.npcs.forEach(npc => updateVoxelHuman(npc, false, dt));
 
-    // butterflies flutter, fronds sway, clouds drift
+    // butterflies flutter by day, fireflies rise at night, clouds drift
+    const daylight = worldClock.daylight, night = worldClock.night;
     for (const b of this.butterflies) {
       b.phase += dt;
       b.grp.position.set(
@@ -1173,6 +1201,20 @@ export class AgdaoIsland {
       b.grp.rotation.y = b.phase * 0.7;
       b.wingL.rotation.z = Math.sin(b.phase * 14) * 0.9;
       b.wingR.rotation.z = -Math.sin(b.phase * 14) * 0.9;
+      b.grp.visible = daylight > 0.15; // butterflies sleep at night
+    }
+    for (const f of this.fireflies) {
+      const ph = f.phase + this.t * 0.5;
+      f.mesh.position.set(
+        f.anchor.x + Math.sin(ph * 1.1) * 1.5,
+        f.anchor.y + Math.sin(ph * 1.9) * 0.5,
+        f.anchor.z + Math.cos(ph * 0.8) * 1.5,
+      );
+      const m = f.mesh.material as THREE.MeshStandardMaterial;
+      const blink = 0.5 + Math.sin(this.t * 3.1 + f.phase * 5) * 0.5;
+      m.opacity = night * 0.95;
+      m.emissiveIntensity = night * (0.6 + blink * 1.8);
+      f.mesh.visible = night > 0.1;
     }
     for (const cl of this.clouds) {
       cl.position.x += dt * 0.7;
@@ -1200,7 +1242,7 @@ export class AgdaoIsland {
       shape: 'circle', radius: 46,
       markers: this.markers,
       player: { x: t.x, z: t.z, rot: this.tamer.rotation.y },
-      title: '🏝️ Agdao Island',
+      title: `🏝️ Agdao Island — ${worldClock.label}`,
     });
   }
 
@@ -1252,6 +1294,7 @@ export class AgdaoIsland {
     window.removeEventListener('keyup', this.onKeyUp);
     this.rigs.forEach(disposeRig);
     this.vfx.dispose();
+    this.dayNight?.dispose();
     this.resolveExit?.(result);
     this.resolveExit = null;
   }

@@ -7,8 +7,8 @@ import * as THREE from 'three';
 import { HOUSES, DUNGEONS, ITEMS, SHOP_STOCK, GEM_STOCK, CRAWLER_PARTS, SPECIES, type DungeonDef, type HouseDef } from './data';
 import { Player, Guardian } from './state';
 import {
-  makeTamer, makeVoxelHuman, updateVoxelHuman, makeGuardian, disposeRig, makeCrawler, disposeCrawler,
-  makeTree, makeStreetLamp, makeCustomCreature, mulberry,
+  makeTamer, makeVoxelHuman, updateVoxelHuman, setVoxelSeated, makeGuardian, disposeRig, makeCrawler, disposeCrawler,
+  makeTree, makeStreetLamp, makeCustomCreature, mulberry, tween,
   plankTexture, stoneTexture, marbleTexture, tileTexture, bookshelfTexture,
   carpetTexture, wallpaperTexture, skyGradient, barkTexture, leafTexture,
   aetherMarbleTexture, legendFriezeTexture, emberCrackTexture,
@@ -30,34 +30,10 @@ import { updateTamerAppearance, CLOTHES_DATABASE } from './clothes';
 import { worldOrbit } from './camorbit';
 import { tagNpc, crowdName, attachNpcPicker } from './npccard';
 import { runCityTutorial, isTutorialOpen } from './tutorial';
+import { worldClock, DayNightRig } from './daynight';
+import { sfx } from './audio';
 
 const minimapCanvas = () => document.getElementById('minimap') as HTMLCanvasElement;
-
-/** Lerp two #rrggbb colors. */
-function lerpHex(a: string, b: string, t: number): string {
-  const pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16);
-  const ch = (sh: number) => Math.round(((pa >> sh) & 255) + (((pb >> sh) & 255) - ((pa >> sh) & 255)) * t);
-  return `#${((ch(16) << 16) | (ch(8) << 8) | ch(0)).toString(16).padStart(6, '0')}`;
-}
-
-// day/night sky keyframes: [top, bottom, fog]
-const SKY_NIGHT: [string, string, string] = ['#0a1026', '#1c2444', '#141a30'];
-const SKY_DAWN:  [string, string, string] = ['#e8945a', '#8a6aa8', '#a8809a'];
-const SKY_DAY:   [string, string, string] = ['#7ab8e8', '#e8d8b8', '#d8d0c0'];
-const SKY_DUSK:  [string, string, string] = ['#e8764a', '#5a4a88', '#9a6a70'];
-
-/** Piecewise sky palette for a 0..1 day phase (0 = midnight, 0.5 = noon). */
-function skyAt(t: number): [string, string, string] {
-  const blend = (a: [string, string, string], b: [string, string, string], k: number): [string, string, string] =>
-    [lerpHex(a[0], b[0], k), lerpHex(a[1], b[1], k), lerpHex(a[2], b[2], k)];
-  if (t < 0.20) return SKY_NIGHT;
-  if (t < 0.28) return blend(SKY_NIGHT, SKY_DAWN, (t - 0.20) / 0.08);
-  if (t < 0.36) return blend(SKY_DAWN, SKY_DAY, (t - 0.28) / 0.08);
-  if (t < 0.66) return SKY_DAY;
-  if (t < 0.74) return blend(SKY_DAY, SKY_DUSK, (t - 0.66) / 0.08);
-  if (t < 0.82) return blend(SKY_DUSK, SKY_NIGHT, (t - 0.74) / 0.08);
-  return SKY_NIGHT;
-}
 
 interface Interactable {
   pos: THREE.Vector3; radius: number; label: string;
@@ -125,12 +101,10 @@ export class Town {
   private intMarkers: MapMarker[] = [];
   private intName = '';
 
-  // day/night cycle (0 = midnight, 0.5 = noon); a full day lasts 4 minutes
-  private dayTime = 0.34;
-  private skyTimer = 99;
+  // day/night cycle — driven by the shared world clock (see daynight.ts)
   private sun: THREE.DirectionalLight | null = null;
   private ambient: THREE.AmbientLight | null = null;
-  private skyTex: THREE.Texture | null = null;
+  private dayNight: DayNightRig | null = null;
 
   // wandering townsfolk
   private walkers: {
@@ -150,6 +124,7 @@ export class Town {
   private fallingLeaves: { mesh: THREE.Mesh; anchor: THREE.Vector3; phase: number; h: number }[] = [];
   private clouds: THREE.Group[] = [];
   private ducks: { grp: THREE.Group; angle: number; r: number; center: THREE.Vector3; speed: number }[] = [];
+  private birds: { grp: THREE.Group; angle: number; r: number; center: THREE.Vector3; speed: number; wingL: THREE.Object3D; wingR: THREE.Object3D }[] = [];
   private windmillHub: THREE.Object3D | null = null;
   private fountainJet: THREE.Mesh | null = null;
 
@@ -601,6 +576,7 @@ export class Town {
     door.position.set(0, 0.65, 2.05);
     const win = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.1),
       new THREE.MeshStandardMaterial({ color: 0xffe9a8, emissive: 0xc9a24a, emissiveIntensity: 0.5 }));
+    win.name = 'nightwindow'; // the miller's lamp burns brightest after dark
     win.position.set(0, 3.4, 1.78);
     win.rotation.x = -0.08;
     g.add(tower, roof, door, win);
@@ -640,6 +616,256 @@ export class Town {
         await say('', 'The sails creak in their endless circles. Inside, the millstones grind the valley\'s grain — the same rhythm Haven City has fallen asleep to for fifteen years.');
       },
     });
+  }
+
+  /** The hilltop gazebo crowning the west park — the city's favorite resting spot. */
+  private buildGazebo(x: number, z: number): void {
+    const s = this.streetScene;
+    const baseY = this.groundH(x, z);
+    const g = new THREE.Group();
+    const stoneM = new THREE.MeshStandardMaterial({ map: stoneTexture('#9a93a8', '#5a5468', 2), roughness: 0.9 });
+    const woodM = new THREE.MeshStandardMaterial({ map: plankTexture('#6a4a2a', 2), roughness: 0.85 });
+    // two stone steps up to an octagonal dais
+    for (let i = 0; i < 2; i++) {
+      const step = new THREE.Mesh(new THREE.CylinderGeometry(3.0 - i * 0.4, 3.2 - i * 0.4, 0.22, 8), stoneM);
+      step.position.y = 0.11 + i * 0.2;
+      step.receiveShadow = true;
+      g.add(step);
+    }
+    // six carved posts and a low railing between them (south gap = the way in)
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2 + Math.PI / 6;
+      const px = Math.cos(a) * 2.1, pz = Math.sin(a) * 2.1;
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.12, 2.3, 8), woodM);
+      post.position.set(px, 1.55, pz);
+      post.castShadow = true;
+      g.add(post);
+      const a2 = ((i + 1) / 6) * Math.PI * 2 + Math.PI / 6;
+      const qx = Math.cos(a2) * 2.1, qz = Math.sin(a2) * 2.1;
+      // leave the rail out on the side facing the plaza — that's the way in
+      const mid = Math.atan2((pz + qz) / 2, (px + qx) / 2);
+      if (!(mid > -1.0 && mid < 0.2)) {
+        const rail = new THREE.Mesh(new THREE.BoxGeometry(Math.hypot(qx - px, qz - pz), 0.08, 0.08), woodM);
+        rail.position.set((px + qx) / 2, 1.05, (pz + qz) / 2);
+        rail.rotation.y = -Math.atan2(qz - pz, qx - px);
+        g.add(rail);
+      }
+    }
+    // shingled cone roof with a finial
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(3.0, 1.5, 8),
+      new THREE.MeshStandardMaterial({ map: plankTexture('#8a3a2a', 3), roughness: 0.8 }));
+    roof.position.y = 3.4;
+    roof.castShadow = true;
+    const finial = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6),
+      new THREE.MeshStandardMaterial({ color: 0xc9a24a, emissive: 0xc9a24a, emissiveIntensity: 0.5 }));
+    finial.position.y = 4.3;
+    g.add(roof, finial);
+    // the lantern under the eaves — lit by the lamplighters at dusk
+    const lantern = new THREE.Mesh(new THREE.SphereGeometry(0.18, 10, 8),
+      new THREE.MeshStandardMaterial({ color: 0xffe9a8, emissive: 0xffd27a, emissiveIntensity: 0.2 }));
+    lantern.name = 'lampOrb';
+    lantern.position.y = 2.5;
+    const lLight = new THREE.PointLight(0xffc46a, 0, 9);
+    lLight.name = 'streetlamp';
+    lLight.position.y = 2.5;
+    g.add(lantern, lLight);
+    // a bench inside, facing the city
+    g.position.set(x, baseY, z);
+    s.add(g);
+    this.addBench(x, z, Math.atan2(-x, -z));
+    // post colliders (walkable interior — only the ring blocks)
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2 + Math.PI / 6;
+      this.streetColliders.push({ pos: new THREE.Vector3(x + Math.cos(a) * 2.1, 0, z + Math.sin(a) * 2.1), r: 0.28 });
+    }
+    this.label3d(s, '🏞️ Hilltop Gazebo', '#c2d8a8', new THREE.Vector3(x, baseY + 5.4, z), 3.6);
+    this.streetMarkers.push({ x, z, label: 'Gazebo', color: '#c2d8a8', kind: 'poi' });
+    this.streetInteractables.push({
+      pos: new THREE.Vector3(x, 0, z + 2.4), radius: 2.2,
+      label: 'Press <b>E</b> — take in the view',
+      handler: async () => {
+        const hour = worldClock.t;
+        if (hour > 0.74 || hour < 0.26) {
+          await say('', 'The city below is a constellation of lamplight — every road a string of warm stars, the fountain a blue heartbeat at the center. Nyla was right about this place.');
+        } else if (hour > 0.6) {
+          await say('', 'From up here the dusk pours honey over the rooftops. The lamplighters are already out; you can trace their progress lamp by lamp down the east road.');
+        } else {
+          await say('', 'The whole of Haven City spreads below — the walls, the windmill turning, the Coliseum banners, the five Grand Houses on their stone shoulder. Worth every step of the climb.');
+        }
+      },
+    });
+  }
+
+  /** The Founders' Bell — rung once at the city's founding, and by every passing child since. */
+  private buildFoundersBell(x: number, z: number): void {
+    const s = this.streetScene;
+    const baseY = this.groundH(x, z);
+    const g = new THREE.Group();
+    const stoneM = new THREE.MeshStandardMaterial({ map: stoneTexture('#8a8198', '#4a4458', 2), roughness: 0.9 });
+    for (const side of [-0.65, 0.65]) {
+      const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.34, 2.6, 0.34), stoneM);
+      pillar.position.set(side, 1.3, 0);
+      pillar.castShadow = true;
+      g.add(pillar);
+    }
+    const crossbeam = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.26, 0.4), stoneM);
+    crossbeam.position.y = 2.7;
+    g.add(crossbeam);
+    const bell = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.4, 0.55, 12),
+      new THREE.MeshStandardMaterial({ color: 0xc9892a, metalness: 0.85, roughness: 0.35 }));
+    bell.position.y = 2.25;
+    const clapper = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 6),
+      new THREE.MeshStandardMaterial({ color: 0x3a3a44, metalness: 0.7 }));
+    clapper.position.y = 1.95;
+    g.add(bell, clapper);
+    g.position.set(x, baseY, z);
+    s.add(g);
+    this.streetColliders.push({ pos: new THREE.Vector3(x, 0, z), r: 0.9 });
+    this.streetMarkers.push({ x, z, label: 'Founders\' Bell', color: '#c9892a', kind: 'poi' });
+    this.label3d(s, '🔔 The Founders\' Bell', '#e8c47a', new THREE.Vector3(x, baseY + 4.0, z), 3.4);
+    let ringing = false;
+    this.streetInteractables.push({
+      pos: new THREE.Vector3(x, 0, z + 1.2), radius: 1.8,
+      label: 'Press <b>E</b> — ring the Founders\' Bell',
+      handler: async () => {
+        if (!ringing) {
+          ringing = true;
+          sfx('confirm');
+          tween(1400, k => { bell.rotation.z = Math.sin(k * Math.PI * 7) * (1 - k) * 0.45; }).then(() => { ringing = false; });
+        }
+        await say('', 'BONNNG. The note rolls down the streets and comes back off the walls a half-second later — the masons tuned the battlements to answer it, or so they claim.');
+        await say('', 'A worn plaque: "Rung at the founding, rung at the Reforging, rung the morning the three came home from Ghandra. Ring it whenever the city should look up."');
+      },
+    });
+  }
+
+  /** Festival string lights swooping between the plaza's grand lamps. */
+  private buildStringLights(): void {
+    const s = this.streetScene;
+    const pts: THREE.Vector3[] = [];
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+      const x = Math.cos(a) * 8.6, z = Math.sin(a) * 8.6;
+      pts.push(new THREE.Vector3(x, this.groundH(x, z) + 3.1, z));
+    }
+    const bulbMat = new THREE.MeshStandardMaterial({ color: 0xffe9a8, emissive: 0xffd27a, emissiveIntensity: 0.25 });
+    for (let i = 0; i < 4; i++) {
+      const a = pts[i], b = pts[(i + 1) % 4];
+      const linePts: THREE.Vector3[] = [];
+      const STEPS = 12;
+      for (let k = 0; k <= STEPS; k++) {
+        const t = k / STEPS;
+        const p = a.clone().lerp(b, t);
+        p.y -= Math.sin(t * Math.PI) * 0.9; // the swoop of the wire
+        linePts.push(p);
+        if (k > 0 && k < STEPS && k % 2 === 0) {
+          const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.07, 6, 5), bulbMat);
+          bulb.name = 'lampOrb';
+          bulb.position.copy(p).y -= 0.1;
+          s.add(bulb);
+        }
+      }
+      const wire = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints(linePts),
+        new THREE.LineBasicMaterial({ color: 0x1c1c26 }));
+      s.add(wire);
+    }
+  }
+
+  /** Low dry-stone terraces holding the windmill hill's south face. */
+  private buildHillTerraces(cx: number, cz: number): void {
+    const s = this.streetScene;
+    const stoneM = new THREE.MeshStandardMaterial({ map: stoneTexture('#8a8276', '#5a544a', 1), roughness: 0.95 });
+    for (const [ring, a0, a1] of [[5.2, 2.6, 4.2], [7.0, 2.4, 4.5]] as const) {
+      const segs = Math.ceil((a1 - a0) / 0.28);
+      for (let i = 0; i <= segs; i++) {
+        const a = a0 + (a1 - a0) * (i / segs);
+        const x = cx + Math.cos(a) * ring, z = cz + Math.sin(a) * ring;
+        const block = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.55, 0.5), stoneM);
+        block.position.set(x, this.groundH(x, z) + 0.12, z);
+        block.rotation.y = -a + Math.PI / 2;
+        block.rotation.z = (Math.random() - 0.5) * 0.06;
+        block.castShadow = block.receiveShadow = true;
+        s.add(block);
+      }
+    }
+    // a few wildflowers tucked along the terrace lips
+    for (let i = 0; i < 10; i++) {
+      const a = 2.5 + Math.random() * 1.9;
+      const ring = 5.2 + (i % 2) * 1.8;
+      const x = cx + Math.cos(a) * ring, z = cz + Math.sin(a) * (ring - 0.6);
+      const bloom = new THREE.Mesh(new THREE.SphereGeometry(0.06, 6, 5),
+        new THREE.MeshStandardMaterial({ color: [0xe85a8a, 0xf2d23a, 0xf2f2f2][i % 3], emissive: 0x222222, roughness: 0.8 }));
+      bloom.position.set(x, this.groundH(x, z) + 0.22, z);
+      s.add(bloom);
+    }
+  }
+
+  /** Market clutter — crates, barrels and sacks that make the plaza look worked-in. */
+  private buildMarketClutter(): void {
+    const s = this.streetScene;
+    const crateM = new THREE.MeshStandardMaterial({ map: plankTexture('#a87848', 1), roughness: 0.9 });
+    const spots: [number, number][] = [[8.1, -5.2], [-8.3, -4.4], [-12.2, 9.4], [12.4, 9.6]];
+    for (const [bx, bz] of spots) {
+      const y = this.groundH(bx, bz);
+      for (let i = 0; i < 3; i++) {
+        const c2 = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.55, 0.55), crateM);
+        c2.position.set(bx + (i % 2) * 0.6 - 0.3, y + 0.28 + Math.floor(i / 2) * 0.56, bz + (i % 2 ? 0.15 : -0.2));
+        c2.rotation.y = i * 0.4;
+        c2.castShadow = true;
+        s.add(c2);
+      }
+      const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.34, 0.7, 10),
+        new THREE.MeshStandardMaterial({ map: plankTexture('#6a4a2a', 1), roughness: 0.9 }));
+      barrel.position.set(bx - 0.8, y + 0.35, bz + 0.4);
+      barrel.castShadow = true;
+      s.add(barrel);
+      this.streetColliders.push({ pos: new THREE.Vector3(bx, 0, bz), r: 1.1 });
+    }
+    // a picnic blanket by the pond, basket and all
+    {
+      const bx = -21.5, bz = 26.5;
+      const y = this.groundH(bx, bz);
+      const blanket = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 1.5),
+        new THREE.MeshStandardMaterial({ map: carpetTexture('#a83a3a', '#f2ead0', 1), roughness: 1 }));
+      blanket.rotation.x = -Math.PI / 2;
+      blanket.rotation.z = 0.4;
+      blanket.position.set(bx, y + 0.02, bz);
+      const basket = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.17, 0.26, 9),
+        new THREE.MeshStandardMaterial({ map: plankTexture('#a87848', 1), roughness: 0.95 }));
+      basket.position.set(bx + 0.5, y + 0.15, bz - 0.3);
+      s.add(blanket, basket);
+    }
+  }
+
+  /** Gulls and songbirds riding lazy circles over the plaza and pond. */
+  private spawnBirds(): void {
+    const centers: [number, number, number][] = [[0, 0, 11], [-26, 30, 8], [30, -16, 13], [10, 30, 9]];
+    for (let i = 0; i < 4; i++) {
+      const grp = new THREE.Group();
+      const col = i % 2 ? 0xf2f2f2 : 0x4a4452;
+      const body = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.42, 6),
+        new THREE.MeshStandardMaterial({ color: col, roughness: 0.8 }));
+      body.rotation.x = Math.PI / 2;
+      const mkWing = (side: 1 | -1) => {
+        const pivot = new THREE.Group();
+        const wing = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.16),
+          new THREE.MeshStandardMaterial({ color: col, roughness: 0.85, side: THREE.DoubleSide }));
+        wing.position.x = side * 0.27;
+        pivot.add(wing);
+        grp.add(pivot);
+        return pivot;
+      };
+      const wingL = mkWing(1), wingR = mkWing(-1);
+      grp.add(body);
+      const [cx, cz, h] = centers[i];
+      this.streetScene.add(grp);
+      this.birds.push({
+        grp, angle: Math.random() * Math.PI * 2, r: 5 + Math.random() * 6,
+        center: new THREE.Vector3(cx, h + Math.random() * 3, cz),
+        speed: (0.22 + Math.random() * 0.18) * (i % 2 ? 1 : -1), wingL, wingR,
+      });
+    }
   }
 
   /** A butterfly: two flapping wings on a wandering lissajous path. */
@@ -1340,6 +1566,7 @@ export class Town {
     sun.shadow.camera.left = sun.shadow.camera.bottom = -54;
     sun.shadow.camera.right = sun.shadow.camera.top = 54;
     s.add(sun);
+    this.dayNight = new DayNightRig(s, sun, this.ambient);
 
     // ---- ground: a true heightfield, displaced by groundH ----
     // Painted grass, dirt roads and pond — then every vertex is lifted onto
@@ -1349,6 +1576,11 @@ export class Town {
     groundGeo.rotateX(-Math.PI / 2);
     {
       const pos = groundGeo.attributes.position as THREE.BufferAttribute;
+      // hand-painted earth: sun-bleached hilltops, damp hollows, dusty road
+      // verges and a per-vertex speckle so no two square meters read alike
+      const colors = new Float32Array(pos.count * 3);
+      const c = new THREE.Color();
+      const verge = new THREE.Color('#c9b289');
       for (let i = 0; i < pos.count; i++) {
         const x = pos.getX(i), z = pos.getZ(i);
         let y = this.groundH(x, z);
@@ -1357,11 +1589,19 @@ export class Town {
         // two coplanar surfaces never z-fight
         if (z <= -24 && z >= -42.5 && Math.abs(x) <= 27.5) y -= 0.08;
         pos.setY(i, y);
+        c.setRGB(1, 1, 1);
+        const dRoad = this.distToRoad(x, z);
+        if (dRoad > 0 && dRoad < 1.5) c.lerp(verge, (1 - dRoad / 1.5) * 0.32); // trodden verges
+        c.offsetHSL(0, 0, Math.max(-0.08, Math.min(0.07, y * 0.032)));         // hills catch light, basins hold shade
+        const v = ((Math.sin(x * 12.9898 + z * 78.233) * 43758.5453) % 1 + 1) % 1;
+        c.offsetHSL(0, 0, (v - 0.5) * 0.05);                                    // speckle
+        colors[i * 3] = c.r; colors[i * 3 + 1] = c.g; colors[i * 3 + 2] = c.b;
       }
+      groundGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
       groundGeo.computeVertexNormals();
     }
     const ground = new THREE.Mesh(groundGeo,
-      new THREE.MeshStandardMaterial({ map: this.cityGroundTexture(R), roughness: 1 }));
+      new THREE.MeshStandardMaterial({ map: this.cityGroundTexture(R), vertexColors: true, roughness: 1 }));
     ground.receiveShadow = true;
     s.add(ground);
 
@@ -1567,15 +1807,23 @@ export class Town {
         const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
         this.addStreetLamp(Math.cos(a) * 8.6, Math.sin(a) * 8.6, 0, 0, 'plaza');
       }
-      // benches facing the fountain
+      // benches facing the fountain — all four of them, properly
       for (let i = 0; i < 4; i++) {
         const a = (i / 4) * Math.PI * 2;
-        this.addBench(Math.cos(a) * 4.6, Math.sin(a) * 4.6, a + Math.PI / 2);
+        const bx = Math.cos(a) * 4.6, bz = Math.sin(a) * 4.6;
+        this.addBench(bx, bz, Math.atan2(-bx, -bz));
       }
       // market stalls on the plaza's south rim
       this.addMarketStall(6.4, -6.6, [0xd84a3a, 0xf2ead0], 'fruit');
       this.addMarketStall(-6.8, -5.8, [0x3a9df2, 0xf2ead0], 'fish');
+      // festival string lights between the grand lamps
+      this.buildStringLights();
+      // worked-in market clutter and the pond picnic
+      this.buildMarketClutter();
     }
+
+    // ---- the Founders' Bell, on the plaza's north-west shoulder ----
+    this.buildFoundersBell(-9.5, -2.5);
 
     // ---- unique merchant district ----
     this.buildShopExterior(-14, 7);
@@ -1593,8 +1841,12 @@ export class Town {
     // ---- the pond: water, lilies, reeds, ducks, a fishing pier ----
     this.buildPond(-26, 30);
 
-    // ---- the windmill on its hill ----
+    // ---- the windmill on its hill, held by dry-stone terraces ----
     this.buildWindmill(32, 28);
+    this.buildHillTerraces(32, 28);
+
+    // ---- the hilltop gazebo crowning the west park ----
+    this.buildGazebo(-36, 16);
 
     // ---- street lamps: marching down every road, alternating sides ----
     // (placed after the buildings so the lamplighters route around them)
@@ -1722,8 +1974,9 @@ export class Town {
       this.addFallingLeaf(spot[0], spot[1]);
     }
 
-    // ---- guardian pets strolling the lanes ----
+    // ---- guardian pets strolling the lanes, birds on the wind ----
     this.spawnPets();
+    this.spawnBirds();
 
     // ---- university shuttle pad — west ----
     const pad = new THREE.Group();
@@ -1758,8 +2011,9 @@ export class Town {
       },
     });
 
-    // ---- townsfolk out on their errands ----
+    // ---- townsfolk out on their errands, and the ones happily idle ----
     this.spawnWalkers();
+    this.spawnIdlers();
 
     // ---- the Dawnflame's daughters, waiting by the fountain (Chronicle ch. VI+) ----
     this.placeDaughters();
@@ -1966,14 +2220,143 @@ export class Town {
     for (const f of folk) {
       const grp = makeVoxelHuman(f.palette);
       tagNpc(grp, f.name);
-      const a = Math.random() * Math.PI * 2, r = 6 + Math.random() * 14;
-      grp.position.set(Math.cos(a) * r, 0, Math.abs(Math.sin(a) * r));
+      // find a clear doorstep: never on the player's spawn, never inside a
+      // collider, never shoulder-to-shoulder with another walker
+      let x = 0, z = 14;
+      for (let tries = 0; tries < 40; tries++) {
+        const a = Math.random() * Math.PI * 2, r = 8 + Math.random() * 22;
+        const cx = Math.cos(a) * r, cz = Math.abs(Math.sin(a) * r);
+        if (Math.hypot(cx, cz - 6.8) < 5.5) continue;            // the player arrives here
+        if (this.streetColliders.some(c => Math.hypot(cx - c.pos.x, cz - c.pos.z) < c.r + 0.8)) continue;
+        if (this.walkers.some(w => Math.hypot(cx - w.grp.position.x, cz - w.grp.position.z) < 2.6)) continue;
+        x = cx; z = cz;
+        break;
+      }
+      grp.position.set(x, this.groundH(x, z), z);
       this.streetScene.add(grp);
+      // already mid-errand from the first frame — no standing-around wind-up
       this.walkers.push({
-        grp, target: grp.position.clone(), pause: Math.random() * 3,
+        grp, target: this.nextWanderTarget(grp.position), pause: 0,
         name: f.name, lines: f.lines, talking: false,
       });
     }
+  }
+
+  /**
+   * The city's idle life: bench-sitters by the fountain, neighbors deep in
+   * gossip, a kid feeding the ducks. They're living their roles from the very
+   * first frame — nobody waits for a script to remember them.
+   */
+  private spawnIdlers(): void {
+    const s = this.streetScene;
+    type Palette = Parameters<typeof makeVoxelHuman>[0];
+
+    const idler = (palette: Palette, x: number, z: number, rotY: number, name: string,
+      lines: string[], seated = false, seatY = 0.5): THREE.Group => {
+      const g = makeVoxelHuman(palette);
+      g.position.set(x, this.groundH(x, z), z);
+      g.rotation.y = rotY;
+      if (seated) setVoxelSeated(g, true, seatY);
+      tagNpc(g, name);
+      s.add(g);
+      this.staticNpcs.push(g);
+      this.streetColliders.push({ pos: new THREE.Vector3(x, 0, z), r: 0.5 });
+      this.streetInteractables.push({
+        pos: new THREE.Vector3(x, 0, z), radius: 1.7,
+        label: `Press <b>E</b> — chat with ${name}`,
+        handler: async () => { await say(name, lines[Math.floor(Math.random() * lines.length)]); },
+      });
+      return g;
+    };
+
+    const bubble = (x: number, y: number, z: number) => {
+      const cv = document.createElement('canvas');
+      cv.width = cv.height = 128;
+      const ctx = cv.getContext('2d')!;
+      ctx.font = '92px serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('💬', 64, 94);
+      const tex = new THREE.CanvasTexture(cv);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, opacity: 0.9 }));
+      sp.renderOrder = 39;
+      sp.name = 'chatbubble';
+      sp.userData.baseScale = 0.5;
+      sp.scale.set(0.5, 0.5, 1);
+      sp.position.set(x, y, z);
+      s.add(sp);
+    };
+
+    /** Two neighbors locked in conversation — walk up and listen in. */
+    const pair = (aP: Palette, bP: Palette, ax: number, az: number, bx: number, bz: number,
+      aName: string, bName: string, scripts: [string, string][][]) => {
+      const aG = idler(aP, ax, az, Math.atan2(bx - ax, bz - az), aName, ['(They glance over mid-sentence, nod, and carry on.)']);
+      const bG = idler(bP, bx, bz, Math.atan2(ax - bx, az - bz), bName, ['(They wave a hand without breaking the argument.)']);
+      void aG; void bG;
+      bubble((ax + bx) / 2, this.groundH(ax, az) + 2.5, (az + bz) / 2);
+      this.streetInteractables.push({
+        pos: new THREE.Vector3((ax + bx) / 2, 0, (az + bz) / 2 + 1.0), radius: 1.9,
+        label: 'Press <b>E</b> — listen in',
+        handler: async () => {
+          const script = scripts[Math.floor(Math.random() * scripts.length)];
+          await conversation(script);
+        },
+      });
+    };
+
+    // ---- bench-sitters by the fountain ----
+    idler({ top: 0x7a8a9a, hair: 0xd8d8d8, cap: null, hairstyle: 'bald' },
+      4.6, 0, Math.atan2(-4.6, 0), 'Old Maro', [
+        'Sixty years I\'ve sat on this bench. The fountain\'s changed twice, the benches four times, the view never. Sit a minute — the city does the talking.',
+        'See the daughters by the fountain? Aljay used to wait on this exact bench when the Houses kept him late. Some families just belong to this plaza.',
+        'My knees forecast better than the stargazer. Rain in two days. The lamplighters already know; they trim the wicks short before a wet week.',
+      ], true);
+    idler({ top: 0xd9a14a, hair: 0xc8c8d0, cap: null, hairstyle: 'buns' },
+      0, 4.6, Math.PI, 'Granny Essa', [
+        'I feed the gulls at noon, the fish at one, and the gossip mill all day long. Busy retirement.',
+        'That windmill ground the flour for my wedding bread, dear. And my mother\'s. Hills remember what people forget.',
+        'You walk like you carry half the world. Put it on the bench a moment. The bench doesn\'t mind. Benches never do.',
+      ], true);
+
+    // ---- gossip by the market lane ----
+    pair(
+      { top: 0xb05a8a, hair: 0x6a3a1a, cap: null, hairstyle: 'long' },
+      { top: 0x4a7a6a, hair: 0x2a2a3a, cap: 0xe8d9a8, hairstyle: 'classic' },
+      -10.6, 9.2, -9.4, 10.0, 'Posy', 'Wick',
+      [
+        [['Posy', 'I\'m telling you, the boutique got Tharkand silk in. SILK, Wick. Madame Celeste hid a bolt under the counter the second she saw me coming.'],
+         ['Wick', 'Because last time you "looked at" a bolt of silk it left the shop inside your coat with a promise to pay Thursday.'],
+         ['Posy', 'And I PAID. The Thursday after the Thursday after. That\'s still a Thursday.']],
+        [['Wick', 'Pina\'s raised the price of honey rolls again. Second time this season.'],
+         ['Posy', 'That\'s because Tilda\'s oven cracked and every roll in the city goes through Pina\'s counter now. Supply, demand, and a baker\'s broken heart.'],
+         ['Wick', '…You are frighteningly well-informed.'],
+         ['Posy', 'I sit near Granny Essa. It\'s like standing under a waterfall of other people\'s business.']],
+        [['Posy', 'They say the new tamer — the quiet one — walked out of the Cradle Hollow like it was a stroll to the well.'],
+         ['Wick', 'Posy. They\'re standing RIGHT there.'],
+         ['Posy', 'Then they can confirm it! Well? Was it a stroll?']],
+      ]);
+
+    // ---- shop talk on the coliseum road ----
+    pair(
+      { top: 0x8a3040, hair: 0x2a2a3a, cap: 0xc9a24a, hairstyle: 'ponytail' },
+      { top: 0x8a7a5a, hair: 0x3a2a1a, cap: null, hairstyle: 'curly' },
+      16.6, -9.2, 17.6, -8.2, 'Sergeant Vell', 'Mason Pott',
+      [
+        [['Sergeant Vell', 'The east tower lists two fingers to the south. Two fingers, Pott. I measured it against my spear.'],
+         ['Mason Pott', 'Your spear is bent from the time you pried open the tournament gate with it. The tower is FINE. The tower will outlive your great-grandchildren.'],
+         ['Sergeant Vell', 'It had better. I\'ve named it.']],
+        [['Mason Pott', 'Doubling the Coliseum took us four years. You know what the hard part was? Not the stone. The NOISE rules. Ten thousand fans, and the Sanctum next door wants "contemplative quiet".'],
+         ['Sergeant Vell', 'So what did you do?'],
+         ['Mason Pott', 'Angled every seat-row to throw the roar east, over the wall, into the wild country. Some farmer out there thinks the ruins cheer on finals night.']],
+      ]);
+
+    // ---- the duck kid at the pond ----
+    idler({ top: 0x5ad8e8, hair: 0x6a3a1a, cap: 0xf2d23a, hairstyle: 'spiky' },
+      -22.4, 26.2, Math.atan2(-26 - -22.4, 30 - 26.2), 'Duckling Dot', [
+        'The green-headed one is Admiral Bread. He outranks the other two because he found a whole roll once. That\'s how duck ranks work.',
+        'Reza says the ducks own the pier. The ducks agree. I\'m the ambassador. It\'s a lot of responsibility.',
+        'If you stand REALLY still, Admiral Bread does a circle around you. It means you\'re accepted. Or that you look like bread.',
+      ]);
   }
 
   /** Pick a fresh wander destination on the streets — hills welcome, water not. */
@@ -2238,7 +2621,8 @@ export class Town {
     this.intNpcs = [];
     this.intRigs.forEach(disposeRig);
     this.intRigs = [];
-    this.intRoom = { w: 18, d: 13 };
+    // the Sanctum earned itself a bigger hall when the research wing moved in
+    this.intRoom = kind === 'sanctum' ? { w: 20, d: 15 } : { w: 18, d: 13 };
     this.intGroundH = null;
     const { w, d } = this.intRoom;
 
@@ -2387,20 +2771,47 @@ export class Town {
       ];
     } else if (kind === 'sanctum') {
       this.intName = 'The Sanctum';
-      // the healing spring
+      // ------------------------------------------------------------------
+      // Where faith met instrumentation and decided they liked each other:
+      // the old healing spring at the heart, recovery capsules and a vitals
+      // wall along one side, the aether condenser humming on the other, and
+      // a research aide who annotates miracles in triplicate.
+      // ------------------------------------------------------------------
+
+      // the healing spring, ringed by an aether-script inlay
       const pool = new THREE.Mesh(new THREE.CylinderGeometry(2.4, 2.6, 0.5, 20),
         new THREE.MeshStandardMaterial({ map: marbleTexture(), roughness: 0.3 }));
-      pool.position.set(0, 0.25, -1.5);
+      pool.position.set(0, 0.25, -2);
       const springWater = new THREE.Mesh(new THREE.CylinderGeometry(2.1, 2.1, 0.12, 20),
         new THREE.MeshStandardMaterial({ color: 0x5ad88a, emissive: 0x2a8a4a, emissiveIntensity: 0.8, roughness: 0.05, transparent: true, opacity: 0.85 }));
-      springWater.position.set(0, 0.56, -1.5);
+      springWater.position.set(0, 0.56, -2);
       springWater.name = 'springwater';
       const springLight = new THREE.PointLight(0x5ad88a, 14, 12);
-      springLight.position.set(0, 2, -1.5);
+      springLight.position.set(0, 2, -2);
       s.add(pool, springWater, springLight);
-      this.intColliders.push({ pos: new THREE.Vector3(0, 0, -1.5), r: 3.0 });
-      // candle columns
-      for (const [cx, cz] of [[-6, -3], [6, -3], [-6, 3], [6, 3]] as const) {
+      this.intColliders.push({ pos: new THREE.Vector3(0, 0, -2), r: 3.0 });
+      const runeRing = new THREE.Mesh(new THREE.TorusGeometry(3.3, 0.06, 8, 40),
+        new THREE.MeshStandardMaterial({ color: 0x4ad8c8, emissive: 0x2aa890, emissiveIntensity: 1.0, roughness: 0.3 }));
+      runeRing.rotation.x = Math.PI / 2;
+      runeRing.position.set(0, 0.03, -2);
+      runeRing.name = 'legendpulse';
+      s.add(runeRing);
+      // sensor probes leaning over the water — the spring is monitored now
+      for (const a of [0.8, 2.4]) {
+        const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 1.9, 6),
+          new THREE.MeshStandardMaterial({ color: 0x8a93a8, metalness: 0.8, roughness: 0.3 }));
+        arm.position.set(Math.cos(a) * 2.7, 1.4, -2 + Math.sin(a) * 2.7);
+        arm.rotation.z = Math.cos(a) * 0.5;
+        arm.rotation.x = -Math.sin(a) * 0.5;
+        const probe = new THREE.Mesh(new THREE.OctahedronGeometry(0.1),
+          new THREE.MeshStandardMaterial({ color: 0x5ad8e8, emissive: 0x5ad8e8, emissiveIntensity: 1.2 }));
+        probe.position.set(Math.cos(a) * 2.0, 2.0, -2 + Math.sin(a) * 2.0);
+        probe.name = 'stormtip';
+        s.add(arm, probe);
+      }
+
+      // candle columns hold the corners — the old faith keeps its seats
+      for (const [cx, cz] of [[-8, -5.5], [8, -5.5], [-8, 4.5], [8, 4.5]] as const) {
         const col = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.3, 2.6, 10),
           new THREE.MeshStandardMaterial({ map: marbleTexture(), roughness: 0.4 }));
         col.position.set(cx, 1.3, cz);
@@ -2408,27 +2819,208 @@ export class Town {
           new THREE.MeshStandardMaterial({ color: 0xffd9a0, emissive: 0xffb45a, emissiveIntensity: 1.4 }));
         flame.position.set(cx, 2.85, cz);
         flame.name = 'flame';
-        const fl = new THREE.PointLight(0xffb45a, 5, 6);
-        fl.position.set(cx, 2.9, cz);
-        s.add(col, flame, fl);
+        s.add(col, flame);
         this.intColliders.push({ pos: new THREE.Vector3(cx, 0, cz), r: 0.5 });
       }
-      // the keeper beside the spring
+      const candleLight = new THREE.PointLight(0xffb45a, 7, 14);
+      candleLight.position.set(0, 3.4, 2);
+      s.add(candleLight);
+
+      // ---- the recovery wing: two guardian capsules + the vitals wall ----
+      for (const [capZ, fluidCol, occupied] of [[-3.6, 0x4ad8c8, true], [-0.6, 0x9a6af2, false]] as const) {
+        const cx = -7.2;
+        const base = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 1.1, 0.4, 14),
+          new THREE.MeshStandardMaterial({ color: 0x3a4250, metalness: 0.75, roughness: 0.3 }));
+        base.position.set(cx, 0.2, capZ);
+        const glass = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 2.3, 14, 1, true),
+          new THREE.MeshStandardMaterial({
+            color: 0xbfe8f2, transparent: true, opacity: 0.22, roughness: 0.05,
+            side: THREE.DoubleSide, depthWrite: false,
+          }));
+        glass.position.set(cx, 1.55, capZ);
+        const fluid = new THREE.Mesh(new THREE.CylinderGeometry(0.74, 0.74, 1.9, 12),
+          new THREE.MeshStandardMaterial({
+            color: fluidCol, emissive: fluidCol, emissiveIntensity: 0.4,
+            transparent: true, opacity: 0.3, depthWrite: false,
+          }));
+        fluid.position.set(cx, 1.45, capZ);
+        const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 0.85, 0.3, 14),
+          new THREE.MeshStandardMaterial({ color: 0x3a4250, metalness: 0.75, roughness: 0.3 }));
+        cap.position.set(cx, 2.85, capZ);
+        s.add(base, glass, fluid, cap);
+        // a rising scan ring sweeps the tube
+        const scan = new THREE.Mesh(new THREE.TorusGeometry(0.78, 0.02, 6, 20),
+          new THREE.MeshBasicMaterial({ color: 0x9af2e8, transparent: true, opacity: 0.7 }));
+        scan.rotation.x = Math.PI / 2;
+        scan.position.set(cx, 0.6, capZ);
+        scan.name = 'scanline';
+        scan.userData.ph = capZ;
+        s.add(scan);
+        if (occupied) {
+          // a small guardian dozing in the fluid, on the mend
+          const patient = new THREE.Mesh(new THREE.SphereGeometry(0.4, 10, 8),
+            new THREE.MeshStandardMaterial({ color: 0x6ab48a, roughness: 0.7 }));
+          patient.scale.set(1.2, 0.85, 1);
+          patient.position.set(cx, 1.2, capZ);
+          patient.name = 'aetherfloat';
+          patient.userData.baseY = 1.2;
+          patient.userData.ph = 1.3;
+          const fin = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.34, 6),
+            new THREE.MeshStandardMaterial({ color: 0x4a946a, roughness: 0.7 }));
+          fin.position.set(cx, 1.62, capZ);
+          fin.name = 'aetherfloat';
+          fin.userData.baseY = 1.62;
+          fin.userData.ph = 1.3;
+          s.add(patient, fin);
+        }
+        this.intColliders.push({ pos: new THREE.Vector3(cx, 0, capZ), r: 1.25 });
+      }
+      this.intInteractables.push({
+        pos: new THREE.Vector3(-5.8, 0, -2.1), radius: 1.8,
+        label: 'Press <b>E</b> — check on the recovery capsules',
+        handler: async () => {
+          await say('', 'A marshfin drifts in the teal capsule, fins stirring in its sleep, vitals tracing slow green hills on the readout. The chart clipped to the glass says: "Day 3. Ate well. Dreamed loudly."');
+          await say('', 'The violet capsule stands empty and freshly cleaned. The Keeper insists an empty capsule is the best possible news a sanctum can have.');
+        },
+      });
+      // the vitals wall: a bank of soft-glowing EKG monitors
+      {
+        const cv = document.createElement('canvas');
+        cv.width = 512; cv.height = 192;
+        const ctx = cv.getContext('2d')!;
+        ctx.fillStyle = '#081410';
+        ctx.fillRect(0, 0, 512, 192);
+        for (let row = 0; row < 3; row++) {
+          ctx.strokeStyle = ['#4ad88a', '#5ad8e8', '#c9a24a'][row];
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          for (let x = 0; x <= 512; x += 4) {
+            const beat = (x % 170 > 140) ? Math.sin(((x % 170) - 140) / 30 * Math.PI) * 26 : Math.sin(x * 0.05 + row * 2) * 4;
+            const y = 36 + row * 60 - beat;
+            if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+          }
+          ctx.stroke();
+        }
+        const tex = new THREE.CanvasTexture(cv);
+        tex.colorSpace = THREE.SRGBColorSpace;
+        const monitor = new THREE.Mesh(new THREE.PlaneGeometry(3.0, 1.15),
+          new THREE.MeshStandardMaterial({ map: tex, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.5, roughness: 0.4 }));
+        monitor.position.set(-w / 2 + 0.45, 2.4, -2.1);
+        monitor.rotation.y = Math.PI / 2;
+        const mFrame = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.35, 3.3),
+          new THREE.MeshStandardMaterial({ color: 0x2a303c, metalness: 0.6, roughness: 0.4 }));
+        mFrame.position.set(-w / 2 + 0.38, 2.4, -2.1);
+        s.add(mFrame, monitor);
+      }
+
+      // ---- the aether condenser: rings, crystal, contained weather ----
+      {
+        const cx = 7.2, cz = -2.4;
+        const plinth = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.1, 0.5, 12),
+          new THREE.MeshStandardMaterial({ map: marbleTexture(), roughness: 0.4 }));
+        plinth.position.set(cx, 0.25, cz);
+        s.add(plinth);
+        for (let i = 0; i < 3; i++) {
+          const ring = new THREE.Mesh(new THREE.TorusGeometry(0.62 - i * 0.14, 0.045, 8, 22),
+            new THREE.MeshStandardMaterial({ color: 0xc9892a, metalness: 0.85, roughness: 0.3 }));
+          ring.position.set(cx, 1.0 + i * 0.5, cz);
+          ring.rotation.x = Math.PI / 2 + (i - 1) * 0.3;
+          ring.name = 'stormtip';
+          s.add(ring);
+        }
+        const crystal = new THREE.Mesh(new THREE.OctahedronGeometry(0.3),
+          new THREE.MeshStandardMaterial({ color: 0xbe9af2, emissive: 0x9a6af2, emissiveIntensity: 1.3, roughness: 0.2 }));
+        crystal.position.set(cx, 2.5, cz);
+        crystal.name = 'aetherfloat';
+        crystal.userData.baseY = 2.5;
+        crystal.userData.ph = 0.4;
+        const cLight = new THREE.PointLight(0x9a6af2, 8, 9);
+        cLight.position.set(cx, 2.6, cz);
+        s.add(crystal, cLight);
+        this.intColliders.push({ pos: new THREE.Vector3(cx, 0, cz), r: 1.3 });
+        this.intInteractables.push({
+          pos: new THREE.Vector3(cx - 1.4, 0, cz), radius: 1.7,
+          label: 'Press <b>E</b> — study the aether condenser',
+          handler: async () => {
+            await say('', 'Three gimbaled rings spin around a sliver of aether crystal — the tenth element, in a jar, technically. A brass plate reads: "Distills 0.4 drams of restorative essence per day. DO NOT TAP THE GLASS. It taps back."');
+          },
+        });
+      }
+
+      // ---- the research bench: vials, alembic, and Aide Lumen's notes ----
+      {
+        const bench = new THREE.Mesh(new THREE.BoxGeometry(4.2, 1.0, 1.0),
+          new THREE.MeshStandardMaterial({ map: plankTexture('#5a4632', 2), roughness: 0.7 }));
+        bench.position.set(5.6, 0.5, 4.6);
+        s.add(bench);
+        this.intColliders.push({ pos: new THREE.Vector3(5.6, 0, 4.6), r: 1.6 });
+        for (let i = 0; i < 5; i++) {
+          const vial = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.075, 0.3, 8),
+            new THREE.MeshStandardMaterial({
+              color: [0x4ad88a, 0x5ad8e8, 0xe85a8a, 0xf2d23a, 0x9a6af2][i],
+              emissive: [0x4ad88a, 0x5ad8e8, 0xe85a8a, 0xf2d23a, 0x9a6af2][i],
+              emissiveIntensity: 0.5, transparent: true, opacity: 0.85,
+            }));
+          vial.position.set(4.0 + i * 0.45, 1.17, 4.4);
+          s.add(vial);
+        }
+        const alembic = new THREE.Mesh(new THREE.SphereGeometry(0.26, 10, 8),
+          new THREE.MeshStandardMaterial({ color: 0xbfe8f2, transparent: true, opacity: 0.4, roughness: 0.05 }));
+        alembic.position.set(6.8, 1.3, 4.6);
+        const spout = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.05, 0.7, 6),
+          new THREE.MeshStandardMaterial({ color: 0xbfe8f2, transparent: true, opacity: 0.4 }));
+        spout.rotation.z = 1.0;
+        spout.position.set(6.45, 1.5, 4.6);
+        s.add(alembic, spout);
+        this.intInteractables.push({
+          pos: new THREE.Vector3(5.6, 0, 3.4), radius: 1.7,
+          label: 'Press <b>E</b> — read the research notes',
+          handler: async () => {
+            await say('Lumen\'s notebook', '"Day 212: spring output up 3% during the Coliseum finals. Hypothesis: the water responds to ten thousand people hoping at once. The Keeper says \'obviously\'. I require a larger sample of hope."');
+            await say('Lumen\'s notebook', '"Day 215: tonic distilled from condenser essence outperforms shelf tonic by 11%. Keeper poured it back into the spring \'as a thank-you\'. Science and the spring remain in negotiation."');
+          },
+        });
+      }
+      // Aide Lumen, mid-measurement
+      const lumen = makeVoxelHuman({ top: 0x5a8ad8, hair: 0xc46a2a, cap: null, hairstyle: 'buns' });
+      lumen.position.set(4.4, 0, 3.0);
+      lumen.rotation.y = Math.PI * 0.8;
+      tagNpc(lumen, 'Aide Lumen');
+      s.add(lumen);
+      this.intNpcs.push(lumen);
+      this.intColliders.push({ pos: new THREE.Vector3(4.4, 0, 3.0), r: 0.55 });
+      this.intInteractables.push({
+        pos: new THREE.Vector3(4.4, 0, 3.0), radius: 1.7,
+        label: 'Press <b>E</b> — talk to Aide Lumen',
+        handler: async () => {
+          const lines = [
+            'The spring healed people for seven hundred years before anyone measured HOW. I\'ve measured for three. Current findings: it\'s the water, it\'s the aether, and it\'s also, infuriatingly, the kindness. All three. The math only balances with the kindness term.',
+            'The capsules aren\'t a replacement for the spring — they\'re for patients who\'d drown in it. Fish guardians excepted. Fish guardians LOVE the capsules. We have a waiting list.',
+            'The Keeper blesses every instrument I install. I used to find it unscientific. Then the unblessed spectrometer caught fire, twice, and I revised my methodology.',
+          ];
+          await say('Aide Lumen', lines[Math.floor(Math.random() * lines.length)]);
+        },
+      });
+
+      // the keeper beside the spring, where the keeper has always been
       const keeper = makeVoxelHuman({ top: 0x4ec45e, robe: true, hair: 0xd8d8e8, cap: null });
-      keeper.position.set(2.8, 0, -2.6);
+      keeper.position.set(2.8, 0, -3.1);
       keeper.rotation.y = Math.PI / 1.5;
       tagNpc(keeper, 'Sanctum Keeper');
       s.add(keeper);
       this.intNpcs.push(keeper);
-      this.intColliders.push({ pos: new THREE.Vector3(2.8, 0, -2.6), r: 0.6 });
+      this.intColliders.push({ pos: new THREE.Vector3(2.8, 0, -3.1), r: 0.6 });
       this.intInteractables.push({
-        pos: new THREE.Vector3(2.8, 0, -2.6), radius: 1.9,
+        pos: new THREE.Vector3(2.8, 0, -3.1), radius: 1.9,
         label: 'Press <b>E</b> — ask for the spring\'s blessing',
         handler: () => this.visitSanctum(),
       });
       this.intMarkers = [
-        { x: 2.8, z: -2.6, label: 'Keeper', color: '#5ad88a', kind: 'npc' },
-        { x: 0, z: -1.5, label: 'Healing Spring', color: '#5ad88a', kind: 'poi' },
+        { x: 2.8, z: -3.1, label: 'Keeper', color: '#5ad88a', kind: 'npc' },
+        { x: 0, z: -2, label: 'Healing Spring', color: '#5ad88a', kind: 'poi' },
+        { x: -7.2, z: -2.1, label: 'Recovery Wing', color: '#5ad8e8', kind: 'poi' },
+        { x: 7.2, z: -2.4, label: 'Condenser', color: '#9a6af2', kind: 'poi' },
+        { x: 5.6, z: 4.6, label: 'Research', color: '#5a8ad8', kind: 'poi' },
         { x: 0, z: d / 2, label: 'Exit', color: '#e8d9a8', kind: 'door' },
       ];
     } else if (kind === 'boutique') {
@@ -3953,6 +4545,7 @@ export class Town {
 
   // ================= per-frame =================
   private update(dt: number): void {
+    if (!this.resolveExit) return;
     if (!this.sun) return; // a frame can render before run() builds the street
     this.guideTimer -= dt;
     if (this.guideTimer <= 0) { this.guideTimer = 2; this.syncGuidance(); }
@@ -3976,7 +4569,7 @@ export class Town {
         : Math.abs(x) <= w / 2 - 0.7 && Math.abs(z) <= d / 2 - 0.7;
       const free = (x: number, z: number) =>
         !this.colliders.some(c => Math.hypot(x - c.pos.x, z - c.pos.z) < c.r) &&
-        (this.mode !== 'street' || !this.walkers.some(w => Math.hypot(x - w.grp.position.x, z - w.grp.position.z) < 0.85)) &&
+        (this.mode !== 'street' || !this.walkers.some(w => Math.hypot(x - w.grp.position.x, z - w.grp.position.z) < 0.5)) &&
         inBounds(x, z);
       const curY = this.tamer.position.y;
       if (free(nx, nz)) this.tamer.position.set(nx, curY, nz);
@@ -4006,6 +4599,22 @@ export class Town {
           wlk.grp.rotation.y = Math.atan2(dxx, dzz);
           updateVoxelHuman(wlk.grp, false, dt);
           continue;
+        }
+        // nobody traps the player: walk into a townsperson and they step aside
+        {
+          const pdx = wlk.grp.position.x - this.tamer.position.x;
+          const pdz = wlk.grp.position.z - this.tamer.position.z;
+          const pd = Math.hypot(pdx, pdz);
+          if (pd < 1.0 && pd > 1e-4) {
+            const sx = wlk.grp.position.x + (pdx / pd) * 2.0 * dt;
+            const sz = wlk.grp.position.z + (pdz / pd) * 2.0 * dt;
+            if (Math.hypot(sx, sz) < Town.WALL_R - 3 &&
+                !this.streetColliders.some(c => Math.hypot(sx - c.pos.x, sz - c.pos.z) < c.r + 0.2)) {
+              wlk.grp.position.set(sx, this.groundH(sx, sz), sz);
+              updateVoxelHuman(wlk.grp, true, dt);
+              continue;
+            }
+          }
         }
         if (wlk.pause > 0) {
           wlk.pause -= dt;
@@ -4066,31 +4675,19 @@ export class Town {
     this.camera.position.lerp(worldOrbit.orbited(camGoal, lookT), Math.min(1, dt * 4));
     this.camera.lookAt(lookT);
 
-    // ---- day/night cycle ----
+    // ---- day/night cycle (shared world clock) ----
     let daylight = 1, night = 0;
-    if (this.mode === 'street') {
-      this.dayTime = (this.dayTime + dt / 240) % 1;
-      daylight = Math.max(0, Math.sin((this.dayTime - 0.25) * Math.PI * 2));
-      night = 1 - Math.min(1, daylight * 1.6);
-      this.skyTimer += dt;
-      if (this.skyTimer > 0.8) {
-        this.skyTimer = 0;
-        const [top, bottom, fogCol] = skyAt(this.dayTime);
-        this.skyTex?.dispose();
-        this.skyTex = skyGradient(top, bottom);
-        this.streetScene.background = this.skyTex;
-        (this.streetScene.fog as THREE.Fog).color.set(fogCol);
-      }
-      if (this.sun) {
-        const dusk = daylight > 0 && daylight < 0.35 ? 1 - daylight / 0.35 : 0;
-        this.sun.intensity = 0.12 + 1.5 * daylight;
-        this.sun.color.set(lerpHex('#fff0d0', '#ff9a5a', dusk * 0.85));
-      }
-      if (this.ambient) this.ambient.intensity = 0.28 + 0.5 * daylight;
+    if (this.mode === 'street' && this.dayNight) {
+      this.dayNight.update(dt);
+      daylight = worldClock.daylight;
+      night = worldClock.night;
       this.streetScene.traverse(o => {
         if (o.name === 'streetlamp') (o as THREE.PointLight).intensity = 11 * night;
         if (o.name === 'lampOrb') {
           ((o as THREE.Mesh).material as THREE.MeshStandardMaterial).emissiveIntensity = 0.15 + 1.25 * night;
+        }
+        if (o.name === 'nightwindow') {
+          ((o as THREE.Mesh).material as THREE.MeshStandardMaterial).emissiveIntensity = 0.08 + 1.1 * night;
         }
       });
     }
@@ -4133,6 +4730,12 @@ export class Town {
         o.rotation.x = Math.cos(now * 0.0007 + ph) * 0.025;
       }
       if (o.name === 'banner') { o.rotation.y = Math.sin(now * 0.0016 + o.position.x) * 0.18; }
+      if (o.name === 'chatbubble') {
+        const base = (o.userData.baseScale as number) ?? 0.5;
+        const k = base * (1 + Math.sin(now * 0.004 + o.position.x) * 0.12);
+        o.scale.set(k, k, 1);
+        o.position.y += Math.sin(now * 0.002 + o.position.z) * 0.0006;
+      }
       if (o.name === 'legendpulse') {
         const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial;
         if (m?.emissive) m.emissiveIntensity = 0.85 + Math.sin(now * 0.0026 + o.position.x * 1.7 + o.position.z * 1.3) * 0.45;
@@ -4145,6 +4748,9 @@ export class Town {
         const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial;
         m.emissiveIntensity = 0.3 + Math.sin(now * 0.0018) * 0.08;
         o.scale.setScalar(1 + Math.sin(now * 0.0012) * 0.01);
+      }
+      if (o.name === 'scanline') {
+        o.position.y = 0.6 + ((now * 0.0006 + ((o.userData.ph as number) ?? 0)) % 1) * 2.1;
       }
     });
 
@@ -4200,6 +4806,19 @@ export class Town {
         d.grp.position.set(dx, d.center.y + Math.sin(tSec * 2 + d.r) * 0.025, dz);
         d.grp.rotation.y = Math.atan2(-Math.sin(d.angle), -Math.cos(d.angle)) + Math.PI / 2;
       }
+      // birds circle high by day and roost after dark
+      for (const bd of this.birds) {
+        bd.angle += dt * bd.speed;
+        const bx = bd.center.x + Math.cos(bd.angle) * bd.r;
+        const bz = bd.center.z + Math.sin(bd.angle) * bd.r;
+        bd.grp.position.set(bx, bd.center.y + Math.sin(tSec * 0.8 + bd.r) * 0.8, bz);
+        const dir = bd.speed > 0 ? 1 : -1;
+        bd.grp.rotation.y = Math.atan2(Math.cos(bd.angle) * dir, -Math.sin(bd.angle) * dir);
+        const flap = Math.sin(tSec * 7 + bd.r * 3) * 0.55;
+        bd.wingL.rotation.z = flap;
+        bd.wingR.rotation.z = -flap;
+        bd.grp.visible = daylight > 0.12;
+      }
       if (this.windmillHub) this.windmillHub.rotation.z = now * 0.0006;
       if (this.fountainJet) {
         this.fountainJet.scale.y = 1 + Math.sin(now * 0.004) * 0.18;
@@ -4210,7 +4829,6 @@ export class Town {
     // ---- labeled minimap ----
     const cv = minimapCanvas();
     if (this.mode === 'street') {
-      const hh = Math.floor(this.dayTime * 24), mm = Math.floor((this.dayTime * 24 % 1) * 60);
       drawAreaMap(cv, {
         shape: 'circle', radius: Town.WALL_R + 1,
         markers: [
@@ -4218,7 +4836,7 @@ export class Town {
           ...this.walkers.map(wk => ({ x: wk.grp.position.x, z: wk.grp.position.z, color: '#d8d8e8', kind: 'npc' as const })),
         ],
         player: { x: t.x, z: t.z, rot: this.tamer.rotation.y },
-        title: `Haven City — ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`,
+        title: `Haven City — ${worldClock.label}`,
       });
     } else {
       drawAreaMap(cv, {
@@ -4359,6 +4977,7 @@ export class Town {
         showHotkeys(false);
         hideAreaMap(minimapCanvas());
         this.intRigs.forEach(disposeRig);
+        this.resolveExit = null;
         res(dest);
       };
     });

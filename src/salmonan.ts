@@ -34,6 +34,7 @@ import {
 import { drawAreaMap, hideAreaMap, type MapMarker } from './townmap';
 import { updateTamerAppearance } from './clothes';
 import { worldOrbit } from './camorbit';
+import { worldClock, DayNightRig } from './daynight';
 import { tagNpc, attachNpcPicker } from './npccard';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
@@ -126,6 +127,11 @@ export class NewSalmonan {
   private rigs: GuardianRig[] = [];
   private markers: MapMarker[] = [];
   private riverTex: THREE.Texture | null = null;
+  private dayNight: DayNightRig | null = null;
+  // light budget: the forward renderer pays for every visible point light in
+  // every shader — only the nearest few stay lit each frame (see town.ts)
+  private static readonly MAX_POINT_LIGHTS = 8;
+  private scenePointLights: THREE.PointLight[] = [];
   private clouds: THREE.Group[] = [];
   private dragonflies: { grp: THREE.Group; anchor: THREE.Vector3; phase: number; wingL: THREE.Object3D; wingR: THREE.Object3D }[] = [];
   private envTick: ((dt: number) => void)[] = [];
@@ -173,10 +179,11 @@ export class NewSalmonan {
   // ================= scene =================
   private buildScene(): void {
     const s = this.scene;
-    // late-afternoon valley gold
+    // late-afternoon valley gold — the valley keeps the same hours as the world
     s.background = skyGradient('#6ab4e0', '#ffe8be');
     s.fog = new THREE.Fog(0xcfe8da, 60, 170);
-    s.add(new THREE.HemisphereLight(0xcfe8ff, 0x6a7a4a, 0.6));
+    const hemi = new THREE.HemisphereLight(0xcfe8ff, 0x6a7a4a, 0.6);
+    s.add(hemi);
     const sun = new THREE.DirectionalLight(0xffe2b0, 1.45);
     sun.position.set(-26, 38, 20);
     sun.castShadow = true;
@@ -184,6 +191,11 @@ export class NewSalmonan {
     sun.shadow.camera.left = -60; sun.shadow.camera.right = 60;
     sun.shadow.camera.top = 60; sun.shadow.camera.bottom = -60;
     s.add(sun);
+    this.dayNight = new DayNightRig(s, sun, hemi, {
+      // the valley keeps a slightly kinder night than the open sea — moonlight
+      // off the river and a hundred kitchen fires see to that
+      sunMax: 1.45, sunMin: 0.22, ambientMax: 0.6, ambientMin: 0.32, sunDay: '#ffe2b0',
+    });
 
     // ---- the valley floor: displaced plane, meadow→hill vertex paint ----
     const geo = new THREE.PlaneGeometry(96, 96, 72, 72);
@@ -234,6 +246,7 @@ export class NewSalmonan {
     this.buildRelayTower();
     this.buildRidgeStair();
     this.buildFestivalLanterns();
+    this.buildVillageLamps();
     this.scatterFlora();
     this.spawnDragonflies();
     this.driftClouds();
@@ -749,13 +762,76 @@ export class NewSalmonan {
         this.scene.add(lan);
         lanterns.push(lan);
       }
+      // each string casts real light on the plaza below it after sundown
+      const mid = a.clone().lerp(b, 0.5);
+      const stringLight = new THREE.PointLight(0xffb86a, 0, 11);
+      stringLight.position.set(mid.x, mid.y - 0.4, mid.z);
+      this.scene.add(stringLight);
       const ph = Math.random() * Math.PI * 2;
       this.envTick.push(() => {
         lanterns.forEach((lan, i) => {
           lan.rotation.z = Math.sin(this.t * 1.3 + ph + i) * 0.12;
-          (lan.material as THREE.MeshStandardMaterial).emissiveIntensity = 0.55 + Math.sin(this.t * 2 + i * 1.7) * 0.15;
+          // paper lanterns come into their own after sundown
+          (lan.material as THREE.MeshStandardMaterial).emissiveIntensity =
+            0.4 + worldClock.night * 0.9 + Math.sin(this.t * 2 + i * 1.7) * 0.15;
         });
+        stringLight.intensity = (1.2 + worldClock.night * 7.5) * (1 + Math.sin(this.t * 2.1 + ph) * 0.06);
       });
+    }
+  }
+
+  // ---------------- village lamps: real light after dark ----------------
+  /**
+   * The valley's working light: oil lamps on carved posts at every place
+   * people actually go after supper — the market, the inn porch, the pier,
+   * the bridgehead, the mural and Ivan's hill path. Wicks are trimmed low
+   * by day and bloom warm at night, each with its own slow flicker.
+   */
+  private buildVillageLamps(): void {
+    const lamp = (x: number, z: number, color = 0xffc46a) => {
+      const y = this.groundH(x, z);
+      const g = new THREE.Group();
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.09, 2.0, 6),
+        new THREE.MeshStandardMaterial({ map: plankTexture('#5a4228', 1), roughness: 0.9 }));
+      post.position.y = 1.0;
+      post.castShadow = true;
+      const cap = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.18, 6),
+        new THREE.MeshStandardMaterial({ color: 0x3a3026, roughness: 0.85 }));
+      cap.position.y = 2.18;
+      const glass = new THREE.Mesh(new THREE.SphereGeometry(0.13, 8, 7),
+        new THREE.MeshStandardMaterial({ color: 0xffe9a8, emissive: color, emissiveIntensity: 0.3 }));
+      glass.position.y = 2.0;
+      g.add(post, cap, glass);
+      g.position.set(x, y, z);
+      this.scene.add(g);
+      this.colliders.push({ pos: new THREE.Vector3(x, 0, z), r: 0.28 });
+      const light = new THREE.PointLight(color, 0, 10);
+      light.position.set(x, y + 2.1, z);
+      this.scene.add(light);
+      const ph = Math.random() * Math.PI * 2;
+      this.envTick.push(() => {
+        const flicker = 1 + Math.sin(this.t * 8.7 + ph) * 0.07 + Math.sin(this.t * 19 + ph * 2) * 0.04;
+        light.intensity = (1.4 + worldClock.night * 8.5) * flicker;
+        (glass.material as THREE.MeshStandardMaterial).emissiveIntensity = 0.25 + worldClock.night * 1.3;
+      });
+    };
+    lamp(1.5, 6.6);            // the market square
+    lamp(-9.2, 14.6);          // the inn porch
+    lamp(19.2, 15.6);          // the river pier
+    lamp(20.2, 6.6);           // the bridgehead
+    lamp(7.6, 16.4);           // the mural, lit for evening admirers
+    lamp(-13.2, -19.8);        // the foot of Ivan's hill
+
+    // the inn's windows glow with kitchen-light after dark
+    {
+      const winMat = new THREE.MeshStandardMaterial({ color: 0xffe9a8, emissive: 0xc9892a, emissiveIntensity: 0.15 });
+      const innY = this.groundH(-11, 12);
+      for (const wx of [-12.8, -9.2]) {
+        const win = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.7, 0.08), winMat);
+        win.position.set(wx, innY + 1.5, 14.06);
+        this.scene.add(win);
+      }
+      this.envTick.push(() => { winMat.emissiveIntensity = 0.12 + worldClock.night * 1.2; });
     }
   }
 
@@ -1085,23 +1161,64 @@ export class NewSalmonan {
     const p = this.player;
     // only present during Chapter XXII, until his ledger is taken
     if (questState(p, 'story_veilfall') !== 'active' || p.flags['salm_proof_stringer']) return;
-    const x = 9, z = 17.5; // loitering across from the mural
+    // a respectable sketching distance from the mural — outside its viewing
+    // collider (the crowd-rope at (7.8, 15) r3.4), approachable from any side
+    const x = 10.8, z = 18.6;
     const y = this.groundH(x, z);
     const quill = makeVoxelHuman({
       skin: 0xc8b49a, hair: 0x1a1a26, top: 0x5a5a6a, bottom: 0x2a2a36, shoes: 0x1a1a22,
       cap: 0x3a3a46, hairstyle: 'classic',
     });
     quill.position.set(x, y, z);
-    quill.rotation.y = Math.atan2(8 - x, 15 - z); // "sketching" the mural
+    quill.rotation.y = Math.atan2(7.9 - x, 15 - z); // "sketching" the mural
     tagNpc(quill, 'Quill');
+    // his name tag and field lantern ride along in the group, so everything
+    // about him leaves together when Dalisay's porters collect him
+    {
+      const cv = document.createElement('canvas');
+      let ctx = cv.getContext('2d')!;
+      ctx.font = 'bold 56px Trebuchet MS';
+      cv.width = Math.max(512, Math.ceil(ctx.measureText('Quill').width) + 64);
+      cv.height = 128;
+      ctx = cv.getContext('2d')!;
+      ctx.font = 'bold 56px Trebuchet MS';
+      ctx.textAlign = 'center';
+      ctx.lineWidth = 10; ctx.strokeStyle = '#0a0c18';
+      ctx.strokeText('Quill', cv.width / 2, 80);
+      ctx.fillStyle = '#d8d8e8';
+      ctx.fillText('Quill', cv.width / 2, 80);
+      const tex = new THREE.CanvasTexture(cv);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
+      sp.renderOrder = 40;
+      const scale = 2.6;
+      sp.scale.set(scale * (cv.width / cv.height / 4), scale / 4, 1);
+      sp.position.set(0, 2.5, 0);
+      quill.add(sp);
+      // a stringer works at all hours — his lantern keeps him findable after dark
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 0.8, 6),
+        new THREE.MeshStandardMaterial({ color: 0x2a2a32, roughness: 0.8 }));
+      post.position.set(0.6, 0.4, 0.4);
+      const glass = new THREE.Mesh(new THREE.SphereGeometry(0.11, 8, 7),
+        new THREE.MeshStandardMaterial({ color: 0xffe9a8, emissive: 0xffc46a, emissiveIntensity: 1.2 }));
+      glass.position.set(0.6, 0.86, 0.4);
+      const lampLight = new THREE.PointLight(0xffc46a, 7, 8);
+      lampLight.position.set(0.6, 1.0, 0.4);
+      quill.add(post, glass, lampLight);
+      this.envTick.push(() => {
+        if (!this.quillGroup) return;
+        lampLight.intensity = 7 * (0.85 + Math.sin(this.t * 9.3) * 0.1 + Math.sin(this.t * 21) * 0.05);
+      });
+    }
     this.scene.add(quill);
     this.npcs.push(quill);
     this.quillGroup = quill;
     this.colliders.push({ pos: new THREE.Vector3(x, 0, z), r: 0.55 });
-    this.label3d('Quill', '#a8a8b8', new THREE.Vector3(x, y + 2.5, z), 2.4);
+    const quillMarker: MapMarker = { x, z, label: 'Quill', color: '#d8d8e8', kind: 'npc' };
+    this.markers.push(quillMarker);
 
-    this.interactables.push({
-      pos: new THREE.Vector3(x, 0, z), radius: 1.9,
+    const quillTalk: Interactable = {
+      pos: new THREE.Vector3(x, 0, z), radius: 2.2,
       label: 'Press <b>E</b> — talk to the "sketch artist"',
       handler: async () => {
         if (p.flags['salm_proof_stringer']) {
@@ -1135,13 +1252,20 @@ export class NewSalmonan {
           ]);
           toast('📓 Proof secured: the stringer\'s assignment ledger!', 'gold');
           syncStoryQuests(p).forEach(n => toast(n, 'gold'));
-          // Quill packs his sketches and is escorted to the inn's "guest room"
+          // Quill packs his sketches — and his label, lantern, collider and
+          // talk prompt all leave with him; nothing ghostly stays behind
           if (this.quillGroup) {
             this.scene.remove(this.quillGroup);
             const i = this.npcs.indexOf(this.quillGroup);
             if (i >= 0) this.npcs.splice(i, 1);
             this.quillGroup = null;
           }
+          const ti = this.interactables.indexOf(quillTalk);
+          if (ti >= 0) this.interactables.splice(ti, 1);
+          const ci = this.colliders.findIndex(c => c.pos.x === x && c.pos.z === z && c.r === 0.55);
+          if (ci >= 0) this.colliders.splice(ci, 1);
+          const mi = this.markers.indexOf(quillMarker);
+          if (mi >= 0) this.markers.splice(mi, 1);
           await say('', 'Auntie Dalisay materializes with two market porters and personally escorts Quill to the inn\'s windowless "guest room" — for his protection, she announces, from her ladle.');
           updateHUD(p, 'New Salmonan');
         } else {
@@ -1149,7 +1273,8 @@ export class NewSalmonan {
           await say('Quill', 'As written, I\'m afraid. Your team has been… patched. By the locals. Who are glaring at me. I would try again before my next filing deadline, if I were you.');
         }
       },
-    });
+    };
+    this.interactables.push(quillTalk);
   }
 
   // ================= per-frame =================
@@ -1157,7 +1282,23 @@ export class NewSalmonan {
     if (!this.resolveExit) return;
     this.t += dt;
     this.vfx.update(dt);
+    this.dayNight?.update(dt);
     for (const f of this.envTick) f(dt);
+
+    // ---- point-light budget: nearest lamps win ----
+    if (this.scenePointLights.length === 0) {
+      this.scene.traverse(o => { if ((o as THREE.PointLight).isPointLight) this.scenePointLights.push(o as THREE.PointLight); });
+    }
+    if (this.scenePointLights.length > NewSalmonan.MAX_POINT_LIGHTS) {
+      const tp = this.tamer.position;
+      this.scenePointLights
+        .map(l => {
+          const e = l.matrixWorld.elements;
+          return { l, score: Math.hypot(e[12] - tp.x, e[14] - tp.z) };
+        })
+        .sort((a2, b2) => a2.score - b2.score)
+        .forEach((r, i) => { r.l.visible = i < NewSalmonan.MAX_POINT_LIGHTS; });
+    }
 
     const speed = 5.2;
     let dx = 0, dz = 0;
@@ -1199,6 +1340,7 @@ export class NewSalmonan {
       b.grp.rotation.y = b.phase * 0.8;
       b.wingL.rotation.z = Math.sin(b.phase * 18) * 0.7;
       b.wingR.rotation.z = -Math.sin(b.phase * 18) * 0.7;
+      b.grp.visible = worldClock.daylight > 0.15; // dragonflies roost at night
     }
     for (const cl of this.clouds) {
       cl.position.x += dt * 0.7;
@@ -1225,7 +1367,7 @@ export class NewSalmonan {
       shape: 'circle', radius: 46,
       markers: this.markers,
       player: { x: t.x, z: t.z, rot: this.tamer.rotation.y },
-      title: '🏞️ New Salmonan',
+      title: `🏞️ New Salmonan — ${worldClock.label}`,
     });
   }
 
@@ -1277,6 +1419,7 @@ export class NewSalmonan {
     window.removeEventListener('keyup', this.onKeyUp);
     this.rigs.forEach(disposeRig);
     this.vfx.dispose();
+    this.dayNight?.dispose();
     this.resolveExit?.(result);
     this.resolveExit = null;
   }
@@ -1287,6 +1430,8 @@ export class NewSalmonan {
     syncStoryQuests(this.player).forEach(n => toast(n, 'gold'));
     updateHUD(this.player, 'New Salmonan');
     showHotkeys(true);
+    // debug handle for automated testing
+    (window as unknown as Record<string, unknown>).__valley = { valley: this, tamer: this.tamer };
     window.addEventListener('keydown', this.onKeyDown);
     window.addEventListener('keyup', this.onKeyUp);
     this.detachPicker = attachNpcPicker({

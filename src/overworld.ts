@@ -432,6 +432,7 @@ export class Overworld {
 
   // ---------------- per-frame ----------------
   private update(dt: number): void {
+    if (!this.resolveExit) return;
     this.t += dt;
     const turnSpeed = 2.4, walkSpeed = 5.0;
     let fwd = 0;

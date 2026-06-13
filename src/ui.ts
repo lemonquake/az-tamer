@@ -156,7 +156,20 @@ export function askName(title: string, placeholder = ''): Promise<string> {
 const bar = (cur: number, max: number, cls: string) =>
   `<div class="minibar ${cls}"><div style="width:${Math.max(0, Math.min(100, (cur / max) * 100))}%"></div></div>`;
 
+let lastHUDPlayer: Player | null = null;
+let lastHUDZone = '';
+let lastHUDExtra: { floor?: number } | undefined = undefined;
+
+export function refreshHUD(): void {
+  if (lastHUDPlayer) {
+    updateHUD(lastHUDPlayer, lastHUDZone, lastHUDExtra);
+  }
+}
+
 export function updateHUD(player: Player, zone: string, extra?: { floor?: number }): void {
+  lastHUDPlayer = player;
+  lastHUDZone = zone;
+  lastHUDExtra = extra;
   checkAchievements(player);
   const hud = $('hud');
   hud.style.display = 'block';

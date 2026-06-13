@@ -1044,6 +1044,7 @@ export class DungeonRun {
 
   // ---------------- per-frame ----------------
   private update(dt: number): void {
+    if (!this.finished) return;
     if (!this.map) return; // view can render a frame before run() generates the floor
     this.envT += dt;
     this.vfx.update(dt);

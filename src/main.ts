@@ -3,11 +3,11 @@
 // by Aljay Leodones
 // ============================================================
 import * as THREE from 'three';
-import { DUNGEONS, HOUSES, type DungeonDef } from './data';
+import { DUNGEONS, HOUSES, type DungeonDef, expForLevel } from './data';
 import { Player, Guardian, SAVE_SLOTS } from './state';
 import { RANKS } from './ranks';
 import { makeRenderer, updateTweens, updateRigs } from './models';
-import { say, conversation, choose, askName, toast, fadeIn, fadeOut, hideHUD, updateHUD, playStorySequence } from './ui';
+import { say, conversation, choose, askName, toast, fadeIn, fadeOut, hideHUD, updateHUD, playStorySequence, isDialogueOpen, isMenuOpen, refreshHUD } from './ui';
 import { Battle, type BattleOptions, type BattleResult } from './battle';
 import { DungeonRun, type DungeonOutcome } from './dungeon';
 import { Town } from './town';
@@ -26,6 +26,71 @@ initAudio();
 window.addEventListener('keydown', e => {
   if (e.key.toLowerCase() === 'n' && !(e.target instanceof HTMLInputElement)) {
     toast(toggleMute() ? '🔇 Sound off' : '🔊 Sound on');
+  }
+});
+
+// Cheat system: Enter key brings up cheat code input box
+window.addEventListener('keydown', async e => {
+  if (e.key === 'Enter') {
+    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+      return;
+    }
+    if (isDialogueOpen() || isMenuOpen()) {
+      return;
+    }
+    if (!player) {
+      return;
+    }
+    e.preventDefault();
+    e.stopPropagation();
+    
+    try {
+      const code = await askName('Enter Cheat Code');
+      if (code.toLowerCase() === 'lemonquake') {
+        // Apply cheat: Lineup (current party) receives 10 levels
+        player.party.forEach(g => {
+          const targetLevel = Math.min(g.levelCap, g.level + 10);
+          const before = g.stats;
+          const levelsGained = targetLevel - g.level;
+          g.level = targetLevel;
+          g.exp = expForLevel(g.level);
+          
+          // Add tech points for any multiples of 5 reached
+          for (let lvl = targetLevel - levelsGained + 1; lvl <= targetLevel; lvl++) {
+            if (lvl % 5 === 0) {
+              g.techPoints++;
+            }
+          }
+          
+          // Unlock any techniques learned up to the new level
+          const newTechs = g.species.techs
+            .filter(t => t.level <= g.level)
+            .map(t => t.tech);
+          
+          newTechs.forEach(techId => {
+            if (!g.learnedTechs.includes(techId)) {
+              g.learnedTechs.push(techId);
+            }
+          });
+          
+          g.hp = g.stats.hp;
+          g.sp = g.stats.sp;
+        });
+
+        // Receive 10 pieces of 3 items important for battle: Grand Elixir, Spirit Soda+, Dawn Leaf
+        player.inventory.set('elixir', (player.inventory.get('elixir') ?? 0) + 10);
+        player.inventory.set('soda_plus', (player.inventory.get('soda_plus') ?? 0) + 10);
+        player.inventory.set('revive_leaf', (player.inventory.get('revive_leaf') ?? 0) + 10);
+
+        player.save();
+        refreshHUD();
+        toast('Cheat Activated: Lineup +10 Levels, +30 items!', 'gold');
+      } else {
+        toast('Invalid Cheat Code', 'red');
+      }
+    } catch (err) {
+      console.error('Cheat system error:', err);
+    }
   }
 });
 

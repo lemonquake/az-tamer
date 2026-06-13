@@ -12,7 +12,7 @@ import { Player, Guardian } from './state';
 import {
   makeTamer, makeVoxelHuman, updateVoxelHuman, setVoxelSeated, makeGuardian, disposeRig,
   marbleTexture, carpetTexture, tileTexture, wallpaperTexture, bookshelfTexture,
-  plankTexture, stoneTexture, skyGradient, makeGuideBeacon,
+  plankTexture, stoneTexture, skyGradient, makeGuideBeacon, globeTexture,
   type GuardianRig, type VoxelHumanOpts, type BeaconRig,
 } from './models';
 import {
@@ -977,69 +977,332 @@ export class University {
   }
 
   // ================= LIBRARY =================
+  /**
+   * The Grand Archive — a cathedral of paper. A mezzanine gallery rides the
+   * north wall above the restricted stacks, rolling ladders lean on towering
+   * shelves, green-shaded lamps pool light on the long reading table, and a
+   * five-hundred-year-old globe turns slowly in the corner. People actually
+   * READ here: scholars at the table, students whispering in the aisles, and
+   * one apprentice who fell asleep over chapter twelve.
+   */
   private buildLibrary(): void {
-    const r = this.newRoom('library', 18, 14);
+    const r = this.newRoom('library', 24, 16, { camHeight: 6.6, camDist: 7.4 });
     const s = r.scene;
     s.background = skyGradient('#241e32', '#0e0a16');
-    s.add(new THREE.AmbientLight(0xd8c8ff, 0.5));
-    const lamp1 = new THREE.PointLight(0xffd9a0, 16, 14);
-    lamp1.position.set(-4, 3.4, 0);
-    const lamp2 = new THREE.PointLight(0xffd9a0, 16, 14);
-    lamp2.position.set(4, 3.4, 2);
+    s.add(new THREE.AmbientLight(0xd8c8ff, 0.62));
+    const lamp1 = new THREE.PointLight(0xffd9a0, 24, 20);
+    lamp1.position.set(-5, 4.2, 0);
+    const lamp2 = new THREE.PointLight(0xffd9a0, 24, 20);
+    lamp2.position.set(5, 4.2, 1);
     lamp2.castShadow = true;
-    s.add(lamp1, lamp2);
+    // the reading table's pooled lamplight
+    const tableGlow = new THREE.PointLight(0xb8f2c8, 9, 8);
+    tableGlow.position.set(0, 2.2, 1.2);
+    s.add(lamp1, lamp2, tableGlow);
 
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(r.w + 1, r.d + 1),
-      new THREE.MeshStandardMaterial({ map: carpetTexture('#3a3050', '#8a7ab0', 4), roughness: 1 }));
+      new THREE.MeshStandardMaterial({ map: carpetTexture('#3a3050', '#8a7ab0', 5), roughness: 1 }));
     floor.rotation.x = -Math.PI / 2;
     floor.receiveShadow = true;
     s.add(floor);
-    this.shell(r, wallpaperTexture('#3a3452', '#2c2438', '#8a7ab0', 4), 0x241e32, 5.2);
+    // a grand circular rug under the reading table
+    const rug = new THREE.Mesh(new THREE.CircleGeometry(3.2, 28),
+      new THREE.MeshStandardMaterial({ map: carpetTexture('#5a2e3a', '#c9a24a', 1), roughness: 1 }));
+    rug.rotation.x = -Math.PI / 2;
+    rug.position.set(0, 0.012, 1.2);
+    s.add(rug);
+    this.shell(r, wallpaperTexture('#3a3452', '#2c2438', '#8a7ab0', 5), 0x241e32, 6.6);
 
-    // towering shelves along walls and as aisles
     const shelfMat = new THREE.MeshStandardMaterial({ map: bookshelfTexture(), roughness: 0.85 });
     const sideMat = new THREE.MeshStandardMaterial({ map: plankTexture('#3a2a18', 1), roughness: 0.9 });
-    const shelf = (x: number, z: number, rotY: number, len = 4.4) => {
-      const m = new THREE.Mesh(new THREE.BoxGeometry(len, 3.6, 0.7), [sideMat, sideMat, sideMat, sideMat, shelfMat, shelfMat]);
-      m.position.set(x, 1.8, z);
+    const shelf = (x: number, z: number, rotY: number, len = 4.4, h = 3.8, yBase = 0) => {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(len, h, 0.7), [sideMat, sideMat, sideMat, sideMat, shelfMat, shelfMat]);
+      m.position.set(x, yBase + h / 2, z);
       m.rotation.y = rotY;
       m.castShadow = true;
       s.add(m);
+      if (yBase > 0) return; // gallery shelves float above head height — no colliders
       const steps = Math.ceil(len / 1.4);
       for (let i = 0; i < steps; i++) {
         const t = len * (i / (steps - 1) - 0.5);
         r.colliders.push({ pos: new THREE.Vector3(x + Math.cos(rotY) * t, 0, z - Math.sin(rotY) * t), r: 0.75 });
       }
     };
-    shelf(-6, -r.d / 2 + 0.8, 0, 5);
-    shelf(6, -r.d / 2 + 0.8, 0, 5);
-    shelf(-r.w / 2 + 0.8, -2, Math.PI / 2, 5);
-    shelf(-r.w / 2 + 0.8, 3.5, Math.PI / 2, 4);
-    shelf(r.w / 2 - 0.8, -2, Math.PI / 2, 5);
-    shelf(-2.5, 0.5, 0, 4);
-    shelf(2.5, 3.5, 0, 4);
 
-    // reading table with candle
-    const table = new THREE.Group();
-    const tt = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, 0.12, 16),
-      new THREE.MeshStandardMaterial({ map: plankTexture('#5a3e22', 1), roughness: 0.6 }));
-    tt.position.y = 0.85;
-    const tleg = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.3, 0.85, 8), sideMat);
-    tleg.position.y = 0.42;
-    const candle = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.3, 8),
-      new THREE.MeshStandardMaterial({ color: 0xe8e0c8 }));
-    candle.position.y = 1.06;
-    const flame = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.14, 6),
-      new THREE.MeshStandardMaterial({ color: 0xffd27a, emissive: 0xff9a3a, emissiveIntensity: 1.5 }));
-    flame.position.y = 1.28;
-    flame.name = 'flame';
-    table.add(tt, tleg, candle, flame);
-    this.prop(r, table, 5, -1.5, 1.4);
+    // ---- the north wall: full-height stacks under a mezzanine gallery ----
+    shelf(-8, -r.d / 2 + 0.8, 0, 6.6, 3.4);
+    shelf(0, -r.d / 2 + 0.8, 0, 6.6, 3.4);
+    shelf(8, -r.d / 2 + 0.8, 0, 6.6, 3.4);
+    {
+      // the gallery: a walkway of dark planks riding the stacks, with a
+      // turned-post railing and a second storey of books above it
+      const walk = new THREE.Mesh(new THREE.BoxGeometry(r.w - 1, 0.18, 2.2),
+        new THREE.MeshStandardMaterial({ map: plankTexture('#4a3320', 4), roughness: 0.85 }));
+      walk.position.set(0, 3.55, -r.d / 2 + 1.3);
+      s.add(walk);
+      const railMat = new THREE.MeshStandardMaterial({ map: plankTexture('#5a3e22', 1), roughness: 0.8 });
+      for (let x = -r.w / 2 + 1.2; x <= r.w / 2 - 1.2; x += 1.15) {
+        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.06, 0.8, 6), railMat);
+        post.position.set(x, 4.0, -r.d / 2 + 2.3);
+        s.add(post);
+      }
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(r.w - 1.6, 0.08, 0.1), railMat);
+      rail.position.set(0, 4.42, -r.d / 2 + 2.3);
+      s.add(rail);
+      // the upper storey of books
+      shelf(-7, -r.d / 2 + 0.8, 0, 6.0, 2.2, 3.7);
+      shelf(1.5, -r.d / 2 + 0.8, 0, 6.0, 2.2, 3.7);
+      shelf(8.6, -r.d / 2 + 0.8, 0, 3.6, 2.2, 3.7);
+      // a spiral-ish stair suggestion in the NW corner (decorative steps)
+      for (let i = 0; i < 6; i++) {
+        const step = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.12, 0.5), railMat);
+        step.position.set(-r.w / 2 + 0.9, 0.6 + i * 0.58, -r.d / 2 + 3.4 - i * 0.42);
+        s.add(step);
+      }
+      r.colliders.push({ pos: new THREE.Vector3(-r.w / 2 + 0.9, 0, -r.d / 2 + 2.6), r: 1.1 });
+    }
 
-    // Archivist Wren at a lectern
-    tagNpc(this.npc(r, { top: 0x5a3a9a, hair: 0xc8c8d0, robe: true, cap: null }, 0, -3.4, Math.PI, undefined), 'Archivist Wren');
+    // ---- rolling ladders leaning on the stacks ----
+    for (const [lx, lean] of [[-4.6, 0.22], [5.2, -0.18]] as const) {
+      const ladder = new THREE.Group();
+      const railM = new THREE.MeshStandardMaterial({ map: plankTexture('#6a4a2a', 1), roughness: 0.8 });
+      for (const side of [-0.28, 0.28]) {
+        const rail = new THREE.Mesh(new THREE.BoxGeometry(0.07, 3.4, 0.07), railM);
+        rail.position.set(side, 1.7, 0);
+        ladder.add(rail);
+      }
+      for (let i = 0; i < 6; i++) {
+        const rung = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.56, 6), railM);
+        rung.rotation.z = Math.PI / 2;
+        rung.position.y = 0.45 + i * 0.52;
+        ladder.add(rung);
+      }
+      ladder.rotation.x = lean * 0.6;
+      ladder.rotation.y = lean;
+      ladder.position.set(lx, 0, -r.d / 2 + 1.55);
+      s.add(ladder);
+      r.colliders.push({ pos: new THREE.Vector3(lx, 0, -r.d / 2 + 1.55), r: 0.5 });
+    }
+
+    // ---- side aisles: tall stacks marching down both walls ----
+    shelf(-r.w / 2 + 0.8, -2.5, Math.PI / 2, 4.6);
+    shelf(-r.w / 2 + 0.8, 3.0, Math.PI / 2, 4.2);
+    shelf(r.w / 2 - 0.8, 0.5, Math.PI / 2, 5.4);
+    // freestanding aisle pair framing the reading hall
+    shelf(-5.4, -2.0, 0, 4.6);
+    shelf(5.4, -2.0, 0, 4.6);
+
+    // ---- the restricted stacks, NE corner, behind a velvet rope ----
+    {
+      shelf(r.w / 2 - 0.8, -5.2, Math.PI / 2, 3.4);
+      // rune-spined volumes glow on the shelf face
+      for (let i = 0; i < 5; i++) {
+        const spine = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.42, 0.06),
+          new THREE.MeshStandardMaterial({
+            color: 0x2a1a3a, emissive: [0x9a5af2, 0x5ad8e8, 0xe85a8a][i % 3], emissiveIntensity: 0.9,
+          }));
+        spine.name = 'wisp';
+        spine.userData.baseY = 1.4 + (i % 3) * 0.5;
+        spine.userData.ph = i * 1.7;
+        spine.position.set(r.w / 2 - 1.35, 1.4 + (i % 3) * 0.5, -6.4 + i * 0.55);
+        s.add(spine);
+      }
+      const ropeM = new THREE.MeshStandardMaterial({ color: 0x8a2438, roughness: 0.8 });
+      const postM = new THREE.MeshStandardMaterial({ color: 0xc9a24a, metalness: 0.85, roughness: 0.3 });
+      for (const [px, pz] of [[r.w / 2 - 3.4, -4.0], [r.w / 2 - 1.0, -4.0]] as const) {
+        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.14, 1.0, 8), postM);
+        post.position.set(px, 0.5, pz);
+        s.add(post);
+      }
+      const rope = new THREE.Mesh(new THREE.TorusGeometry(1.2, 0.035, 6, 16, Math.PI), ropeM);
+      rope.rotation.z = Math.PI;
+      rope.scale.y = 0.35;
+      rope.position.set(r.w / 2 - 2.2, 0.95, -4.0);
+      s.add(rope);
+      r.colliders.push({ pos: new THREE.Vector3(r.w / 2 - 2.2, 0, -4.6), r: 1.5 });
+      r.interactables.push({
+        pos: new THREE.Vector3(r.w / 2 - 2.2, 0, -3.2), radius: 1.6,
+        label: 'Press <b>E</b> — peer into the restricted stacks',
+        handler: async () => {
+          await say('', 'A brass plaque: "RESTRICTED — by order of the Archive. The books beyond this rope read back." One of the glowing spines shifts, very slightly, like something turning over in its sleep.');
+          await say('', 'From her lectern, Archivist Wren clears her throat without looking up. Message received.');
+        },
+      });
+    }
+
+    // ---- the five-hundred-year-old globe, still turning ----
+    {
+      const stand = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.7, 0.5, 10),
+        new THREE.MeshStandardMaterial({ map: plankTexture('#4a3320', 1), roughness: 0.8 }));
+      stand.position.set(8.6, 0.25, 3.4);
+      const globe = new THREE.Mesh(new THREE.SphereGeometry(0.85, 24, 18),
+        new THREE.MeshStandardMaterial({ map: globeTexture(), roughness: 0.7 }));
+      globe.position.set(8.6, 1.6, 3.4);
+      globe.rotation.z = 0.41; // a scholar's respectful axial tilt
+      globe.name = 'spinglobe';
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(1.0, 0.04, 8, 24),
+        new THREE.MeshStandardMaterial({ color: 0xc9a24a, metalness: 0.8, roughness: 0.3 }));
+      ring.rotation.x = Math.PI / 2.6;
+      ring.position.set(8.6, 1.6, 3.4);
+      s.add(stand, globe, ring);
+      r.colliders.push({ pos: new THREE.Vector3(8.6, 0, 3.4), r: 1.2 });
+      r.interactables.push({
+        pos: new THREE.Vector3(8.6, 0, 3.4), radius: 1.8,
+        label: 'Press <b>E</b> — study the old globe',
+        handler: async () => {
+          await say('', 'Four continents under your fingertips: Olivar, Veyra, Tharkand, Noruun. Someone has marked Ghandra\'s fold with a tiny brass pin and, in pencil so old it\'s nearly silver: "still holding."');
+          await say('', 'The globe turns on its own, one revolution per day, and nobody has ever found the mechanism. Library policy is not to look too hard.');
+        },
+      });
+    }
+
+    // ---- the grand reading table: green lamps, open books, working scholars ----
+    {
+      const table = new THREE.Group();
+      const top = new THREE.Mesh(new THREE.BoxGeometry(5.6, 0.14, 1.7),
+        new THREE.MeshStandardMaterial({ map: plankTexture('#5a3e22', 3), roughness: 0.55 }));
+      top.position.y = 0.92;
+      table.add(top);
+      for (const [lx, lz] of [[-2.5, -0.6], [2.5, -0.6], [-2.5, 0.6], [2.5, 0.6]] as const) {
+        const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.1, 0.92, 8), sideMat);
+        leg.position.set(lx, 0.46, lz);
+        table.add(leg);
+      }
+      // twin green-glass bankers' lamps
+      for (const lx of [-1.6, 1.6]) {
+        const base = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.12, 0.3, 8),
+          new THREE.MeshStandardMaterial({ color: 0xc9a24a, metalness: 0.85, roughness: 0.3 }));
+        base.position.set(lx, 1.14, 0);
+        const shade = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.26, 0.18, 10, 1, true),
+          new THREE.MeshStandardMaterial({
+            color: 0x2a6a4a, emissive: 0x4ad88a, emissiveIntensity: 0.9,
+            side: THREE.DoubleSide, roughness: 0.4,
+          }));
+        shade.position.set(lx, 1.36, 0);
+        table.add(base, shade);
+      }
+      // open books, an ink pot, loose paper
+      for (let i = 0; i < 4; i++) {
+        const book = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.05, 0.3),
+          new THREE.MeshStandardMaterial({ color: [0xa8453a, 0x3a6ea8, 0x4a8a4a, 0xe8dcc0][i], roughness: 0.7 }));
+        book.position.set(-1.9 + i * 1.25, 1.02, (i % 2 ? 0.35 : -0.3));
+        book.rotation.y = (i - 1.5) * 0.3;
+        table.add(book);
+      }
+      const ink = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 0.09, 8),
+        new THREE.MeshStandardMaterial({ color: 0x1a1a2e, roughness: 0.3 }));
+      ink.position.set(0.4, 1.04, -0.5);
+      table.add(ink);
+      this.prop(r, table, 0, 1.2, 0); // colliders added per-seat below
+      for (const cx of [-2, 0, 2]) r.colliders.push({ pos: new THREE.Vector3(cx, 0, 1.2), r: 0.95 });
+    }
+
+    // scholars at the table — actually reading, not waiting for a cue
+    for (const [sx, sz] of [[-1.4, 2.35], [1.6, 0.05]] as const) {
+      const stool = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.3, 0.46, 10),
+        new THREE.MeshStandardMaterial({ map: plankTexture('#4a3320', 1), roughness: 0.85 }));
+      stool.position.set(sx, 0.23, sz);
+      s.add(stool);
+    }
+    this.npc(r, { top: 0x6a4a9a, hair: 0x8a8a92, robe: true, cap: null, hairstyle: 'bald' }, -1.4, 2.35, 0, {
+      label: 'chat with Scholar Imbry',
+      handler: () => say('Scholar Imbry', 'Shh — I\'m mid-footnote. …Oh, very well. Did you know the Trial Caverns predate the university by six centuries? We built the school around the test, not the other way round. Now SHH.'),
+    }, true, 0.48);
+    this.npc(r, { top: 0x3a6e5a, hair: 0x6a3a1a, cap: null, hairstyle: 'buns' }, 1.6, 0.05, Math.PI, {
+      label: 'chat with Scribe Onna',
+      handler: () => say('Scribe Onna', 'I\'m copying the Reforging census before the original crumbles. Four hundred pages, two years, one hand. When I finish, I start the second volume. It\'s the happiest I\'ve ever been.'),
+    }, true, 0.48);
+
+    // the apprentice asleep over chapter twelve, at a corner desk
+    {
+      const desk = new THREE.Group();
+      const dt2 = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.1, 0.9),
+        new THREE.MeshStandardMaterial({ map: plankTexture('#5a3e22', 1), roughness: 0.6 }));
+      dt2.position.y = 0.82;
+      for (const [lx, lz] of [[-0.65, -0.35], [0.65, -0.35], [-0.65, 0.35], [0.65, 0.35]] as const) {
+        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.82, 0.08), sideMat);
+        leg.position.set(lx, 0.41, lz);
+        desk.add(leg);
+      }
+      const openBook = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.04, 0.36),
+        new THREE.MeshStandardMaterial({ color: 0xe8dcc0, roughness: 0.9 }));
+      openBook.position.set(0, 0.89, 0.05);
+      desk.add(dt2, openBook);
+      this.prop(r, desk, -8.6, 4.6, 1.0);
+      const fenStool = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.3, 0.46, 10),
+        new THREE.MeshStandardMaterial({ map: plankTexture('#4a3320', 1), roughness: 0.85 }));
+      fenStool.position.set(-8.6, 0.23, 5.6);
+      s.add(fenStool);
+      this.npc(r, { top: 0xc4763a, hair: 0x2a2a3a, cap: null, hairstyle: 'curly' }, -8.6, 5.6, 0, {
+        label: 'wake the sleeping apprentice (rude)',
+        handler: async () => {
+          await say('', 'The apprentice is face-down on "A Complete History of the Compact, Vol. III", breathing the slow breath of the truly defeated. A bubble of drool threatens page 212.');
+          await say('Apprentice Fen', '…mmh. five more minutes, Archivist. the compact can keep till morning…');
+        },
+      }, true, 0.46);
+    }
+
+    // students whispering in the west aisle
+    {
+      const wa: [number, number] = [-8.2, -0.6], wb: [number, number] = [-7.2, 0.4];
+      this.npc(r, { top: 0x5ad8e8, hair: 0x1a1a2e, cap: null, hairstyle: 'spiky' }, wa[0], wa[1],
+        Math.atan2(wb[0] - wa[0], wb[1] - wa[1]), undefined);
+      this.npc(r, { top: 0xe85a8a, hair: 0x6a3a1a, cap: null, hairstyle: 'long' }, wb[0], wb[1],
+        Math.atan2(wa[0] - wb[0], wa[1] - wb[1]), undefined);
+      r.interactables.push({
+        pos: new THREE.Vector3(-7.7, 0, -0.1), radius: 1.7,
+        label: 'Press <b>E</b> — eavesdrop shamelessly',
+        handler: async () => {
+          const bits: [string, string][][] = [
+            [['Student Tam', '…so the restricted rope. Is it to keep us out, or the books in?'],
+             ['Student Ree', 'Wren says "yes".']],
+            [['Student Ree', 'I checked the globe at midnight once. It was turning FASTER.'],
+             ['Student Tam', 'It was not.'],
+             ['Student Ree', 'It knows things, Tam.']],
+            [['Student Tam', 'Quiz me again. Five Houses, five verbs.'],
+             ['Student Ree', 'Runs toward, waits beside, grows beneath, stands before…'],
+             ['Student Tam', '…walks behind. We\'re going to pass. We\'re actually going to pass.']],
+          ];
+          await conversation(bits[Math.floor(Math.random() * bits.length)]);
+        },
+      });
+    }
+
+    // candle sconces breathing light along the aisles
+    for (const [cx, cz] of [[-5.4, -1.0], [5.4, -1.0], [-10.6, 0.5], [10.6, 2.8]] as const) {
+      const candle = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.3, 8),
+        new THREE.MeshStandardMaterial({ color: 0xe8e0c8 }));
+      candle.position.set(cx, 2.5, cz);
+      const flame = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.14, 6),
+        new THREE.MeshStandardMaterial({ color: 0xffd27a, emissive: 0xff9a3a, emissiveIntensity: 1.5 }));
+      flame.position.set(cx, 2.72, cz);
+      flame.name = 'flame';
+      s.add(candle, flame);
+    }
+
+    // Archivist Wren at her lectern, the Ledger's empty glass case beside her
+    {
+      const lectern = new THREE.Group();
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.18, 1.15, 8), sideMat);
+      post.position.y = 0.57;
+      const top = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.07, 0.5),
+        new THREE.MeshStandardMaterial({ map: plankTexture('#5a3e22', 1), roughness: 0.6 }));
+      top.position.y = 1.18;
+      top.rotation.x = -0.35;
+      lectern.add(post, top);
+      this.prop(r, lectern, 3.2, -4.6, 0.6);
+      const caseG = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.5, 0.6),
+        new THREE.MeshStandardMaterial({ color: 0x9ad4f2, transparent: true, opacity: 0.35, roughness: 0.1 }));
+      caseG.position.set(4.6, 1.05, -4.8);
+      const plinth = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.8, 0.7),
+        new THREE.MeshStandardMaterial({ map: stoneTexture('#7a7388', '#494258', 1), roughness: 0.8 }));
+      plinth.position.set(4.6, 0.4, -4.8);
+      s.add(caseG, plinth);
+      r.colliders.push({ pos: new THREE.Vector3(4.6, 0, -4.8), r: 0.8 });
+    }
+    tagNpc(this.npc(r, { top: 0x5a3a9a, hair: 0xc8c8d0, robe: true, cap: null }, 3.2, -5.4, Math.PI, undefined), 'Archivist Wren');
     r.interactables.push({
-      pos: new THREE.Vector3(0, 0, -2), radius: 1.8,
+      pos: new THREE.Vector3(3.2, 0, -4.2), radius: 1.8,
       label: 'Press <b>E</b> — talk to Archivist Wren',
       handler: () => this.questTalk('side_ledger', 'Archivist Wren', {
         offer: [
@@ -1077,11 +1340,12 @@ export class University {
         chartTable.add(chart);
       }
       chartTable.add(top);
-      this.prop(r, chartTable, -5, -0.2, 1.3);
+      // Veyl works under the gallery's west end, storm-charts spread wide
+      this.prop(r, chartTable, -8.4, -4.2, 1.3);
 
-      tagNpc(this.npc(r, { top: 0x4a6a9a, hair: 0x8a8a92, robe: true, cap: null, hairstyle: 'classic' }, -5, -1.8, 0, undefined), 'Historian Veyl');
+      tagNpc(this.npc(r, { top: 0x4a6a9a, hair: 0x8a8a92, robe: true, cap: null, hairstyle: 'classic' }, -8.4, -5.6, 0, undefined), 'Historian Veyl');
       r.interactables.push({
-        pos: new THREE.Vector3(-5, 0, -1), radius: 2.0,
+        pos: new THREE.Vector3(-8.4, 0, -4.9), radius: 2.0,
         label: 'Press <b>E</b> — talk to Historian Veyl',
         handler: () => this.historianTalk(),
       });
@@ -1106,7 +1370,7 @@ export class University {
       book.position.y = 1.18;
       book.rotation.x = -0.4;
       lectern.add(post, top, book);
-      const x = -5.5 + i * 2.6, z = 4.6;
+      const x = 3.6 + i * 2.0, z = 5.8; // the lore nook, beside the old globe
       this.prop(r, lectern, x, z, 0.5);
       r.interactables.push({
         pos: new THREE.Vector3(x, 0, z), radius: 1.3,
@@ -1230,6 +1494,13 @@ export class University {
   }
 
   // ================= TRAINING HALL =================
+  /**
+   * Half dojo, half laboratory. The old sparring ring got an energy fence,
+   * the dummies got hovering target drones, and the east wall is now the
+   * Simulation Bay — a projector dais that conjures practice opponents out
+   * of light. Coach Hurst pretends to distrust all of it, and checks his
+   * drill stats on the big board when he thinks nobody's watching.
+   */
   private buildTraining(): void {
     const r = this.newRoom('training', 20, 14);
     const s = r.scene;
@@ -1239,6 +1510,9 @@ export class University {
     main.position.set(0, 4.6, 0);
     main.castShadow = true;
     s.add(main);
+    const bayLight = new THREE.PointLight(0x5ad8e8, 10, 10);
+    bayLight.position.set(7, 3.2, 4.2);
+    s.add(bayLight);
 
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(r.w + 1, r.d + 1),
       new THREE.MeshStandardMaterial({ map: plankTexture('#9a7a4e', 6), roughness: 0.85 }));
@@ -1247,17 +1521,155 @@ export class University {
     s.add(floor);
     this.shell(r, wallpaperTexture('#5e3e34', '#3a2c1e', '#c89a6a', 4), 0x3a2820, 5);
 
-    // sparring ring
+    // sparring ring — now fenced by a humming energy rope
     const ring = new THREE.Mesh(new THREE.CircleGeometry(3.6, 32),
       new THREE.MeshStandardMaterial({ map: carpetTexture('#7a3a30', '#e8d8b8', 1), roughness: 1 }));
     ring.rotation.x = -Math.PI / 2;
     ring.position.set(-3, 0.015, -1);
     s.add(ring);
     const ringRope = new THREE.Mesh(new THREE.TorusGeometry(3.6, 0.05, 6, 36),
-      new THREE.MeshStandardMaterial({ color: 0xe8d8b8, roughness: 0.8 }));
+      new THREE.MeshStandardMaterial({
+        color: 0x5ad8e8, emissive: 0x3ab8d8, emissiveIntensity: 0.9, roughness: 0.3,
+      }));
+    ringRope.name = 'wisp';
+    ringRope.userData.ph = 0;
     ringRope.rotation.x = Math.PI / 2;
     ringRope.position.set(-3, 0.55, -1);
     s.add(ringRope);
+    // four emitter pylons keep the rope alive
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+      const px = -3 + Math.cos(a) * 3.6, pz = -1 + Math.sin(a) * 3.6;
+      const pylon = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.1, 0.62, 8),
+        new THREE.MeshStandardMaterial({ color: 0x4a5060, metalness: 0.7, roughness: 0.35 }));
+      pylon.position.set(px, 0.31, pz);
+      const tip = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 6),
+        new THREE.MeshStandardMaterial({ color: 0x5ad8e8, emissive: 0x5ad8e8, emissiveIntensity: 1.2 }));
+      tip.position.set(px, 0.62, pz);
+      tip.name = 'wisp';
+      tip.userData.ph = i * 1.6;
+      s.add(pylon, tip);
+    }
+
+    // ---- the drill board: today's standings in honest lamplight ----
+    {
+      const cv = document.createElement('canvas');
+      cv.width = 512; cv.height = 256;
+      const ctx = cv.getContext('2d')!;
+      ctx.fillStyle = '#0c1620';
+      ctx.fillRect(0, 0, 512, 256);
+      ctx.strokeStyle = '#2a4a5a'; ctx.lineWidth = 6;
+      ctx.strokeRect(6, 6, 500, 244);
+      ctx.fillStyle = '#5ad8e8';
+      ctx.font = 'bold 34px Trebuchet MS';
+      ctx.fillText('⚡ TRAINING HALL — DRILL BOARD', 22, 46);
+      ctx.font = '24px Trebuchet MS';
+      const rows: [string, string][] = [
+        ['1. Kade & Cinder', '21–1'],
+        ['2. Sgt. Mira\'s squad', '17–4'],
+        ['3. "The Footwork Five"', '12–9'],
+        ['4. Apprentice Fen', 'asleep'],
+      ];
+      rows.forEach(([nm, sc], i) => {
+        ctx.fillStyle = i === 0 ? '#f2c14e' : '#bcd8e8';
+        ctx.fillText(nm, 28, 96 + i * 38);
+        ctx.fillText(sc, 400, 96 + i * 38);
+      });
+      const tex = new THREE.CanvasTexture(cv);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      const board = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 1.8),
+        new THREE.MeshStandardMaterial({ map: tex, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.55, roughness: 0.4 }));
+      board.position.set(-3, 3.1, -r.d / 2 + 0.45);
+      const frame = new THREE.Mesh(new THREE.BoxGeometry(3.9, 2.1, 0.12),
+        new THREE.MeshStandardMaterial({ color: 0x2a303c, metalness: 0.6, roughness: 0.4 }));
+      frame.position.set(-3, 3.1, -r.d / 2 + 0.38);
+      s.add(frame, board);
+      r.interactables.push({
+        pos: new THREE.Vector3(-3, 0, -r.d / 2 + 1.4), radius: 1.8,
+        label: 'Press <b>E</b> — read the drill board',
+        handler: () => say('', 'Twenty-one and one. Kade has drawn a small, dignified crown over the "21" and a very large, undignified circle around the "1". Underneath, in Coach Hurst\'s block capitals: "RIVALS MAKE LEGENDS. RE-MATCH FRIDAY."'),
+      });
+    }
+
+    // ---- the Simulation Bay: a projector dais conjuring sparring partners ----
+    {
+      const dais = new THREE.Mesh(new THREE.CylinderGeometry(1.7, 1.9, 0.22, 20),
+        new THREE.MeshStandardMaterial({ color: 0x3a4250, metalness: 0.75, roughness: 0.3 }));
+      dais.position.set(7, 0.11, 4.2);
+      const glowRing = new THREE.Mesh(new THREE.TorusGeometry(1.55, 0.05, 8, 28),
+        new THREE.MeshStandardMaterial({ color: 0x5ad8e8, emissive: 0x5ad8e8, emissiveIntensity: 1.1 }));
+      glowRing.rotation.x = Math.PI / 2;
+      glowRing.position.set(7, 0.23, 4.2);
+      glowRing.name = 'wisp';
+      glowRing.userData.ph = 2.1;
+      s.add(dais, glowRing);
+      r.colliders.push({ pos: new THREE.Vector3(7, 0, 4.2), r: 2.1 });
+      // the hologram: a practice guardian sketched in light
+      const holoMat = new THREE.MeshStandardMaterial({
+        color: 0x6ae8f2, emissive: 0x4ad8e8, emissiveIntensity: 0.9,
+        transparent: true, opacity: 0.45, roughness: 0.2, depthWrite: false,
+      });
+      const holo = new THREE.Group();
+      const body = new THREE.Mesh(new THREE.SphereGeometry(0.55, 12, 10), holoMat);
+      body.scale.set(1.25, 0.9, 1);
+      body.position.y = 1.0;
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.3, 10, 8), holoMat);
+      head.position.set(0.6, 1.45, 0);
+      const tail = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.7, 8), holoMat);
+      tail.rotation.z = Math.PI / 2.2;
+      tail.position.set(-0.75, 1.15, 0);
+      holo.add(body, head, tail);
+      holo.position.set(7, 0.25, 4.2);
+      holo.name = 'holo';
+      s.add(holo);
+      // projector emitters around the rim
+      for (let i = 0; i < 3; i++) {
+        const a = (i / 3) * Math.PI * 2;
+        const em = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.26, 6),
+          new THREE.MeshStandardMaterial({ color: 0x8a93a8, metalness: 0.8, roughness: 0.3 }));
+        em.position.set(7 + Math.cos(a) * 1.55, 0.32, 4.2 + Math.sin(a) * 1.55);
+        s.add(em);
+      }
+      // the console
+      const console3 = new THREE.Group();
+      const pedestal = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.0, 0.4),
+        new THREE.MeshStandardMaterial({ color: 0x2a303c, metalness: 0.7, roughness: 0.35 }));
+      pedestal.position.y = 0.5;
+      const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.55, 0.34),
+        new THREE.MeshStandardMaterial({ color: 0x9af2e8, emissive: 0x4ad8c8, emissiveIntensity: 1.0 }));
+      screen.position.set(0, 1.08, 0.06);
+      screen.rotation.x = -0.5;
+      console3.add(pedestal, screen);
+      this.prop(r, console3, 4.6, 4.2, 0.55);
+      r.interactables.push({
+        pos: new THREE.Vector3(4.6, 0, 4.2), radius: 1.7,
+        label: 'Press <b>E</b> — poke the simulator console',
+        handler: async () => {
+          const lines = [
+            'SIMULATION READY: "Tidefin, Lv 5, mildly annoyed." You scroll the difficulty list. It goes from "mildly annoyed" to "Greggy". Nobody has ever selected "Greggy".',
+            'The console hums: "DRILL 7 — type matchups. Blaze beats Verdant beats Tide beats Blaze. Umbra eats Volt. Gale rides above it all." The hologram strikes a pose with each line. It enjoys its work.',
+            'ERROR LOG, last entry: "Simulation terminated — student attempted to befriend the hologram. Note from Coach Hurst: stop logging this as an error."',
+          ];
+          await say('Simulator', lines[Math.floor(Math.random() * lines.length)]);
+        },
+      });
+    }
+
+    // ---- hovering target drones above the dummy line ----
+    for (const [dx2, dz2, ph] of [[5.5, -3.5, 0], [7, -1, 2.1], [5.5, 1.5, 4.2]] as const) {
+      const drone = new THREE.Group();
+      const core = new THREE.Mesh(new THREE.OctahedronGeometry(0.18),
+        new THREE.MeshStandardMaterial({ color: 0xf2c14e, emissive: 0xe8a23a, emissiveIntensity: 0.9, metalness: 0.5, roughness: 0.3 }));
+      const halo = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.025, 6, 18),
+        new THREE.MeshStandardMaterial({ color: 0x8a93a8, metalness: 0.8, roughness: 0.3 }));
+      halo.rotation.x = Math.PI / 2;
+      drone.add(core, halo);
+      drone.position.set(dx2 - 0.4, 2.6, dz2);
+      drone.name = 'dronefloat';
+      drone.userData.baseY = 2.6;
+      drone.userData.ph = ph;
+      s.add(drone);
+    }
 
     // training dummies
     for (const [x, z] of [[5.5, -3.5], [7, -1], [5.5, 1.5]] as const) {
@@ -1703,6 +2115,7 @@ export class University {
 
   // ================= per-frame =================
   private update(dt: number): void {
+    if (!this.resolveExit) return;
     const r = this.room;
     // guidance: Officers' Hall until the player has pledged, then the way out
     if (this.officersBeacon && this.doorsBeacon) {
@@ -1794,6 +2207,23 @@ export class University {
       if (o.name === 'steam') {
         o.position.y = 1.75 + Math.sin(now * 0.003 + o.position.x) * 0.08;
         (o as THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>).material.opacity = 0.2 + Math.sin(now * 0.004 + o.position.x * 2) * 0.12;
+      }
+      if (o.name === 'spinglobe') o.rotation.y = now * 0.0004; // one slow scholarly revolution
+      if (o.name === 'wisp') {
+        const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial;
+        if (m?.emissive) m.emissiveIntensity = 0.7 + Math.sin(now * 0.0022 + ((o.userData.ph as number) ?? 0)) * 0.4;
+      }
+      if (o.name === 'holo') {
+        const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial;
+        if (m) m.opacity = 0.4 + Math.sin(now * 0.0035 + o.position.x) * 0.12;
+        o.rotation.y = now * 0.0012;
+      }
+      if (o.name === 'dronefloat') {
+        o.position.y = (o.userData.baseY as number) + Math.sin(now * 0.0018 + ((o.userData.ph as number) ?? 0)) * 0.22;
+        o.rotation.y = now * 0.002 + ((o.userData.ph as number) ?? 0);
+      }
+      if (o.name === 'scanline') {
+        o.position.y = 0.6 + ((now * 0.0007 + ((o.userData.ph as number) ?? 0)) % 1) * 2.2;
       }
     });
 
@@ -1889,6 +2319,8 @@ export class University {
 
     updateHUD(this.player, 'Tamer University');
     showHotkeys(true);
+    // debug handle for automated testing
+    (window as unknown as Record<string, unknown>).__uni = { uni: this, tamer: this.tamer };
     window.addEventListener('keydown', this.onKeyDown);
     window.addEventListener('keyup', this.onKeyUp);
 
@@ -1924,6 +2356,7 @@ export class University {
         showHotkeys(false);
         hideAreaMap(document.getElementById('minimap') as HTMLCanvasElement);
         this.rooms.forEach(rd => rd.rigs.forEach(disposeRig));
+        this.resolveExit = null;
         res();
       };
     });

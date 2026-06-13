@@ -9,9 +9,9 @@ import {
   elementsOf, type GType, type SpeciesDef,
 } from './data';
 import type { Player } from './state';
-import { speciesSnapshotURL } from './snapshots';
+import { speciesSnapshotURL, legendSnapshotURL } from './snapshots';
 import { openGuardianCard } from './guardiancard';
-import { CORRUPTED_LEGION, LEGION_WAR_SUMMARY } from './lore';
+import { CORRUPTED_LEGION, LEGION_WAR_SUMMARY, LEGENDS, LEGEND_GUARDIANS } from './lore';
 
 const TYPE_ORDER: GType[] = ['Blaze', 'Tide', 'Verdant', 'Volt', 'Gale', 'Umbra'];
 const BOSS_IDS = new Set(['ironhusk', 'gravemaw', 'voltigarch', ...CORRUPTED_LEGION.map(l => l.speciesId)]);
@@ -126,6 +126,30 @@ export function evoTreeHTML(p: Player): string {
     html += `</div>`;
   }
 
+  // ---- the Legends' nine: Aljay, Greggy and Onnel's personal Guardians ----
+  html += `<div class="evo-type-head" style="color:${ELEMENT_CSS.Aether};border-color:${ELEMENT_CSS.Aether}">🌠 AETHER — THE LEGENDS' NINE</div>
+    <div class="sub" style="margin:2px 0 8px">The personal Guardians of the Big Three. They evolve from nothing and into nothing —
+    each is the only one of its kind, bonded for life. Click any of them for their story.</div>`;
+  for (const legend of LEGENDS) {
+    html += `<div class="evo-chain" style="border-color:${legend.color}66">
+      <div class="evo-legend-owner" style="min-width:96px;text-align:center;align-self:center">
+        <div style="color:${legend.color};font-weight:bold">${legend.name}</div>
+        <div class="sub" style="font-size:0.78em">${legend.title}</div>
+      </div>`;
+    for (const g of legend.guardians) {
+      html += `
+        <div class="evo-node" data-legend="${g.name}" title="${g.name} — ${g.epithet}">
+          <div class="evo-thumb" style="border-color:${legend.color}">
+            <img data-legendsnap="${g.name}" alt="${g.name}">
+          </div>
+          <div class="evo-name" style="color:${legend.color}">${g.name}</div>
+          <div class="evo-stage">${g.epithet}</div>
+          <div class="evo-els" title="${g.elements.join(' · ')}">${g.elements.map(e => ELEMENT_ICONS[e]).join('')}</div>
+        </div>`;
+    }
+    html += `</div>`;
+  }
+
   // corrupted sentinels appendix
   html += `<div class="evo-type-head" style="color:var(--ui-red);border-color:var(--ui-red)">⚠ CORRUPTED SENTINELS</div><div class="evo-chain">`;
   for (const id of ['ironhusk', 'gravemaw', 'voltigarch']) html += nodeHTML(SPECIES[id], owned);
@@ -152,16 +176,59 @@ export function evoTreeHTML(p: Player): string {
   return html;
 }
 
+/** A lore card for one of the Legends' nine — overlay with portrait, elements and story. */
+function openLegendLore(guardianName: string): void {
+  const entry = LEGEND_GUARDIANS.find(lg => lg.guardian.name === guardianName);
+  if (!entry) return;
+  const { owner, guardian: g } = entry;
+  const overlay = document.createElement('div');
+  overlay.style.cssText = `
+    position:fixed;inset:0;z-index:300;display:flex;align-items:center;justify-content:center;
+    background:rgba(6,8,18,0.78);backdrop-filter:blur(3px);cursor:pointer;`;
+  overlay.innerHTML = `
+    <div style="max-width:430px;width:92%;background:linear-gradient(170deg,#141a30,#0a0e20);
+      border:1px solid ${owner.color};border-radius:14px;padding:18px 20px;cursor:default;
+      box-shadow:0 0 40px ${owner.color}55, inset 0 0 60px rgba(0,0,0,0.4);color:#dde2f2;
+      font-family:inherit">
+      <div style="display:flex;gap:14px;align-items:center">
+        <img src="${legendSnapshotURL(g.name, 256)}" alt="${g.name}"
+          style="width:118px;height:118px;border-radius:12px;border:1.5px solid ${owner.color};
+          background:radial-gradient(circle at 50% 35%, #1c2444, #0a0e20)">
+        <div>
+          <div style="font-size:1.3em;font-weight:bold;color:${owner.color}">${g.name}</div>
+          <div style="opacity:0.85;font-style:italic;margin:2px 0 6px">${g.epithet}</div>
+          <div style="font-size:0.85em;opacity:0.8">Bonded to <b style="color:${owner.color}">${owner.name} ${owner.title}</b></div>
+          <div style="margin-top:6px;font-size:1.05em" title="${g.elements.join(' · ')}">
+            ${g.elements.map(e => `<span style="color:${ELEMENT_CSS[e]}">${ELEMENT_ICONS[e]} ${e}</span>`).join(' &nbsp;')}
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:12px;line-height:1.5;font-size:0.93em;opacity:0.92">${g.desc}</div>
+      <div style="margin-top:12px;text-align:right">
+        <button class="ui-btn" data-close>Close</button>
+      </div>
+    </div>`;
+  const close = () => overlay.remove();
+  overlay.onclick = e => { if (e.target === overlay) close(); };
+  overlay.querySelector<HTMLButtonElement>('[data-close]')!.onclick = close;
+  document.body.appendChild(overlay);
+}
+
 /** Wire clicks + progressively fill in 3D thumbnails (one per frame). */
 export function wireEvoTree(el: HTMLElement, p: Player, busyGuard?: { busy: boolean }): void {
-  const imgs = [...el.querySelectorAll<HTMLImageElement>('img[data-snap]')];
+  const imgs = [
+    ...el.querySelectorAll<HTMLImageElement>('img[data-snap]'),
+    ...el.querySelectorAll<HTMLImageElement>('img[data-legendsnap]'),
+  ];
   let i = 0;
   let cancelled = false;
   const fill = () => {
     if (cancelled || i >= imgs.length) return;
     const img = imgs[i++];
-    if (img.isConnected) img.src = speciesSnapshotURL(img.dataset.snap!, 128);
-    else { cancelled = true; return; }
+    if (!img.isConnected) { cancelled = true; return; }
+    img.src = img.dataset.snap
+      ? speciesSnapshotURL(img.dataset.snap, 128)
+      : legendSnapshotURL(img.dataset.legendsnap!, 128);
     requestAnimationFrame(fill);
   };
   requestAnimationFrame(fill);
@@ -175,5 +242,10 @@ export function wireEvoTree(el: HTMLElement, p: Player, busyGuard?: { busy: bool
       .sort((a, b) => b.level - a.level)[0];
     await openGuardianCard(ownedG ?? id, p);
     if (busyGuard) busyGuard.busy = false;
+  });
+
+  el.querySelectorAll<HTMLElement>('[data-legend]').forEach(node => node.onclick = () => {
+    if (busyGuard?.busy) return;
+    openLegendLore(node.dataset.legend!);
   });
 }
