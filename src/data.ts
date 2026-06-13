@@ -829,18 +829,25 @@ export const ITEMS: Record<string, ItemDef> = Object.fromEntries([
   I('elixir', 'Grand Elixir', 'heal', 9999, 600, 'Fully restores one Guardian\'s HP.'),
   I('soda', 'Spirit Soda', 'sp', 30, 90, 'Restores 30 SP to one Guardian.'),
   I('soda_plus', 'Spirit Soda+', 'sp', 80, 240, 'Restores 80 SP to one Guardian.'),
+  I('soda_max', 'Spirit Nectar', 'sp', 9999, 520, 'Fully restores one Guardian\'s SP — bottled dawn-dew from the Mistveil springs.'),
   I('revive_leaf', 'Dawn Leaf', 'revive', 0.5, 350, 'Revives a fainted Guardian at half HP.'),
+  I('revive_bloom', 'Phoenix Bloom', 'revive', 1.0, 760, 'Revives a fainted Guardian at FULL HP. Petals that remember being fire.'),
   I('berry', 'Sweet Berry', 'gift', 12, 30, 'A favorite snack of wild Guardians. Builds bond when gifted.'),
   I('honey_roll', 'Honey Roll', 'gift', 25, 80, 'A pastry no Guardian can resist. Builds strong bond.'),
   I('star_treat', 'Star Treat', 'gift', 45, 200, 'A legendary delicacy. Builds a deep bond instantly.'),
+  I('aether_confit', 'Aether Confit', 'gift', 80, 460, 'A shimmering candied morsel from a University recipe. Even wary Apex Guardians soften at the smell.'),
   I('cell', 'Charge Cell', 'fuel', 40, 50, 'Restores 40 Energy to the Crawler.'),
   I('cell_plus', 'Charge Cell+', 'fuel', 120, 130, 'Restores 120 Energy to the Crawler.'),
+  I('cell_max', 'Stormcore Cell', 'fuel', 9999, 360, 'Fully recharges the Crawler\'s Energy in one jolt of stored lightning.'),
   I('plating', 'Patch Plating', 'repair', 50, 70, 'Repairs 50 Hull on the Crawler.'),
+  I('plating_plus', 'Aegis Plating', 'repair', 9999, 320, 'Fully repairs the Crawler\'s Hull with vault-grade weld-foam.'),
   I('atk_gem', 'Ruby Gem', 'boost', 2, 800, 'Permanently raises a Guardian\'s Attack by 2.', 'atk'),
   I('def_gem', 'Topaz Gem', 'boost', 2, 800, 'Permanently raises a Guardian\'s Defense by 2.', 'def'),
   I('spd_gem', 'Opal Gem', 'boost', 2, 800, 'Permanently raises a Guardian\'s Speed by 2.', 'spd'),
   I('wis_gem', 'Sapphire Gem', 'boost', 2, 800, 'Permanently raises a Guardian\'s Wisdom by 2.', 'wis'),
   I('hp_gem', 'Garnet Gem', 'boost', 6, 800, 'Permanently raises a Guardian\'s max HP by 6.', 'hp'),
+  I('sp_gem', 'Amethyst Gem', 'boost', 6, 800, 'Permanently raises a Guardian\'s max SP by 6.', 'sp'),
+  I('prism_gem', 'Prism Gem', 'boost', 3, 2600, 'A flawless cut crystal that strengthens a Guardian\'s very frame — permanently raises max HP by 3 and is prized by every house.', 'hp'),
   // story relics — quest items, never sold, never consumed by accident
   I('storm_amber', 'Storm-Touched Amber', 'relic', 0, 0, 'Fossil resin from the Thunderfen Mire with a living spark sealed inside. Historian Veyl at the University would trade a great deal to study one.'),
   I('sea_chart', 'Aurelian Sea-Chart', 'relic', 0, 0, 'Historian Veyl\'s hand-corrected chart of the western sea. Agdao Island — the Cradle of Tamers — is inked at its heart. Your overworld map now knows the way.'),
@@ -882,6 +889,7 @@ export const CRAWLER_PARTS: Record<string, CrawlerPart> = Object.fromEntries([
   P('cargo1', 'cargo', 'Side Satchels', 1, 12, 0, 'satchel', 'Leather saddlebags on both flanks. Carry up to 12 item stacks.'),
   P('cargo2', 'cargo', 'Cargo Rack', 2, 20, 400, 'rack', 'A strapped-down top rack of crates. Carry up to 20 item stacks.'),
   P('cargo3', 'cargo', 'Vault Trunk', 3, 32, 1100, 'vault', 'An armored, gold-sealed strongbox. Carry up to 32 item stacks.'),
+  P('cargo4', 'cargo', 'Caravan Hold', 4, 48, 3000, 'caravan', 'A double-decked merchant hold with brass-bound chests. Carry up to 48 item stacks.'),
   P('cannon1', 'cannon', 'Pop Cannon', 1, 1, 0, 'pop', 'A single cheerful barrel. Breaks cracked rocks blocking passages.'),
   P('cannon2', 'cannon', 'Bore Cannon', 2, 2, 700, 'bore', 'Twin barrels. Also stuns foes: +10% first-strike chance.'),
   P('cannon3', 'cannon', 'Howitzer MK-A', 3, 3, 1800, 'howitzer', 'A muzzle-braked monster. Also stuns foes: +25% first-strike chance.'),
@@ -889,9 +897,11 @@ export const CRAWLER_PARTS: Record<string, CrawlerPart> = Object.fromEntries([
   P('scanner1', 'scanner', 'Tin Sonar', 1, 1, 0, 'tin', 'A whip antenna with a brave little beacon. Reveals nearby map tiles.'),
   P('scanner2', 'scanner', 'Owl-Eye Sonar', 2, 2, 600, 'owleye', 'A slow-turning dish that never blinks. Wider reveal; chests ping on the map.'),
   P('scanner3', 'scanner', 'Oracle Array', 3, 3, 1500, 'oracle', 'Three orbiting auguries. Full-floor chest & stair pings, wide reveal.'),
+  P('scanner4', 'scanner', 'Aether Eye', 4, 4, 3800, 'aethereye', 'A levitating halo-ring of folded sky. Sees half a floor at a glance — nothing stays hidden.'),
   P('legs1', 'legs', 'Scuttler Legs', 1, 0, 0, 'scuttler', 'Four sturdy academy struts. They get you there.'),
   P('legs2', 'legs', 'Arachno Striders', 2, 15, 900, 'arachno', 'Six armored legs with a smoother gait: 15% of steps cost no Energy.'),
   P('legs3', 'legs', 'Sovereign Octapods', 3, 30, 2400, 'sovereign', 'Eight gold-jointed clawfeet gliding like silk: 30% of steps cost no Energy.'),
+  P('legs4', 'legs', 'Aether Drift Legs', 4, 50, 4600, 'aetherdrift', 'Eight floating clawfeet that barely touch the ground: 50% of steps cost no Energy.'),
 ].map(p => [p.id, p]));
 
 // ---------------- Crawler paint jobs ----------------
@@ -917,6 +927,14 @@ export const PAINT_JOBS: Record<string, PaintJob> = Object.fromEntries([
   PJ('p_gold', 'Royal Gold', 480, 0xc9a24a, 0.9, 0.2, '#c9a24a', 'Actual gold leaf. Dax charges extra to even look at it.'),
   PJ('p_chrome', 'Stormchrome', 420, 0x9aa4b8, 0.95, 0.12, '#b8c2d4', 'Mirror chrome that catches every lightning flash.'),
   PJ('p_aether', 'Aetherglow', 640, 0xff9ad2, 0.5, 0.3, '#ff9ad2', 'Faintly luminous pink — pigment ground from a fallen halo, allegedly.', 0xff6ab8, 0.35),
+  PJ('p_emberveil', 'Emberveil', 320, 0xd8542a, 0.55, 0.32, '#ff7a3a', 'Coal-black lacquer with banked-ember undertones that breathe when the light moves.', 0xf24a1a, 0.4),
+  PJ('p_tidewatch', 'Tidewatch Teal', 200, 0x1f8a8a, 0.6, 0.3, '#1f8a8a', 'Harbor-glass teal flecked with salt-white. Mistveil dock crews swear by it.'),
+  PJ('p_mosswyrm', 'Mosswyrm Green', 200, 0x2f6b3a, 0.45, 0.55, '#2f6b3a', 'Living moss-lacquer that smells faintly of rain and old forests.'),
+  PJ('p_vault', 'Vaultiron', 240, 0x4a4e5a, 0.85, 0.25, '#5a5e6a', 'Gunmetal with a brushed sheen — the finish of the Sunken Vault\'s own war-engines.'),
+  PJ('p_solar', 'Solar Flare', 360, 0xf2a83a, 0.7, 0.25, '#ffc04a', 'Molten gold-orange that seems to hold its own sunrise.', 0xf2832a, 0.3),
+  PJ('p_void', 'Voidpetal', 580, 0x2a1e44, 0.4, 0.4, '#3a2a5a', 'Deep umbral purple shot through with drifting motes of starlight.', 0x6a3a9a, 0.45),
+  PJ('p_glacier', 'Glacier Pale', 300, 0xaccfe2, 0.55, 0.2, '#accfe2', 'Frost-white nacre with a cold blue heart, mirror-buffed by Coldcurrent ice-wrights.', 0x6ab8e8, 0.2),
+  PJ('p_prism', 'Prismshift', 760, 0xc8b4f2, 0.85, 0.15, '#c8b4f2', 'A dichroic clearcoat that throws a different color from every angle. Dax calls it "the headache".', 0xa088e8, 0.3),
 ].map(p => [p.id, p]));
 
 // ---------------- Grand Houses ----------------
@@ -996,5 +1014,5 @@ export const DUNGEONS: DungeonDef[] = [
     desc: 'The Foretales relay-bastion where the eastern valleys\' news is made — before it happens. Dark glass, dead-light conduits, and a print floor that has never once stopped.', coords: [12, 70], quest: true },
 ];
 
-export const SHOP_STOCK = ['tonic', 'tonic_plus', 'soda', 'berry', 'honey_roll', 'star_treat', 'revive_leaf', 'cell', 'cell_plus', 'plating', 'elixir', 'soda_plus'];
-export const GEM_STOCK = ['atk_gem', 'def_gem', 'spd_gem', 'wis_gem', 'hp_gem'];
+export const SHOP_STOCK = ['tonic', 'tonic_plus', 'soda', 'soda_plus', 'soda_max', 'berry', 'honey_roll', 'star_treat', 'aether_confit', 'revive_leaf', 'revive_bloom', 'cell', 'cell_plus', 'cell_max', 'plating', 'plating_plus', 'elixir'];
+export const GEM_STOCK = ['atk_gem', 'def_gem', 'spd_gem', 'wis_gem', 'hp_gem', 'sp_gem', 'prism_gem'];

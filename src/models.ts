@@ -1411,6 +1411,29 @@ export function makeCrawler(look: CrawlerLook = {}): THREE.Group {
       const lock = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.03, 10), gold);
       lock.rotation.x = Math.PI / 2; lock.position.set(-0.34, 1.12, 0.3);
       body.add(box, seam, lock);
+    } else if (style === 'caravan') { // double-decked merchant hold with brass-bound chests
+      const holdMat = paintedMat(paint, 0x4a3a30, 0.45, 0.55);
+      const brass = new THREE.MeshStandardMaterial({ color: 0xc7993f, metalness: 0.8, roughness: 0.3 });
+      for (const [dy, dh] of [[1.02, 0.3], [1.34, 0.24]] as const) {
+        const deck = new THREE.Mesh(new THREE.BoxGeometry(0.5, dh, 0.58), holdMat);
+        deck.position.set(-0.32, dy, 0);
+        body.add(deck);
+        // brass bands wrapping the deck
+        for (const bz of [0.2, -0.2]) {
+          const band = new THREE.Mesh(new THREE.BoxGeometry(0.52, dh * 0.9, 0.03), brass);
+          band.position.set(-0.32, dy, bz);
+          body.add(band);
+        }
+      }
+      // little stacked chests on top
+      const chestMat = new THREE.MeshStandardMaterial({ map: plankTexture('#9a6e3a'), roughness: 0.85 });
+      for (const [cx, cz] of [[-0.24, 0.14], [-0.42, -0.12]] as const) {
+        const chest = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.14, 0.18), chestMat);
+        chest.position.set(cx, 1.53, cz);
+        const lid = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.05, 0.2), brass);
+        lid.position.set(cx, 1.61, cz);
+        body.add(chest, lid);
+      }
     } else { // satchel — saddlebags on both flanks
       const bagMat = paintedMat(paint, 0x7a5a36, 0.1, 0.85);
       for (const side of [0.5, -0.5]) {
@@ -1505,6 +1528,35 @@ export function makeCrawler(look: CrawlerLook = {}): THREE.Group {
       }
       spinners.push(orbiter);
       body.add(orbiter);
+    } else if (style === 'aethereye') { // levitating halo-ring of folded sky
+      // a slim floating post (no physical mast to the body — it hovers)
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.03, 0.32, 6), mastMat);
+      post.position.set(-0.32, 1.18, 0);
+      body.add(post);
+      const floater = new THREE.Group();
+      floater.position.set(-0.32, 1.62, 0);
+      const skyMat = new THREE.MeshStandardMaterial({ color: 0xc8b4f2, emissive: 0x7a8af2, emissiveIntensity: 1.5 });
+      glowMats.push(skyMat);
+      // twin counter-set halo rings
+      const outer = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.022, 8, 24), skyMat);
+      outer.rotation.x = Math.PI / 2;
+      const inner = new THREE.Mesh(new THREE.TorusGeometry(0.13, 0.016, 7, 20), skyMat);
+      inner.rotation.x = Math.PI / 2.2;
+      inner.rotation.z = 0.5;
+      // the all-seeing core eye
+      const coreMat = new THREE.MeshStandardMaterial({ color: 0xff9ad2, emissive: 0xff6ab8, emissiveIntensity: 1.8 });
+      glowMats.push(coreMat);
+      const core = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 10), coreMat);
+      // four cardinal motes
+      for (let i = 0; i < 4; i++) {
+        const a = (i / 4) * Math.PI * 2;
+        const mote = new THREE.Mesh(new THREE.SphereGeometry(0.025, 6, 5), skyMat);
+        mote.position.set(Math.cos(a) * 0.2, 0, Math.sin(a) * 0.2);
+        floater.add(mote);
+      }
+      floater.add(outer, inner, core);
+      spinners.push(floater);
+      body.add(floater);
     } else { // tin whip antenna
       const ant = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.5, 4), mastMat);
       ant.position.set(-0.3, 1.22, 0);
@@ -1522,8 +1574,16 @@ export function makeCrawler(look: CrawlerLook = {}): THREE.Group {
   {
     const style = partStyle('legs', 'scuttler');
     const paint = paintFor('legs');
-    const legMat = paintedMat(paint, style === 'sovereign' ? 0x3a3444 : 0x2a2a35, 0.6, 0.45);
-    const xs = style === 'sovereign' ? [0.52, 0.18, -0.16, -0.5]
+    const eightLeg = style === 'sovereign' || style === 'aetherdrift';
+    const legMat = paintedMat(paint, style === 'aetherdrift' ? 0x2e2a40 : style === 'sovereign' ? 0x3a3444 : 0x2a2a35, 0.6, 0.45);
+    // glowing aether accent material for the drift legs' joints & feet
+    const aetherJoint = new THREE.MeshStandardMaterial({ color: 0xc8b4f2, emissive: 0x7a8af2, emissiveIntensity: 1.3 });
+    if (style === 'aetherdrift') glowMats.push(aetherJoint);
+    const goldMat = new THREE.MeshStandardMaterial({ color: 0xc9a24a, metalness: 0.85, roughness: 0.25 });
+    const goldFoot = new THREE.MeshStandardMaterial({ color: 0xc9a24a, metalness: 0.8, roughness: 0.3 });
+    const accentKnee = style === 'aetherdrift' ? aetherJoint : goldMat;
+    const accentFoot = style === 'aetherdrift' ? aetherJoint : goldFoot;
+    const xs = eightLeg ? [0.52, 0.18, -0.16, -0.5]
       : style === 'arachno' ? [0.42, 0, -0.42]
       : [0.32, -0.32];
     const thighLen = 0.42, shinLen = 0.8;
@@ -1555,7 +1615,7 @@ export function makeCrawler(look: CrawlerLook = {}): THREE.Group {
         knee.position.copy(kneePos);
         hip.add(knee);
         const kneeCap = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 6),
-          style === 'sovereign' ? new THREE.MeshStandardMaterial({ color: 0xc9a24a, metalness: 0.85, roughness: 0.25 }) : legMat);
+          eightLeg ? accentKnee : legMat);
         knee.add(kneeCap);
 
         const shinGeo = new THREE.CylinderGeometry(0.03, 0.045, shinLen, 6);
@@ -1567,7 +1627,7 @@ export function makeCrawler(look: CrawlerLook = {}): THREE.Group {
         shinPivot.add(shin);
         knee.add(shinPivot);
         const foot = new THREE.Mesh(new THREE.ConeGeometry(0.045, 0.14, 6),
-          style === 'sovereign' ? new THREE.MeshStandardMaterial({ color: 0xc9a24a, metalness: 0.8, roughness: 0.3 }) : DARK_TRIM());
+          eightLeg ? accentFoot : DARK_TRIM());
         foot.position.y = shinLen;
         foot.rotation.x = Math.PI;
         shin.add(foot);

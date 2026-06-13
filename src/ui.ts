@@ -541,9 +541,10 @@ const KIND_ICONS: Record<string, string> = {
   heal: '🧪', sp: '🥤', revive: '🍃', gift: '🎁', fuel: '🔋', repair: '🛠️', boost: '💎', evo: '🧬', relic: '📜',
 };
 const ITEM_ICONS: Record<string, string> = {
-  tonic: '🧪', tonic_plus: '⚗️', elixir: '✨', soda: '🥤', soda_plus: '🧋', revive_leaf: '🍃',
-  berry: '🫐', honey_roll: '🥐', star_treat: '🌟', cell: '🔋', cell_plus: '⚡', plating: '🛡️',
-  atk_gem: '🔴', def_gem: '🟡', spd_gem: '⚪', wis_gem: '🔵', hp_gem: '🟢',
+  tonic: '🧪', tonic_plus: '⚗️', elixir: '✨', soda: '🥤', soda_plus: '🧋', soda_max: '🍶', revive_leaf: '🍃',
+  revive_bloom: '🌺', berry: '🫐', honey_roll: '🥐', star_treat: '🌟', aether_confit: '🍬',
+  cell: '🔋', cell_plus: '⚡', cell_max: '🌩️', plating: '🛡️', plating_plus: '🔰',
+  atk_gem: '🔴', def_gem: '🟡', spd_gem: '⚪', wis_gem: '🔵', hp_gem: '🟢', sp_gem: '🟣', prism_gem: '💎',
   storm_amber: '🟠', sea_chart: '🗺️', stormheart_coil: '🌀',
 };
 export const itemIcon = (id: string): string => ITEM_ICONS[id] ?? KIND_ICONS[ITEMS[id]?.kind] ?? '📦';
@@ -1062,6 +1063,7 @@ export function applyItem(player: Player, itemId: string, g: Guardian): string {
   if (it.kind === 'boost' && it.boostStat) {
     g.bonus[it.boostStat] += it.value;
     if (it.boostStat === 'hp') g.hp += it.value;
+    if (it.boostStat === 'sp') g.sp += it.value;
     return `${g.nickname}'s ${STAT_NAMES[it.boostStat]} rose permanently!`;
   }
   return 'Nothing happened.';

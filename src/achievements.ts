@@ -38,7 +38,16 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: 'rank_captain', icon: '⭐', name: "Captain's Banner", desc: 'Reach the Captain rank.', check: p => rankIndexFor(p) >= 7 },
   { id: 'rank_chief', icon: '👑', name: 'Grand Chief of Aurel', desc: 'Reach the final rank — Grand Chief.', check: p => rankIndexFor(p) >= 8 },
   { id: 'tier3', icon: '🔧', name: 'Master Machinist', desc: 'Install any Tier-3 Crawler part.', check: p => p.crawler.owned.some(id => id.endsWith('3')) },
+  { id: 'tier4', icon: '🛠️', name: 'Aether-Wright', desc: 'Own any Tier-4 Crawler part — the pinnacle of Dax\'s craft.', check: p => p.crawler.owned.some(id => id.endsWith('4')) },
   { id: 'lv30', icon: '📈', name: 'Drillmaster', desc: 'Train any Guardian to level 30.', check: p => allGuardians(p).some(g => g.level >= 30) },
+  { id: 'lv50', icon: '🏔️', name: 'Limit Breaker', desc: 'Train any Guardian to level 50.', check: p => allGuardians(p).some(g => g.level >= 50) },
+  { id: 'maxcap', icon: '💯', name: 'Sky\'s the Limit', desc: 'Train a Guardian to level 99.', check: p => allGuardians(p).some(g => g.level >= 99) },
+  { id: 'win150', icon: '🏆', name: 'Undefeated', desc: 'Win 150 battles.', check: p => p.battlesWon >= 150 },
+  { id: 'friend15', icon: '🌈', name: 'Beastfriend', desc: 'Befriend 15 wild Guardians.', check: p => p.capturesMade >= 15 },
+  { id: 'painter', icon: '🎨', name: 'Showroom Pride', desc: 'Own 3 or more Crawler paint jobs.', check: p => (p.crawler.ownedPaints?.length ?? 0) >= 3 },
+  { id: 'tycoon', icon: '🏦', name: 'Aurel Tycoon', desc: 'Hold 20,000 Shards at once.', check: p => p.shards >= 20000 },
+  { id: 'gemcutter', icon: '💠', name: 'Forged in Bonus', desc: 'Build +60 in permanent stat bonuses on one Guardian (gems & evolutions).', check: p => allGuardians(p).some(g => (g.bonus.atk + g.bonus.def + g.bonus.spd + g.bonus.wis + g.bonus.hp + g.bonus.sp) >= 60) },
+  { id: 'fullhouse', icon: '🎴', name: 'Loyal to the Crest', desc: 'Pledge to one of the five Grand Houses.', check: p => !!p.houseId },
 ];
 
 export const isUnlocked = (p: Player, id: string): boolean => !!p.flags[`ach_${id}`];
