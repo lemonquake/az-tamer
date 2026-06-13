@@ -130,8 +130,56 @@ export const DAUGHTERS: DaughterDef[] = [
   {
     id: 'azrael', name: 'Azrael', title: 'The Nightwing', color: '#9a6af2',
     look: { top: 0x6a4a9a, hair: 0x241a2e, hairstyle: 'ponytail', bottom: 0x2a2438 },
-    blurb: 'The younger daughter — her father over again: stubborn past all argument, a quiet genius, and convinced every Guardian is simply a friend she hasn\'t met yet. She keeps his old lantern on her belt, unlit. "For Ghandra," she says, and does not elaborate.',
+    blurb: 'The younger daughter — her father over again: stubborn past all argument, a quiet genius, and convinced every Guardian is simply a friend she hasn\'t met yet. She keeps his old lantern on her belt, unlit. "For Ghandra," she says, and does not elaborate. Her steadiness she gets from her mother — Mayor Airah — though she\'d sooner duel a general than admit it.',
   },
+];
+
+// ---------------- Airah, the Lantern of Haven ----------------
+// Wife of Aljay the Dawnflame, mother of Azrin and Azrael, and the
+// elected Mayor of Haven City. While the Dawnflame walks the dark
+// places of the world, Airah keeps the light on at home: she rebuilt
+// the capital after the Legion War and has held its only true civic
+// seat clean through sixteen years of Foretales' manufactured chaos.
+export interface AirahDef {
+  name: string; title: string; epithet: string;
+  husband: string; daughters: [string, string];
+  /** the lux civic seat she keeps */
+  hall: string;
+  desc: string;
+  /** how a fisher-town girl came to govern the capital */
+  rise: string;
+  /** why the news-machine that unseats every leader cannot unseat her */
+  untouchable: string;
+}
+export const AIRAH: AirahDef = {
+  name: 'Airah',
+  title: 'Mayor of Haven',
+  epithet: 'The Lantern of Haven',
+  husband: 'Aljay',
+  daughters: ['Azrin', 'Azrael'],
+  hall: 'The Aurelian Hall',
+  desc: 'Mayor Airah carries the city the way other people carry a lantern down a dark stair — steadily, and so that everyone behind her can see their feet. She is sharp where her husband is bright, patient where her daughters are sudden, and she remembers the name of every lamplighter, ferryman and flower-seller in Haven. Aljay the Dawnflame won the Coliseum eight times; Airah won the harder thing, which was the morning after, every morning, for fifteen years.',
+  rise: 'She came up out of the harbor wards — a clerk\'s daughter who could read a city\'s ledgers and its moods at the same glance. When the Legion War left Haven a ring of cracked walls and frightened people, it was Airah who drew the lines the masons followed: the doubled Coliseum, the new market lanes, the Sanctum beside the spring, the five Grand Houses on their stone shoulder. The people did not so much elect her as refuse to let her stop.',
+  untouchable: 'Foretales unseats every leader on four continents — the front-runner withdraws, scandalizes, or is simply un-mentioned until the polls discover the public "never wanted them." Sixteen years of it. And yet Airah keeps her chair. Partly because Haven adores her past the reach of any poll; partly because the standing directive at the heart of the Mirrorhouse names her family among the only three the machine is forbidden to touch — "GLAZE. DO NOT TOUCH. NOT YET. SOON." She knows the line word for word. She has it framed in her office, where everyone can see it, which is the most dangerous thing in the building.',
+};
+
+// The hints Airah and her staff let slip about where the Dawnflame
+// gets to when he "goes walking." Each one is true. None of them is
+// the whole truth — she keeps the map of him in her head and nowhere
+// else, on purpose. Players collect these as folklore.
+export const ALJAY_HIDEOUTS: { place: string; hint: string }[] = [
+  { place: 'The Lantern Loft',
+    hint: 'He makes lanterns. Has since before the war — hand-folds the panes, files the little doors. Half the lamps on the lamplighters\' routes have one of his somewhere in them, and not one is signed. There\'s a loft he keeps for it, up some stair he insists he can always find his way back to. He cannot always find his way back to it. I send Azrael.' },
+  { place: 'The Quiet Water',
+    hint: 'When he truly wants to vanish he goes fishing where the broadcast crystals lose their signal — out past the hills toward New Salmonan, or the north rocks of Agdao where it all began. No crystal, no Foretales, no one asking the Dawnflame for a quote. Just a line in the water and a man pretending he isn\'t the most-watched person alive.' },
+  { place: 'The Reflectory',
+    hint: 'There is a rooftop somewhere in this city with no name and a very good telescope, and a chart of the Noruun auroras pinned all round the walls. He says the lights down south are Ghandra\'s reflection and he is reading them. I say he is stargazing and calling it homework. We are both right.' },
+  { place: 'The Loud Kitchen',
+    hint: 'Three or four times a year a window in this house bangs open at dawn and the whole floor smells of chilies and seared garlic and somebody\'s grandmother\'s recipe from Salmonan, and that is how the girls and I learn their father is home. He cooks like he fought — too much, all at once, and you forgive him everything. Then he\'s gone before the dishes dry.' },
+  { place: 'The Veyra Light',
+    hint: 'There\'s a dead lighthouse on the Veyra coast he has been "almost finished" restoring for nine years. I think he likes it precisely because it is never finished. A light that has gone out, that one stubborn man insists on bringing back — you can see why it would suit him.' },
+  { place: 'Greggy\'s Bluff',
+    hint: 'And some weeks he is simply with Greggy, on that ridiculous windy bluff on Agdao, the two of them sparring like boys and lying about their scores. Onnel referees and pretends to find them tiresome. If you ever cannot find my husband and the thunder is close — that\'s where.' },
 ];
 
 // ---------------- the three Legendary Tamers ----------------
@@ -186,7 +234,7 @@ export const LEGENDS: LegendDef[] = [
         bespoke: 'vulfenix',
       },
     ],
-    story: 'Leader of the three, and eight-time World Champion of the Grand Coliseum. Aljay walked into Ghandra carrying nothing but a lantern, with Firgara\'s blazing sword at his shoulder, Onthrofa folding the road ahead, and Vulfenix lighting the dark behind with trails of rose-fire. Children across all four continents reenact his duel with Nyxghul using broom handles. He has not been seen publicly in years — every tamer claims to know someone who has met him.',
+    story: 'Leader of the three, and eight-time World Champion of the Grand Coliseum. Aljay walked into Ghandra carrying nothing but a lantern, with Firgara\'s blazing sword at his shoulder, Onthrofa folding the road ahead, and Vulfenix lighting the dark behind with trails of rose-fire. Children across all four continents reenact his duel with Nyxghul using broom handles. He has not been seen publicly in years — every tamer claims to know someone who has met him; his wife Airah, Mayor of Haven, only smiles when she is asked where he is. Their daughters Azrin and Azrael carry the family fire forward.',
   },
   {
     id: 'greggy', name: 'Greggy', title: 'The Stormheart', element: 'Electric', color: '#f2d23a',
