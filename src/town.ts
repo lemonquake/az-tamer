@@ -32,6 +32,7 @@ import { tagNpc, crowdName, attachNpcPicker } from './npccard';
 import { runCityTutorial, isTutorialOpen } from './tutorial';
 import { worldClock, DayNightRig } from './daynight';
 import { sfx } from './audio';
+import { cDesk, cFountain, cReadingDesk, cColumnSconces, cHangingBanner, cTelescope, cPainting } from './aurelian_hall_helpers';
 
 const minimapCanvas = () => document.getElementById('minimap') as HTMLCanvasElement;
 
@@ -4103,55 +4104,55 @@ export class Town {
     this.intRigs = [];
     this.resetInteriorRig();
     // ---- the multi-storey rig ----
-    this.intRoom = { w: 26, d: 22 };
+    this.intRoom = { w: 32, d: 24 };
     this.intCamRig = 'tower';
     this.intFloors = 4;
     this.intFloorH = 6;
     this.intName = 'The Aurelian Hall';
     this.intFloorNames = ['Lobby & Reception', 'Records & Gallery', 'Hall of Mayors', 'Mayor’s Grand Suite'];
     const { w, d } = this.intRoom;
-    const HW = w / 2, HD = d / 2;          // 13, 11
+    const HW = w / 2, HD = d / 2;          // 16, 12
     const FH = this.intFloorH;             // 6
     const p = this.player;
 
-    // ---------- layout constants ----------
-    const ATR = { x0: -5, x1: 5, z0: -2, z1: 7 };           // open atrium (floors 1 & 2)
-    const WEST = { x0: -12.6, x1: -8, zBot: 9, zTop: -9, yBot: 0, yTop: FH };   // flight 0→1
-    const EAST = { x0: 8, x1: 12.6, zBot: -9, zTop: 9, yBot: FH, yTop: 2 * FH }; // flight 1→2
-    const WEST3 = { x0: -12.6, x1: -8, zBot: 9, zTop: -9, yBot: 2 * FH, yTop: 3 * FH }; // flight 2→3
+    // ---------- layout constants for spiral staircase ----------
+    // East Flight: Floor 0 -> 1, z goes from 8.5 (bottom) to -8.5 (top)
+    // North Flight: Floor 1 -> 2, x goes from 8.0 (bottom) to -8.0 (top)
+    // West Flight: Floor 2 -> 3, z goes from -8.0 (bottom) to 8.0 (top)
 
     // ---------- the floor-aware ground height ----------
-    const rampH = (f: typeof WEST, z: number) => {
-      const t = Math.max(0, Math.min(1, (z - f.zBot) / (f.zTop - f.zBot)));
-      return f.yBot + (f.yTop - f.yBot) * t;
-    };
     this.intGroundH = (x: number, z: number): number => {
+      // East Flight: 0 -> 1
+      if (x >= 12.0 && x <= 15.0 && z >= -8.5 && z <= 8.5) {
+        const t = Math.max(0, Math.min(1, (8.5 - z) / 17.0));
+        return 6.0 * t;
+      }
+      // North Flight: 1 -> 2
+      if (x >= -8.0 && x <= 8.0 && z >= -11.0 && z <= -8.5) {
+        const t = Math.max(0, Math.min(1, (8.0 - x) / 16.0));
+        return 6.0 + 6.0 * t;
+      }
+      // West Flight: 2 -> 3
+      if (x >= -15.0 && x <= -12.0 && z >= -8.0 && z <= 8.0) {
+        const t = Math.max(0, Math.min(1, (z + 8.0) / 16.0));
+        return 12.0 + 6.0 * t;
+      }
       const curY = this.tamer.position.y;
-      if (x >= -12.6 && x <= -8 && z >= -9 && z <= 9) {
-        if (curY <= 9.0) {
-          return rampH(WEST, z);
-        } else {
-          return rampH(WEST3, z);
-        }
-      }
-      if (x >= 8 && x <= 12.6 && z >= -9 && z <= 9) {
-        return rampH(EAST, z);
-      }
       const cur = this.intFloorOf(curY);
       return cur * FH;
     };
 
     // ---------- materials ----------
-    const lobbyFloorMat = new THREE.MeshStandardMaterial({ map: marbleTexture('#fdfcfa', '#cabfda', 3), roughness: 0.35, metalness: 0.1 });
-    const upperFloorMat = new THREE.MeshStandardMaterial({ map: marbleTexture('#fcfbfa', '#dcd8d0', 3), roughness: 0.3, metalness: 0.05 });
-    const officeFloorMat = new THREE.MeshStandardMaterial({ map: plankTexture('#4a2a18', 3), roughness: 0.65 });
+    const lobbyFloorMat = new THREE.MeshStandardMaterial({ map: tileTexture('#ffffff', '#eaeef5', 8), roughness: 0.25, metalness: 0.15 });
+    const archivesFloorMat = new THREE.MeshStandardMaterial({ map: tileTexture('#11284a', '#ffffff', 8), roughness: 0.25, metalness: 0.1 });
+    const galleryFloorMat = new THREE.MeshStandardMaterial({ map: tileTexture('#5a1730', '#c9a24a', 8), roughness: 0.3, metalness: 0.15 });
+    const suiteFloorMat = new THREE.MeshStandardMaterial({ map: tileTexture('#16161a', '#c9a24a', 8), roughness: 0.2, metalness: 0.25 });
     const wallMat = new THREE.MeshStandardMaterial({ map: wallpaperTexture('#6a4a6e', '#3a2438', '#d8b56a', 3), roughness: 0.85 });
     const stoneTrim = new THREE.MeshStandardMaterial({ map: stoneTexture('#e2dbe8', '#b8aec8', 2), roughness: 0.7 });
     const gold = new THREE.MeshStandardMaterial({ color: 0xc9a24a, metalness: 0.85, roughness: 0.28 });
     const stepMat = new THREE.MeshStandardMaterial({ map: marbleTexture('#fbf9f6', '#bcb0cc', 1), roughness: 0.4 });
     const runnerMat = new THREE.MeshStandardMaterial({ map: carpetTexture('#5a1730', '#d8b56a', 2), roughness: 0.9 });
     const royalPurpleRunner = new THREE.MeshStandardMaterial({ map: carpetTexture('#2a143a', '#d8b56a', 2), roughness: 0.9 });
-    const ROSE = 0xe85a8a;
 
     s.background = skyGradient('#2a1e30', '#120a18');
 
@@ -4175,46 +4176,60 @@ export class Town {
     lamp(g2, -6, 16.5, -5, 0xffe6c0, 12); lamp(g2, 6, 16.5, 5, 0xffe6c0, 11);   // Hall of Mayors
     lamp(g3, -6, 22.3, -5, 0xffe6c0, 14); lamp(g3, 6, 22.3, 5, 0xffe6c0, 12);   // Grand Suite
 
-    // ---------- outer walls (floor-by-floor for culling & openings) ----------
-    const buildFloorWalls = (fy: number, floorIdx: number, parentGroup: THREE.Object3D) => {
-      const wh = FH;
-      const wy = fy + wh / 2;
-      const mkWall = (ww: number, wd: number, x: number, z: number, mat: THREE.Material = wallMat) => {
-        const wall = new THREE.Mesh(new THREE.BoxGeometry(ww, wh, wd), mat);
-        wall.position.set(x, wy, z);
-        wall.receiveShadow = true;
-        parentGroup.add(wall);
-      };
+    // ---------- wall helper: visual walls & dense colliders ----------
+    const addWall = (
+      x0: number, z0: number, x1: number, z1: number,
+      y0: number, y1: number,
+      parent: THREE.Object3D,
+      mat: THREE.Material = wallMat
+    ) => {
+      const dist = Math.hypot(x1 - x0, z1 - z0);
+      const wh = y1 - y0;
+      const wy = y0 + wh / 2;
+      const isHoriz = Math.abs(x1 - x0) >= Math.abs(z1 - z0);
+      const ww = isHoriz ? dist : 0.4;
+      const wd = isHoriz ? 0.4 : dist;
+      const wall = new THREE.Mesh(new THREE.BoxGeometry(ww, wh, wd), mat);
+      wall.position.set((x0 + x1) / 2, wy, (z0 + z1) / 2);
+      wall.receiveShadow = true;
+      parent.add(wall);
 
-      if (floorIdx === 0) {
-        mkWall(w, 0.5, 0, -HD);                       // back
-        mkWall(0.5, d, -HW, 0);                       // west
-        mkWall(0.5, d, HW, 0);                        // east
-        mkWall(w / 2 - 1.6, 0.5, -(w / 4 + 0.8), HD); // front
-        mkWall(w / 2 - 1.6, 0.5, w / 4 + 0.8, HD);
-      } else if (floorIdx === 1) {
-        mkWall(w, 0.5, 0, -HD);
-        mkWall(0.5, d, -HW, 0);
-        mkWall(0.5, d, HW, 0);
-        mkWall(w, 0.5, 0, HD);
-      } else if (floorIdx === 2) {
-        mkWall(w, 0.5, 0, -HD);
-        mkWall(0.5, d, -HW, 0);
-        mkWall(0.5, d, HW, 0);
-        mkWall(w, 0.5, 0, HD);
-      } else if (floorIdx === 3) {
-        // Balcony opening on the back wall (x = -3 to 3 open)
-        mkWall(w / 2 - 3.0, 0.5, -(w / 4 + 1.5), -HD);
-        mkWall(w / 2 - 3.0, 0.5, w / 4 + 1.5, -HD);
-        mkWall(0.5, d, -HW, 0);
-        mkWall(0.5, d, HW, 0);
-        mkWall(w, 0.5, 0, HD);
+      // Add circular colliders along the wall
+      const steps = Math.max(1, Math.round(dist / 0.8));
+      for (let i = 0; i <= steps; i++) {
+        const t = i / steps;
+        const cx = x0 + (x1 - x0) * t;
+        const cz = z0 + (z1 - z0) * t;
+        this.intColliders.push({ pos: new THREE.Vector3(cx, 0, cz), r: 0.65, y0, y1 });
       }
     };
-    buildFloorWalls(0, 0, s);
-    buildFloorWalls(FH, 1, g1);
-    buildFloorWalls(2 * FH, 2, g2);
-    buildFloorWalls(3 * FH, 3, g3);
+
+    // ---------- outer walls (floor-by-floor) ----------
+    // Floor 0
+    addWall(-HW, -HD, HW, -HD, 0, FH, s);
+    addWall(-HW, -HD, -HW, HD, 0, FH, s);
+    addWall(HW, -HD, HW, HD, 0, FH, s);
+    addWall(-HW, HD, -1.6, HD, 0, FH, s);
+    addWall(1.6, HD, HW, HD, 0, FH, s); // gap for entrance door
+
+    // Floor 1
+    addWall(-HW, -HD, HW, -HD, FH, 2 * FH, g1);
+    addWall(-HW, -HD, -HW, HD, FH, 2 * FH, g1);
+    addWall(HW, -HD, HW, HD, FH, 2 * FH, g1);
+    addWall(-HW, HD, HW, HD, FH, 2 * FH, g1);
+
+    // Floor 2
+    addWall(-HW, -HD, HW, -HD, 2 * FH, 3 * FH, g2);
+    addWall(-HW, -HD, -HW, HD, 2 * FH, 3 * FH, g2);
+    addWall(HW, -HD, HW, HD, 2 * FH, 3 * FH, g2);
+    addWall(-HW, HD, HW, HD, 2 * FH, 3 * FH, g2);
+
+    // Floor 3
+    addWall(-HW, -HD, -6.0, -HD, 3 * FH, 4 * FH, g3); // Balcony opening on back wall
+    addWall(6.0, -HD, HW, -HD, 3 * FH, 4 * FH, g3);
+    addWall(-HW, -HD, -HW, HD, 3 * FH, 4 * FH, g3);
+    addWall(HW, -HD, HW, HD, 3 * FH, 4 * FH, g3);
+    addWall(-HW, HD, HW, HD, 3 * FH, 4 * FH, g3);
 
     // gold dado bands marking each storey
     for (const by of [FH, 2 * FH, 3 * FH]) {
@@ -4234,69 +4249,56 @@ export class Town {
     // FLOOR 0: lobby plate
     plate(-HW, HW, -HD, HD, 0, lobbyFloorMat);
 
-    // Civic seal
-    const sealRing = new THREE.Mesh(new THREE.RingGeometry(2.0, 2.8, 40),
-      new THREE.MeshStandardMaterial({ color: 0xc9a24a, emissive: 0x8a6a1a, emissiveIntensity: 0.4, side: THREE.DoubleSide, roughness: 0.4 }));
-    sealRing.rotation.x = -Math.PI / 2;
-    sealRing.position.set(0, 0.04, 2.4);
-    const sealStar = new THREE.Mesh(new THREE.CircleGeometry(1.7, 8),
-      new THREE.MeshStandardMaterial({ color: 0xf2c14e, emissive: 0xc9a24a, emissiveIntensity: 0.5, side: THREE.DoubleSide, roughness: 0.4 }));
-    sealStar.rotation.x = -Math.PI / 2;
-    sealStar.position.set(0, 0.05, 2.4);
-    sealStar.name = 'legendpulse';
-    s.add(sealRing, sealStar);
+    // Dynamic central fountain
+    cFountain(0, 0, 2.4, s, this.intColliders);
 
-    // FLOOR 1 plate (minus atrium, minus stair lanes, plus landings at back)
-    plate(-8, 8, -HD, ATR.z0, FH, upperFloorMat, g1);
-    plate(-8, 8, ATR.z1, HD, FH, upperFloorMat, g1);
-    plate(-8, ATR.x0, ATR.z0, ATR.z1, FH, upperFloorMat, g1);
-    plate(ATR.x1, 8, ATR.z0, ATR.z1, FH, upperFloorMat, g1);
-    // Back landings to transition to/from stairs
-    plate(-HW, -8, -HD, -7, FH, upperFloorMat, g1); // West landing (top of Flight 1)
-    plate(8, HW, -HD, -7, FH, upperFloorMat, g1);  // East landing (bottom of Flight 2)
+    // FLOOR 1 plates:
+    // North strip (contains NE landing, North corridor, NW landing base)
+    plate(-HW, HW, -HD, -9.0, FH, archivesFloorMat, g1);
+    // South strip (balcony)
+    plate(-HW, HW, 8.5, HD, FH, archivesFloorMat, g1);
+    // West area (Deep Archives Room)
+    plate(-HW, -4.0, -9.0, 8.5, FH, archivesFloorMat, g1);
 
-    // FLOOR 2 plate (wrap around atrium, east/west stair lanes open, front solid for crossover)
-    plate(-8, 8, -HD, ATR.z0, 2 * FH, upperFloorMat, g2); // back center
-    plate(-8, 8, ATR.z1, HD, 2 * FH, upperFloorMat, g2);  // front center
-    plate(-8, ATR.x0, ATR.z0, ATR.z1, 2 * FH, upperFloorMat, g2); // west center
-    plate(ATR.x1, 8, ATR.z0, ATR.z1, 2 * FH, upperFloorMat, g2);  // east center
-    // Solid front strip for crossing over from East top to West bottom
-    plate(-HW, HW, 7, HD, 2 * FH, upperFloorMat, g2);
+    // FLOOR 2 plates:
+    // North strip (contains NW landing, NE landing, and a connecting bridge walkway)
+    plate(-HW, -8.5, -HD, -8.5, 2 * FH, galleryFloorMat, g2);
+    plate(8.0, HW, -HD, -8.5, 2 * FH, galleryFloorMat, g2);
+    plate(-HW, HW, -8.5, -3.0, 2 * FH, galleryFloorMat, g2);
+    // South strip
+    plate(-HW, HW, 8.0, HD, 2 * FH, galleryFloorMat, g2);
+    // East area (Hall of Mayors Exhibition Room)
+    plate(4.0, HW, -8.0, 8.0, 2 * FH, galleryFloorMat, g2);
 
-    // Floor 1 runner (connecting West stairs top and East stairs bottom at back)
-    const runnerG1 = new THREE.Mesh(new THREE.PlaneGeometry(w - 5.0, 1.4), royalPurpleRunner);
+    // FLOOR 3 plates:
+    // North side
+    plate(-HW, HW, -HD, -8.0, 3 * FH, suiteFloorMat, g3);
+    // East side + Center
+    plate(-12.0, HW, -8.0, 8.0, 3 * FH, suiteFloorMat, g3);
+    // West wall trim
+    plate(-HW, -15.0, -8.0, 8.0, 3 * FH, suiteFloorMat, g3);
+    // South side (includes SW landing)
+    plate(-HW, HW, 8.5, HD, 3 * FH, suiteFloorMat, g3);
+
+    // Floor 1 runner (purple runner on the North landing corridor)
+    const runnerG1 = new THREE.Mesh(new THREE.PlaneGeometry(w - 10.0, 1.4), royalPurpleRunner);
     runnerG1.rotation.x = -Math.PI / 2;
-    runnerG1.position.set(0, FH + 0.02, -9);
+    runnerG1.position.set(0, FH + 0.02, -10.0);
     g1.add(runnerG1);
 
-    // Floor 2 runner (connecting East stairs top and West stairs bottom at front)
-    const runnerG2 = new THREE.Mesh(new THREE.PlaneGeometry(w - 5.0, 1.4), royalPurpleRunner);
+    // Floor 2 runner (purple runner on the South landing corridor)
+    const runnerG2 = new THREE.Mesh(new THREE.PlaneGeometry(w - 10.0, 1.4), royalPurpleRunner);
     runnerG2.rotation.x = -Math.PI / 2;
-    runnerG2.position.set(0, 2 * FH + 0.02, 9);
+    runnerG2.position.set(0, 2 * FH + 0.02, 10.0);
     g2.add(runnerG2);
-
-    // FLOOR 3 plate: atrium open, solid east lane, west lane open for stairs except back landing
-    plate(-8, 8, -HD, ATR.z0, 3 * FH, upperFloorMat, g3); // back center
-    plate(-8, 8, ATR.z1, HD, 3 * FH, upperFloorMat, g3);  // front center
-    plate(-8, ATR.x0, ATR.z0, ATR.z1, 3 * FH, upperFloorMat, g3); // west center
-    plate(ATR.x1, 8, ATR.z0, ATR.z1, 3 * FH, upperFloorMat, g3);  // east center
-    // Solid East lane (no stairs here)
-    plate(8, HW, -HD, HD, 3 * FH, upperFloorMat, g3);
-    // West landing (top of Flight 3)
-    plate(-HW, -8, -HD, -7, 3 * FH, upperFloorMat, g3);
-
-    const grandRug = new THREE.Mesh(new THREE.PlaneGeometry(12, 4),
-      new THREE.MeshStandardMaterial({ map: carpetTexture('#3a163a', '#d8b56a', 2), roughness: 0.9 }));
-    grandRug.rotation.x = -Math.PI / 2;
-    grandRug.position.set(0, 3 * FH + 0.02, -6.5);
-    g3.add(grandRug);
 
     // ---------- fluted columns at the four corners of the atrium ----------
     const buildAtriumColumns = () => {
       const cyHeight = 3 * FH;
       const colMat = new THREE.MeshStandardMaterial({ map: stoneTexture('#f2ebf5', '#cabfd3', 2), roughness: 0.6 });
-      for (const cx of [ATR.x0 - 0.2, ATR.x1 + 0.2]) {
-        for (const cz of [ATR.z0 - 0.2, ATR.z1 + 0.2]) {
+      // Atrium boundary: x0 = -6, x1 = 6, z0 = -3, z1 = 7
+      for (const cx of [-6.2, 6.2]) {
+        for (const cz of [-3.2, 7.2]) {
           const colShaft = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, cyHeight, 12), colMat);
           colShaft.position.set(cx, cyHeight / 2, cz);
           colShaft.castShadow = true;
@@ -4307,79 +4309,119 @@ export class Town {
             collar.position.set(cx, cy, cz);
             s.add(collar);
           }
+          cColumnSconces(cx, cz, FH, s);
         }
       }
     };
     buildAtriumColumns();
 
-    // ---------- twin grand staircases with tilted stringers ----------
-    const buildFlight = (f: typeof WEST, parent: THREE.Object3D) => {
+    // ---------- twin grand spiral staircases (non-overlapping) ----------
+    const buildFlight = (
+      x0: number, x1: number,
+      z0: number, z1: number,
+      y0: number, y1: number,
+      climbAxis: 'x' | 'z',
+      parent: THREE.Object3D
+    ) => {
       const N = 16;
-      const cx = (f.x0 + f.x1) / 2, wWidth = f.x1 - f.x0;
-      const stepDepth = Math.abs(f.zTop - f.zBot) / N + 0.06;
+      const cx = (x0 + x1) / 2;
+      const cz = (z0 + z1) / 2;
+      const wWidth = x1 - x0;
+      const dDepth = z1 - z0;
+      const stepDepth = climbAxis === 'z' ? (Math.abs(z1 - z0) / N + 0.06) : 0.6;
+      const stepWidth = climbAxis === 'x' ? (Math.abs(x1 - x0) / N + 0.06) : 0.6;
+
       for (let i = 0; i < N; i++) {
         const tt = (i + 0.5) / N;
-        const zc = f.zBot + (f.zTop - f.zBot) * tt;
-        const yc = f.yBot + (f.yTop - f.yBot) * tt;
-        const tread = new THREE.Mesh(new THREE.BoxGeometry(wWidth, 0.5, stepDepth), stepMat);
-        tread.position.set(cx, yc - 0.12, zc);
+        const zc = climbAxis === 'z' ? (z0 + (z1 - z0) * tt) : cz;
+        const xc = climbAxis === 'x' ? (x0 + (x1 - x0) * tt) : cx;
+        const yc = y0 + (y1 - y0) * tt;
+        
+        const wSz = climbAxis === 'z' ? wWidth : stepWidth;
+        const dSz = climbAxis === 'z' ? stepDepth : dDepth;
+
+        const tread = new THREE.Mesh(new THREE.BoxGeometry(wSz, 0.5, dSz), stepMat);
+        tread.position.set(xc, yc - 0.12, zc);
         tread.receiveShadow = true;
         parent.add(tread);
-        const carpet = new THREE.Mesh(new THREE.BoxGeometry(wWidth * 0.52, 0.08, stepDepth), runnerMat);
-        carpet.position.set(cx, yc + 0.16, zc);
+
+        const carpet = new THREE.Mesh(new THREE.BoxGeometry(climbAxis === 'z' ? wSz * 0.52 : stepWidth, 0.08, climbAxis === 'z' ? stepDepth : dSz * 0.52), runnerMat);
+        carpet.position.set(xc, yc + 0.16, zc);
         parent.add(carpet);
       }
 
-      // tilted marble stringers flanking the flight
-      const innerX = f.x0 < 0 ? f.x1 : f.x0;
-      const outerX = f.x0 < 0 ? f.x0 : f.x1;
-      const stringerLength = Math.hypot(f.zTop - f.zBot, f.yTop - f.yBot);
-      const angle = Math.atan2(f.yTop - f.yBot, Math.abs(f.zTop - f.zBot));
+      // turned posts and stringers flanking
+      const angle = Math.atan2(y1 - y0, climbAxis === 'z' ? Math.abs(z1 - z0) : Math.abs(x1 - x0));
+      const len = Math.hypot(y1 - y0, climbAxis === 'z' ? (z1 - z0) : (x1 - x0));
 
-      const innerStringer = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.85, stringerLength), stoneTrim);
-      innerStringer.rotation.x = (f.zTop > f.zBot ? 1 : -1) * angle;
-      innerStringer.position.set(innerX, (f.yBot + f.yTop) / 2 + 0.18, (f.zBot + f.zTop) / 2);
-      parent.add(innerStringer);
+      const stringerL = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.85, len), stoneTrim);
+      const stringerR = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.85, len), stoneTrim);
+      const handrailL = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, len), gold);
+      const handrailR = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, len), gold);
 
-      const outerStringer = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.85, stringerLength), stoneTrim);
-      outerStringer.rotation.x = (f.zTop > f.zBot ? 1 : -1) * angle;
-      outerStringer.position.set(outerX, (f.yBot + f.yTop) / 2 + 0.18, (f.zBot + f.zTop) / 2);
-      parent.add(outerStringer);
+      if (climbAxis === 'z') {
+        const angleDir = z1 > z0 ? 1 : -1;
+        stringerL.rotation.x = angleDir * angle;
+        stringerL.position.set(x0, (y0 + y1) / 2 + 0.18, cz);
+        stringerR.rotation.x = angleDir * angle;
+        stringerR.position.set(x1, (y0 + y1) / 2 + 0.18, cz);
 
-      // handrail on the inner stringer
-      const handrail = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, stringerLength), gold);
-      handrail.rotation.x = (f.zTop > f.zBot ? 1 : -1) * angle;
-      handrail.position.set(innerX, (f.yBot + f.yTop) / 2 + 0.82, (f.zBot + f.zTop) / 2);
-      parent.add(handrail);
+        handrailL.rotation.x = angleDir * angle;
+        handrailL.position.set(x0, (y0 + y1) / 2 + 0.82, cz);
+        handrailR.rotation.x = angleDir * angle;
+        handrailR.position.set(x1, (y0 + y1) / 2 + 0.82, cz);
+      } else {
+        const angleDir = x1 > x0 ? -1 : 1;
+        stringerL.rotation.z = angleDir * angle;
+        stringerL.position.set(cx, (y0 + y1) / 2 + 0.18, z0);
+        stringerR.rotation.z = angleDir * angle;
+        stringerR.position.set(cx, (y0 + y1) / 2 + 0.18, z1);
 
-      // turned posts stepping up
-      for (let i = 1; i < N; i += 2) {
+        handrailL.rotation.z = angleDir * angle;
+        handrailL.position.set(cx, (y0 + y1) / 2 + 0.82, z0);
+        handrailR.rotation.z = angleDir * angle;
+        handrailR.position.set(cx, (y0 + y1) / 2 + 0.82, z1);
+      }
+      parent.add(stringerL, stringerR, handrailL, handrailR);
+
+      // posts along handrails
+      for (let i = 1; i < N; i += 3) {
         const tt = i / N;
-        const zc = f.zBot + (f.zTop - f.zBot) * tt;
-        const yc = f.yBot + (f.yTop - f.yBot) * tt;
-        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.8, 8), stoneTrim);
-        post.position.set(innerX, yc + 0.4, zc);
-        const collar = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.12, 0.09), gold);
-        collar.position.set(innerX, yc + 0.4, zc);
-        parent.add(post, collar);
+        const zc = climbAxis === 'z' ? (z0 + (z1 - z0) * tt) : cz;
+        const xc = climbAxis === 'x' ? (x0 + (x1 - x0) * tt) : cx;
+        const yc = y0 + (y1 - y0) * tt;
+        
+        const postL = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.8, 8), stoneTrim);
+        postL.position.set(climbAxis === 'z' ? x0 : xc, yc + 0.4, climbAxis === 'z' ? zc : z0);
+        const postR = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.8, 8), stoneTrim);
+        postR.position.set(climbAxis === 'z' ? x1 : xc, yc + 0.4, climbAxis === 'z' ? zc : z1);
+        parent.add(postL, postR);
       }
 
-      // grand glowing pedestal lamp at the bottom
-      const lampPost = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, 1.1, 8), stoneTrim);
-      lampPost.position.set(innerX, f.yBot + 0.55, f.zBot);
-      const cap = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.12, 0.44), gold);
-      cap.position.set(innerX, f.yBot + 1.16, f.zBot);
-      const glow = new THREE.Mesh(new THREE.OctahedronGeometry(0.2),
-        new THREE.MeshStandardMaterial({ color: 0xffe6b0, emissive: 0xffcf7a, emissiveIntensity: 1.2 }));
-      glow.position.set(innerX, f.yBot + 1.4, f.zBot);
-      glow.name = 'legendpulse';
-      const stairLight = new THREE.PointLight(0xffd98a, 4, 6);
-      stairLight.position.set(innerX, f.yBot + 1.4, f.zBot);
-      parent.add(lampPost, cap, glow, stairLight);
+      // grand glowing lamps at bottom and top
+      const addPedestalLamp = (px: number, py: number, pz: number) => {
+        const lampPost = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, 1.1, 8), stoneTrim);
+        lampPost.position.set(px, py + 0.55, pz);
+        const cap = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.12, 0.44), gold);
+        cap.position.set(px, py + 1.16, pz);
+        const glow = new THREE.Mesh(new THREE.OctahedronGeometry(0.2),
+          new THREE.MeshStandardMaterial({ color: 0xffe6b0, emissive: 0xffcf7a, emissiveIntensity: 1.2 }));
+        glow.position.set(px, py + 1.4, pz);
+        glow.name = 'legendpulse';
+        const stairLight = new THREE.PointLight(0xffd98a, 4, 6);
+        stairLight.position.set(px, py + 1.4, pz);
+        parent.add(lampPost, cap, glow, stairLight);
+      };
+      addPedestalLamp(climbAxis === 'z' ? cx : x0, y0, climbAxis === 'z' ? z0 : cz);
+      addPedestalLamp(climbAxis === 'z' ? cx : x1, y1, climbAxis === 'z' ? z1 : cz);
     };
-    buildFlight(WEST, s);
-    buildFlight(EAST, g1);
-    buildFlight(WEST3, g2);
+
+    // Flight 0 -> 1: East stairs, Z axis (goes from z=8.5, bottom to z=-8.5, top)
+    buildFlight(12.0, 15.0, 8.5, -8.5, 0, FH, 'z', s);
+    // Flight 1 -> 2: North stairs, X axis (goes from x=8.0, bottom to x=-8.0, top)
+    buildFlight(8.0, -8.0, -11.0, -8.5, FH, 2 * FH, 'x', g1);
+    // Flight 2 -> 3: West stairs, Z axis (goes from z=-8.0, bottom to z=8.0, top)
+    buildFlight(-15.0, -12.0, -8.0, 8.0, 2 * FH, 3 * FH, 'z', g2);
 
     // ---------- atrium railings (floors 1 & 2) ----------
     const railBalusters = (x0: number, x1: number, z0: number, z1: number, y: number, parent: THREE.Object3D) => {
@@ -4402,15 +4444,23 @@ export class Town {
         parent.add(bal, ring);
       }
     };
-    for (const [y, grp] of [[FH, g1], [2 * FH, g2], [3 * FH, g3]] as [number, THREE.Group][]) {
-      railBalusters(ATR.x0, ATR.x1, ATR.z0, ATR.z0, y, grp);
-      railBalusters(ATR.x0, ATR.x1, ATR.z1, ATR.z1, y, grp);
-      railBalusters(ATR.x0, ATR.x0, ATR.z0, ATR.z1, y, grp);
-      railBalusters(ATR.x1, ATR.x1, ATR.z0, ATR.z1, y, grp);
+
+    // Atrium boundary on Floor 1 & 2 (x0 = -6, x1 = 6, z0 = -3, z1 = 7)
+    for (const [y, grp] of [[FH, g1], [2 * FH, g2]] as [number, THREE.Group][]) {
+      railBalusters(-6.0, 6.0, -3.0, -3.0, y, grp);
+      railBalusters(-6.0, 6.0, 7.0, 7.0, y, grp);
+      railBalusters(-6.0, -6.0, -3.0, 7.0, y, grp);
+      railBalusters(6.0, 6.0, -3.0, 7.0, y, grp);
     }
+
+    // Railings on Floor 3 SW landing edge (x = -12.0 to -8.0)
+    railBalusters(-12.0, -8.0, 8.0, 8.0, 3 * FH, g3);
+    railBalusters(-8.0, -8.0, 8.0, 12.0, 3 * FH, g3);
+
+    // Collision check for railings (prevent walking into the atrium)
     const fence = (x: number, z: number) => this.intColliders.push({ pos: new THREE.Vector3(x, 0, z), r: 0.7, y0: FH - 0.4, y1: 3 * FH + 0.6 });
-    for (let x = ATR.x0; x <= ATR.x1 + 0.01; x += 1.25) { fence(x, ATR.z0); fence(x, ATR.z1); }
-    for (let z = ATR.z0; z <= ATR.z1 + 0.01; z += 1.25) { fence(ATR.x0, z); fence(ATR.x1, z); }
+    for (let x = -6.0; x <= 6.001; x += 1.25) { fence(x, -3.0); fence(x, 7.0); }
+    for (let z = -3.0; z <= 7.001; z += 1.25) { fence(-6.0, z); fence(6.0, z); }
 
     // ---------- great chandelier (atrium) ----------
     const chainTop = 3 * FH + 0.4;
@@ -4484,17 +4534,13 @@ export class Town {
       async () => { await say(name, lines[Math.floor(Math.random() * lines.length)]); };
 
     // =====================================================================
-    // FLOOR 0 — LOBBY & RECEPTION
+    // FLOOR 0 — LOBBY & RECEPTION & REGISTRY ROOM
     // =====================================================================
-    const desk = new THREE.Mesh(new THREE.BoxGeometry(6, 1.1, 1.2),
-      new THREE.MeshStandardMaterial({ map: plankTexture('#5a3a22', 2), roughness: 0.6 }));
-    desk.position.set(0, 0.55, -3.4);
-    const deskGold = new THREE.Mesh(new THREE.BoxGeometry(6.1, 0.12, 1.3), gold);
-    deskGold.position.set(0, 1.12, -3.4);
-    s.add(desk, deskGold);
-    this.intColliders.push({ pos: new THREE.Vector3(-1.7, 0, -3.4), r: 1.0, y0: 0, y1: 0 },
-      { pos: new THREE.Vector3(0, 0, -3.4), r: 1.0, y0: 0, y1: 0 }, { pos: new THREE.Vector3(1.7, 0, -3.4), r: 1.0, y0: 0, y1: 0 });
-    addNpc(0, -4.5, 0, { top: 0x3a6a8a, hair: 0x2a2018, cap: null, hairstyle: 'buns', skin: 0xd29a6a }, 'Deputy Clerk Pell', 0,
+    const deskMat = new THREE.MeshStandardMaterial({ map: plankTexture('#5a3a22', 2), roughness: 0.6 });
+    cDesk(0, 0, -4.0, 1.5, -Math.PI / 2.5, Math.PI / 2.5, 1.1, 0.8, deskMat, s);
+    this.intColliders.push({ pos: new THREE.Vector3(-1.4, 0, -3.2), r: 0.8, y0: 0, y1: 0 },
+      { pos: new THREE.Vector3(0, 0, -2.5), r: 0.8, y0: 0, y1: 0 }, { pos: new THREE.Vector3(1.4, 0, -3.2), r: 0.8, y0: 0, y1: 0 });
+    addNpc(0, -4.8, 0, { top: 0x3a6a8a, hair: 0x2a2018, cap: null, hairstyle: 'buns', skin: 0xd29a6a }, 'Deputy Clerk Pell', 0,
       'Press <b>E</b> — speak to the Deputy Clerk', async () => {
         const pick = await choose('Deputy Clerk Pell',
           'Welcome to the Aurelian Hall, the seat of Mayor Airah herself! Mind the marble, it’s just been polished. How can the Hall serve you?',
@@ -4503,48 +4549,52 @@ export class Town {
         else if (pick === 1) await say('Deputy Clerk Pell', 'The Aurelian Hall — civic seat of Haven, named for Aurelia who made the First Bond. The Mayor had it built pale so the dust of the rebuild wouldn’t show, then kept it pale because she liked being able to see exactly how clean her city was. There’s a metaphor in there. She’d deny it.');
         else if (pick === 2) await say('Deputy Clerk Pell', 'Records and the Gallery on the mezzanine — our whole history, and a wall of letters from people the Mayor’s helped. Then up again to the Hall of Mayors. Go right up, they’ve just cataloged all the previous leaders.');
       });
-    this.intMarkers.push({ x: 0, z: -4.5, label: 'Clerk Pell', color: '#3a8ad9', kind: 'npc' });
+    this.intMarkers.push({ x: 0, z: -4.8, label: 'Clerk Pell', color: '#3a8ad9', kind: 'npc' });
 
+    // waiting bench for citizens
     const bench = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.45, 0.8),
       new THREE.MeshStandardMaterial({ map: plankTexture('#6a4a2a', 2), roughness: 0.7 }));
-    bench.position.set(-7, 0.42, 4);
+    bench.position.set(-6, 0.42, 8);
     s.add(bench);
-    addNpc(-7.6, 4, 0, { top: 0x8a5a3a, hair: 0xd8d8d8, cap: null, hairstyle: 'classic', skin: 0xb07848 }, 'Old Petitioner', Math.PI,
+    this.intColliders.push({ pos: new THREE.Vector3(-6, 0, 8), r: 1.6, y0: 0, y1: 0 });
+
+    addNpc(-6.6, 8, 0, { top: 0x8a5a3a, hair: 0xd8d8d8, cap: null, hairstyle: 'classic', skin: 0xb07848 }, 'Old Petitioner', Math.PI,
       'Press <b>E</b> — chat with the waiting citizen', proud('Old Petitioner', [
         'Forty years I’ve brought my troubles to this Hall. Mayor Airah’s the fourth name on that door and the only one who learned mine. I’d wait all day. I have, twice. Worth it.',
         'My grandson says no continent’s had a real leader in sixteen years. I tell him: come to Haven, boy. We have one. We just don’t let the news-crystals near her.',
       ]), true);
-    addNpc(-6.4, 4, 0, { top: 0x4a7a4a, hair: 0x35261a, cap: null, hairstyle: 'curly', skin: 0xe8b48a }, 'Young Petitioner', Math.PI,
+    addNpc(-5.4, 8, 0, { top: 0x4a7a4a, hair: 0x35261a, cap: null, hairstyle: 'curly', skin: 0xe8b48a }, 'Young Petitioner', Math.PI,
       'Press <b>E</b> — chat with the waiting citizen', proud('Young Petitioner', [
         'I’m asking the Mayor to fix the pier lamps. Half of them out. Funny thing — the working ones all have this lovely little hand-folded pane in them, no maker’s mark. Nobody knows who makes those.',
         'They say if your petition’s honest she’ll have it sorted by the time you’re back down the stairs. So I practiced being honest on the way up. Harder than it sounds.',
       ]), true);
 
-    addNpc(7, 5, 0, { top: 0x3a3a4a, hair: 0x2a2018, cap: 0xc9a24a, hairstyle: 'classic', skin: 0x8a5a36 }, 'Lamplighter Brenn', -Math.PI / 1.5,
+    addNpc(5.0, 4.0, 0, { top: 0x3a3a4a, hair: 0x2a2018, cap: 0xc9a24a, hairstyle: 'classic', skin: 0x8a5a36 }, 'Lamplighter Brenn', -Math.PI / 1.5,
       'Press <b>E</b> — talk to the Lamplighter', async () => {
         await conversation([
           ['Lamplighter Brenn', 'Best job in Haven, lighting the Mayor’s city. You know the lantern up top — the great gold one? Never goes dark. Mayor says it’s so her husband can always find his way home.'],
           ['Lamplighter Brenn', 'And here’s the thing nobody believes me on: some of my lamps have a panel in them finer than anything the guild makes. Hand-folded. I asked the Mayor once who made them. She just smiled and said, "a hobbyist." A HOBBYIST. In MY lamps.'],
         ]);
       });
-    this.intMarkers.push({ x: 7, z: 5, label: 'Lamplighter', color: '#c9a24a', kind: 'npc' });
+    this.intMarkers.push({ x: 5.0, z: 4.0, label: 'Lamplighter', color: '#c9a24a', kind: 'npc' });
 
-    addNpc(4.5, -1, 0, { top: 0xf2603a, hair: 0x8a3a1a, cap: null, hairstyle: 'spiky', skin: 0xe8b48a }, 'Haven Child', Math.PI / 2,
+    addNpc(2.0, -1.0, 0, { top: 0xf2603a, hair: 0x8a3a1a, cap: null, hairstyle: 'spiky', skin: 0xe8b48a }, 'Haven Child', Math.PI / 2,
       'Press <b>E</b> — talk to the child', proud('Haven Child', [
         'I’m the DAWNFLAME! VWOOSH! …Mama works here. Real mama, the Mayor mama. The Dawnflame’s the OTHER one. He’s my—no wait that’s a secret. VWOOSH!',
         'Mayor Airah gave me a honey-roll and said heroes share. So I shared. With me. Later.',
       ]));
 
+    // Plant pots
     for (const px of [-3.4, 3.4]) {
       const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.5, 0.7, 12), stoneTrim);
-      pot.position.set(px, 0.35, 9.4);
+      pot.position.set(px, 0.35, 10.4);
       const fronds = new THREE.Mesh(new THREE.ConeGeometry(0.9, 1.6, 7), new THREE.MeshStandardMaterial({ color: 0x4ec45e, roughness: 0.8 }));
-      fronds.position.set(px, 1.5, 9.4); fronds.name = 'foliage';
+      fronds.position.set(px, 1.5, 10.4); fronds.name = 'foliage';
       s.add(pot, fronds);
     }
-    addNpc(-9.4, 7.4, 0, { top: 0x6a1e3a, hair: 0x2a2018, cap: 0xc9a24a, hairstyle: 'classic', skin: 0xb07848 }, 'Hall Steward', -Math.PI / 4,
+    addNpc(9.0, 7.0, 0, { top: 0x6a1e3a, hair: 0x2a2018, cap: 0xc9a24a, hairstyle: 'classic', skin: 0xb07848 }, 'Hall Steward', -Math.PI / 4,
       'Press <b>E</b> — ask the Hall Steward the way up', proud('Hall Steward', [
-        'Up the west stair to Records, cross the gallery, up the east stair to the Hall of Mayors. Take your time on the landing — best view of the lantern in all Haven, and it costs nothing.',
+        'Up the east stair to the landing, cross the North corridor, up the North stair to the Hall of Mayors. Then up the West stair to the Mayor\'s Penthouse. Take your time, Haven looks lovely from the stairs.',
         'Proud to hold this door. My mother held it before me. The Mayor knows that. She knows everyone’s mother. It’s a little uncanny and entirely why we love her.',
       ]));
 
@@ -4558,17 +4608,88 @@ export class Town {
       handler: async () => this.exitHouse(),
     });
 
-    // =====================================================================
-    // FLOOR 1 — RECORDS & GALLERY
-    // =====================================================================
-    for (const sx of [-6, -2.5, 2.5, 6]) {
-      const shelf = new THREE.Mesh(new THREE.BoxGeometry(3.0, 4.0, 0.5),
-        new THREE.MeshStandardMaterial({ map: bookshelfTexture(), roughness: 0.85 }));
-      shelf.position.set(sx, FH + 2.0, -HD + 0.5);
-      g1.add(shelf);
-      this.intColliders.push({ pos: new THREE.Vector3(sx, 0, -HD + 0.7), r: 0.9, y0: FH, y1: FH });
+    // --- Floor 0 Registry Office Room ---
+    // Walls: West room bounds x: [-15.5, -5.0], z: [-6.0, 6.0]
+    addWall(-15.5, -6.0, -5.0, -6.0, 0, FH, s); // North room wall
+    addWall(-15.5, 6.0, -5.0, 6.0, 0, FH, s);  // South room wall
+    addWall(-5.0, -6.0, -5.0, -1.0, 0, FH, s);  // East room wall (North part)
+    addWall(-5.0, 1.0, -5.0, 6.0, 0, FH, s);   // East room wall (South part)
+    // Emerald plush rug
+    const registryRugMat = new THREE.MeshStandardMaterial({ map: carpetTexture('#0f4c3a', '#d8b56a', 1), roughness: 0.9 });
+    plate(-15.3, -5.2, -5.8, 5.8, 0.02, registryRugMat, s);
+
+    // Registry Desk
+    cDesk(-10.0, 0, 1.0, 1.0, -Math.PI / 3, Math.PI / 3, 1.1, 0.8, deskMat, s);
+    this.intColliders.push({ pos: new THREE.Vector3(-10.0, 0, 1.0), r: 1.2, y0: 0, y1: 0 });
+
+    addNpc(-10.0, 0.0, 0, { top: 0x4ec45e, hair: 0x6a3a1a, cap: null, hairstyle: 'mohawk', skin: 0xe8b48a }, 'Records Clerk Tovi', Math.PI,
+      'Press <b>E</b> — talk to the Records Clerk', async () => {
+        await conversation([
+          ['Records Clerk Tovi', 'You want a secret the Records don’t hold? I met him. The Dawnflame. Out past the hills toward New Salmonan, where the broadcast crystals go quiet. Old man, beat-up hat, line in the water.'],
+          ['Records Clerk Tovi', 'Didn’t know him till he laughed — you can’t mistake that laugh, it’s on every anniversary special. He just said, "the fish here don’t want a quote either." Then the Mayor’s carriage came for him and he was gone. Tell no one. I’ve told everyone.'],
+        ]);
+      });
+    this.intMarkers.push({ x: -10.0, z: 0.0, label: 'Clerk Tovi', color: '#4ec45e', kind: 'npc' });
+
+    // Bookshelves in Registry Room
+    for (const sz of [-4.0, 4.0]) {
+      const shelf = new THREE.Mesh(new THREE.BoxGeometry(0.5, 4.0, 2.5), new THREE.MeshStandardMaterial({ map: bookshelfTexture(), roughness: 0.85 }));
+      shelf.position.set(-15.2, 2.0, sz);
+      s.add(shelf);
+      this.intColliders.push({ pos: new THREE.Vector3(-15.2, 0, sz), r: 1.4, y0: 0, y1: 0 });
     }
-    addNpc(-3, -5.5, FH, { top: 0x2a4a6a, hair: 0xd8d8d8, cap: null, hairstyle: 'classic', skin: 0xd29a6a, robe: true }, 'Archivist Maelis', Math.PI / 5,
+
+    // Registry fireplace
+    const fireplace = new THREE.Group();
+    fireplace.position.set(-15.2, 0, -2.0);
+    const hearth = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.8, 2.0), stoneTrim);
+    hearth.position.set(0, 0.9, 0);
+    fireplace.add(hearth);
+    const hole = new THREE.Mesh(new THREE.BoxGeometry(0.52, 1.0, 1.2), new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.9 }));
+    hole.position.set(0.15, 0.6, 0);
+    fireplace.add(hole);
+    const fire = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.4, 0.6), new THREE.MeshStandardMaterial({ color: 0xff4500, emissive: 0xff4500, emissiveIntensity: 2.0 }));
+    fire.position.set(0.15, 0.35, 0);
+    fire.name = 'flame';
+    const fireLight = new THREE.PointLight(0xff6600, 8, 8);
+    fireLight.position.set(0.2, 0.4, 0);
+    fireplace.add(fire, fireLight);
+    s.add(fireplace);
+    this.intColliders.push({ pos: new THREE.Vector3(-15.2, 0, -2.0), r: 1.0, y0: 0, y1: 2.0 });
+
+    this.intInteractables.push({
+      pos: new THREE.Vector3(-13.8, 0, -2.0), radius: 1.8,
+      label: 'Press <b>E</b> — warm yourself by the registry fire',
+      handler: async () => { await say('Registry Fireplace', 'A crackling stone hearth keeping the city records registry room warm. The wood smells of cedar and sea-salt.'); }
+    });
+
+    // =====================================================================
+    // FLOOR 1 — DEEP ARCHIVES LIBRARY ROOM
+    // =====================================================================
+    // West room bounds x: [-16.0, -4.0], z: [-8.5, 8.5]
+    addWall(-16.0, -8.5, -4.0, -8.5, FH, 2 * FH, g1); // North room wall
+    addWall(-16.0, 8.5, -4.0, 8.5, FH, 2 * FH, g1);  // South room wall
+    addWall(-4.0, -8.5, -4.0, -1.0, FH, 2 * FH, g1);  // East room wall (North part)
+    addWall(-4.0, 1.0, -4.0, 8.5, FH, 2 * FH, g1);   // East room wall (South part)
+
+    // Deep Indigo Carpet
+    const archiveCarpet = new THREE.MeshStandardMaterial({ map: carpetTexture('#112244', '#d8b56a', 1), roughness: 0.9 });
+    plate(-15.5, -4.2, -8.2, 8.2, FH + 0.02, archiveCarpet, g1);
+
+    // Reading Desks & Bookshelves in Deep Archives Room
+    cReadingDesk(-9.0, -4.0, FH, g1, this.intColliders);
+    cReadingDesk(-9.0, 4.0, FH, g1, this.intColliders);
+
+    // Bookshelves along the West wall
+    for (const sz of [-6.0, -3.0, 3.0, 6.0]) {
+      const shelf = new THREE.Mesh(new THREE.BoxGeometry(0.5, 4.0, 2.4),
+        new THREE.MeshStandardMaterial({ map: bookshelfTexture(), roughness: 0.85 }));
+      shelf.position.set(-15.2, FH + 2.0, sz);
+      g1.add(shelf);
+      this.intColliders.push({ pos: new THREE.Vector3(-15.2, 0, sz), r: 1.4, y0: FH, y1: FH });
+    }
+
+    addNpc(-9.0, -5.5, FH, { top: 0x2a4a6a, hair: 0xd8d8d8, cap: null, hairstyle: 'classic', skin: 0xd29a6a, robe: true }, 'Archivist Maelis', 0,
       'Press <b>E</b> — consult the Archivist', async () => {
         const pick = await choose('Archivist Maelis',
           'The Records of Haven, friend — every brick the Mayor laid. What chapter would you like?',
@@ -4578,117 +4699,85 @@ export class Town {
         else if (pick === 2) await say('Archivist Maelis', 'When the Legion War broke the walls, Haven was a frightened ring of rubble. Airah didn’t make speeches. She made LINES — chalk lines, on the ground, where the masons should build. The doubled Coliseum, the market lanes, the Sanctum by the spring, the five Grand Houses on their shoulder of stone. We followed the chalk. We’re still following it.');
       }, false, g1);
 
+    // Gallery of Gratitude
     {
-      const board = new THREE.Mesh(new THREE.PlaneGeometry(7.0, 3.4),
+      const board = new THREE.Mesh(new THREE.PlaneGeometry(6.0, 3.0),
         new THREE.MeshStandardMaterial({ color: 0xf2ead0, emissive: 0xf2ead0, emissiveIntensity: 0.25, roughness: 0.6 }));
-      board.rotation.y = -Math.PI / 2;
-      board.position.set(HW - 0.3, FH + 2.2, -2);
-      const frame = new THREE.Mesh(new THREE.BoxGeometry(0.2, 3.8, 7.4), gold);
-      frame.position.set(HW - 0.18, FH + 2.2, -2);
+      board.rotation.y = Math.PI / 2;
+      board.position.set(-4.2, FH + 2.2, 4.0);
+      const frame = new THREE.Mesh(new THREE.BoxGeometry(0.2, 3.4, 6.4), gold);
+      frame.position.set(-4.1, FH + 2.2, 4.0);
       g1.add(frame, board);
-      for (let i = 0; i < 18; i++) {
-        const note = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.6),
+      for (let i = 0; i < 12; i++) {
+        const note = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.5),
           new THREE.MeshStandardMaterial({ color: [0xffffff, 0xffe6e6, 0xe6f0ff][i % 3], roughness: 0.8 }));
-        note.rotation.y = -Math.PI / 2;
-        note.position.set(HW - 0.34, FH + 1.2 + (i % 4) * 0.7, -4.4 + Math.floor(i / 4) * 1.1);
+        note.rotation.y = Math.PI / 2;
+        note.position.set(-4.22, FH + 1.2 + (i % 3) * 0.7, 2.0 + Math.floor(i / 3) * 1.1);
         g1.add(note);
       }
       this.intInteractables.push({
-        pos: new THREE.Vector3(HW - 1.4, FH, -2), radius: 2.4,
+        pos: new THREE.Vector3(-5.5, FH, 4.0), radius: 2.2,
         label: 'Press <b>E</b> — read the Gallery of Gratitude',
         handler: async () => { await say('Gallery of Gratitude', '"To Mayor Airah — you found my son work." "—you kept the pier lit." "—you held my mother’s hand in the Sanctum." "—you never once asked who my father votes for." Hundreds of them. The oldest is sixteen years old. The newest went up this morning.'); },
       });
     }
-    addNpc(5.5, 4.5, FH, { top: 0x4ec45e, hair: 0x6a3a1a, cap: null, hairstyle: 'mohawk', skin: 0xe8b48a }, 'Records Clerk Tovi', -Math.PI / 1.6,
-      'Press <b>E</b> — talk to the Records Clerk', async () => {
-        await conversation([
-          ['Records Clerk Tovi', 'You want a secret the Records don’t hold? I met him. The Dawnflame. Out past the hills toward New Salmonan, where the broadcast crystals go quiet. Old man, beat-up hat, line in the water.'],
-          ['Records Clerk Tovi', 'Didn’t know him till he laughed — you can’t mistake that laugh, it’s on every anniversary special. He just said, "the fish here don’t want a quote either." Then the Mayor’s carriage came for him and he was gone. Tell no one. I’ve told everyone.'],
-        ]);
-      }, false, g1);
-    this.intMarkers.push({ x: 5.5, z: 4.5, label: 'Clerk Tovi', color: '#4ec45e', kind: 'npc' });
 
     // =====================================================================
-    // FLOOR 2 — THE HALL OF MAYORS (The Grand Hallway)
+    // FLOOR 2 — THE HALL OF MAYORS GALLERY ROOM
     // =====================================================================
-    const F2 = 2 * FH;
+    // East room bounds x: [4.0, 16.0], z: [-8.0, 8.0]
+    addWall(4.0, -8.0, 16.0, -8.0, 2 * FH, 3 * FH, g2); // North room wall
+    addWall(4.0, 8.0, 16.0, 8.0, 2 * FH, 3 * FH, g2);  // South room wall
+    addWall(4.0, -8.0, 4.0, -1.5, 2 * FH, 3 * FH, g2);  // West room wall (North part)
+    addWall(4.0, 1.5, 4.0, 8.0, 2 * FH, 3 * FH, g2);   // West room wall (South part)
 
-    // Helper to build a painting on the wall with interaction
+    // Red gallery carpet
+    const galleryCarpet = new THREE.MeshStandardMaterial({ map: carpetTexture('#5a1730', '#d8b56a', 1), roughness: 0.9 });
+    plate(4.2, 15.5, -7.8, 7.8, 2 * FH + 0.02, galleryCarpet, g2);
+
+    // Benches in exhibition room
+    const bench2 = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.45, 3.0),
+      new THREE.MeshStandardMaterial({ map: plankTexture('#6a4a2a', 2), roughness: 0.7 }));
+    bench2.position.set(10.0, 2 * FH + 0.22, 0);
+    g2.add(bench2);
+    this.intColliders.push({ pos: new THREE.Vector3(10.0, 0, 0), r: 1.6, y0: 2 * FH, y1: 2 * FH });
+
+    // Paintings in the gallery room
     const createPainting = (title: string, desc: string, px: number, pz: number, side: 'east' | 'west' | 'north', canvasColor: number) => {
-      const rotY = (side === 'north') ? Math.PI / 2 : 0;
-      const frame = new THREE.Mesh(new THREE.BoxGeometry(0.16, 1.8, 1.4), gold);
-      frame.position.set(px, F2 + 2.4, pz);
-      frame.rotation.y = rotY;
-      frame.castShadow = true;
-      g2.add(frame);
-
-      const canvas = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 1.6),
-        new THREE.MeshStandardMaterial({ color: canvasColor, emissive: canvasColor, emissiveIntensity: 0.15, roughness: 0.8 }));
-      
-      let canvasX = px;
-      let canvasZ = pz;
-      let canvasRot = 0;
-
-      if (side === 'east') {
-        canvasX = px - 0.1;
-        canvasRot = -Math.PI / 2;
-      } else if (side === 'west') {
-        canvasX = px + 0.1;
-        canvasRot = Math.PI / 2;
-      } else { // north
-        canvasZ = pz + 0.1;
-        canvasRot = 0;
-      }
-
-      canvas.position.set(canvasX, F2 + 2.4, canvasZ);
-      canvas.rotation.y = canvasRot;
-      g2.add(canvas);
-
-      // interaction point
-      let intX = px;
-      let intZ = pz;
-      if (side === 'east') intX = px - 1.5;
-      else if (side === 'west') intX = px + 1.5;
-      else intZ = pz + 1.5;
-
-      this.intInteractables.push({
-        pos: new THREE.Vector3(intX, F2, intZ), radius: 1.8,
-        label: `Press <b>E</b> — inspect Portrait of ${title}`,
-        handler: async () => { await say(`Portrait of ${title}`, desc); }
-      });
+      cPainting(title, desc, px, pz, side, 2 * FH, canvasColor, HW, HD, g2, this.intInteractables);
     };
-
     // East wall paintings
-    createPainting('Mayor Aurelia', 'Portrait of Mayor Aurelia (Year 1 - 18). The Founding Mayor. She signed the Pact of the Seven Springs and laid the very first chalk lines for Haven’t walls. The portrait shows her holding a silver mason’s trowel and a parchment blueprint.', HW - 0.2, 5.5, 'east', 0x8a3a2a);
-    createPainting('Mayor Valerius', 'Portrait of Mayor Valerius (Year 18 - 35). The Iron Mayor. He completed the outer pale-stone walls and established the first City Watch. In his painting, he wears a heavy iron breastplate under his ceremonial gold sash.', HW - 0.2, 1.0, 'east', 0x3a5a7a);
-    createPainting('Mayor Keith', 'Portrait of Mayor Keith (Year 35 - 52). The Ledger-Keeper. He turned Haven from a small refuge into a bustling trade hub by introducing the unified coin system. He is depicted holding a massive ledger and a gold scale.', HW - 0.2, -3.5, 'east', 0x2a6a4a);
+    createPainting('Mayor Aurelia', 'Portrait of Mayor Aurelia (Year 1 - 18). The Founding Mayor. She signed the Pact of the Seven Springs and laid the very first chalk lines for Haven’t walls. The portrait shows her holding a silver mason’s trowel and a parchment blueprint.', 15.8, 4.5, 'east', 0x8a3a2a);
+    createPainting('Mayor Valerius', 'Portrait of Mayor Valerius (Year 18 - 35). The Iron Mayor. He completed the outer pale-stone walls and established the first City Watch. In his painting, he wears a heavy iron breastplate under his ceremonial gold sash.', 15.8, 0.5, 'east', 0x3a5a7a);
+    createPainting('Mayor Keith', 'Portrait of Mayor Keith (Year 35 - 52). The Ledger-Keeper. He turned Haven from a small refuge into a bustling trade hub by introducing the unified coin system. He is depicted holding a massive ledger and a gold scale.', 15.8, -3.5, 'east', 0x2a6a4a);
 
     // North wall paintings
-    createPainting('Mayor Gideon', 'Portrait of Mayor Gideon (Year 52 - 68). The Water-Bringer. He built the complex mountain aqueduct system that feeds the city’s blue central fountain. The painting shows him pointing proudly to a cascading waterfall.', 6.5, -HD + 0.2, 'north', 0x6a4a7a);
-    createPainting('Mayor Cassandra', 'Portrait of Mayor Cassandra (Year 68 - 84). The Scholar-Queen. She founded the University of Haven and the great library. Her portrait depicts her sitting in a high-backed velvet chair, holding a glowing magical codex.', 2.0, -HD + 0.2, 'north', 0x8a7a3a);
-    createPainting('Mayor Ignatius', 'Portrait of Mayor Ignatius (Year 84 - 99). The Champion Mayor. A retired gladiator who expanded the Grand Coliseum to twice its size. He is painted wearing polished champion’s plate armor, holding a flaming torch.', -2.0, -HD + 0.2, 'north', 0xa25a2a);
-    createPainting('Mayor Lucilla', 'Portrait of Mayor Lucilla (Year 99 - 115). The Peacemaker. She negotiated the Treaty of Agdao, resolving decades of conflict with the wild tamer clans. Her portrait shows her holding a silver treaty roll and a white flower.', -6.5, -HD + 0.2, 'north', 0x2a8a8a);
+    createPainting('Mayor Gideon', 'Portrait of Mayor Gideon (Year 52 - 68). The Water-Bringer. He built the complex mountain aqueduct system that feeds the city’s blue central fountain. The painting shows him pointing proudly to a cascading waterfall.', 7.0, -7.8, 'north', 0x6a4a7a);
+    createPainting('Mayor Cassandra', 'Portrait of Mayor Cassandra (Year 68 - 84). The Scholar-Queen. She founded the University of Haven and the great library. Her portrait depicts her sitting in a high-backed velvet chair, holding a glowing magical codex.', 10.0, -7.8, 'north', 0x8a7a3a);
+    createPainting('Mayor Ignatius', 'Portrait of Mayor Ignatius (Year 84 - 99). The Champion Mayor. A retired gladiator who expanded the Grand Coliseum to twice its size. He is painted wearing polished champion’s plate armor, holding a flaming torch.', 13.0, -7.8, 'north', 0xa25a2a);
 
-    // West wall paintings
-    createPainting('Mayor Tristan', 'Portrait of Mayor Tristan (Year 115 - 130). The Harbormaster. He built the pier district and the Great Lighthouse. He is painted standing on a ship’s wooden deck, peering through a brass spyglass out at the vast sea.', -HW + 0.2, -3.5, 'west', 0x3a3a5a);
-    createPainting('Mayor Alistair', 'Portrait of Mayor Alistair (Year 130 - 145). The Rebuilder. He led Haven through the dark reconstruction years after the great Legion invasion. He is shown in simple woolen robes holding a hammer, with half-built arches behind him.', -HW + 0.2, 1.0, 'west', 0x5a5a5a);
-    createPainting('Mayor Airah', 'Portrait of Mayor Airah (Year 145 - Present). The current Mayor, the Lantern of Haven. She is painted holding a hand-folded glass lamp, with a warm, caring smile. A tiny brass plate below reads: "To lead is to carry the light for those behind."', -HW + 0.2, 5.5, 'west', 0x7a2452);
+    // South wall paintings
+    createPainting('Mayor Lucilla', 'Portrait of Mayor Lucilla (Year 99 - 115). The Peacemaker. She negotiated the Treaty of Agdao, resolving decades of conflict with the wild tamer clans. Her portrait shows her holding a silver treaty roll and a white flower.', 7.0, 7.8, 'north', 0x2a8a8a);
+    createPainting('Mayor Tristan', 'Portrait of Mayor Tristan (Year 115 - 130). The Harbormaster. He built the pier district and the Great Lighthouse. He is painted standing on a ship’s wooden deck, peering through a brass spyglass out at the vast sea.', 10.0, 7.8, 'north', 0x3a3a5a);
+    createPainting('Mayor Alistair', 'Portrait of Mayor Alistair (Year 130 - 145). The Rebuilder. He led Haven through the dark reconstruction years after the great Legion invasion. He is shown in simple woolen robes holding a hammer, with half-built arches behind him.', 13.0, 7.8, 'north', 0x5a5a5a);
 
-    // Chamber Door at the end of the hallway (south-west corner)
-    const doorFrame = new THREE.Mesh(new THREE.BoxGeometry(0.3, 3.2, 2.2), stoneTrim);
-    doorFrame.position.set(-HW + 0.15, F2 + 1.6, 8.5);
+    // West wall painting
+    createPainting('Mayor Airah', 'Portrait of Mayor Airah (Year 145 - Present). The current Mayor, the Lantern of Haven. She is painted holding a hand-folded glass lamp, with a warm, caring smile. A tiny brass plate below reads: "To lead is to carry the light for those behind."', 4.2, 4.5, 'west', 0x7a2452);
+
+    // Grand Archives Door at the back (North wall of exhibition room)
+    const doorFrame = new THREE.Mesh(new THREE.BoxGeometry(2.2, 3.2, 0.3), stoneTrim);
+    doorFrame.position.set(10.0, 2 * FH + 1.6, -7.85);
     g2.add(doorFrame);
-    const doorWing = new THREE.Mesh(new THREE.BoxGeometry(0.12, 3.0, 1.8), gold);
-    doorWing.position.set(-HW + 0.15, F2 + 1.5, 8.5);
+    const doorWing = new THREE.Mesh(new THREE.BoxGeometry(1.8, 3.0, 0.12), gold);
+    doorWing.position.set(10.0, 2 * FH + 1.5, -7.85);
     g2.add(doorWing);
-    const doorGlow = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 2.8),
+    const doorGlow = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 2.8),
       new THREE.MeshBasicMaterial({ color: 0xffd98a, transparent: true, opacity: 0.55 }));
-    doorGlow.position.set(-HW + 0.22, F2 + 1.5, 8.5);
-    doorGlow.rotation.y = Math.PI / 2;
+    doorGlow.position.set(10.0, 2 * FH + 1.5, -7.78);
     g2.add(doorGlow);
 
     this.intInteractables.push({
-      pos: new THREE.Vector3(-HW + 1.4, F2, 8.5), radius: 1.8,
+      pos: new THREE.Vector3(10.0, 2 * FH, -6.5), radius: 1.8,
       label: 'Press <b>E</b> — inspect the Grand Archives Door',
       handler: async () => {
         await say('Grand Archives Door', 'A pair of heavy golden-inlaid oak doors, sealed with the Mayor’s civic crest. Chamberlain Ysolde holds the only key. Beyond lies the treasury and the deep historical chronicles of Haven.');
@@ -4696,102 +4785,130 @@ export class Town {
     });
 
     // Visiting Historian NPC
-    addNpc(-2, 4.5, F2, { top: 0x3a7a5a, hair: 0x8a7a5a, cap: null, hairstyle: 'classic', skin: 0xd29a6a }, 'Historian Varris', -Math.PI / 4,
+    addNpc(10.0, 2.0, 2 * FH, { top: 0x3a7a5a, hair: 0x8a7a5a, cap: null, hairstyle: 'classic', skin: 0xd29a6a }, 'Historian Varris', -Math.PI / 4,
       'Press <b>E</b> — speak to the Historian', async () => {
-        await say('Historian Varris', 'Fascinating, isn’t it? Ten Mayors, two hundred years of Haven’s history on these walls. Airah is the first in fifty years who didn’t build a monument to herself. She just kept the lamps lit. True legacy, I say.');
+        await say('Historian Varris', 'Fascinating, isn’t it? Ten Mayors, two hundred years of Haven’t history on these walls. Airah is the first in fifty years who didn’t build a monument to herself. She just kept the lamps lit. True legacy, I say.');
       }, false, g2);
 
     // =====================================================================
-    // FLOOR 3 — MAYOR AIRAH'S OFFICE (The Classy Lux Penthouse Suite)
+    // FLOOR 3 — MAYOR AIRAH'S PRIVATE PENTHOUSE OFFICE ROOM
     // =====================================================================
-    const F3 = 3 * FH;
+    // Mayor's room bounds x: [-8.0, 16.0], z: [-12.0, 8.0]
+    addWall(-8.0, -12.0, -8.0, 5.0, 3 * FH, 4 * FH, g3); // West wall of office (North part)
+    addWall(-8.0, 7.0, -8.0, 8.0, 3 * FH, 4 * FH, g3);  // West wall of office (South part)
+    addWall(-8.0, 8.0, 16.0, 8.0, 3 * FH, 4 * FH, g3);  // South wall of office
 
-    // Grand desk of state
-    const mdesk = new THREE.Mesh(new THREE.BoxGeometry(5.0, 1.2, 2.0),
-      new THREE.MeshStandardMaterial({ map: plankTexture('#2a150a', 2), roughness: 0.45 }));
-    mdesk.position.set(0, F3 + 0.6, -7.4);
-    const mdeskGold = new THREE.Mesh(new THREE.BoxGeometry(5.1, 0.12, 2.1), gold);
-    mdeskGold.position.set(0, F3 + 1.22, -7.4);
-    g3.add(mdesk, mdeskGold);
-    this.intColliders.push({ pos: new THREE.Vector3(0, 0, -7.4), r: 1.6, y0: F3, y1: F3 });
+    // Luxury magenta carpet
+    const royalMagentaCarpet = new THREE.MeshStandardMaterial({ map: carpetTexture('#3a163a', '#d8b56a', 2), roughness: 0.9 });
+    plate(-7.5, 15.5, -11.5, 7.5, 3 * FH + 0.02, royalMagentaCarpet, g3);
+
+    // Elegant curved Mahogany executive desk
+    const executiveWood = new THREE.MeshStandardMaterial({ map: plankTexture('#2a150a', 2), roughness: 0.45 });
+    cDesk(4.0, 3 * FH, -6.8, 1.2, -Math.PI / 2.5, Math.PI / 2.5, 1.2, 0.8, executiveWood, g3);
+    this.intColliders.push({ pos: new THREE.Vector3(4.0, 0, -6.2), r: 1.4, y0: 3 * FH, y1: 3 * FH });
 
     // Desk lamp
     const lampGlow = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.5, 0.4),
       new THREE.MeshStandardMaterial({ color: 0xffe6b0, emissive: 0xffcf7a, emissiveIntensity: 1.0, transparent: true, opacity: 0.85 }));
-    lampGlow.position.set(-1.8, F3 + 1.5, -7.4); lampGlow.name = 'legendpulse';
+    lampGlow.position.set(3.0, 3 * FH + 1.4, -6.2); lampGlow.name = 'legendpulse';
     const deskLight = new THREE.PointLight(0xffd98a, 8, 7);
-    deskLight.position.set(-1.8, F3 + 1.8, -7.4);
+    deskLight.position.set(3.0, 3 * FH + 1.7, -6.2);
     g3.add(lampGlow, deskLight);
 
-    // Two grand fluted pillars flanking the balcony doors at back wall (z = -HD)
+    // Two grand fluted pillars flanking the balcony doors at back wall
     for (const cx of [-3.4, 3.4]) {
       const col = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, FH, 10), stoneTrim);
-      col.position.set(cx, F3 + FH / 2, -HD);
+      col.position.set(cx, 3 * FH + FH / 2, -HD);
       col.castShadow = true;
       const cap = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.22, 0.8), gold);
-      cap.position.set(cx, F3 + FH - 0.1, -HD);
+      cap.position.set(cx, 3 * FH + FH - 0.1, -HD);
       g3.add(col, cap);
     }
 
-    // Walk-out Balcony (extends from z = -11 to -14.4)
+    // Arched double doors on Floor 3 balcony
+    const doorFrameG3 = new THREE.Mesh(new THREE.BoxGeometry(6.2, 0.2, 0.4), stoneTrim);
+    doorFrameG3.position.set(0, 3 * FH + 4.1, -HD);
+    const doorPillarL = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 4.0, 8), stoneTrim);
+    doorPillarL.position.set(-3.0, 3 * FH + 2.0, -HD);
+    const doorPillarR = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 4.0, 8), stoneTrim);
+    doorPillarR.position.set(3.0, 3 * FH + 2.0, -HD);
+    
+    // Glass double doors
+    const glassMat = new THREE.MeshStandardMaterial({ color: 0x8ad9ff, roughness: 0.1, transparent: true, opacity: 0.4 });
+    const leftDoor = new THREE.Mesh(new THREE.BoxGeometry(1.4, 3.8, 0.06), glassMat);
+    leftDoor.position.set(-0.75, 3 * FH + 1.9, -HD);
+    const rightDoor = new THREE.Mesh(new THREE.BoxGeometry(1.4, 3.8, 0.06), glassMat);
+    rightDoor.position.set(0.75, 3 * FH + 1.9, -HD);
+    
+    const leftDoorFrame = new THREE.Mesh(new THREE.BoxGeometry(1.44, 3.84, 0.1), gold);
+    leftDoorFrame.position.set(-0.75, 3 * FH + 1.9, -HD - 0.02);
+    const rightDoorFrame = new THREE.Mesh(new THREE.BoxGeometry(1.44, 3.84, 0.1), gold);
+    rightDoorFrame.position.set(0.75, 3 * FH + 1.9, -HD - 0.02);
+    
+    g3.add(doorFrameG3, doorPillarL, doorPillarR, leftDoor, rightDoor, leftDoorFrame, rightDoorFrame);
+
+    // Walk-out Balcony (extends from z = -12 to -15.6)
     const balconySlab = new THREE.Mesh(new THREE.BoxGeometry(10, 0.3, 3.6), stoneTrim);
-    balconySlab.position.set(0, F3 - 0.15, -HD - 1.8);
+    balconySlab.position.set(0, 3 * FH - 0.15, -HD - 1.8);
     balconySlab.receiveShadow = true;
     g3.add(balconySlab);
 
     // Balcony railings (North, West, East)
     const nRail = new THREE.Mesh(new THREE.BoxGeometry(10.2, 0.1, 0.1), gold);
-    nRail.position.set(0, F3 + 1.0, -HD - 3.6);
+    nRail.position.set(0, 3 * FH + 1.0, -HD - 3.6);
     g3.add(nRail);
     for (let x = -4.5; x <= 4.5; x += 0.9) {
       const bal = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.0, 6), stoneTrim);
-      bal.position.set(x, F3 + 0.5, -HD - 3.6);
+      bal.position.set(x, 3 * FH + 0.5, -HD - 3.6);
       g3.add(bal);
     }
     const wRail = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 3.6), gold);
-    wRail.position.set(-5.1, F3 + 1.0, -HD - 1.8);
+    wRail.position.set(-5.1, 3 * FH + 1.0, -HD - 1.8);
     g3.add(wRail);
     for (let z = -HD - 0.45; z >= -HD - 3.6; z -= 0.75) {
       const bal = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.0, 6), stoneTrim);
-      bal.position.set(-5.1, F3 + 0.5, z);
+      bal.position.set(-5.1, 3 * FH + 0.5, z);
       g3.add(bal);
     }
     const eRail = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 3.6), gold);
-    eRail.position.set(5.1, F3 + 1.0, -HD - 1.8);
+    eRail.position.set(5.1, 3 * FH + 1.0, -HD - 1.8);
     g3.add(eRail);
     for (let z = -HD - 0.45; z >= -HD - 3.6; z -= 0.75) {
       const bal = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.0, 6), stoneTrim);
-      bal.position.set(5.1, F3 + 0.5, z);
+      bal.position.set(5.1, 3 * FH + 0.5, z);
       g3.add(bal);
     }
 
+    // Tripod telescope model on the balcony
+    cTelescope(0, -13.0, 3 * FH, g3, this.intColliders);
+
     // Balcony interactive plaque
     this.intInteractables.push({
-      pos: new THREE.Vector3(0, F3, -HD - 2.5), radius: 2.2,
+      pos: new THREE.Vector3(0, 3 * FH, -HD - 2.5), radius: 2.2,
       label: 'Press <b>E</b> — look out at Haven from the Balcony',
       handler: async () => {
         await say('Mayor’s Balcony', 'From up here, the entire city of Haven unfolds below. You can see the grand avenue, the glowing blue fount, the Coliseum rising proud, and the golden street lamps marching in straight lanes to the outer walls. The wind is cool, and the sky feels closer.');
       }
     });
 
-    // Exit door to Hall of Mayors (West Wall, south end)
+    // Double entrance door on West wall facing SW landing
     const suiteExitFrame = new THREE.Mesh(new THREE.BoxGeometry(0.3, 3.2, 2.2), stoneTrim);
-    suiteExitFrame.position.set(-HW + 0.15, F3 + 1.6, 8.5);
+    suiteExitFrame.position.set(-8.0, 3 * FH + 1.6, 6.0);
     g3.add(suiteExitFrame);
     const suiteExitDoor = new THREE.Mesh(new THREE.BoxGeometry(0.12, 3.0, 1.8), gold);
-    suiteExitDoor.position.set(-HW + 0.15, F3 + 1.5, 8.5);
+    suiteExitDoor.position.set(-8.0, 3 * FH + 1.5, 6.0);
     g3.add(suiteExitDoor);
     const suiteExitGlow = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 2.8),
       new THREE.MeshBasicMaterial({ color: 0xffd98a, transparent: true, opacity: 0.55 }));
-    suiteExitGlow.position.set(-HW + 0.22, F3 + 1.5, 8.5);
+    suiteExitGlow.position.set(-7.92, 3 * FH + 1.5, 6.0);
     suiteExitGlow.rotation.y = Math.PI / 2;
     g3.add(suiteExitGlow);
 
     this.intInteractables.push({
-      pos: new THREE.Vector3(-HW + 1.4, F3, 8.5), radius: 1.8,
-      label: 'Press <b>E</b> — inspect Private Chamber Door',
+      pos: new THREE.Vector3(-6.6, 3 * FH, 6.0), radius: 1.8,
+      label: 'Press <b>E</b> — exit to Hallway landing',
       handler: async () => {
-        await say('Private Chambers', 'The private quarters of Mayor Airah. A little brass sign reads: "Even the Lantern needs to sleep." It is locked.');
+        await say('Suite Entrance', 'The heavy wooden doors lead back out to the high balcony hallway overlooking the atrium.');
       }
     });
 
@@ -4799,14 +4916,14 @@ export class Town {
     const portraitTex = this.mayorPortraitTexture();
     const portrait = new THREE.Mesh(new THREE.PlaneGeometry(3.0, 2.2),
       new THREE.MeshStandardMaterial({ map: portraitTex, emissive: 0xffffff, emissiveMap: portraitTex, emissiveIntensity: 0.25, roughness: 0.6 }));
-    portrait.position.set(-HW + 0.32, F3 + 2.6, -6);
+    portrait.position.set(-7.8, 3 * FH + 2.6, -2.0);
     portrait.rotation.y = Math.PI / 2;
     const portraitFrame = new THREE.Mesh(new THREE.BoxGeometry(0.2, 2.6, 3.4), gold);
-    portraitFrame.position.set(-HW + 0.2, F3 + 2.6, -6);
+    portraitFrame.position.set(-7.9, 3 * FH + 2.6, -2.0);
     g3.add(portraitFrame, portrait);
 
     this.intInteractables.push({
-      pos: new THREE.Vector3(-HW + 1.4, F3, -6), radius: 2.2,
+      pos: new THREE.Vector3(-6.0, 3 * FH, -2.0), radius: 2.2,
       label: 'Press <b>E</b> — look at the family portrait',
       handler: async () => { await say('Family Portrait', 'Four faces in dawn-gold paint. The Mayor, calm at the centre. Beside her a man in a battered hat with a sword of light at his back and a lantern — not the sword — in his hand. Two girls in front: one grinning like a sunrise, one watching you from the corner of the canvas as if she’s already three moves ahead. Someone has painted, very small, in the lantern’s glow: "home is the place you can always find."'); },
     });
@@ -4814,42 +4931,67 @@ export class Town {
     // Framed directive on East wall
     const directive = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 1.1),
       new THREE.MeshStandardMaterial({ color: 0x14101c, emissive: 0xe85a8a, emissiveIntensity: 0.18, roughness: 0.5 }));
-    directive.position.set(HW - 0.32, F3 + 2.6, -6);
+    directive.position.set(15.8, 3 * FH + 2.6, -2.0);
     directive.rotation.y = -Math.PI / 2;
     const directiveFrame = new THREE.Mesh(new THREE.BoxGeometry(0.18, 1.4, 1.9), gold);
-    directiveFrame.position.set(HW - 0.2, F3 + 2.6, -6);
+    directiveFrame.position.set(15.9, 3 * FH + 2.6, -2.0);
     g3.add(directiveFrame, directive);
 
     this.intInteractables.push({
-      pos: new THREE.Vector3(HW - 1.4, F3, -6), radius: 2.2,
+      pos: new THREE.Vector3(14.0, 3 * FH, -2.0), radius: 2.2,
       label: 'Press <b>E</b> — read the framed directive',
       handler: async () => { await say('Framed Directive', 'Behind glass, in a hand that isn’t hers, spooled from the heart of the Mirrorhouse: "GLAZE. DO NOT TOUCH. NOT YET. SOON." Foretales’ own standing order on the only family it dares not rewrite. The Mayor hung it where every visitor can see it. A little brass plate beneath reads, in her hand: "They forgot to be afraid of the wife."'); },
     });
 
-    // Bookshelves on side walls
-    for (const sx of [-9.5, 9.5]) {
+    // Bookshelves on side walls of Mayor's Suite
+    for (const sx of [-7.5, 15.5]) {
       const shelf = new THREE.Mesh(new THREE.BoxGeometry(0.5, 4.0, 4.5),
         new THREE.MeshStandardMaterial({ map: bookshelfTexture(), roughness: 0.85 }));
-      shelf.position.set(sx, F3 + 2.0, -8);
+      shelf.position.set(sx, 3 * FH + 2.0, -5.0);
       g3.add(shelf);
     }
 
+    // Cozy Fireplace in Mayor's Penthouse Suite (East wall)
+    const fireplace3 = new THREE.Group();
+    fireplace3.position.set(15.2, 3 * FH, 2.0);
+    fireplace3.rotation.y = -Math.PI / 2;
+    const hearth3 = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.8, 2.0), stoneTrim);
+    hearth3.position.set(0, 0.9, 0);
+    fireplace3.add(hearth3);
+    const hole3 = new THREE.Mesh(new THREE.BoxGeometry(0.52, 1.0, 1.2), new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.9 }));
+    hole3.position.set(0.15, 0.6, 0);
+    fireplace3.add(hole3);
+    const fire3 = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.4, 0.6), new THREE.MeshStandardMaterial({ color: 0xff4500, emissive: 0xff4500, emissiveIntensity: 2.0 }));
+    fire3.position.set(0.15, 0.35, 0);
+    fire3.name = 'flame';
+    const fireLight3 = new THREE.PointLight(0xff6600, 8, 8);
+    fireLight3.position.set(0.2, 0.4, 0);
+    fireplace3.add(fire3, fireLight3);
+    g3.add(fireplace3);
+    this.intColliders.push({ pos: new THREE.Vector3(15.2, 0, 2.0), r: 1.0, y0: 3 * FH, y1: 3 * FH });
+
+    this.intInteractables.push({
+      pos: new THREE.Vector3(13.8, 3 * FH, 2.0), radius: 1.8,
+      label: 'Press <b>E</b> — warm yourself by the fireplace',
+      handler: async () => { await say('Mayor’s Fireplace', 'A cozy, grand fireplace warming the Mayor’s office. The embers glow with a deep magical orange light, keeping the drafts of the high penthouse at bay.'); }
+    });
+
     // Wispry guardian
     const wisp = makeGuardian('wispry');
-    wisp.group.position.set(-6.5, F3 + 0.2, -8.5);
+    wisp.group.position.set(0.0, 3 * FH + 0.2, -4.0);
     wisp.group.scale.setScalar(0.9);
     wisp.group.rotation.y = Math.PI / 3;
     g3.add(wisp.group);
     this.intRigs.push(wisp);
 
     this.intInteractables.push({
-      pos: new THREE.Vector3(-6.5, F3, -8.5), radius: 1.7,
+      pos: new THREE.Vector3(0.0, 3 * FH, -4.0), radius: 1.7,
       label: 'Press <b>E</b> — greet the Mayor’s companion',
       handler: async () => { await say('Sile, the Mayor’s Guardian', '*A soft, airy Wispry blinks at you and drifts a slow circle, content. The Mayor says Aljay won her in a card game on Agdao years ago and "forgot to take her back." She has guarded this office ever since — the gentlest sentinel in Haven, and the only one Foretales never counted.*'); },
     });
 
     // Chamberlain Ysolde
-    addNpc(3.2, -4.2, F3, { top: 0x2a4a6a, hair: 0x2a2018, cap: null, hairstyle: 'ponytail', skin: 0xd29a6a }, 'Chamberlain Ysolde', -Math.PI / 3,
+    addNpc(7.0, -6.0, 3 * FH, { top: 0x2a4a6a, hair: 0x2a2018, cap: null, hairstyle: 'ponytail', skin: 0xd29a6a }, 'Chamberlain Ysolde', -Math.PI / 3,
       'Press <b>E</b> — speak to the Chamberlain', async () => {
         const pick = await choose('Chamberlain Ysolde',
           'The Mayor’s at her desk and yes, she’ll see you — she always sees people, it’s exhausting and it’s the whole job. A word before you approach?',
@@ -4858,11 +5000,11 @@ export class Town {
         else if (pick === 1) await say('Chamberlain Ysolde', 'Be honest and be brief — she can read a lie like a ledger and she hasn’t the time. And don’t pester her about the Dawnflame. Half this city’s visitors do. She answers anyway, because she’s kinder than I am. I would not.');
         else if (pick === 2) await say('Chamberlain Ysolde', 'Out. "Walking," she calls it. He has a dozen places and she knows every one and tells no one — not even me, and I know where the treasury keys are. Ask her yourself if you dare. She’ll give you a hint and a smile and you’ll leave knowing less than you think.');
       }, false, g3);
-    this.intMarkers.push({ x: 3.2, z: -4.2, label: 'Chamberlain', color: '#3a8ad9', kind: 'npc' });
+    this.intMarkers.push({ x: 7.0, z: -6.0, label: 'Chamberlain', color: '#3a8ad9', kind: 'npc' });
 
     // Mayor Airah herself
     const airah = makeVoxelHuman({ top: 0x7a2452, sleeves: 0x5a1838, bottom: 0x3a163a, hair: 0x241a14, hairstyle: 'long', skin: 0xd29a6a, robe: true });
-    airah.position.set(0, F3, -6.0);
+    airah.position.set(4.0, 3 * FH, -8.0);
     airah.rotation.y = 0;
     const chainOffice = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.03, 6, 18), gold);
     chainOffice.position.set(0, 1.18, 0.06); chainOffice.rotation.x = Math.PI / 2.2;
@@ -4875,12 +5017,12 @@ export class Town {
     tagNpc(airah, 'Mayor Airah');
     g3.add(airah);
     this.intNpcs.push(airah);
-    this.intColliders.push({ pos: new THREE.Vector3(0, 0, -6.0), r: 0.6, y0: F3, y1: F3 });
-    this.intMarkers.push({ x: 0, z: -6.0, label: '👑 Mayor Airah', color: '#e85a8a', kind: 'poi' });
+    this.intColliders.push({ pos: new THREE.Vector3(4.0, 0, -8.0), r: 0.6, y0: 3 * FH, y1: 3 * FH });
+    this.intMarkers.push({ x: 4.0, z: -8.0, label: '👑 Mayor Airah', color: '#e85a8a', kind: 'poi' });
 
     let hintIdx = 0;
     this.intInteractables.push({
-      pos: new THREE.Vector3(0, F3, -5.0), radius: 2.2,
+      pos: new THREE.Vector3(4.0, 3 * FH, -7.0), radius: 2.2,
       label: 'Press <b>E</b> — present yourself to Mayor Airah',
       handler: async () => {
         airah.rotation.y = Math.atan2(this.tamer.position.x - airah.position.x, this.tamer.position.z - airah.position.z);
@@ -4921,32 +5063,32 @@ export class Town {
 
     // ---------- assemble the per-storey minimap marker sets ----------
     const exitMk: MapMarker = { x: 0, z: HD - 0.7, color: '#e8d9a8', kind: 'door' };
-    const stairUpW: MapMarker = { x: -10, z: 0, label: '▲ Records', color: '#d8b56a', kind: 'poi' };
-    const stairUpE: MapMarker = { x: 10, z: 0, label: '▲ Hall of Mayors', color: '#d8b56a', kind: 'poi' };
-    const stairUpW2: MapMarker = { x: -10, z: 0, label: '▲ Grand Suite', color: '#d8b56a', kind: 'poi' };
+    const stairUpE: MapMarker = { x: 13.5, z: 8.5, label: '▲ Records', color: '#d8b56a', kind: 'poi' };
+    const stairUpN: MapMarker = { x: 8.0, z: -9.75, label: '▲ Hall of Mayors', color: '#d8b56a', kind: 'poi' };
+    const stairUpW: MapMarker = { x: -13.5, z: -8.0, label: '▲ Grand Suite', color: '#d8b56a', kind: 'poi' };
     this.intFloorMarkers = [
       // Floor 0
-      [ { x: 0, z: -4.5, label: 'Clerk Pell', color: '#3a8ad9', kind: 'npc' },
-        { x: 7, z: 5, label: 'Lamplighter', color: '#c9a24a', kind: 'npc' },
-        { x: -7, z: 4, label: 'Petitioners', color: '#b08a5a', kind: 'npc' },
+      [ { x: 0, z: -4.8, label: 'Clerk Pell', color: '#3a8ad9', kind: 'npc' },
+        { x: 5.0, z: 4.0, label: 'Lamplighter', color: '#c9a24a', kind: 'npc' },
+        { x: -6.0, z: 8.0, label: 'Petitioners', color: '#b08a5a', kind: 'npc' },
         { x: 0, z: 2.4, label: 'Civic Seal', color: '#f2c14e', kind: 'poi' },
-        stairUpW, exitMk ],
+        { x: -10.0, z: 0.0, label: 'Registry Clerk', color: '#4ec45e', kind: 'npc' },
+        stairUpE, exitMk ],
       // Floor 1
-      [ { x: -3, z: -5.5, label: 'Archivist', color: '#9ab0d8', kind: 'npc' },
-        { x: 5.5, z: 4.5, label: 'Clerk Tovi', color: '#4ec45e', kind: 'npc' },
-        { x: HW - 1.4, z: -2, label: 'Gratitude', color: '#f2ead0', kind: 'poi' },
-        stairUpE ],
+      [ { x: -9.0, z: -5.5, label: 'Archivist', color: '#9ab0d8', kind: 'npc' },
+        { x: -4.2, z: 4.0, label: 'Gratitude', color: '#f2ead0', kind: 'poi' },
+        stairUpN ],
       // Floor 2
-      [ { x: -2, z: 4.5, label: 'Historian', color: '#3a7a5a', kind: 'npc' },
-        { x: -9.5, z: 8.5, label: 'Archives', color: '#d8b56a', kind: 'door' },
-        stairUpW2 ],
+      [ { x: 10.0, z: 2.0, label: 'Historian', color: '#3a7a5a', kind: 'npc' },
+        { x: 10.0, z: -8.0, label: 'Archives', color: '#d8b56a', kind: 'door' },
+        stairUpW ],
       // Floor 3
-      [ { x: 0, z: -6.0, label: '👑 Airah', color: '#e85a8a', kind: 'poi' },
-        { x: 3.2, z: -4.2, label: 'Chamberlain', color: '#3a8ad9', kind: 'npc' },
-        { x: -HW + 1.4, z: -6, label: 'Family', color: '#ffcf7a', kind: 'poi' },
-        { x: HW - 1.4, z: -6, label: 'Directive', color: '#e85a8a', kind: 'poi' },
-        { x: -6.5, z: -8.5, label: 'Sile', color: '#9adff2', kind: 'npc' },
-        { x: -HW + 0.7, z: 8.5, label: 'Exit', color: '#e8d9a8', kind: 'door' } ],
+      [ { x: 4.0, z: -8.0, label: '👑 Airah', color: '#e85a8a', kind: 'poi' },
+        { x: 7.0, z: -6.0, label: 'Chamberlain', color: '#3a8ad9', kind: 'npc' },
+        { x: -7.8, z: -2.0, label: 'Family', color: '#ffcf7a', kind: 'poi' },
+        { x: 15.8, z: -2.0, label: 'Directive', color: '#e85a8a', kind: 'poi' },
+        { x: 0.0, z: -4.0, label: 'Sile', color: '#9adff2', kind: 'npc' },
+        { x: -8.0, z: 6.0, label: 'Exit', color: '#e8d9a8', kind: 'door' } ],
     ];
     this.intMarkers = this.intFloorMarkers[0];
   }
@@ -5222,6 +5364,7 @@ export class Town {
     this.busy = true;
     this.exitSpot.copy(this.tamer.position);
     this.buildMayorOfficeInterior();
+    console.log("DEBUG: entering Mayor's Office. Interior scene children:", this.interiorScene!.children.map(c => c.name || c.type));
     this.streetScene.remove(this.tamer);
     this.interiorScene!.add(this.tamer);
     // arrive a few steps in — beneath the great chandelier, atrium soaring
@@ -5678,6 +5821,33 @@ export class Town {
   private update(dt: number): void {
     if (!this.resolveExit) return;
     if (!this.sun) return; // a frame can render before run() builds the street
+
+    (window as any).debugTimer = ((window as any).debugTimer || 0) + dt;
+    if ((window as any).debugTimer >= 2.0) {
+      (window as any).debugTimer = 0;
+      try {
+        const serializeObj = (c: THREE.Object3D): any => {
+          return {
+            name: c.name,
+            type: c.type,
+            pos: { x: c.position.x, y: c.position.y, z: c.position.z },
+            visible: c.visible,
+            children: c.children.map(serializeObj)
+          };
+        };
+        const info = {
+          mode: this.mode,
+          tamerPos: { x: this.tamer.position.x, y: this.tamer.position.y, z: this.tamer.position.z },
+          intSceneChildren: this.interiorScene ? this.interiorScene.children.map(serializeObj) : null,
+          intGroundH_val: this.intGroundH ? this.intGroundH(this.tamer.position.x, this.tamer.position.z) : null,
+        };
+        fetch('http://localhost:4899/', {
+          method: 'POST',
+          body: JSON.stringify(info, null, 2)
+        }).catch(() => {});
+      } catch (e) {}
+    }
+
     this.guideTimer -= dt;
     if (this.guideTimer <= 0) { this.guideTimer = 2; this.syncGuidance(); }
     this.guideBeacons.forEach(b => b.rig.update(dt));

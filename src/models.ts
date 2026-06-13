@@ -46,6 +46,7 @@ export function canvasTex(size: number, draw: (ctx: CanvasRenderingContext2D, s:
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   tex.repeat.set(repeat, repeat);
   tex.colorSpace = THREE.SRGBColorSpace;
+  tex.needsUpdate = true;
   return tex;
 }
 
