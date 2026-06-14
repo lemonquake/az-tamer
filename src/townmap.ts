@@ -5,7 +5,7 @@
 // player is a facing arrow.
 // ============================================================
 
-import { questState } from './quests';
+import { questState, QUESTS } from './quests';
 import type { Player } from './state';
 
 export interface MapMarker {
@@ -15,6 +15,7 @@ export interface MapMarker {
   /** building = square, poi = diamond, npc = dot, door = bar */
   kind: 'building' | 'poi' | 'npc' | 'door';
   quest?: boolean;
+  questKinds?: ('story' | 'main' | 'side')[];
 }
 
 export interface AreaMapOpts {
@@ -33,34 +34,49 @@ function decorateQuestMarkers(p: Player, markers: MapMarker[], title: string): M
   
   return markers.map(mk => {
     if (!mk.label) return mk;
-    let isQuest = false;
+    const activeQuestIds: string[] = [];
     const label = mk.label.toLowerCase();
     
     // Haven City / Town
     if (t.includes('haven') || t.includes('pyrelight') || t.includes('mistveil') || t.includes('thornward') || t.includes('stormcall') || t.includes('duskwatch')) {
       if (label.includes('azrin') && label.includes('azrael')) {
         const state = questState(p, 'story_daughters');
-        if (state === 'active' || state === 'ready') isQuest = true;
+        if (state === 'active' || state === 'ready') activeQuestIds.push('story_daughters');
       }
       if (label.includes('pyrelight')) {
-        const s1 = questState(p, 'pyrelight_m1'), s2 = questState(p, 'pyrelight_m2'), s3 = questState(p, 'pyrelight_m3'), s4 = questState(p, 'pyrelight_m4');
-        if (s1 === 'active' || s1 === 'ready' || s2 === 'active' || s2 === 'ready' || s3 === 'active' || s3 === 'ready' || s4 === 'active' || s4 === 'ready') isQuest = true;
+        const list = ['pyrelight_m1', 'pyrelight_m2', 'pyrelight_m3', 'pyrelight_m4'];
+        for (const id of list) {
+          const s = questState(p, id);
+          if (s === 'active' || s === 'ready') activeQuestIds.push(id);
+        }
       }
       if (label.includes('mistveil')) {
-        const s1 = questState(p, 'mistveil_m1'), s2 = questState(p, 'mistveil_m2'), s3 = questState(p, 'mistveil_m3'), s4 = questState(p, 'mistveil_m4');
-        if (s1 === 'active' || s1 === 'ready' || s2 === 'active' || s2 === 'ready' || s3 === 'active' || s3 === 'ready' || s4 === 'active' || s4 === 'ready') isQuest = true;
+        const list = ['mistveil_m1', 'mistveil_m2', 'mistveil_m3', 'mistveil_m4'];
+        for (const id of list) {
+          const s = questState(p, id);
+          if (s === 'active' || s === 'ready') activeQuestIds.push(id);
+        }
       }
       if (label.includes('thornward')) {
-        const s1 = questState(p, 'thornward_m1'), s2 = questState(p, 'thornward_m2'), s3 = questState(p, 'thornward_m3'), s4 = questState(p, 'thornward_m4');
-        if (s1 === 'active' || s1 === 'ready' || s2 === 'active' || s2 === 'ready' || s3 === 'active' || s3 === 'ready' || s4 === 'active' || s4 === 'ready') isQuest = true;
+        const list = ['thornward_m1', 'thornward_m2', 'thornward_m3', 'thornward_m4'];
+        for (const id of list) {
+          const s = questState(p, id);
+          if (s === 'active' || s === 'ready') activeQuestIds.push(id);
+        }
       }
       if (label.includes('stormcall')) {
-        const s1 = questState(p, 'stormcall_m1'), s2 = questState(p, 'stormcall_m2'), s3 = questState(p, 'stormcall_m3'), s4 = questState(p, 'stormcall_m4');
-        if (s1 === 'active' || s1 === 'ready' || s2 === 'active' || s2 === 'ready' || s3 === 'active' || s3 === 'ready' || s4 === 'active' || s4 === 'ready') isQuest = true;
+        const list = ['stormcall_m1', 'stormcall_m2', 'stormcall_m3', 'stormcall_m4'];
+        for (const id of list) {
+          const s = questState(p, id);
+          if (s === 'active' || s === 'ready') activeQuestIds.push(id);
+        }
       }
       if (label.includes('duskwatch')) {
-        const s1 = questState(p, 'duskwatch_m1'), s2 = questState(p, 'duskwatch_m2'), s3 = questState(p, 'duskwatch_m3'), s4 = questState(p, 'duskwatch_m4');
-        if (s1 === 'active' || s1 === 'ready' || s2 === 'active' || s2 === 'ready' || s3 === 'active' || s3 === 'ready' || s4 === 'active' || s4 === 'ready') isQuest = true;
+        const list = ['duskwatch_m1', 'duskwatch_m2', 'duskwatch_m3', 'duskwatch_m4'];
+        for (const id of list) {
+          const s = questState(p, id);
+          if (s === 'active' || s === 'ready') activeQuestIds.push(id);
+        }
       }
     }
     
@@ -70,11 +86,13 @@ function decorateQuestMarkers(p: Player, markers: MapMarker[], title: string): M
         const sAgdao = questState(p, 'story_agdao');
         const sCradle = questState(p, 'story_cradle');
         const sEchoes = questState(p, 'story_echoes');
-        if (sAgdao === 'active' || sAgdao === 'ready' || sCradle === 'ready' || sEchoes === 'ready') isQuest = true;
+        if (sAgdao === 'active' || sAgdao === 'ready') activeQuestIds.push('story_agdao');
+        if (sCradle === 'ready') activeQuestIds.push('story_cradle');
+        if (sEchoes === 'ready') activeQuestIds.push('story_echoes');
       }
       if (label.includes('cradle hollow')) {
         const sCradle = questState(p, 'story_cradle');
-        if (sCradle === 'active') isQuest = true;
+        if (sCradle === 'active') activeQuestIds.push('story_cradle');
       }
     }
     
@@ -82,27 +100,31 @@ function decorateQuestMarkers(p: Player, markers: MapMarker[], title: string): M
     if (t.includes('university')) {
       if (label.includes('library')) {
         const sHist = questState(p, 'story_historian'), sAmber = questState(p, 'story_amber'), sWren = questState(p, 'side_ledger');
-        if (sHist === 'active' || sHist === 'ready' || sAmber === 'ready' || sWren === 'active' || sWren === 'ready') isQuest = true;
+        if (sHist === 'active' || sHist === 'ready') activeQuestIds.push('story_historian');
+        if (sAmber === 'ready') activeQuestIds.push('story_amber');
+        if (sWren === 'active' || sWren === 'ready') activeQuestIds.push('side_ledger');
       }
       if (label.includes('cafeteria')) {
         const sChef = questState(p, 'side_chef'), sWren = questState(p, 'side_ledger');
-        if (sChef === 'active' || sChef === 'ready' || sWren === 'active' || sWren === 'ready') isQuest = true;
+        if (sChef === 'active' || sChef === 'ready') activeQuestIds.push('side_chef');
+        if (sWren === 'active' || sWren === 'ready') activeQuestIds.push('side_ledger');
       }
       if (label.includes('lobby')) {
         const sNiko = questState(p, 'side_niko'), sTomas = questState(p, 'side_wrench');
-        if (sNiko === 'active' || sNiko === 'ready' || sTomas === 'active' || sTomas === 'ready') isQuest = true;
+        if (sNiko === 'active' || sNiko === 'ready') activeQuestIds.push('side_niko');
+        if (sTomas === 'active' || sTomas === 'ready') activeQuestIds.push('side_wrench');
       }
       if (label.includes('locker room')) {
         const sTomas = questState(p, 'side_wrench');
-        if (sTomas === 'active' || sTomas === 'ready') isQuest = true;
+        if (sTomas === 'active' || sTomas === 'ready') activeQuestIds.push('side_wrench');
       }
       if (label.includes('classroom')) {
         const sLyra = questState(p, 'side_quiz');
-        if (sLyra === 'active' || sLyra === 'ready') isQuest = true;
+        if (sLyra === 'active' || sLyra === 'ready') activeQuestIds.push('side_quiz');
       }
       if (label.includes('training hall')) {
         const sKade = questState(p, 'side_spar');
-        if (sKade === 'active' || sKade === 'ready') isQuest = true;
+        if (sKade === 'active' || sKade === 'ready') activeQuestIds.push('side_spar');
       }
     }
     
@@ -110,15 +132,16 @@ function decorateQuestMarkers(p: Player, markers: MapMarker[], title: string): M
     if (t.includes('salmonan')) {
       const sVeil = questState(p, 'story_veilfall');
       if (sVeil === 'active' || sVeil === 'ready') {
-        if (label.includes('relay tower') && !p.flags['salm_proof_relay']) isQuest = true;
-        if (label.includes('market') && !p.flags['salm_proof_crystal']) isQuest = true;
-        if (label.includes('mural') && !p.flags['salm_proof_stringer']) isQuest = true;
-        if (label.includes('ivan') && p.flags['salm_proof_relay'] && p.flags['salm_proof_crystal'] && p.flags['salm_proof_stringer']) isQuest = true;
+        if (label.includes('relay tower') && !p.flags['salm_proof_relay']) activeQuestIds.push('story_veilfall');
+        if (label.includes('market') && !p.flags['salm_proof_crystal']) activeQuestIds.push('story_veilfall');
+        if (label.includes('mural') && !p.flags['salm_proof_stringer']) activeQuestIds.push('story_veilfall');
+        if (label.includes('ivan') && p.flags['salm_proof_relay'] && p.flags['salm_proof_crystal'] && p.flags['salm_proof_stringer']) activeQuestIds.push('story_veilfall');
       }
     }
     
-    if (isQuest) {
-      return { ...mk, quest: true };
+    if (activeQuestIds.length > 0) {
+      const questKinds = activeQuestIds.map(id => QUESTS[id]?.kind).filter(Boolean) as ('story' | 'main' | 'side')[];
+      return { ...mk, quest: true, questKinds };
     }
     return mk;
   });
@@ -175,30 +198,85 @@ export function drawAreaMap(cv: HTMLCanvasElement, o: AreaMapOpts): void {
     c.fillStyle = mk.color;
     
     if (mk.quest) {
-      const time = Date.now() * 0.005;
-      const pulse = 0.5 + 0.5 * Math.sin(time * 2);
-      const radius = 6 + pulse * 3.5;
-      c.save();
-      c.beginPath();
-      c.arc(x, y, radius, 0, Math.PI * 2);
-      c.fillStyle = `rgba(232, 90, 106, ${0.15 + 0.25 * (1 - pulse)})`;
-      c.fill();
-      
-      c.beginPath();
-      c.arc(x, y, 6.5, 0, Math.PI * 2);
-      c.fillStyle = '#e85a6a';
-      c.strokeStyle = '#ffffff';
-      c.lineWidth = 1.2;
-      c.stroke();
-      c.fill();
-      
-      const bob = Math.sin(time * 3.5) * 1.5;
-      c.fillStyle = '#ffffff';
-      c.font = 'bold 10px sans-serif';
-      c.textAlign = 'center';
-      c.textBaseline = 'middle';
-      c.fillText('!', x, y + bob - 0.5);
-      c.restore();
+      const kinds = mk.questKinds && mk.questKinds.length > 0 ? mk.questKinds : [];
+      if (kinds.length === 0) {
+        // Fallback to original single red exclamation mark
+        const time = Date.now() * 0.005;
+        const pulse = 0.5 + 0.5 * Math.sin(time * 2);
+        const radius = 6 + pulse * 3.5;
+        c.save();
+        c.beginPath();
+        c.arc(x, y, radius, 0, Math.PI * 2);
+        c.fillStyle = `rgba(232, 90, 106, ${0.15 + 0.25 * (1 - pulse)})`;
+        c.fill();
+        
+        c.beginPath();
+        c.arc(x, y, 6.5, 0, Math.PI * 2);
+        c.fillStyle = '#e85a6a';
+        c.strokeStyle = '#ffffff';
+        c.lineWidth = 1.2;
+        c.stroke();
+        c.fill();
+        
+        const bob = Math.sin(time * 3.5) * 1.5;
+        c.fillStyle = '#ffffff';
+        c.font = 'bold 10px sans-serif';
+        c.textAlign = 'center';
+        c.textBaseline = 'middle';
+        c.fillText('!', x, y + bob - 0.5);
+        c.restore();
+      } else {
+        // Render custom badges side-by-side
+        const N = kinds.length;
+        const spacing = 15;
+        const time = Date.now() * 0.005;
+        const pulse = 0.5 + 0.5 * Math.sin(time * 2);
+        
+        c.save();
+        kinds.forEach((kind, i) => {
+          const cx = x + (i - (N - 1) / 2) * spacing;
+          const cy = y;
+          
+          let bgColor = '#e85a6a';
+          let emoji = '❗';
+          if (kind === 'story') {
+            bgColor = '#f2c14e';
+            emoji = '📜';
+          } else if (kind === 'main') {
+            bgColor = '#e85a6a';
+            emoji = '⚔️';
+          } else if (kind === 'side') {
+            bgColor = '#5ab8e8';
+            emoji = '🤝';
+          }
+          
+          const haloRadius = 6 + pulse * 3.5;
+          c.beginPath();
+          c.arc(cx, cy, haloRadius, 0, Math.PI * 2);
+          c.fillStyle = bgColor === '#f2c14e' 
+            ? `rgba(242, 193, 78, ${0.15 + 0.25 * (1 - pulse)})` 
+            : bgColor === '#5ab8e8'
+            ? `rgba(90, 184, 232, ${0.15 + 0.25 * (1 - pulse)})`
+            : `rgba(232, 90, 106, ${0.15 + 0.25 * (1 - pulse)})`;
+          c.fill();
+          
+          c.beginPath();
+          c.arc(cx, cy, 6.5, 0, Math.PI * 2);
+          c.fillStyle = bgColor;
+          c.strokeStyle = '#ffffff';
+          c.lineWidth = 1.2;
+          c.stroke();
+          c.fill();
+          
+          const bob = Math.sin(time * 3.5 + i * 1.5) * 1.2;
+          c.fillStyle = '#ffffff';
+          c.font = '10px sans-serif';
+          c.textAlign = 'center';
+          c.textBaseline = 'middle';
+          c.fillText(emoji, cx, cy + bob);
+        });
+        c.restore();
+      }
     } else {
       if (mk.kind === 'building') {
         c.fillRect(x - 4, y - 4, 8, 8);
@@ -216,9 +294,10 @@ export function drawAreaMap(cv: HTMLCanvasElement, o: AreaMapOpts): void {
     if (mk.label) {
       c.font = 'bold 9px Trebuchet MS';
       c.lineWidth = 3; c.strokeStyle = 'rgba(4,6,12,0.9)'; c.lineJoin = 'round';
-      c.strokeText(mk.label, x, y - 7);
+      const labelY = mk.quest ? y - 9 : y - 7;
+      c.strokeText(mk.label, x, labelY);
       c.fillStyle = mk.quest ? '#e85a6a' : mk.color;
-      c.fillText(mk.label, x, y - 7);
+      c.fillText(mk.label, x, labelY);
     }
   }
 
