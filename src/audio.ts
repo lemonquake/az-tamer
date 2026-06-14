@@ -1,7 +1,5 @@
 // ============================================================
-// AZ Tamer — procedural audio: synthesized UI sounds, jingles
-// and a soft ambient music pad. No audio files — everything is
-// generated with WebAudio oscillators. M toggles sound.
+// AZ Tamer — background music, mp3 audio, and synth sound effects
 // ============================================================
 
 const MUTE_KEY = 'az-tamer-muted';
@@ -11,6 +9,36 @@ let master: GainNode | null = null;
 let ambientGain: GainNode | null = null;
 let ambientTimer: number | null = null;
 let muted = localStorage.getItem(MUTE_KEY) === '1';
+
+// Volume levels (0 - 100)
+let musicVolume = parseInt(localStorage.getItem('az-tamer-music-volume') ?? '70', 10);
+let soundVolume = parseInt(localStorage.getItem('az-tamer-sound-volume') ?? '70', 10);
+
+// Background Music tracking
+let currentTrackKey: string | null = null;
+let currentAudio: HTMLAudioElement | null = null;
+
+const TRACKS: Record<string, string> = {
+  main_theme: 'music/az_tamer_maintheme.mp3',
+  haven_town: 'music/haven_town.mp3',
+  overworld: 'music/overworld_theme.mp3',
+  university: 'music/university_theme.mp3',
+  terra_city: 'music/terra_city_theme.mp3',
+  coliseum: 'music/coliseum_theme.mp3',
+  battle: 'music/battle_theme.mp3',
+  battle_boss: 'music/battle_boss.mp3',
+  battle_coliseum: 'music/battle_coliseum.mp3',
+  battle_win: 'music/battle_win.mp3',
+  battle_lost: 'music/battle_lost.mp3',
+  // Fishing Expansion — dynamic fishing soundtrack
+  fishing: 'music/fishing_theme.mp3',
+  fishing_hooked: 'music/fishing_hooked.mp3',
+  fishing_hooked_rare: 'music/fishing_hooked_rare.mp3',
+  fishing_success: 'music/fishing_success.mp3',
+  fishing_success_rare: 'music/fishing_success_rare.mp3',
+  level_up: 'music/level_up.mp3',
+  evolve: 'music/evolve.mp3',
+};
 
 function ensureCtx(): AudioContext | null {
   if (ctx) return ctx;
@@ -28,7 +56,7 @@ export function initAudio(): void {
   const kick = () => {
     const c = ensureCtx();
     if (c && c.state === 'suspended') c.resume();
-    startAmbient();
+    playMusic('main_theme');
     window.removeEventListener('pointerdown', kick);
     window.removeEventListener('keydown', kick);
   };
@@ -42,7 +70,89 @@ export function toggleMute(): boolean {
   muted = !muted;
   localStorage.setItem(MUTE_KEY, muted ? '1' : '0');
   if (master && ctx) master.gain.setTargetAtTime(muted ? 0 : 1, ctx.currentTime, 0.05);
+  updateMusicVolume();
   return muted;
+}
+
+export const getMusicVolume = (): number => musicVolume;
+export const getSoundVolume = (): number => soundVolume;
+
+export function getTrueMusicVolume(): number {
+  if (muted) return 0;
+  return (musicVolume / 100) * 0.70;
+}
+
+export function updateMusicVolume(): void {
+  if (currentAudio) {
+    currentAudio.volume = getTrueMusicVolume();
+  }
+}
+
+export function setMusicVolume(val: number): void {
+  musicVolume = Math.max(0, Math.min(100, val));
+  localStorage.setItem('az-tamer-music-volume', String(musicVolume));
+  updateMusicVolume();
+}
+
+export function setSoundVolume(val: number): void {
+  soundVolume = Math.max(0, Math.min(100, val));
+  localStorage.setItem('az-tamer-sound-volume', String(soundVolume));
+}
+
+export function playMusic(trackKey: string): void {
+  if (currentTrackKey === trackKey) {
+    updateMusicVolume();
+    return;
+  }
+  
+  const src = TRACKS[trackKey];
+  if (!src) {
+    console.warn('Unknown track key:', trackKey);
+    return;
+  }
+  
+  // Fade out current audio
+  const oldAudio = currentAudio;
+  if (oldAudio) {
+    let fadeOutInterval = setInterval(() => {
+      if (oldAudio.volume > 0.05) {
+        oldAudio.volume = Math.max(0, oldAudio.volume - 0.05);
+      } else {
+        clearInterval(fadeOutInterval);
+        oldAudio.pause();
+        oldAudio.remove();
+      }
+    }, 50);
+  }
+  
+  currentTrackKey = trackKey;
+  
+  const newAudio = new Audio(src);
+  newAudio.loop = true;
+  newAudio.volume = 0;
+  currentAudio = newAudio;
+  
+  newAudio.play().then(() => {
+    updateMusicVolume();
+    const maxVol = getTrueMusicVolume();
+    let fadeInInterval = setInterval(() => {
+      if (newAudio.volume < maxVol - 0.05) {
+        newAudio.volume = Math.min(maxVol, newAudio.volume + 0.05);
+      } else {
+        newAudio.volume = maxVol;
+        clearInterval(fadeInInterval);
+      }
+    }, 50);
+  }).catch(err => {
+    console.log('Audio playback waiting for gesture:', err);
+  });
+}
+
+export function playMp3Sfx(filename: string): void {
+  if (muted) return;
+  const audio = new Audio(`music/${filename}`);
+  audio.volume = soundVolume / 100;
+  audio.play().catch(err => console.log('MP3 SFX failed:', err));
 }
 
 // ---------------- synth helpers ----------------
@@ -59,8 +169,9 @@ function tone(freq: number, dur: number, opts: {
   osc.frequency.setValueAtTime(freq, t0);
   if (slideTo) osc.frequency.exponentialRampToValueAtTime(Math.max(20, slideTo), t0 + dur);
   g.gain.setValueAtTime(0, t0);
-  g.gain.linearRampToValueAtTime(vol, t0 + attack);
-  g.gain.exponentialRampToValueAtTime(0.0008, t0 + dur);
+  const finalVol = vol * (soundVolume / 100);
+  g.gain.linearRampToValueAtTime(finalVol, t0 + attack);
+  g.gain.exponentialRampToValueAtTime(Math.max(0.0001, finalVol * 0.005), t0 + dur);
   osc.connect(g).connect(master);
   osc.start(t0);
   osc.stop(t0 + dur + 0.05);
@@ -88,12 +199,14 @@ function noiseBurst(dur: number, opts: {
   if (slideTo) f.frequency.exponentialRampToValueAtTime(Math.max(20, slideTo), t0 + dur);
   const g = c.createGain();
   g.gain.setValueAtTime(0, t0);
-  g.gain.linearRampToValueAtTime(vol, t0 + 0.012);
-  g.gain.exponentialRampToValueAtTime(0.0008, t0 + dur);
+  const finalVol = vol * (soundVolume / 100);
+  g.gain.linearRampToValueAtTime(finalVol, t0 + 0.012);
+  g.gain.exponentialRampToValueAtTime(Math.max(0.0001, finalVol * 0.005), t0 + dur);
   src.connect(f).connect(g).connect(master);
   src.start(t0);
   src.stop(t0 + dur + 0.05);
 }
+
 
 // ---------------- sound effects ----------------
 export type SfxName =

@@ -867,7 +867,7 @@ export const SPECIES: Record<string, SpeciesDef> = Object.fromEntries(([
 ] as SpeciesDef[]).map(s => [s.id, s]));
 
 // ---------------- Items ----------------
-export type ItemKind = 'heal' | 'sp' | 'revive' | 'gift' | 'fuel' | 'repair' | 'boost' | 'evo' | 'relic';
+export type ItemKind = 'heal' | 'sp' | 'revive' | 'gift' | 'fuel' | 'repair' | 'boost' | 'feast' | 'evo' | 'relic';
 
 export interface ItemDef {
   id: string; name: string; kind: ItemKind;
@@ -905,6 +905,13 @@ export const ITEMS: Record<string, ItemDef> = Object.fromEntries([
   I('hp_gem', 'Garnet Gem', 'boost', 6, 800, 'Permanently raises a Guardian\'s max HP by 6.', 'hp'),
   I('sp_gem', 'Amethyst Gem', 'boost', 6, 800, 'Permanently raises a Guardian\'s max SP by 6.', 'sp'),
   I('prism_gem', 'Prism Gem', 'boost', 3, 2600, 'A flawless cut crystal that strengthens a Guardian\'s very frame — permanently raises max HP by 3 and is prized by every house.', 'hp'),
+  // cooked fish — dishes crafted at the Anglers' Wharf kitchen
+  I('fish_grill', 'Grilled Fillet', 'heal', 120, 0, 'Restores 120 HP to one Guardian. Simple campfire fare from a fresh catch.'),
+  I('fish_smoke', 'Smoked Catch', 'sp', 90, 0, 'Restores 90 SP to one Guardian. Cured to keep for the long road.'),
+  I('fish_stew', "Angler's Stew", 'heal', 9999, 0, 'Fully restores one Guardian\'s HP. A rich pot of pond-and-river bounty.'),
+  I('fish_sashimi', 'Prism Sashimi', 'boost', 2, 0, 'Permanently raises a Guardian\'s Speed by 2. Cut from exotic flesh.', 'spd'),
+  I('fish_roe', 'Mythic Roe', 'boost', 6, 0, 'Permanently raises a Guardian\'s max HP by 6. Eggs that hum with power.', 'hp'),
+  I('fish_legend', 'Legendary Banquet', 'feast', 3, 0, 'A feast told of for generations — permanently raises ALL of a Guardian\'s stats.'),
   // story relics — quest items, never sold, never consumed by accident
   I('storm_amber', 'Storm-Touched Amber', 'relic', 0, 0, 'Fossil resin from the Thunderfen Mire with a living spark sealed inside. Historian Veyl at the University would trade a great deal to study one.'),
   I('sea_chart', 'Aurelian Sea-Chart', 'relic', 0, 0, 'Historian Veyl\'s hand-corrected chart of the western sea. Agdao Island — the Cradle of Tamers — is inked at its heart. Your overworld map now knows the way.'),

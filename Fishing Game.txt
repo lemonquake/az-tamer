@@ -1,0 +1,1173 @@
+# 🎣 Comprehensive Fishing Expansion System
+
+## Vision
+
+Create a fully-featured, highly engaging Fishing Expansion that becomes a major side activity and progression path for players. Fishing should feel like its own game within the game, complete with progression, collectibles, exploration, economy systems, social interactions, rare discoveries, unique equipment, and meaningful gameplay rewards.
+
+The system should be polished, visually impressive, fun for both casual and hardcore players, and designed for long-term replayability.
+
+---
+
+# 🌊 World Expansion
+
+## The Great Pond
+
+Construct a large scenic pond just outside the city walls.
+
+### Location Design
+
+* The pond should connect naturally to a river.
+* The river flows southward beyond the city and disappears into the distant wilderness.
+* Wooden docks extend into the water.
+* Small fishing platforms are scattered around the shoreline.
+* Tall grass, reeds, cattails, lily pads, and rocks decorate the area.
+* Wildlife such as frogs, dragonflies, birds, turtles, and fish can be seen.
+* Dynamic weather affects the area.
+* Water reflects sunlight and moonlight beautifully.
+* Day/night lighting should dramatically affect atmosphere.
+
+### Interactive Areas
+
+Players can:
+
+* Fish from docks
+* Fish from shoreline
+* Fish from bridges
+* Fish from special hidden locations
+* Discover secret fishing spots
+
+---
+
+# 🎣 Fishing Mode
+
+When a player interacts with a fishing location:
+
+## Scene Transition
+
+Instead of fishing directly in the main world:
+
+* The game loads a dedicated Fishing Scene.
+* This scene contains the player's character and the selected fishing environment.
+* This improves performance.
+* Allows higher quality animations and effects.
+* Creates a focused fishing experience.
+
+### Fishing Scene Features
+
+* Dynamic water simulation
+* Fish movement beneath water
+* Floating particles
+* Weather effects
+* Day/night cycle
+* Ambient sounds
+
+Examples:
+
+* Water splashes
+* Wind
+* Birds
+* Crickets
+* River flow
+
+---
+
+# 🧍 Player Animations
+
+Create an entirely new animation set.
+
+### Examples
+
+#### Idle
+
+* Relaxed standing
+* Looking at water
+* Adjusting rod
+
+#### Casting
+
+* Light cast
+* Heavy cast
+* Precision cast
+
+#### Waiting
+
+* Checking line
+* Looking around
+* Shifting weight
+
+#### Hooking
+
+* Sudden reaction
+* Rod jerk
+
+#### Reeling
+
+* Slow reel
+* Fast reel
+* Struggle reel
+
+#### Catch Success
+
+Player proudly raises fish.
+
+#### Legendary Catch
+
+Unique cinematic animation.
+
+---
+
+# 🎮 Fishing Gameplay Mechanics
+
+## Phase 1: Cast
+
+Player chooses:
+
+* Rod
+* Bait
+* Fishing Spot
+
+A casting meter appears.
+
+Perfect timing:
+
+* Increases fish attraction
+* Increases rare fish chance
+
+---
+
+## Phase 2: Waiting
+
+Fish AI evaluates:
+
+* Time of day
+* Weather
+* Bait type
+* Rod quality
+* Water depth
+* Spawn conditions
+
+Fish may:
+
+* Ignore bait
+* Inspect bait
+* Bite bait
+
+---
+
+## Phase 3: Hooking
+
+Reaction-based mini-game.
+
+Player must press at the correct timing.
+
+Results:
+
+* Perfect Hook
+* Good Hook
+* Weak Hook
+* Miss
+
+---
+
+## Phase 4: Fish Battle
+
+The fish actively fights back.
+
+### Fish Behavior System
+
+Fish have:
+
+* Stamina
+* Strength
+* Aggression
+* Intelligence
+
+Players must:
+
+* Maintain line tension
+* Prevent line snapping
+* Follow fish movement
+
+---
+
+## Phase 5: Landing
+
+Final timing challenge.
+
+Successful catch triggers celebration sequence.
+
+---
+
+# 🎥 Catch Showcase System
+
+Every successful catch triggers:
+
+### Camera Sequence
+
+* Camera zooms in dramatically.
+* Character lifts fish.
+* Fish model rotates.
+* Rarity badge appears.
+* Weight displayed.
+* Length displayed.
+
+Special visual effects depend on rarity.
+
+---
+
+# ⭐ Fish Rarities
+
+Each rarity has:
+
+* Unique badge
+* Unique UI frame
+* Unique VFX
+* Unique sounds
+
+## Common
+
+Gray Badge
+
+## Uncommon
+
+Green Badge
+
+## Rare
+
+Blue Badge
+
+## Elite
+
+Purple Badge
+
+## Mythical
+
+Gold Badge
+
+## Legendary
+
+Animated Rainbow Badge
+
+---
+
+# 🐟 Fish Ecosystem
+
+Create 5 Fish Families.
+
+Each family contains 5 species.
+
+Total: 25 unique fish species.
+
+Each species requires:
+
+* Unique 3D model
+* Unique textures
+* Unique animations
+* Unique behaviors
+
+---
+
+## Family 1: Pond Fish
+
+### Species
+
+1. Silver Minnow
+2. Pond Carp
+3. Golden Koi
+4. Emerald Carp
+5. Royal Dragon Koi
+
+---
+
+## Family 2: River Fish
+
+### Species
+
+1. Swift Trout
+2. Redfin Trout
+3. Crystal Salmon
+4. Thunder Salmon
+5. Emperor Salmon
+
+---
+
+## Family 3: Predator Fish
+
+### Species
+
+1. Pike
+2. Razor Pike
+3. Shadow Pike
+4. Bonejaw Pike
+5. Abyss Pike
+
+---
+
+## Family 4: Exotic Fish
+
+### Species
+
+1. Moonfish
+2. Starfish Eel
+3. Prism Fish
+4. Aurora Swimmer
+5. Celestial Ray
+
+---
+
+## Family 5: Ancient Fish
+
+### Species
+
+1. Fossil Fin
+2. Elder Catfish
+3. Ancient Leviathan Fry
+4. Titan River Serpent
+5. Worldscale Dragonfish
+
+---
+
+# 🧠 Fish Spawn Logic
+
+Fish should not spawn randomly.
+
+### Spawn Conditions
+
+Consider:
+
+* Weather
+* Time
+* Season
+* Water location
+* Rod used
+* Bait used
+* Player Fishing Level
+
+Examples:
+
+Thunder Salmon:
+
+* Rain only
+* Night only
+
+Aurora Swimmer:
+
+* Dawn only
+
+Worldscale Dragonfish:
+
+* 0.01% chance
+* Requires special bait
+* Requires max Fishing Level
+
+---
+
+# 🎣 Rod System
+
+Every rod has:
+
+* Model
+* Stats
+* Effects
+* Sounds
+
+Examples:
+
+## Beginner Rod
+
+Basic starter rod.
+
+## Ironhook Rod
+
+Improved catch rate.
+
+## Stormcaller Rod
+
+Lightning effects.
+
+## Neonizer Rod
+
+Animated neon glow.
+
+## Dragonheart Rod
+
+Legendary rod with fiery effects.
+
+---
+
+# 🪱 Bait System
+
+Every bait has:
+
+* Model
+* Rarity
+* Fish preferences
+
+Examples:
+
+## Worm Bait
+
+Basic.
+
+## Glow Worm
+
+Night bonus.
+
+## Electrozap Bait
+
+Electric effects.
+
+## Dragon Essence Bait
+
+Attracts legendary fish.
+
+## Celestial Lure
+
+Highest-tier bait.
+
+---
+
+# 🏪 Fishing Specialty Store
+
+Create a dedicated fishing shop in town.
+
+### Features
+
+* Rod Shop
+* Bait Shop
+* Fish Encyclopedia
+* Rod Upgrades
+* Fishing Quests
+
+---
+
+# 👕 Real-Time Preview System
+
+Same technology as clothing shop.
+
+Players can:
+
+* Equip rods
+* Equip bait
+* Preview combinations
+* View special animations
+* View VFX before purchase
+
+---
+
+# 🧑 NPC Fishing Community
+
+Create multiple NPCs around the pond.
+
+### NPC Types
+
+* Beginner Fisher
+* Veteran Fisher
+* Fishing Merchant
+* Fish Researcher
+* Legendary Fisherman
+
+NPCs provide:
+
+* Tips
+* Quests
+* Rare bait recipes
+* Secret fishing locations
+* Fishing lore
+
+---
+
+# 📖 Fishing Progression
+
+Players gain:
+
+* Fishing EXP
+* Fishing Levels
+* Fishing Titles
+* Fishing Achievements
+
+Examples:
+
+* Pond Rookie
+* River Master
+* Fish Whisperer
+* Legendary Angler
+
+---
+
+# ⚔ Fish Rewards and Gameplay Uses
+
+Caught fish have practical value.
+
+### Battle Benefits
+
+Fish can:
+
+* Restore HP
+* Restore SP
+* Increase Attack
+* Increase Defense
+* Increase Speed
+* Increase Critical Chance
+* Increase EXP Gain
+* Reduce Cooldowns
+
+---
+
+# 🧪 Cooking & Crafting
+
+Fish can be:
+
+* Cooked
+* Smoked
+* Grilled
+* Crafted into battle items
+
+---
+
+# 🏆 Rare Discoveries
+
+Hidden catches include:
+
+* Treasure Chests
+* Ancient Relics
+* Lost Weapons
+* Rare Cosmetics
+* Secret Quest Items
+* Legendary Fish Eggs
+
+---
+
+Add the following to the Fishing Expansion specification:
+
+---
+
+# 🎵 Dynamic Fishing Music System
+
+Fishing mode must use a dedicated soundtrack system to enhance immersion and excitement.
+
+### Background Music
+
+* Upon entering Fishing Mode, immediately play:
+
+  * `fishing.mp3`
+
+This serves as the default ambient fishing soundtrack.
+
+### Hooked Music
+
+When a fish successfully bites and becomes hooked:
+
+* Fade out `fishing.mp3`
+* Play:
+
+  * `fishing_hooked.mp3`
+
+This track should create tension and excitement during the fish battle.
+
+### Rare Fish Hook Music
+
+If the hooked fish is:
+
+* Rare
+* Elite
+* Mythical
+* Legendary
+
+Then immediately override the normal hooked music and play:
+
+* `fishing_rare.mp3`
+
+This alerts the player that they have encountered something valuable.
+
+### Successful Catch Music
+
+Upon successfully landing a fish:
+
+* Play:
+
+  * `fishing_capture.mp3`
+
+This should accompany the fish showcase animation and catch summary.
+
+### Legendary Capture Music
+
+If the fish rarity is Legendary:
+
+* Override all other catch music.
+* Play:
+
+  * `fishing_legendary.mp3`
+
+This should feel grand, rewarding, and unforgettable.
+
+### Music Transitions
+
+* All music changes should smoothly fade between tracks.
+* No abrupt audio cuts.
+* Music should dynamically respond to fishing events.
+
+---
+
+# 👁 Fish Shadow Detection System
+
+Players should be able to visually scout the water before casting.
+
+### Visible Fish Shadows
+
+Various fish shadows move beneath the water surface.
+
+Different fish species should have:
+
+* Different silhouettes
+* Different movement styles
+* Different swimming speeds
+* Different grouping behaviors
+
+### Shadow Categories
+
+#### Small Shadows
+
+Usually indicate:
+
+* Common Fish
+* Uncommon Fish
+
+#### Medium Shadows
+
+Usually indicate:
+
+* Uncommon Fish
+* Rare Fish
+
+#### Large Shadows
+
+Usually indicate:
+
+* Rare Fish
+* Elite Fish
+
+#### Massive Shadows
+
+Usually indicate:
+
+* Mythical Fish
+* Legendary Fish
+
+---
+
+# ⭐ Rare Fish Visual Indicators
+
+Rare fish should not be obvious but should have subtle visual clues.
+
+Examples:
+
+### Rare
+
+* Slight sparkle trail
+
+### Elite
+
+* Occasional water shimmer
+
+### Mythical
+
+* Colored glow beneath water
+
+### Legendary
+
+* Unique silhouette
+* Golden glow
+* Distinct movement pattern
+* Special water distortion effect
+
+Players should eventually learn to recognize these signs.
+
+---
+
+# 🎯 Shadow-Based Casting Strategy
+
+Fishing should involve observation and decision-making.
+
+Players can:
+
+* Watch fish movement
+* Study shadow size
+* Predict swimming paths
+* Cast strategically
+
+Casting directly near fish shadows increases:
+
+* Bite chance
+* Hook chance
+* Rare fish encounter chance
+
+---
+
+# 🌊 Advanced Water Technology
+
+The pond and fishing environments should feature premium, modern water rendering comparable to high-quality fishing and open-world games.
+
+### Water Shader Features
+
+* Real-time reflections
+* Dynamic refractions
+* Surface sparkle effects
+* Sunlight glints
+* Moonlight reflections
+* Underwater visibility
+* Shoreline foam
+
+### Water Movement
+
+* Gentle ripples
+* Wind-driven waves
+* Dynamic current flow
+* Fish-generated disturbances
+
+### Interaction Effects
+
+Water reacts to:
+
+* Casting
+* Reeling
+* Fish movement
+* Fish jumps
+* Rain
+* Player actions
+
+---
+
+# 💦 Splash & Particle Effects
+
+Create highly detailed splash systems.
+
+### Casting Splash
+
+* Small water splash
+* Ripple propagation
+
+### Fish Bite Splash
+
+* Quick splash burst
+* Water disturbance
+
+### Fish Struggle Splash
+
+* Dynamic splash intensity based on fish size
+
+### Legendary Fish Splash
+
+* Massive cinematic splash
+* Enhanced particle effects
+* Water spray
+* Unique visual effects
+
+---
+
+# 📊 Fishing Score Log
+
+After every successful catch, display a detailed Catch Summary Screen.
+
+### Catch Information
+
+Display:
+
+* Fish Name
+* Species
+* Family
+* Rarity
+* Weight
+* Length
+* Time Caught
+* Location
+* Rod Used
+* Bait Used
+* Fishing EXP Earned
+* Bonus Rewards
+
+### Score Calculation
+
+Award points based on:
+
+* Fish rarity
+* Fish size
+* Catch speed
+* Perfect hooks
+* Fishing streaks
+
+### Example
+
+Fishing Score: 2,450
+
+Breakdown:
+
+* Rare Fish Bonus: +500
+* Perfect Hook: +250
+* Large Size Bonus: +700
+* First Catch Bonus: +1,000
+
+---
+
+# 🔄 Post-Catch Options
+
+After the Catch Summary Screen, present two options:
+
+### Cast Again
+
+* Instantly begin another fishing attempt.
+* Remain inside Fishing Mode.
+* Preserve current rod and bait selections.
+
+### Quit Fishing
+
+* Exit Fishing Mode.
+* Fade back into the main game world.
+* Return the player to the exact original location where fishing was initiated.
+* Restore normal gameplay and world music.
+
+This transition should feel seamless and immersive.
+
+---
+
+Add the following to the Fishing Expansion specification:
+
+---
+
+# 🎰 Animated Fishing Score Log System
+
+The Fishing Score Log should feel exciting, rewarding, and highly satisfying, similar to winning in a casino or arcade game.
+
+### Score Reveal Animation
+
+After a successful catch and fish showcase animation:
+
+* The Catch Summary UI appears.
+* Every score category rolls rapidly like casino slot-machine numbers.
+* Numbers continuously spin upward before slowing down.
+* Final values dramatically lock into place one by one.
+* Each category should have satisfying sound effects.
+
+### Sound Effects
+
+Examples:
+
+* Tick sounds while numbers roll
+* Coin jingles
+* Slot-machine style counting sounds
+* Success chimes
+* Rarity celebration sounds
+* Large score impact sounds
+
+### Score Lock Effects
+
+Each score category should:
+
+* Flash when finalized
+* Produce particles
+* Slightly shake the UI
+* Increase excitement as totals become larger
+
+---
+
+# 🏅 Expanded Fishing Score System
+
+The player's final Fishing Score should be calculated using multiple categories.
+
+### Fish Rarity Score
+
+Based on rarity:
+
+* Common
+* Uncommon
+* Rare
+* Elite
+* Mythical
+* Legendary
+
+Higher rarities provide dramatically higher scores.
+
+---
+
+### Fish Size Score
+
+Based on:
+
+* Length
+* Weight
+
+Larger fish award bonus points.
+
+---
+
+### Catch Time Score
+
+Reward efficient fishing.
+
+Examples:
+
+* Faster captures = higher score
+* Long battles = lower score
+
+This rewards player skill and precision.
+
+---
+
+### Casting Distance Score
+
+The farther the cast lands from the player:
+
+* The more points awarded.
+
+Examples:
+
+* Short Cast Bonus
+* Long Cast Bonus
+* Extreme Cast Bonus
+
+Perfect casts into distant hotspots provide significant score multipliers.
+
+---
+
+### Perfect Hook Bonus
+
+Awarded for perfect reaction timing.
+
+---
+
+### Fishing Streak Bonus
+
+Consecutive catches increase score multiplier.
+
+Examples:
+
+* 3 Catch Combo
+* 5 Catch Combo
+* 10 Catch Combo
+
+---
+
+### First Discovery Bonus
+
+Awarded when catching a species for the first time.
+
+---
+
+### Daily Record Bonus
+
+Awarded when surpassing personal best records.
+
+---
+
+### Legendary Encounter Bonus
+
+Awarded simply for hooking extremely rare fish.
+
+---
+
+# 📊 Final Score Tally Sequence
+
+The score reveal should follow this order:
+
+1. Fish Rarity
+2. Fish Size
+3. Catch Time
+4. Casting Distance
+5. Perfect Hook Bonus
+6. Combo Bonus
+7. Discovery Bonus
+8. Special Event Bonus
+9. Grand Total
+
+Each category rolls and locks individually before proceeding to the next.
+
+The Grand Total should have:
+
+* Large number animation
+* Particle explosion
+* Camera shake
+* Sound crescendo
+* Bonus celebration effects
+
+---
+
+# 🏆 Global Fishing Leaderboard
+
+Introduce a living Fishing Leaderboard system.
+
+The leaderboard should be accessible from:
+
+* Fishing Shop
+* Fishing Menu
+* Fishing NPCs
+* Pond Information Boards
+
+---
+
+# 🤖 Dynamic NPC Leaderboard Simulation
+
+The leaderboard should never feel static.
+
+A background simulation system continuously generates fishing activity from NPC anglers.
+
+NPCs automatically:
+
+* Catch fish
+* Earn scores
+* Break records
+* Rise and fall in rankings
+
+The leaderboard should update automatically over time.
+
+Players should feel like they are competing against a living fishing community.
+
+---
+
+### 🏆 Top 20 Anglers Leaderboard (Example)
+
+| Rank | Name             |   Score |
+| ---- | ---------------- | ------: |
+| #1   | Captain Finwick  | 985,400 |
+| #2   | Marina Wavecrest | 941,850 |
+| #3   | Aljay            | 903,250 |
+| #4   | Old Man River    | 872,300 |
+| #5   | Luna Tidewalker  | 845,700 |
+| #6   | Greggy           | 810,500 |
+| #7   | Onnel            | 784,100 |
+| #8   | Fisher Tom       | 742,900 |
+| #9   | Coral Quinn      | 721,450 |
+| #10  | River Joe        | 699,800 |
+| #11  | Stormhook Sam    | 681,250 |
+| #12  | Pearl Castor     | 663,900 |
+| #13  | Gillbert Finn    | 648,700 |
+| #14  | Tidal Rex        | 632,150 |
+| #15  | Sandy Hooks      | 615,300 |
+| #16  | Willow Current   | 601,850 |
+| #17  | Harbor Hank      | 588,400 |
+| #18  | Crystal Baiter   | 572,900 |
+| #19  | Driftwood Dan    | 559,750 |
+| #20  | Echo Waters      | 543,200 |
+
+### 🎣 Dynamic Leaderboard Rules
+
+* The Top 20 Leaderboard is displayed in the Fishing Shop, Fishing Menu, Pond Notice Boards, and Fishing Guild Hall.
+* NPC scores automatically update every 3-6 times of triggering the Fishing game through a simulated fishing system.
+* NPCs can gain or lose positions based on generated catches.
+* Special events, tournaments, Legendary catches, and Mythical catches can dramatically affect rankings.
+* The player's ranking updates immediately after submitting a Fishing Score Log.
+* Players can inspect each angler's profile to view:
+
+  * Total Fish Caught
+  * Largest Fish
+  * Favorite Species
+  * Best Catch Location
+  * Legendary Fish Count
+  * Fishing Level
+  * Lifetime Fishing Score
+* If the player enters the Top 20 for the first time, a special announcement appears on screen:
+
+  * **"🎉 New Top 20 Angler Achieved!"**
+* If the player enters the Top 10:
+
+  * **"🏆 Elite Fisher Status Reached!"**
+* If the player reaches Top 3:
+
+  * **"⭐ Legendary Angler Status Reached!"**
+* If the player reaches Rank #1:
+
+  * **"👑 Master of the Waters!"**
+
+### 📈 Leaderboard Visual Effects
+
+* Rankings animate whenever positions change.
+* Names slide up or down when overtaken.
+* Sound effects play when the player gains a rank.
+* Top 3 positions have special animated frames:
+
+  * 🥇 Gold Frame (#1)
+  * 🥈 Silver Frame (#2)
+  * 🥉 Bronze Frame (#3)
+* The player's name should always glow slightly for easy identification.
+* Recent Legendary catches are displayed in a scrolling ticker at the bottom of the leaderboard.
+* The leaderboard should feel alive, competitive, and constantly changing, encouraging players to continue fishing to improve their rank.
+
+---
+
+# 📈 Automatic Leaderboard Updates
+
+The system should periodically:
+
+* Generate new NPC catches.
+* Generate tournament results.
+* Generate seasonal rankings.
+* Simulate rare catches.
+* Simulate record-breaking fish.
+
+This keeps the rankings dynamic and unpredictable.
+
+---
+
+# 🏅 Fishing Titles & Recognition
+
+Leaderboard positions grant titles.
+
+Examples:
+
+### Rank #1
+
+* Master of the Waters
+
+### Top 3
+
+* Legendary Angler
+
+### Top 10
+
+* Elite Fisher
+
+### Top 50
+
+* Professional Fisher
+
+### Top 100
+
+* Skilled Angler
+
+Titles appear:
+
+* Above player name
+* In profile
+* On leaderboards
+* During fishing competitions
+
+---
+
+# 🌟 Hall of Fame
+
+Create a permanent Hall of Fame.
+
+Tracks:
+
+* Largest Fish Ever Caught
+* Fastest Catch
+* Longest Cast
+* Highest Fishing Score
+* Most Legendary Fish Caught
+* Most Species Collected
+* Longest Fishing Streak
+
+Records should display:
+
+* Player Name
+* Date
+* Fish Species
+* Location
+* Score
+
+These records provide long-term goals and prestige for dedicated anglers.
+
+---
+
+# End Goal
+
+The Fishing Expansion should feel like a complete secondary game system with its own economy, progression, collection mechanics, exploration content, social interactions, rare discoveries, and meaningful rewards. Players should be able to spend dozens of hours engaging with fishing alone, collecting all 25 fish species, obtaining legendary rods and bait, completing fishing achievements, mastering rare fish encounters, and becoming a renowned Master Angler within the game world.

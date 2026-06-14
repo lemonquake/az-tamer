@@ -31,7 +31,8 @@ import { worldOrbit } from './camorbit';
 import { tagNpc, crowdName, attachNpcPicker } from './npccard';
 import { runCityTutorial, isTutorialOpen } from './tutorial';
 import { worldClock, DayNightRig } from './daynight';
-import { sfx } from './audio';
+import { sfx, playMusic } from './audio';
+import { openFishingShop, openFishingBoard, type FishingSpotInfo } from './fishing';
 import { cDesk, cFountain, cReadingDesk, cColumnSconces, cHangingBanner, cTelescope, cPainting } from './aurelian_hall_helpers';
 
 const minimapCanvas = () => document.getElementById('minimap') as HTMLCanvasElement;
@@ -108,6 +109,12 @@ const ATTENDANT_TIPS: Record<string, string[]> = {
 };
 
 type Mode = 'street' | 'interior';
+
+/** Hooks the city loop injects so the town can hand control to other Views. */
+export interface TownDeps {
+  /** Run a dedicated Fishing session, returning when the player quits fishing. */
+  runFishing?: (info: FishingSpotInfo) => Promise<void>;
+}
 
 export class Town {
   private streetScene = new THREE.Scene();
@@ -206,7 +213,7 @@ export class Town {
   private litScene: THREE.Scene | null = null;
   private scenePointLights: THREE.PointLight[] = [];
 
-  constructor(private player: Player, private firstArrival: boolean) {}
+  constructor(private player: Player, private firstArrival: boolean, private deps: TownDeps = {}) {}
 
   get view() {
     const self = this;
@@ -641,6 +648,168 @@ export class Town {
         center: new THREE.Vector3(cx, waterY + 0.08, cz), speed: 0.25 + Math.random() * 0.3,
       });
     }
+  }
+
+  /**
+   * The Great Pond fishing grounds — three castable spots (Pond Dock, River
+   * Bend, Hidden Cove), the Anglers' Wharf shop, a pond notice board, and the
+   * regulars who loiter there. Interacting with a spot hands control to the
+   * dedicated Fishing scene (injected via deps.runFishing).
+   */
+  private buildFishingArea(cx: number, cz: number): void {
+    const s = this.streetScene;
+
+    // ---- a castable fishing spot ----
+    const addSpot = (sx: number, sz: number, info: FishingSpotInfo, label: string, color: string) => {
+      const gy = this.groundH(sx, sz);
+      // a little flat stone standing-stone so the spot reads on the ground
+      const slab = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.0, 0.16, 12),
+        new THREE.MeshStandardMaterial({ map: stoneTexture('#9a93a8', '#5a5468', 2), roughness: 0.9 }));
+      slab.position.set(sx, gy + 0.08, sz); slab.receiveShadow = true; s.add(slab);
+      this.label3d(s, label, color, new THREE.Vector3(sx, gy + 2.4, sz), 3.0);
+      this.streetMarkers.push({ x: sx, z: sz, label, color, kind: 'poi' });
+      this.streetInteractables.push({
+        pos: new THREE.Vector3(sx, 0, sz), radius: 2.4,
+        label: `Press <b>E</b> — cast a line at ${info.location}`,
+        handler: async () => {
+          if (!this.deps.runFishing) { await say('', 'The water is calm and inviting, but you have nowhere to fish from just now.'); return; }
+          this.busy = true;
+          showInteractHint(null);
+          await this.deps.runFishing(info);
+          // restore the city HUD after the fishing session
+          updateHUD(this.player, 'Haven City');
+          showHotkeys(true);
+          this.busy = false;
+        },
+      });
+    };
+
+    // Pond Dock — on the shore by the pier (just outside the pond collider)
+    addSpot(cx + 5.4, cz - 1.7, { spot: 'pond', location: 'the Great Pond', zoneTitle: 'The Great Pond' }, '🎣 Pond Dock', '#5ab8e8');
+
+    // River Bend — a reedy stream channel running south-east from the pond
+    {
+      const rx = cx + 11, rz = cz + 8;
+      const streamMat = new THREE.MeshStandardMaterial({ color: 0x3a8ad9, emissive: 0x1a4d88, emissiveIntensity: 0.3, roughness: 0.1, metalness: 0.2, transparent: true, opacity: 0.85 });
+      for (let i = 0; i < 6; i++) {
+        const seg = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 3.0), streamMat);
+        seg.rotation.x = -Math.PI / 2;
+        const t = i / 5;
+        seg.position.set(cx + 6 + t * 7, this.groundH(cx + 6 + t * 7, cz + 4 + t * 8) + 0.02, cz + 4 + t * 8);
+        s.add(seg);
+      }
+      const reedMat = new THREE.MeshStandardMaterial({ color: 0x5a7a36, roughness: 0.9 });
+      for (let i = 0; i < 14; i++) {
+        const a = Math.random() * Math.PI * 2, r = 1.4 + Math.random() * 1.4;
+        const px = rx + Math.cos(a) * r, pz = rz + Math.sin(a) * r;
+        const h = 0.5 + Math.random() * 0.5;
+        const reed = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.035, h, 4), reedMat);
+        reed.position.set(px, this.groundH(px, pz) + h / 2, pz); s.add(reed);
+      }
+      addSpot(rx, rz, { spot: 'river', location: 'the South River Bend', zoneTitle: 'River Bend' }, '🌊 River Bend', '#5ad8c8');
+    }
+
+    // Hidden Cove — tucked behind a cluster of boulders, west of the pond
+    {
+      const hx = cx - 7.5, hz = cz - 3;
+      for (let i = 0; i < 6; i++) {
+        const a = Math.PI * 0.4 + (i / 6) * Math.PI;
+        const bx = hx + Math.cos(a) * 2.2, bz = hz + Math.sin(a) * 2.2;
+        const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(0.7 + Math.random() * 0.6, 0),
+          new THREE.MeshStandardMaterial({ color: 0x6a6458, roughness: 1, flatShading: true }));
+        rock.position.set(bx, this.groundH(bx, bz) + 0.3, bz);
+        rock.rotation.set(Math.random(), Math.random(), Math.random());
+        rock.castShadow = true; s.add(rock);
+        this.streetColliders.push({ pos: new THREE.Vector3(bx, 0, bz), r: 0.8 });
+      }
+      addSpot(hx, hz, { spot: 'secret', location: 'the Hidden Cove', zoneTitle: 'Hidden Cove' }, '✨ Hidden Cove', '#b18ae8');
+    }
+
+    // ---- the Anglers' Wharf: rod & bait shop, kitchen, leaderboard ----
+    {
+      const wx = cx + 6, wz = cz + 4.5;
+      const g = new THREE.Group();
+      const wood = new THREE.MeshStandardMaterial({ map: plankTexture('#6a5236'), roughness: 0.9 });
+      const wall = new THREE.Mesh(new THREE.BoxGeometry(3.2, 2.4, 2.6), wood);
+      wall.position.y = 1.2; g.add(wall);
+      const roof = new THREE.Mesh(new THREE.ConeGeometry(2.8, 1.3, 4),
+        new THREE.MeshStandardMaterial({ color: 0x3a6a8a, roughness: 0.8 }));
+      roof.position.y = 3.0; roof.rotation.y = Math.PI / 4; g.add(roof);
+      const counter = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.9, 0.5), wood);
+      counter.position.set(0, 0.45, 1.5); g.add(counter);
+      // a big hanging fish sign
+      const sign = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.9, 0.08),
+        new THREE.MeshStandardMaterial({ color: 0xe8d9a8, roughness: 0.9 }));
+      sign.position.set(0, 2.0, 1.36); g.add(sign);
+      g.position.set(wx, this.groundH(wx, wz), wz);
+      g.rotation.y = Math.atan2(cx - wx, cz - wz);
+      g.traverse(o => { o.castShadow = true; });
+      s.add(g);
+      this.streetColliders.push({ pos: new THREE.Vector3(wx, 0, wz), r: 2.0 });
+      this.label3d(s, "🎣 Anglers' Wharf", '#f2c14e', new THREE.Vector3(wx, this.groundH(wx, wz) + 4.0, wz), 4.2);
+      this.streetMarkers.push({ x: wx, z: wz, label: "🎣 Anglers' Wharf", color: '#f2c14e', kind: 'building' });
+      // stand in front of the counter
+      const front = new THREE.Vector3(wx, 0, wz).add(new THREE.Vector3(Math.sin(g.rotation.y), 0, Math.cos(g.rotation.y)).multiplyScalar(2.4));
+      this.streetInteractables.push({
+        pos: front, radius: 2.2,
+        label: "Press <b>E</b> — shop at the Anglers' Wharf",
+        handler: async () => { this.busy = true; await openFishingShop(this.player); this.busy = false; },
+      });
+    }
+
+    // ---- pond notice board (leaderboard / encyclopedia / hall of fame) ----
+    {
+      const bx = cx + 2.5, bz = cz + 6;
+      const g = new THREE.Group();
+      const wood = new THREE.MeshStandardMaterial({ map: plankTexture('#6a4a2a'), roughness: 0.9 });
+      for (const side of [-1.0, 1.0]) {
+        const post = new THREE.Mesh(new THREE.BoxGeometry(0.16, 2.0, 0.16), wood);
+        post.position.set(side, 1.0, 0); g.add(post);
+      }
+      const board = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.2, 0.1), wood);
+      board.position.y = 1.4; g.add(board);
+      g.position.set(bx, this.groundH(bx, bz), bz);
+      g.rotation.y = Math.atan2(cx - bx, cz - bz);
+      g.traverse(o => { o.castShadow = true; });
+      s.add(g);
+      this.streetColliders.push({ pos: new THREE.Vector3(bx, 0, bz), r: 1.0 });
+      this.label3d(s, '🏆 Pond Records', '#5ab8e8', new THREE.Vector3(bx, this.groundH(bx, bz) + 2.8, bz), 3.2);
+      this.streetInteractables.push({
+        pos: new THREE.Vector3(bx, 0, bz), radius: 2.0,
+        label: 'Press <b>E</b> — read the Pond Notice Board',
+        handler: async () => { this.busy = true; await openFishingBoard(this.player, 'board'); this.busy = false; },
+      });
+    }
+
+    // ---- the regulars ----
+    type Palette = Parameters<typeof makeVoxelHuman>[0];
+    const angler = (palette: Palette, x: number, z: number, rotY: number, name: string, lines: string[]) => {
+      const g = makeVoxelHuman(palette);
+      g.position.set(x, this.groundH(x, z), z);
+      g.rotation.y = rotY;
+      tagNpc(g, name);
+      s.add(g);
+      this.staticNpcs.push(g);
+      this.streetColliders.push({ pos: new THREE.Vector3(x, 0, z), r: 0.5 });
+      this.streetInteractables.push({
+        pos: new THREE.Vector3(x, 0, z), radius: 1.7,
+        label: `Press <b>E</b> — chat with ${name}`,
+        handler: async () => { await say(name, lines[Math.floor(Math.random() * lines.length)]); },
+      });
+    };
+    angler({ top: 0x4a7a6a, hair: 0xc8c8d0, cap: 0xd9a14a, hairstyle: 'classic' }, cx + 5.6, cz + 4.0, Math.PI, 'Old Bait Pete', [
+      'Tip from forty years on this dock: bigger the shadow, bigger the fish. A COLORED glow means something rare is down there.',
+      'Buy a Glow Worm before you fish at night, and an Electrozap if a storm rolls in. Right bait, right time — that\'s the whole secret.',
+      'Cook your catch at my counter and your Guardians eat well in battle. Nothing wasted at the Great Pond.',
+    ]);
+    angler({ top: 0x8a3a4a, hair: 0x2a2a3a, cap: null, hairstyle: 'ponytail' }, cx + 1.5, cz - 4.5, Math.atan2(cx - (cx + 1.5), cz - (cz - 4.5)), 'Angler Brisa', [
+      'I\'m chasing the Crystal Salmon up the river run. Caught everything BUT, this whole season. The water mocks me.',
+      'Cast right next to a shadow and your odds soar. Cast into open water and you\'re just feeding worms to the pond.',
+    ]);
+    angler({ top: 0x3a5a8a, hair: 0xd8d8d8, cap: null, hairstyle: 'bald' }, cx - 4.0, cz + 2.0, Math.atan2(cx - (cx - 4.0), cz - (cz + 2.0)), 'Greybeard Onnel', [
+      'Top of that leaderboard? Captain Finwick. Nine hundred thousand and climbing. A body could spend a lifetime chasing him.',
+      'They say a Worldscale Dragonfish sleeps under the Hidden Cove. One cast in a hundred thousand. I\'ve made ninety thousand of them.',
+    ]);
   }
 
   /** The old grain windmill on its hill — sails forever turning. */
@@ -2120,6 +2289,8 @@ export class Town {
 
     // ---- the pond: water, lilies, reeds, ducks, a fishing pier ----
     this.buildPond(-26, 30);
+    // ---- the Great Pond fishing grounds: spots, the Anglers' Wharf, the regulars ----
+    this.buildFishingArea(-26, 30);
 
     // ---- the windmill on its hill, held by dry-stone terraces ----
     this.buildWindmill(32, 28);
@@ -5378,7 +5549,10 @@ export class Town {
   private async enterService(kind: 'shop' | 'garage' | 'sanctum' | 'coliseum' | 'boutique'): Promise<void> {
     this.busy = true;
     this.exitSpot.copy(this.tamer.position);
-    if (kind === 'coliseum') this.buildColiseumInterior();
+    if (kind === 'coliseum') {
+      this.buildColiseumInterior();
+      playMusic('coliseum');
+    }
     else this.buildServiceInterior(kind);
     this.streetScene.remove(this.tamer);
     this.interiorScene!.add(this.tamer);
@@ -5415,6 +5589,9 @@ export class Town {
   }
 
   private exitHouse(): void {
+    if (this.intName === 'Grand Coliseum') {
+      playMusic('haven_town');
+    }
     this.mode = 'street';
     this.interiorScene?.remove(this.tamer);
     this.streetScene.add(this.tamer);

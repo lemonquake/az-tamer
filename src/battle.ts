@@ -11,7 +11,7 @@ import {
   TECHS, ITEMS, TYPE_CSS, TYPE_COLORS, TYPE_ELEMENT, expForLevel,
   elementsOf, elementMult, ELEMENT_ICONS, type Technique, type GType,
 } from './data';
-import { sfx } from './audio';
+import { sfx, playMusic, playMp3Sfx } from './audio';
 import { Guardian, Player } from './state';
 import {
   makeGuardian, disposeRig, tween, wait, Ease, makeFloatingDamageText, setTimeScale,
@@ -1520,6 +1520,7 @@ export class Battle {
       return { g, beforeLevel, afterLevel: g.level, beforeExp, gained: share, newTechs: this.newlyAvailableTechs(g, beforeLevel) };
     });
 
+    playMusic('battle_win');
     sfx('fanfare');
     await this.showVictorySummary(shards, share, dropName, results);
 
@@ -1655,7 +1656,7 @@ export class Battle {
         fill.style.width = pct + '%';
         if (lvlEl) lvlEl.textContent = `Lv${L}`;
         if (nextEl) nextEl.textContent = L >= cap ? 'MAX' : `${Math.max(0, Math.ceil(next - cur))} to next`;
-        if (L > shown) { shown = L; sfx('confirm'); }
+        if (L > shown) { shown = L; playMp3Sfx('level_up.mp3'); }
       }, Ease.outQuad);
     });
   }
@@ -1750,6 +1751,7 @@ export class Battle {
     this.log(`<b>${oldName}</b> is evolving…`);
 
     const home = u.rig.group.position.clone();
+    playMp3Sfx('evolve.mp3');
     sfx('charge');
     this.fx.spiral(home.clone(), color, { up: true, dur: 1.3, radius: 0.95, height: 2.1 });
     this.fx.glow(this.chest(u), color, { scale: 2.0, life: 1.0 });
@@ -1996,7 +1998,10 @@ export class Battle {
     $('battle-auto').style.display = 'none';
 
     if (result === 'win') await this.grantRewards();
-    else if (result === 'lose') await say('', 'Your party was overwhelmed…');
+    else if (result === 'lose') {
+      playMusic('battle_lost');
+      await say('', 'Your party was overwhelmed…');
+    }
 
     // cleanup
     if (this.autoKeyHandler) { window.removeEventListener('keydown', this.autoKeyHandler); this.autoKeyHandler = undefined; }

@@ -13,7 +13,7 @@ import { openGuardianCard } from './guardiancard';
 import { RANKS, rankIndexFor, rankBadgeHTML, rankLadderHTML } from './ranks';
 import { evoTreeHTML, wireEvoTree } from './evotree';
 import { checkAchievements, achievementsHTML } from './achievements';
-import { sfx, toggleMute, isMuted } from './audio';
+import { sfx, toggleMute, isMuted, getMusicVolume, getSoundVolume, setMusicVolume, setSoundVolume } from './audio';
 import { openTutorialReplayMenu } from './tutorial';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
@@ -248,7 +248,92 @@ export function showInteractHint(text: string | null): void {
 
 // ---------------- screens ----------------
 let menuOpen = false;
-export const isMenuOpen = () => menuOpen;
+let optionsOpen = false;
+export const isMenuOpen = () => menuOpen || optionsOpen;
+export const isOptionsOpen = () => optionsOpen;
+
+export function openOptionsMenu(): Promise<void> {
+  return new Promise(resolve => {
+    optionsOpen = true;
+    const modal = $('options-modal');
+    const musicSlider = $<HTMLInputElement>('opt-music-slider');
+    const soundSlider = $<HTMLInputElement>('opt-sound-slider');
+    const musicVal = $('opt-music-val');
+    const soundVal = $('opt-sound-val');
+    const muteBtn = $('opt-mute-btn');
+    const mobileBtn = $('opt-mobile-btn');
+    const closeBtn = $('opt-close-btn');
+
+    // 1. Load current values
+    const initialMusic = getMusicVolume();
+    const initialSound = getSoundVolume();
+    
+    musicSlider.value = String(initialMusic);
+    musicVal.textContent = `${initialMusic}%`;
+    
+    soundSlider.value = String(initialSound);
+    soundVal.textContent = `${initialSound}%`;
+
+    const updateMuteBtnLabel = () => {
+      const muted = isMuted();
+      muteBtn.textContent = muted ? 'Muted: ON' : 'Muted: OFF';
+      muteBtn.style.borderColor = muted ? 'var(--ui-red)' : 'var(--ui-border)';
+    };
+    updateMuteBtnLabel();
+
+    const updateMobileBtnLabel = () => {
+      const isMob = localStorage.getItem('mobileMode') === 'true';
+      mobileBtn.textContent = isMob ? 'Controls: ON' : 'Controls: OFF';
+      mobileBtn.style.borderColor = isMob ? 'var(--ui-gold)' : 'var(--ui-border)';
+    };
+    updateMobileBtnLabel();
+
+    modal.style.display = 'flex';
+
+    // 2. Attach events
+    musicSlider.oninput = () => {
+      const val = parseInt(musicSlider.value, 10);
+      musicVal.textContent = `${val}%`;
+      setMusicVolume(val);
+    };
+
+    soundSlider.oninput = () => {
+      const val = parseInt(soundSlider.value, 10);
+      soundVal.textContent = `${val}%`;
+      setSoundVolume(val);
+    };
+    
+    soundSlider.onchange = () => {
+      sfx('click');
+    };
+
+    muteBtn.onclick = () => {
+      toggleMute();
+      updateMuteBtnLabel();
+    };
+
+    mobileBtn.onclick = () => {
+      const isMob = localStorage.getItem('mobileMode') === 'true';
+      localStorage.setItem('mobileMode', isMob ? 'false' : 'true');
+      updateMobileBtnLabel();
+      import('./mobile').then(m => m.initMobileControls());
+    };
+
+    const close = () => {
+      modal.style.display = 'none';
+      musicSlider.oninput = null;
+      soundSlider.oninput = null;
+      soundSlider.onchange = null;
+      muteBtn.onclick = null;
+      mobileBtn.onclick = null;
+      closeBtn.onclick = null;
+      optionsOpen = false;
+      resolve();
+    };
+
+    closeBtn.onclick = close;
+  });
+}
 
 export function closeMenu(): void {
   $('menu-screen').style.display = 'none';
@@ -534,11 +619,11 @@ const INV_TABS: Record<InvTab, { label: string; icon: string; kinds: string[] }>
   consume: { label: 'Consumables', icon: '🧪', kinds: ['heal', 'sp', 'revive'] },
   gift:    { label: 'Gifts',       icon: '🎁', kinds: ['gift'] },
   crawler: { label: 'Crawler',     icon: '🛞', kinds: ['fuel', 'repair'] },
-  gem:     { label: 'Gems',        icon: '💎', kinds: ['boost', 'evo'] },
+  gem:     { label: 'Gems',        icon: '💎', kinds: ['boost', 'feast', 'evo'] },
   key:     { label: 'Key & Quest', icon: '📜', kinds: ['relic'] },
 };
 const KIND_ICONS: Record<string, string> = {
-  heal: '🧪', sp: '🥤', revive: '🍃', gift: '🎁', fuel: '🔋', repair: '🛠️', boost: '💎', evo: '🧬', relic: '📜',
+  heal: '🧪', sp: '🥤', revive: '🍃', gift: '🎁', fuel: '🔋', repair: '🛠️', boost: '💎', feast: '🍱', evo: '🧬', relic: '📜',
 };
 const ITEM_ICONS: Record<string, string> = {
   tonic: '🧪', tonic_plus: '⚗️', elixir: '✨', soda: '🥤', soda_plus: '🧋', soda_max: '🍶', revive_leaf: '🍃',
@@ -546,15 +631,16 @@ const ITEM_ICONS: Record<string, string> = {
   cell: '🔋', cell_plus: '⚡', cell_max: '🌩️', plating: '🛡️', plating_plus: '🔰',
   atk_gem: '🔴', def_gem: '🟡', spd_gem: '⚪', wis_gem: '🔵', hp_gem: '🟢', sp_gem: '🟣', prism_gem: '💎',
   storm_amber: '🟠', sea_chart: '🗺️', stormheart_coil: '🌀',
+  fish_grill: '🐟', fish_smoke: '🍥', fish_stew: '🍲', fish_sashimi: '🍣', fish_roe: '🍱', fish_legend: '🎏',
 };
 export const itemIcon = (id: string): string => ITEM_ICONS[id] ?? KIND_ICONS[ITEMS[id]?.kind] ?? '📦';
 
 const KIND_LABEL: Record<string, string> = {
   heal: 'Consumable · Healing', sp: 'Consumable · Spirit', revive: 'Consumable · Revival',
   gift: 'Gift — builds bond with wild Guardians', fuel: 'Crawler — Energy', repair: 'Crawler — Hull',
-  boost: 'Gem — permanent stat boost', evo: 'Evolution catalyst', relic: 'Quest Relic — cannot be dropped',
+  boost: 'Gem — permanent stat boost', feast: 'Feast — permanent ALL-stat boost', evo: 'Evolution catalyst', relic: 'Quest Relic — cannot be dropped',
 };
-const KIND_ORDER = ['heal', 'sp', 'revive', 'gift', 'fuel', 'repair', 'boost', 'evo', 'relic'];
+const KIND_ORDER = ['heal', 'sp', 'revive', 'gift', 'fuel', 'repair', 'boost', 'feast', 'evo', 'relic'];
 
 function renderInventory(p: Player): string {
   const entries = [...p.inventory.entries()].filter(([id]) => ITEMS[id]);
@@ -586,7 +672,7 @@ function renderInventory(p: Player): string {
   if (invSel) {
     const it = ITEMS[invSel];
     const qty = p.itemCount(invSel);
-    const usable = ['heal', 'sp', 'revive', 'boost'].includes(it.kind);
+    const usable = ['heal', 'sp', 'revive', 'boost', 'feast'].includes(it.kind);
     const droppable = it.kind !== 'relic';
     detail = `
       <div class="jdetail-head">
@@ -1066,6 +1152,12 @@ export function applyItem(player: Player, itemId: string, g: Guardian): string {
     if (it.boostStat === 'sp') g.sp += it.value;
     return `${g.nickname}'s ${STAT_NAMES[it.boostStat]} rose permanently!`;
   }
+  if (it.kind === 'feast') {
+    (['atk', 'def', 'spd', 'wis'] as StatKey[]).forEach(k => { g.bonus[k] += it.value; });
+    g.bonus.hp += it.value * 2; g.bonus.sp += it.value * 2;
+    g.hp += it.value * 2; g.sp += it.value * 2;
+    return `${g.nickname} feasted on a Legendary Banquet — ALL stats rose permanently!`;
+  }
   return 'Nothing happened.';
 }
 
@@ -1087,7 +1179,7 @@ export function openPauseMenu(player: Player, opts: { canSave: boolean }): Promi
         <button class="ui-btn" data-hub="quests">📖 Quest Journal <span class="sub">(J)</span></button>
         <button class="ui-btn" data-hub="evotree">🧬 Evolution Atlas <span class="sub">(V)</span></button>
         <button class="ui-btn" id="hub-tutorial">🎓 Field Manual <span class="sub">(replay tutorials)</span></button>
-        <button class="ui-btn" id="hub-sound">${isMuted() ? '🔇 Sound: OFF' : '🔊 Sound: ON'} <span class="sub">(N)</span></button>
+        <button class="ui-btn" id="hub-options">⚙️ Game Options</button>
       </div>
       <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px">
         ${opts.canSave ? '<button class="ui-btn" id="hub-save">💾 Save Game</button>' : ''}
@@ -1114,10 +1206,12 @@ export function openPauseMenu(player: Player, opts: { canSave: boolean }): Promi
     }
     const save = el.querySelector<HTMLElement>('#hub-save');
     if (save) save.onclick = () => { player.save(); toast('Game saved.', 'gold'); };
-    const snd = el.querySelector<HTMLElement>('#hub-sound');
-    if (snd) snd.onclick = () => {
-      const m = toggleMute();
-      snd.innerHTML = `${m ? '🔇 Sound: OFF' : '🔊 Sound: ON'} <span class="sub">(N)</span>`;
+    const opt = el.querySelector<HTMLElement>('#hub-options');
+    if (opt) opt.onclick = async () => {
+      window.removeEventListener('keydown', esc);
+      closeMenu();
+      await openOptionsMenu();
+      openPauseMenu(player, opts).then(resolve);
     };
     (el.querySelector('#hub-close') as HTMLElement).onclick = close;
   });

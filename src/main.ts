@@ -7,10 +7,11 @@ import { DUNGEONS, HOUSES, type DungeonDef, expForLevel } from './data';
 import { Player, Guardian, SAVE_SLOTS } from './state';
 import { RANKS } from './ranks';
 import { makeRenderer, updateTweens, updateRigs } from './models';
-import { say, conversation, choose, askName, toast, fadeIn, fadeOut, hideHUD, updateHUD, playStorySequence, isDialogueOpen, isMenuOpen, refreshHUD } from './ui';
+import { say, conversation, choose, askName, toast, fadeIn, fadeOut, hideHUD, updateHUD, playStorySequence, isDialogueOpen, isMenuOpen, refreshHUD, openOptionsMenu } from './ui';
 import { Battle, type BattleOptions, type BattleResult } from './battle';
 import { DungeonRun, type DungeonOutcome } from './dungeon';
 import { Town } from './town';
+import { Fishing, type FishingSpotInfo } from './fishing';
 import { Overworld } from './overworld';
 import { AgdaoIsland } from './agdao';
 import { NewSalmonan } from './salmonan';
@@ -18,7 +19,7 @@ import { TerraCity } from './terra';
 import { University } from './university';
 import { Cinematic } from './cinematic';
 import { syncStoryQuests } from './quests';
-import { initAudio, toggleMute } from './audio';
+import { initAudio, toggleMute, playMusic } from './audio';
 import { initMobileControls } from './mobile';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
@@ -108,6 +109,7 @@ const canvas = document.createElement('canvas');
 canvas.className = 'game-canvas';
 $('app').prepend(canvas);
 const renderer = makeRenderer(canvas);
+(window as unknown as Record<string, unknown>).__renderer = renderer; // debug handle (see window.__town)
 
 let activeView: View | null = null;
 const setView = (v: View | null) => { activeView = v; };
@@ -144,18 +146,57 @@ let player: Player;
 async function runBattle(specs: { speciesId: string; level: number }[], opts: BattleOptions): Promise<BattleResult> {
   const prev = activeView;
   await fadeOut();
+  
+  let track = 'battle';
+  if (opts.boss) {
+    track = 'battle_boss';
+  } else if (prev && (prev as any).intName === 'Grand Coliseum') {
+    track = 'battle_coliseum';
+  }
+  playMusic(track);
+  
   const battle = new Battle(player, specs, opts);
   setView(battle.view);
   await fadeIn();
   const result = await battle.run();
   await fadeOut();
+  
+  let returnTrack = 'overworld';
+  if (prev && prev.constructor?.name === 'Town') {
+    if ((prev as any).intName === 'Grand Coliseum') {
+      returnTrack = 'coliseum';
+    } else {
+      returnTrack = 'haven_town';
+    }
+  } else if (prev && prev.constructor?.name === 'University') {
+    returnTrack = 'university';
+  } else if (prev && prev.constructor?.name === 'TerraCity') {
+    returnTrack = 'terra_city';
+  }
+  playMusic(returnTrack);
+  
   setView(prev);
   await fadeIn();
   return result;
 }
 
+/** Hand control to the dedicated Fishing scene, returning to the exact city spot afterward. */
+async function runFishing(info: FishingSpotInfo): Promise<void> {
+  const prev = activeView;
+  await fadeOut();
+  const fishing = new Fishing(player, info);
+  setView(fishing.view);
+  await fadeIn();
+  await fishing.run();         // resolves when the player quits fishing
+  await fadeOut();
+  playMusic('haven_town');     // fishing always launches from Haven City
+  setView(prev);
+  await fadeIn();
+}
+
 async function runDungeon(def: DungeonDef): Promise<DungeonOutcome> {
   await fadeOut();
+  playMusic('overworld');
   const dungeon = new DungeonRun({ player, runBattle }, def);
   setView(dungeon.view);
   await fadeIn();
@@ -172,6 +213,7 @@ async function academyExam(cine?: Cinematic): Promise<void> {
   if (!cine || activeView !== cine.view) {
     cine = cine ?? new Cinematic('academy');
     await fadeOut();
+    playMusic('university');
     setView(cine.view);
     await fadeIn();
   }
@@ -231,6 +273,7 @@ async function academyExam(cine?: Cinematic): Promise<void> {
 // ---------------- Leodones University ----------------
 async function runUniversity(revisit: boolean): Promise<void> {
   await fadeOut();
+  playMusic('university');
   const uni = new University({ player, runBattle }, revisit);
   setView(uni.view);
   await fadeIn();
@@ -247,6 +290,7 @@ async function runAgdao(): Promise<void> {
   while (true) {
     const isle = new AgdaoIsland(player, spawnAt);
     await fadeOut();
+    playMusic('overworld');
     setView(isle.view);
     await fadeIn();
     const res = await isle.run();
@@ -277,6 +321,7 @@ async function runSalmonan(): Promise<void> {
   while (true) {
     const valley = new NewSalmonan({ player, runBattle }, spawnAt);
     await fadeOut();
+    playMusic('overworld');
     setView(valley.view);
     await fadeIn();
     const res = await valley.run();
@@ -306,6 +351,7 @@ async function runTerra(): Promise<void> {
   const firstArrival = !player.flags['terra_visited'];
   const city = new TerraCity(player, firstArrival);
   await fadeOut();
+  playMusic('terra_city');
   setView(city.view);
   await fadeIn();
   await city.run(); // resolves when the player boards the Pod home to Haven City
@@ -325,9 +371,10 @@ async function cityLoop(): Promise<never> {
     // advance the Chronicle (auto-accept / auto-complete story chapters)
     syncStoryQuests(player).forEach(n => toast(n, 'gold'));
 
-    const town = new Town(player, firstArrival);
+    const town = new Town(player, firstArrival, { runFishing });
     firstArrival = false;
     await fadeOut();
+    playMusic('haven_town');
     setView(town.view);
     await fadeIn();
 
@@ -363,6 +410,7 @@ async function cityLoop(): Promise<never> {
       while (true) {
         const overworld = new Overworld(player, region);
         await fadeOut();
+        playMusic('overworld');
         setView(overworld.view);
         await fadeIn();
         const dest = await overworld.run();
@@ -470,32 +518,22 @@ function titleScreen(): Promise<{ mode: 'new' | 'continue'; slot: number }> {
         menu.appendChild(row);
       }
 
-      // Add Mobile Mode Toggle
-      const mobileRow = document.createElement('div');
-      mobileRow.className = 'slot-row';
-      mobileRow.style.marginTop = '15px';
+      // Add Options Button
+      const optRow = document.createElement('div');
+      optRow.className = 'slot-row';
+      optRow.style.marginTop = '15px';
       
-      const mobileBtn = document.createElement('button');
-      mobileBtn.className = 'ui-btn';
-      mobileBtn.style.textAlign = 'center';
-      mobileBtn.style.width = '100%';
-      
-      const updateMobileBtn = () => {
-        const isMob = localStorage.getItem('mobileMode') === 'true';
-        mobileBtn.innerHTML = isMob ? '📱 Mobile Controls: ON' : '💻 Mobile Controls: OFF';
-        mobileBtn.style.borderColor = isMob ? 'var(--ui-gold)' : 'var(--ui-border)';
+      const optBtn = document.createElement('button');
+      optBtn.className = 'ui-btn';
+      optBtn.style.textAlign = 'center';
+      optBtn.style.width = '100%';
+      optBtn.innerHTML = '⚙️ Game Options';
+      optBtn.onclick = async () => {
+        await openOptionsMenu();
       };
       
-      updateMobileBtn();
-      mobileBtn.onclick = () => {
-        const isMob = localStorage.getItem('mobileMode') === 'true';
-        localStorage.setItem('mobileMode', isMob ? 'false' : 'true');
-        updateMobileBtn();
-        initMobileControls();
-      };
-      
-      mobileRow.appendChild(mobileBtn);
-      menu.appendChild(mobileRow);
+      optRow.appendChild(optBtn);
+      menu.appendChild(optRow);
     };
     render();
   });
@@ -518,6 +556,7 @@ async function boot(): Promise<void> {
   }
 
   player = new Player();
+  playMusic('university');
 
   // opening cinematic — the academy registration hall, at the holo-terminal
   const cine = new Cinematic('academy');

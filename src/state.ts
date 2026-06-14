@@ -6,6 +6,7 @@ import {
   type SpeciesDef, type Stats, type StatKey, type Technique, type CrawlerPart,
 } from './data';
 import { DEFAULT_APPEARANCE, type Appearance } from './models';
+import { defaultFishingState, normalizeFishingState, type FishingState } from './fishingdata';
 
 let uidCounter = 1;
 export const uid = () => `g${Date.now().toString(36)}${(uidCounter++).toString(36)}`;
@@ -262,6 +263,7 @@ export interface PlayerSave {
   equippedClothes?: Record<string, string>;
   ownedClothes?: string[];
   appearance?: Appearance;
+  fishing?: FishingState;
 }
 
 export class Player {
@@ -291,6 +293,8 @@ export class Player {
   };
   ownedClothes: string[] = ['default_cap', 'default_shirt', 'default_pants', 'default_gloves', 'default_backpack', 'default_shoes'];
   appearance: Appearance = { ...DEFAULT_APPEARANCE };
+  /** Fishing Expansion — progression, gear, encyclopedia, leaderboard standing. */
+  fishing: FishingState = defaultFishingState();
 
   get alive(): Guardian[] { return this.party.filter(g => !g.fainted); }
 
@@ -337,6 +341,7 @@ export class Player {
       equippedClothes: { ...this.equippedClothes },
       ownedClothes: [...this.ownedClothes],
       appearance: { ...this.appearance },
+      fishing: this.fishing,
     };
     localStorage.setItem(slotKey(activeSlot), JSON.stringify(data));
   }
@@ -391,6 +396,7 @@ export class Player {
       };
       p.ownedClothes = d.ownedClothes ? [...d.ownedClothes] : ['default_cap', 'default_shirt', 'default_pants', 'default_gloves', 'default_backpack', 'default_shoes'];
       p.appearance = d.appearance ? { ...DEFAULT_APPEARANCE, ...d.appearance } : { ...DEFAULT_APPEARANCE };
+      p.fishing = normalizeFishingState(d.fishing);
       return p;
     } catch {
       return null;
