@@ -16,7 +16,7 @@ import { sfx } from './audio';
 import { makeRenderer } from './models';
 import { makeRod, makeBobber, swimFish, makeFish, disposeFish } from './fishingmodels';
 import {
-  RARITY, RODS, BAITS, RECIPES, FISH, ALL_FISH, FAMILIES, FISH_ACHIEVEMENTS, FISHING_BOUNTIES,
+  RARITY, RODS, LINES, BAITS, RECIPES, FISH, ALL_FISH, FAMILIES, FISH_ACHIEVEMENTS, FISHING_BOUNTIES,
   RARITY_ORDER, fishingLevelFromExp, fishingExpForLevel, titleForLevel, rankTitle, fmt,
   type ScoreBreakdown, type SpeciesDef, type Rarity, type FamilyId, type FishingState, type RodDef,
 } from './fishingdata';
@@ -93,6 +93,12 @@ export interface CatchSummaryData {
   isFirstDiscovery: boolean;
   streak: number;
   location: string; rodName: string; baitName: string; timeLabel: string;
+  fightGrade: string;
+  gradeMult: number;
+  perfectLeansCount: number;
+  wrongLeansCount: number;
+  specialMovesCountered: number;
+  totalSpecialMoves: number;
 }
 
 function rollNumber(node: HTMLElement, target: number, durMs: number, onDone: () => void): void {
@@ -128,11 +134,41 @@ export function showCatchSummary(data: CatchSummaryData): Promise<'again' | 'qui
       </div>`).join('');
 
     overlay.innerHTML = `
+      <style>
+        .rank-badge {
+          display: inline-block;
+          padding: 2px 8px;
+          font-size: 15px;
+          font-weight: 900;
+          border-radius: 4px;
+          margin-left: 8px;
+          vertical-align: middle;
+          text-shadow: 0 0 8px rgba(255,255,255,0.4);
+          border: 1px solid currentColor;
+        }
+        .rank-sss { color: #ff3366; background: rgba(255, 51, 102, 0.15); box-shadow: 0 0 10px rgba(255, 51, 102, 0.5); }
+        .rank-ss { color: #ffcc00; background: rgba(255, 204, 0, 0.15); box-shadow: 0 0 8px rgba(255, 204, 0, 0.4); }
+        .rank-s { color: #00e676; background: rgba(0, 230, 118, 0.15); }
+        .rank-a { color: #29b6f6; background: rgba(41, 182, 246, 0.15); }
+        .rank-b { color: #eeeeee; background: rgba(238, 238, 238, 0.15); }
+        .rank-c { color: #9e9e9e; background: rgba(158, 158, 158, 0.15); }
+        .fight-details-row {
+          font-size: 11px;
+          color: var(--ui-blue);
+          border-top: 1px solid #1a2040;
+          padding-top: 6px;
+          margin-top: 8px;
+          display: flex;
+          justify-content: space-between;
+          width: 100%;
+          flex-basis: 100%;
+        }
+      </style>
       <div class="fso-card ${rd.rainbow ? 'rarity-legendary' : ''}" style="--rc:${rd.color};--rg:${rd.glow}">
         <div class="fso-head">
           <div class="fso-badge">${rd.badge}</div>
           <div>
-            <div class="fso-title">${data.sp.name}</div>
+            <div class="fso-title">${data.sp.name} <span class="rank-badge rank-${data.fightGrade.toLowerCase()}">${data.fightGrade}</span></div>
             <div class="fso-sub">${FAMILIES[data.sp.family].name} · ${rarityChip(data.sp.rarity)} ${data.isFirstDiscovery ? '<span class="new-tag">NEW!</span>' : ''}</div>
           </div>
         </div>
@@ -144,6 +180,11 @@ export function showCatchSummary(data: CatchSummaryData): Promise<'again' | 'qui
           <span>🎣 ${data.rodName}</span>
           <span>🪱 ${data.baitName}</span>
           ${data.streak >= 2 ? `<span class="streak">🔥 ${data.streak} Streak</span>` : ''}
+          <div class="fight-details-row">
+            <span>Lean Counters: <b>${data.perfectLeansCount.toFixed(1)}s</b></span>
+            <span>Wrong Leans: <b>${data.wrongLeansCount.toFixed(1)}s</b></span>
+            <span>Moves Intercepted: <b>${data.specialMovesCountered} / ${data.totalSpecialMoves}</b></span>
+          </div>
         </div>
         <div class="fso-scores">${rowsHtml}</div>
         <div class="score-row grand" data-key="grand">
@@ -248,9 +289,10 @@ function spawnConfetti(parent: HTMLElement, color: string | 'rainbow'): void {
 // ============================================================
 //  THE FISHING HUB (shop / encyclopedia / leaderboard / etc.)
 // ============================================================
-export type HubTab = 'rods' | 'bait' | 'kitchen' | 'codex' | 'board' | 'fame' | 'records' | 'quests';
+export type HubTab = 'rods' | 'lines' | 'bait' | 'kitchen' | 'codex' | 'board' | 'fame' | 'records' | 'quests';
 const TAB_INFO: Record<HubTab, { icon: string; label: string }> = {
   rods: { icon: '🎣', label: 'Rods' },
+  lines: { icon: '🧵', label: 'Lines' },
   bait: { icon: '🪱', label: 'Bait' },
   kitchen: { icon: '🍳', label: 'Kitchen' },
   codex: { icon: '📖', label: 'Encyclopedia' },
@@ -276,7 +318,7 @@ export function openFishHub(player: Player, fs: FishingState, opts: { tab?: HubT
     window.addEventListener('keydown', onKey);
 
     const visibleTabs: HubTab[] = canBuy
-      ? ['rods', 'bait', 'kitchen', 'codex', 'board', 'fame', 'records', 'quests']
+      ? ['rods', 'lines', 'bait', 'kitchen', 'codex', 'board', 'fame', 'records', 'quests']
       : ['codex', 'board', 'fame', 'records', 'quests'];
 
     const tabsHtml = () => visibleTabs.map(t =>
@@ -301,24 +343,26 @@ export function openFishHub(player: Player, fs: FishingState, opts: { tab?: HubT
       if (pv) {
         const p = preview = mountRodPreview(pv, fs);
         const cap = eln.querySelector<HTMLElement>('#rod-preview-cap');
-        const setCap = (rodId: string, baitId: string) => {
-          if (cap) cap.textContent = `🎣 ${(RODS[rodId] ?? RODS.beginner).name}  ·  🪱 ${(BAITS[baitId] ?? BAITS.worm).name}`;
+        const setCap = (rodId: string, lineId: string, baitId: string) => {
+          if (cap) cap.textContent = `🎣 ${(RODS[rodId] ?? RODS.beginner).name}  ·  🧵 ${(LINES[lineId] ?? LINES.basic_mono).name}  ·  🪱 ${(BAITS[baitId] ?? BAITS.worm).name}`;
         };
-        const wirePreview = (attr: 'previewRod' | 'previewBait', pick: (id: string) => [string, string]) => {
-          const sel = `[data-${attr === 'previewRod' ? 'preview-rod' : 'preview-bait'}]`;
+        const wirePreview = (attr: 'previewRod' | 'previewLine' | 'previewBait', pick: (id: string) => [string, string, string]) => {
+          const sel = `[data-${attr === 'previewRod' ? 'preview-rod' : attr === 'previewLine' ? 'preview-line' : 'preview-bait'}]`;
           eln.querySelectorAll<HTMLElement>(sel).forEach(row => row.onclick = e => {
             if ((e.target as HTMLElement).closest('.ui-btn')) return;
             eln.querySelectorAll(sel).forEach(r => r.classList.remove('previewing'));
             row.classList.add('previewing');
-            const [rodId, baitId] = pick(row.dataset[attr]!);
-            p.show(rodId, baitId); setCap(rodId, baitId); sfx('blip');
+            const [rodId, lineId, baitId] = pick(row.dataset[attr]!);
+            p.show(rodId, baitId); setCap(rodId, lineId, baitId); sfx('blip');
           });
         };
-        wirePreview('previewRod', id => [id, fs.equippedBait]);
-        wirePreview('previewBait', id => [fs.equippedRod, id]);
+        wirePreview('previewRod', id => [id, fs.equippedLine, fs.equippedBait]);
+        wirePreview('previewLine', id => [fs.equippedRod, id, fs.equippedBait]);
+        wirePreview('previewBait', id => [fs.equippedRod, fs.equippedLine, id]);
         // start on the equipped loadout, highlighting its row
-        setCap(fs.equippedRod, fs.equippedBait);
+        setCap(fs.equippedRod, fs.equippedLine, fs.equippedBait);
         eln.querySelector(`[data-preview-rod="${fs.equippedRod}"]`)?.classList.add('previewing');
+        eln.querySelector(`[data-preview-line="${fs.equippedLine}"]`)?.classList.add('previewing');
         eln.querySelector(`[data-preview-bait="${fs.equippedBait}"]`)?.classList.add('previewing');
       }
     };
@@ -331,6 +375,7 @@ interface TabBody { html: string; wire?: (root: HTMLElement) => void; }
 function renderTab(tab: HubTab, player: Player, fs: FishingState, canBuy: boolean, refresh: () => void): TabBody {
   switch (tab) {
     case 'rods': return tabRods(player, fs, canBuy, refresh);
+    case 'lines': return tabLines(player, fs, canBuy, refresh);
     case 'bait': return tabBait(player, fs, canBuy, refresh);
     case 'kitchen': return tabKitchen(player, fs, canBuy, refresh);
     case 'codex': return tabCodex(fs);
@@ -385,6 +430,73 @@ function tabRods(player: Player, fs: FishingState, canBuy: boolean, refresh: () 
       });
       root.querySelectorAll<HTMLElement>('[data-equip]').forEach(b => b.onclick = () => {
         fs.equippedRod = b.dataset.equip!; player.save(); sfx('confirm'); refresh();
+      });
+    },
+  };
+}
+
+// ---------------- Lines ----------------
+function tabLines(player: Player, fs: FishingState, canBuy: boolean, refresh: () => void): TabBody {
+  const list = Object.values(LINES).map(line => {
+    const owned = (fs.ownedLines ?? []).includes(line.id);
+    const equipped = fs.equippedLine === line.id;
+    
+    // Formatting stats
+    const strengthStr = line.strengthBonus > 1.0 ? `+${Math.round((line.strengthBonus - 1) * 100)}%` : '—';
+    const tensionStr = line.tensionRateBonus < 1.0 ? `-${Math.round((1 - line.tensionRateBonus) * 100)}%` : '—';
+    const luckStr = line.luckBonus > 1.0 ? `+${Math.round((line.luckBonus - 1) * 100)}%` : '—';
+    const perfectStr = line.perfectWidthBonus > 0 ? `+${Math.round(line.perfectWidthBonus * 100)}%` : '—';
+
+    const btn = equipped ? `<button class="ui-btn primary" disabled>Equipped</button>`
+      : owned ? `<button class="ui-btn" data-equip="${line.id}">Equip</button>`
+      : canBuy ? `<button class="ui-btn ${player.shards >= line.price ? '' : 'danger'}" data-buy="${line.id}">◆ ${fmt(line.price)}</button>`
+      : `<span class="sub">Locked</span>`;
+
+    return `
+      <div class="list-row line-row ${equipped ? 'eq' : ''}" data-preview-line="${line.id}" title="Click to preview">
+        <div style="flex:1">
+          <div class="lr-top"><b>${line.name}</b> <span class="sub">Tier ${line.tier}</span></div>
+          <div class="sub">${line.desc}</div>
+          <div class="rod-stats">
+            <span>🧵 Strength: <b>${strengthStr}</b></span>
+            <span>⚡ Tension Rate: <b>${tensionStr}</b></span>
+            <span>🍀 Luck Bonus: <b>${luckStr}</b></span>
+            <span>🎯 Hook Sweet Spot: <b>${perfectStr}</b></span>
+          </div>
+        </div>
+        <div class="lr-act">${btn}</div>
+      </div>`;
+  }).join('');
+
+  const html = `
+    <div class="hub-split">
+      <div class="hub-list">${list}</div>
+      <div class="hub-preview">
+        <div id="rod-preview" class="rod-preview-box"></div>
+        <div class="sub" id="rod-preview-cap" style="text-align:center;margin-top:6px">Live preview</div>
+      </div>
+    </div>`;
+
+  return {
+    html,
+    wire(root) {
+      root.querySelectorAll<HTMLElement>('[data-buy]').forEach(b => b.onclick = () => {
+        const line = LINES[b.dataset.buy!];
+        if (player.shards < line.price) { toast('Not enough Shards.', 'red'); return; }
+        player.shards -= line.price;
+        if (!fs.ownedLines) fs.ownedLines = [];
+        fs.ownedLines.push(line.id);
+        fs.equippedLine = line.id;
+        player.save();
+        sfx('fanfare');
+        toast(`Bought & equipped ${line.name}!`, 'gold');
+        refresh();
+      });
+      root.querySelectorAll<HTMLElement>('[data-equip]').forEach(b => b.onclick = () => {
+        fs.equippedLine = b.dataset.equip!;
+        player.save();
+        sfx('confirm');
+        refresh();
       });
     },
   };
@@ -486,7 +598,7 @@ function tabCodex(fs: FishingState): TabBody {
       if (!rec) {
         return `<div class="codex-card unknown"><div class="cc-q">?</div><div class="cc-name">??? </div><div class="sub">${RARITY[f.rarity].badge}</div></div>`;
       }
-      return `<div class="codex-card" style="--rc:${RARITY[f.rarity].color}">
+      return `<div class="codex-card" style="--rc:${RARITY[f.rarity].color};cursor:pointer" data-fish="${f.id}">
         <div class="cc-name" style="color:${RARITY[f.rarity].color}">${f.name}</div>
         <div class="sub">${rarityChip(f.rarity)}</div>
         <div class="cc-rec"><span>×${rec.count}</span><span>⚖️ ${rec.maxWeight.toFixed(1)}kg</span><span>📏 ${rec.maxLength.toFixed(0)}cm</span></div>
@@ -495,7 +607,21 @@ function tabCodex(fs: FishingState): TabBody {
     }).join('');
     return `<div class="codex-fam"><h4>${FAMILIES[fam].name} <span class="sub">${FAMILIES[fam].blurb}</span></h4><div class="codex-grid">${cards}</div></div>`;
   }).join('');
-  return { html: `<div class="codex-head sub">Species discovered: <b style="color:var(--ui-gold)">${discoveredCount} / 25</b></div>${sections}` };
+  return {
+    html: `<div class="codex-head sub">Species discovered: <b style="color:var(--ui-gold)">${discoveredCount} / 25</b></div><div class="sub" style="margin-top:-6px;margin-bottom:12px;color:var(--ui-blue)">Click any discovered fish to inspect its 3D model!</div>${sections}`,
+    wire(root) {
+      root.querySelectorAll<HTMLElement>('.codex-card[data-fish]').forEach(card => {
+        card.onclick = () => {
+          const fishId = card.dataset.fish!;
+          const fish = FISH[fishId];
+          const rec = fs.discovered[fishId];
+          if (fish && rec) {
+            openFishPreviewModal(fish, rec);
+          }
+        };
+      });
+    }
+  };
 }
 
 // ---------------- Leaderboard ----------------
@@ -734,6 +860,116 @@ function mountRodPreview(container: HTMLElement, fs: FishingState): RodPreview {
       renderer.dispose();
       canvas.remove();
     },
+  };
+}
+
+// ============================================================
+//  3D ENCYCLOPEDIA FISH PREVIEWER
+// ============================================================
+function mountFish3DPreview(container: HTMLElement, sp: SpeciesDef): { dispose(): void } {
+  const canvas = document.createElement('canvas');
+  canvas.style.cssText = 'width:100%;height:100%;display:block;border-radius:10px';
+  container.appendChild(canvas);
+  let renderer: THREE.WebGLRenderer;
+  try { renderer = makeRenderer(canvas); } catch { return { dispose() { canvas.remove(); } }; }
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0c1430);
+  const cam = new THREE.PerspectiveCamera(40, 1, 0.1, 50);
+  cam.position.set(0, 0, 2.5); // position camera facing the fish
+  
+  const resize = () => {
+    const w = container.clientWidth || 220, h = container.clientHeight || 200;
+    renderer.setSize(w, h, false);
+    canvas.style.width = '100%'; canvas.style.height = '100%';
+    cam.aspect = w / h; cam.updateProjectionMatrix();
+  };
+  resize();
+  cam.lookAt(0, 0, 0);
+  const ro = new ResizeObserver(resize); ro.observe(container);
+  scene.add(new THREE.HemisphereLight(0xbcd8ff, 0x223044, 1.2));
+  const key = new THREE.DirectionalLight(0xfff0d0, 1.4); key.position.set(3, 5, 2); scene.add(key);
+
+  const fishGroup = makeFish(sp);
+  fishGroup.position.set(0, 0, 0);
+  fishGroup.rotation.y = -Math.PI / 4; // slight rotation so we see the body and head
+  scene.add(fishGroup);
+
+  let alive = true;
+  let t = 0;
+  const loop = () => {
+    if (!alive) return;
+    t += 0.016;
+    swimFish(fishGroup, t, 1.0);
+    // Let the fish gently rotate so the player sees all angles
+    fishGroup.rotation.y = -Math.PI / 4 + Math.sin(t * 0.5) * 0.3;
+    fishGroup.position.y = Math.sin(t * 1.5) * 0.08; // gentle hover bobbing
+    renderer.render(scene, cam);
+    requestAnimationFrame(loop);
+  };
+  loop();
+
+  return {
+    dispose() {
+      alive = false;
+      ro.disconnect();
+      disposeFish(fishGroup);
+      renderer.dispose();
+      canvas.remove();
+    }
+  };
+}
+
+export function openFishPreviewModal(fish: SpeciesDef, rec: { count: number; maxWeight: number; maxLength: number }): void {
+  const rd = RARITY[fish.rarity];
+  const modal = el('div', 'fish-preview-modal');
+  modal.style.setProperty('--rc', rd.color);
+  modal.style.setProperty('--rg', rd.glow || 'rgba(0,0,0,0.5)');
+  
+  modal.innerHTML = `
+    <div class="fpm-card" style="--rc:${rd.color};--rg:${rd.glow || 'rgba(0,0,0,0.5)'}">
+      <div class="fpm-title">${fish.name}</div>
+      <div class="fpm-sub">${FAMILIES[fish.family].name} · ${rarityChip(fish.rarity)}</div>
+      <div class="fpm-body">
+        <div class="fish-3d-box" id="fish-preview-canvas-container"></div>
+        <div class="fpm-details">
+          <div class="fpm-stat"><span>Total Caught</span><b>${rec.count}</b></div>
+          <div class="fpm-stat"><span>Largest Weight</span><b>${rec.maxWeight.toFixed(2)} kg</b></div>
+          <div class="fpm-stat"><span>Max Length</span><b>${rec.maxLength.toFixed(1)} cm</b></div>
+          <div class="fpm-stat"><span>Spot Type</span><b>${fish.spawn.spot ? fish.spawn.spot.join(', ') : 'Any'}</b></div>
+          <div class="fpm-stat"><span>Weather</span><b>${fish.spawn.weather ? fish.spawn.weather.join(', ') : 'Any'}</b></div>
+          <div class="fpm-lore">${fish.lore}</div>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;margin-top:16px">
+        <button class="ui-btn primary" id="fpm-close">Close</button>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+  sfx('open');
+  
+  const container = modal.querySelector<HTMLElement>('#fish-preview-canvas-container')!;
+  const preview = mountFish3DPreview(container, fish);
+  
+  const close = () => {
+    sfx('cancel');
+    preview.dispose();
+    modal.remove();
+    window.removeEventListener('keydown', onKey);
+  };
+  
+  const onKey = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      close();
+      e.stopPropagation();
+    }
+  };
+  
+  window.addEventListener('keydown', onKey, { capture: true });
+  (modal.querySelector('#fpm-close') as HTMLElement).onclick = close;
+  modal.onclick = (e) => {
+    if (e.target === modal) close();
   };
 }
 

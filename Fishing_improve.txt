@@ -1,0 +1,102 @@
+Redesign and significantly enhance the entire Fishing Game to make it more immersive, exciting, and rewarding. The goal is to create a polished, high-engagement gameplay loop where every catch feels tense, unpredictable, and satisfying.
+
+---
+
+## Core Gameplay Improvements
+
+* Completely overhaul the fishing and catching logic to remove repetitive and low-excitement outcomes.
+* Redesign fish spawning and baiting systems so that fish variety feels dynamic, rare, and discovery-driven.
+* Introduce meaningful rarity scaling:
+
+  * Common fish should be easy to catch.
+  * Rare and legendary fish should require skill, better equipment, and should feel genuinely difficult to hook and reel in.
+* Add a risk-reward system where stronger fish are harder to control but give significantly better rewards.
+
+---
+
+## Fishing Mechanics Overhaul
+
+* Implement an improved targeting system for rod casting and hook placement, giving players more control and skill expression.
+* Rebuild line tension and reeling mechanics so that fish actively struggle and affect player control.
+* Add a stamina/tension system for both fish and player interaction during catch sequences.
+
+---
+
+## Cinematic Camera & Animation
+
+* Add dynamic cinematic camera angles when a fish is hooked:
+
+  * Slow zoom-in on hook moment
+  * Follow-cam while reeling in fish
+  * Intense camera shakes during struggle moments
+* Enhance all fishing animations:
+
+  * Rod bending realism
+  * Line tension physics
+  * Fish thrashing, diving, and escaping behavior
+
+---
+
+## UI / UX Improvements
+
+* Redesign the entire fishing UI to feel modern, immersive, and minimal during gameplay.
+* Add a dedicated targeting interface for casting accuracy.
+* Improve feedback systems (visual + audio) for hooks, catches, escapes, and rare discoveries.
+* Make the experience feel like each catch is a “moment,” not a routine action.
+
+---
+
+## Fish Encyclopedia System
+
+* Fully rebuild the Fish Encyclopedia:
+
+  * Display all discovered and unlocked fish in a visually appealing catalog
+  * Include fish models, rarity, habitat, and stats
+  * Add progression tracking and completion rewards
+* Encourage collection and discovery as a long-term gameplay goal.
+
+---
+
+## Equipment Expansion
+
+Add deeper progression systems with new gear types:
+
+### Rods
+
+* Add 5 new fishing rods with unique stats and special abilities.
+
+### Fishing Lines
+
+* Introduce a new “Line” equipment category:
+
+  * Example: Reinforced Nylon Line
+  * Add 10 additional specialized lines with different durability, tension control, and rarity bonuses.
+
+### Baits
+
+* Add 5 new bait types that influence fish behavior, rarity chances, and biome-specific attraction.
+
+---
+
+## Progression & Reward System
+
+* Add a meaningful progression loop where better gear unlocks access to more dangerous and rare fish.
+* Introduce a reward system that increases excitement per catch:
+
+  * Bonus loot for perfect catches
+  * Rare “critical catch” moments
+  * Combo or streak bonuses for successful catches
+
+---
+
+## Overall Design Goal
+
+The game should feel:
+
+* More thrilling with every cast
+* Rewarding through discovery and rarity
+* Skill-based rather than random
+* Cinematic during key fishing moments
+* Deep enough to support long-term progression and replayability
+
+Every catch should feel like a moment of anticipation, tension, and payoff.

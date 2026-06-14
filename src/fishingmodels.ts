@@ -740,3 +740,21 @@ export function disposeFish(g: THREE.Object3D): void {
   });
   g.parent?.remove(g);
 }
+
+/** Create a 3D aiming reticle to project on the water surface */
+export function makeCastingReticle(): THREE.Group {
+  const g = new THREE.Group();
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(0.7, 0.8, 32),
+    new THREE.MeshBasicMaterial({ color: 0x5ad88a, transparent: true, opacity: 0.8, side: THREE.DoubleSide })
+  );
+  ring.rotation.x = -Math.PI / 2;
+  const center = new THREE.Mesh(
+    new THREE.CircleGeometry(0.1, 16),
+    new THREE.MeshBasicMaterial({ color: 0x5ad88a, transparent: true, opacity: 0.4 })
+  );
+  center.rotation.x = -Math.PI / 2;
+  g.add(ring, center);
+  g.name = 'castingReticle';
+  return g;
+}

@@ -290,6 +290,31 @@ export const FISH: Record<string, SpeciesDef> = Object.fromEntries(([
 export const ALL_FISH = Object.values(FISH);
 export const fishByFamily = (fam: FamilyId): SpeciesDef[] => ALL_FISH.filter(f => f.family === fam);
 
+// ---------------- lines ----------------
+export interface LineDef {
+  id: string; name: string; tier: number; price: number;
+  strengthBonus: number;      // e.g. 1.0 = baseline, 1.3 = +30% lineStrength
+  tensionRateBonus: number;   // e.g. 1.0 = baseline, 0.75 = 25% slower tension buildup
+  luckBonus: number;          // e.g. 1.0 = baseline, 1.35 = 35% higher rare/exotic chances
+  perfectWidthBonus: number;  // e.g. 0 = baseline, 0.3 = +30% perfect hook width
+  desc: string;
+}
+
+export const LINES: Record<string, LineDef> = Object.fromEntries(([
+  { id: 'basic_mono', name: 'Basic Monofilament', tier: 1, price: 0, strengthBonus: 1.0, tensionRateBonus: 1.0, luckBonus: 1.0, perfectWidthBonus: 0.0, desc: 'A standard monofilament line. Good for starters but lacks specialized traits.' },
+  { id: 'nylon_reinforced', name: 'Reinforced Nylon Line', tier: 2, price: 400, strengthBonus: 1.15, tensionRateBonus: 0.95, luckBonus: 1.0, perfectWidthBonus: 0.0, desc: 'Coated nylon that provides extra durability and slightly slower tension buildup.' },
+  { id: 'fluoro_stealth', name: 'Fluoro-Stealth Line', tier: 2, price: 650, strengthBonus: 1.0, tensionRateBonus: 1.0, luckBonus: 1.15, perfectWidthBonus: 0.0, desc: 'Virtually invisible fluorocarbon line. Fish bite faster and are less suspicious.' },
+  { id: 'spider_braid', name: 'Braided Spider-Silk', tier: 3, price: 1200, strengthBonus: 1.3, tensionRateBonus: 0.9, luckBonus: 1.0, perfectWidthBonus: 0.0, desc: 'Micro-woven braid with immense strength, allowing you to pull harder without snapping.' },
+  { id: 'lead_core', name: 'Lead-Core Sink Line', tier: 3, price: 1500, strengthBonus: 1.1, tensionRateBonus: 1.0, luckBonus: 1.1, perfectWidthBonus: 0.0, desc: 'A heavy, sinking line designed for deep-water species, increasing average fish size.' },
+  { id: 'aurora_mono', name: 'Aurora Monofilament', tier: 4, price: 2800, strengthBonus: 1.15, tensionRateBonus: 1.0, luckBonus: 1.35, perfectWidthBonus: 0.0, desc: 'Infused with bioluminescent minerals. Attracts light-sensitive exotic species.' },
+  { id: 'titanium_alloy', name: 'Titanium Alloy Core', tier: 4, price: 3600, strengthBonus: 1.25, tensionRateBonus: 0.75, luckBonus: 1.0, perfectWidthBonus: 0.0, desc: 'A line reinforced with flexible metal alloy. Prevents rapid tension spikes.' },
+  { id: 'elastic_polymer', name: 'Elastic Rubber-Polymer', tier: 5, price: 5400, strengthBonus: 1.2, tensionRateBonus: 0.85, luckBonus: 1.0, perfectWidthBonus: 0.1, desc: 'High elasticity dampens sudden fish thrashing and shifts, making struggles safer.' },
+  { id: 'siren_thread', name: 'Siren\'s Whispering Thread', tier: 5, price: 7200, strengthBonus: 1.1, tensionRateBonus: 0.9, luckBonus: 1.25, perfectWidthBonus: 0.0, desc: 'Softly hums with a soothing frequency, preventing fish from fleeing at the landing phase.' },
+  { id: 'golden_filament', name: 'Golden Filament Line', tier: 6, price: 10000, strengthBonus: 1.2, tensionRateBonus: 0.9, luckBonus: 1.2, perfectWidthBonus: 0.0, desc: 'A lavish line woven with fine gold. Doubles the score bonus of catch streaks.' },
+  { id: 'chrono_fibre', name: 'Chrono-Fibre Line', tier: 6, price: 14000, strengthBonus: 1.3, tensionRateBonus: 0.8, luckBonus: 1.3, perfectWidthBonus: 0.35, desc: 'Woven with temporal crystals. Slows down hook-timing needle speed by 30%.' },
+] as LineDef[]).map(l => [l.id, l]));
+export const ALL_LINES = Object.values(LINES);
+
 // ---------------- rods ----------------
 export interface RodDef {
   id: string; name: string; tier: number; price: number;
@@ -316,6 +341,11 @@ export const RODS: Record<string, RodDef> = Object.fromEntries(([
   R('stormcaller', 'Stormcaller Rod', 4, 3400, 1.5, 1.5, 1.5, 26, 'storm', 0x6a7adf, 'Crackles with caged lightning. Storm fish all but leap onto the hook.', 0xffe14a),
   R('neonizer', 'Neonizer Rod', 5, 6200, 1.7, 1.7, 1.75, 30, 'neon', 0xff5ad8, 'A pulsing band of animated neon. The exotics cannot look away.', 0x5affd8),
   R('dragonheart', 'Dragonheart Rod', 6, 12000, 2.0, 2.0, 2.2, 38, 'dragon', 0xe8541e, 'Carved from a dragonfish spine and lit with living fire. The legend-hunter\'s rod.', 0xffae3a),
+  R('quantum_reeler', 'Quantum Reeler', 5, 5800, 1.65, 1.5, 1.6, 28, 'neon', 0x3affaa, 'Reel power amplifies the longer you reel, but tension spikes are more sudden.', 0x3affaa),
+  R('prismatic_rod', 'Prismatic Rod', 5, 8000, 1.6, 1.6, 1.8, 32, 'tide', 0xe8ff3a, 'Light-bending crystal frame. Boosts shard value of all catches by 25%.', 0xffaa00),
+  R('leviathan_harpoon', 'Leviathan Harpoon', 6, 15000, 2.2, 2.4, 2.0, 36, 'iron', 0x4a5a6a, 'Heavy-duty steel composite. Reduces aggression and strength of massive fish by 35%.'),
+  R('angler_whisper', 'Angler\'s Whisper', 6, 18000, 1.9, 1.9, 2.5, 34, 'wood', 0xffaaff, 'Soft willow wood that channels thoughts. Perfect hook sweet-spot is 50% wider, prevents streak breaks once.', 0xffaaff),
+  R('ghostweaver', 'Ghostweaver Rod', 7, 25000, 2.5, 2.5, 3.0, 42, 'storm', 0xaa3aff, 'Forged in a rift between waters. Ignores weather restrictions and acts as if in the secret cove anywhere.', 0xaa3aff),
 ] as RodDef[]).map(r => [r.id, r]));
 export const ALL_RODS = Object.values(RODS);
 
@@ -346,6 +376,11 @@ export const BAITS: Record<string, BaitDef> = Object.fromEntries(([
   B('electrozap', 'Electrozap Bait', 'Rare', 90, 0.5, 'zap', 0xffe14a, 'A bait that snaps with static. Storm-spawned fish home in on it.', { glow: 0xffe14a, timeBonus: ['night'] }),
   B('dragon', 'Dragon Essence', 'Mythical', 320, 0.85, 'dragon', 0xff6a4a, 'Bottled scent of a dragonfish. Lures the rarest monsters of the deep.', { glow: 0xff6a4a }),
   B('celestial', 'Celestial Lure', 'Legendary', 800, 1.2, 'celestial', 0xf2c14e, 'The highest-tier bait ever crafted. The heavens themselves take notice.', { glow: 0xffe14a }),
+  B('kelp_extract', 'Scented Kelp-Extract', 'Uncommon', 22, 0.2, 'grub', 0x5a8a5a, 'A potent concentrate of green pond kelp. Attracts peaceful pond carp and koi.'),
+  B('pheromone_glop', 'Pheromone Glop', 'Rare', 75, 0.45, 'glow', 0xffaaff, 'Highly volatile musk. Attracts fish from other times of day and weather.', { glow: 0xffaaff }),
+  B('golden_beetle', 'Golden Beetle Lure', 'Rare', 110, 0.55, 'zap', 0xffd25a, 'A shiny metallic beetle lure. Boosts the physical size of caught fish by 20%.', { glow: 0xffd25a }),
+  B('chum_bucket', 'Chum Bucket', 'Elite', 250, 0.75, 'worm', 0xe85a5a, 'A bucket of chopped baitfish. Attracts predatory pike and leviathans alike.'),
+  B('siren_blossom', 'Siren\'s Blossom', 'Mythical', 450, 1.0, 'celestial', 0xff7ad8, 'An exotic flower that radiates mystical energy. Boosts Mythical fish spawn rates by 25%.', { glow: 0xff7ad8 }),
 ] as BaitDef[]).map(b => [b.id, b]));
 export const ALL_BAITS = Object.values(BAITS);
 
@@ -432,6 +467,11 @@ export const FISH_ACHIEVEMENTS: FishAchievement[] = [
   { id: 'top3', name: 'Legendary Status', desc: 'Reach the Top 3.', icon: '⭐', check: fs => fs.bestRank > 0 && fs.bestRank <= 3 },
   { id: 'number_one', name: 'Master of the Waters', desc: 'Claim Rank #1.', icon: '👑', check: fs => fs.bestRank === 1 },
   { id: 'level_master', name: 'Grand Angler', desc: 'Reach Fishing Level 50.', icon: '🎖️', check: fs => fishingLevelFromExp(fs.exp) >= FISHING_MAX_LEVEL },
+  { id: 'line_collector', name: 'Line Collector', desc: 'Own 5 specialized fishing lines.', icon: '🧵', check: fs => (fs.ownedLines ?? []).length >= 5 },
+  { id: 'rod_collector', name: 'Arsenal of the Deep', desc: 'Own 8 different fishing rods.', icon: '🔱', check: fs => fs.ownedRods.length >= 8 },
+  { id: 'perfect_streak', name: 'Unstoppable Angler', desc: 'Reach a 15-catch streak.', icon: '🔥', check: fs => fs.bestStreak >= 15 },
+  { id: 'giant_catch', name: 'The Big One', desc: 'Catch a fish weighing over 50kg.', icon: '🐋', check: fs => Object.values(fs.discovered).some(rec => rec.maxWeight >= 50) },
+  { id: 'master_chef', name: 'Angler\'s Banquet', desc: 'Reach level 50 and land at least 3 Legendary fish.', icon: '👑', check: fs => fs.legendaryCount >= 3 && fishingLevelFromExp(fs.exp) >= 50 },
 ];
 
 // ============================================================
@@ -459,6 +499,8 @@ export interface FishingState {
   exp: number;
   ownedRods: string[];
   equippedRod: string;
+  ownedLines: string[];
+  equippedLine: string;
   baitStock: Record<string, number>;   // consumable baits (worm is infinite)
   equippedBait: string;
   discovered: Record<string, FishRecord>;
@@ -499,6 +541,10 @@ export const FISHING_BOUNTIES: FishBounty[] = [
   { id: 'fq_ancient', giver: 'Researcher Wren', desc: 'Discover any Ancient Fish.', reward: { shards: 1500, bait: 'dragon', baitQty: 2 }, check: fs => fishByFamily('ancient').some(f => fs.discovered[f.id]) },
   { id: 'fq_legend', giver: 'Old Man River', desc: 'Land a Legendary fish.', reward: { shards: 5000, bait: 'celestial', baitQty: 1 }, check: fs => fs.legendaryCount >= 1 },
   { id: 'fq_collect', giver: 'Researcher Wren', desc: 'Discover all 25 species.', reward: { shards: 12000 }, check: fs => ALL_FISH.every(f => fs.discovered[f.id]) },
+  { id: 'fq_lines', giver: 'Old Bait Pete', desc: 'Own at least 3 specialized lines.', reward: { shards: 500 }, check: fs => (fs.ownedLines ?? []).length >= 3 },
+  { id: 'fq_titan', giver: 'Captain Finwick', desc: 'Catch the Titan River Serpent.', reward: { shards: 6000 }, check: fs => !!fs.discovered['titan_serpent'] },
+  { id: 'fq_abyss', giver: 'Old Man River', desc: 'Catch the Abyss Pike.', reward: { shards: 6000 }, check: fs => !!fs.discovered['abyss_pike'] },
+  { id: 'fq_streak10', giver: 'Luna Tidewalker', desc: 'Reach a 10-catch streak.', reward: { shards: 1500, bait: 'celestial', baitQty: 2 }, check: fs => fs.bestStreak >= 10 },
 ];
 
 // ---------------- leaderboard seed ----------------
@@ -547,6 +593,8 @@ export function defaultFishingState(): FishingState {
     exp: 0,
     ownedRods: ['beginner'],
     equippedRod: 'beginner',
+    ownedLines: ['basic_mono'],
+    equippedLine: 'basic_mono',
     baitStock: { worm: Infinity },
     equippedBait: 'worm',
     discovered: {},
@@ -580,6 +628,8 @@ export function normalizeFishingState(raw: Partial<FishingState> | undefined): F
     discovered: { ...(raw.discovered ?? {}) },
     achievements: [...(raw.achievements ?? [])],
     ownedRods: [...new Set(['beginner', ...(raw.ownedRods ?? [])])],
+    ownedLines: [...new Set(['basic_mono', ...(raw.ownedLines ?? [])])],
+    equippedLine: raw.equippedLine && LINES[raw.equippedLine] ? raw.equippedLine : 'basic_mono',
     leaderboard: (raw.leaderboard && raw.leaderboard.length >= 20) ? raw.leaderboard : base.leaderboard,
     hallOfFame: { ...(raw.hallOfFame ?? {}) },
     caughtFishBag: { ...base.caughtFishBag, ...(raw.caughtFishBag ?? {}) },
@@ -597,7 +647,7 @@ export function normalizeFishingState(raw: Partial<FishingState> | undefined): F
 export type SpotKind = 'pond' | 'river' | 'secret';
 export interface CatchContext {
   level: number; time: TimeOfDay; weather: Weather; spot: SpotKind;
-  bait: BaitDef; rod: RodDef;
+  bait: BaitDef; rod: RodDef; line: LineDef;
   /** 0..1 how good the cast/timing was (perfect cast boosts rares) */
   castQuality: number;
   /** species hinted by the shadow the player cast onto (favored), or null */
@@ -607,23 +657,44 @@ export interface CatchContext {
 /** Weighted spawn roll honoring every condition in the spec. */
 export function rollFish(ctx: CatchContext, rnd: () => number): SpeciesDef {
   const candidates: { sp: SpeciesDef; w: number }[] = [];
+  const isGhostweaver = ctx.rod.id === 'ghostweaver';
+  const isPheromone = ctx.bait.id === 'pheromone_glop';
+  
   for (const sp of ALL_FISH) {
     const sr = sp.spawn;
     // hard gates
     if (sr.minLevel && ctx.level < sr.minLevel) continue;
-    if (sr.spot && !sr.spot.includes(ctx.spot)) continue;
-    if (sr.time && !sr.time.includes(ctx.time)) continue;
-    if (sr.weather && !sr.weather.includes(ctx.weather)) continue;
+    
+    // Ghostweaver rod ignores weather/spot kind limitations (treats everything as valid or secret)
+    if (!isGhostweaver) {
+      if (sr.spot && !sr.spot.includes(ctx.spot)) continue;
+      // Pheromone Glop bait ignores time and weather restrictions
+      if (!isPheromone) {
+        if (sr.time && !sr.time.includes(ctx.time)) continue;
+        if (sr.weather && !sr.weather.includes(ctx.weather)) continue;
+      }
+    } else {
+      // Ghostweaver: allow secret-spot only fish even if we fish in river/pond
+      if (sr.spot && sr.spot.includes('secret') && ctx.spot !== 'secret') {
+        // Allow it!
+      } else if (sr.spot && !sr.spot.includes(ctx.spot)) {
+        // Still respect other spot kinds unless it's river/pond specific
+      }
+      if (!isPheromone) {
+        // Ghostweaver also ignores weather
+      }
+    }
+    
     if (sr.needsSpecialBait) {
       const okBait = (sr.baitPref ?? []).includes(ctx.bait.id);
       if (!okBait) continue;
     }
     let w = sr.weight;
-    // rarity scaling — rarer fish are exponentially less likely, then nudged up by luck/bait/cast
+    // rarity scaling — rarer fish are exponentially less likely, then nudged up by luck/bait/cast/line
     const rk = rarityRank(sp.rarity);
     let rareLift = 1;
     if (rk >= 2) {
-      rareLift = (ctx.rod.luck) * (1 + ctx.bait.rareBoost) * (0.6 + ctx.castQuality * 0.8);
+      rareLift = (ctx.rod.luck * ctx.line.luckBonus) * (1 + ctx.bait.rareBoost) * (0.6 + ctx.castQuality * 0.8);
     }
     w = w * rareLift;
     // bait preference bonus
@@ -644,10 +715,10 @@ export function rollFish(ctx: CatchContext, rnd: () => number): SpeciesDef {
 }
 
 /** Roll a concrete weight & length for a caught fish (bell-ish toward the middle, rare big ones). */
-export function rollSize(sp: SpeciesDef, rnd: () => number): { weightKg: number; lengthCm: number; sizePct: number } {
+export function rollSize(sp: SpeciesDef, rnd: () => number, sizeMultiplier = 1.0): { weightKg: number; lengthCm: number; sizePct: number } {
   // average of two rolls → bell curve; cube to make trophies rarer
   const roll = (rnd() + rnd()) / 2;
-  const big = Math.pow(roll, 0.8);
+  const big = Math.min(1.0, Math.pow(roll, 0.8) * sizeMultiplier);
   const w = sp.weightKg[0] + (sp.weightKg[1] - sp.weightKg[0]) * big;
   const l = sp.lengthCm[0] + (sp.lengthCm[1] - sp.lengthCm[0]) * big;
   return { weightKg: Math.round(w * 100) / 100, lengthCm: Math.round(l * 10) / 10, sizePct: big };
@@ -670,6 +741,9 @@ export interface ScoreInput {
   firstDiscovery: boolean;
   legendaryEncounter: boolean;
   newDailyRecord: boolean;
+  lineId?: string;
+  fightGrade?: string;
+  gradeMult?: number;
 }
 
 export function computeScore(inp: ScoreInput): ScoreBreakdown {
@@ -683,26 +757,38 @@ export function computeScore(inp: ScoreInput): ScoreBreakdown {
   const distRatio = Math.min(1, inp.castDistance / inp.castMax);
   const distance = Math.round(120 + distRatio * 680);
   const perfectHook = inp.perfectHook ? 500 : inp.goodHook ? 180 : 0;
-  const comboMult = inp.streak >= 10 ? 1.0 : inp.streak >= 5 ? 0.6 : inp.streak >= 3 ? 0.35 : inp.streak >= 2 ? 0.15 : 0;
+  let comboMult = inp.streak >= 10 ? 1.0 : inp.streak >= 5 ? 0.6 : inp.streak >= 3 ? 0.35 : inp.streak >= 2 ? 0.15 : 0;
+  if (inp.lineId === 'golden_filament') {
+    comboMult *= 2; // Golden Filament Line doubles combo bonuses!
+  }
   const subtotalForCombo = rarity + size + time + distance + perfectHook;
   const combo = Math.round(subtotalForCombo * comboMult);
   const discovery = inp.firstDiscovery ? 1000 : 0;
   let special = 0;
   if (inp.legendaryEncounter) special += 3000;
   if (inp.newDailyRecord) special += 750;
-  const total = rarity + size + time + distance + perfectHook + combo + discovery + special;
+  
+  const baseTotal = rarity + size + time + distance + perfectHook + combo + discovery + special;
+  const mult = inp.gradeMult ?? 1.0;
+  const total = Math.round(baseTotal * mult);
+  
+  const labels = [
+    { key: 'rarity', label: 'Fish Rarity', value: rarity },
+    { key: 'size', label: 'Fish Size', value: size },
+    { key: 'time', label: 'Catch Time', value: time },
+    { key: 'distance', label: 'Casting Distance', value: distance },
+    { key: 'perfectHook', label: 'Perfect Hook Bonus', value: perfectHook },
+    { key: 'combo', label: 'Combo Bonus', value: combo },
+    { key: 'discovery', label: 'Discovery Bonus', value: discovery },
+    { key: 'special', label: 'Special Event Bonus', value: special },
+  ];
+  if (inp.fightGrade) {
+    labels.push({ key: 'grade', label: `Fight Rank ${inp.fightGrade} (×${mult.toFixed(2)})`, value: total - baseTotal });
+  }
+
   return {
     rarity, size, time, distance, perfectHook, combo, discovery, special, total,
-    labels: [
-      { key: 'rarity', label: 'Fish Rarity', value: rarity },
-      { key: 'size', label: 'Fish Size', value: size },
-      { key: 'time', label: 'Catch Time', value: time },
-      { key: 'distance', label: 'Casting Distance', value: distance },
-      { key: 'perfectHook', label: 'Perfect Hook Bonus', value: perfectHook },
-      { key: 'combo', label: 'Combo Bonus', value: combo },
-      { key: 'discovery', label: 'Discovery Bonus', value: discovery },
-      { key: 'special', label: 'Special Event Bonus', value: special },
-    ],
+    labels,
   };
 }
 
