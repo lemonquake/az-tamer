@@ -237,6 +237,106 @@ export function showHotkeys(on: boolean, dungeon = false, regions = false): void
     ...(regions ? ['<b>T</b> Regions'] : []),
     '<b>N</b> Sound', '<b>Esc</b> Menu',
   ].map(s => `<span>${s}</span>`).join('');
+
+  el.style.pointerEvents = 'auto';
+  el.querySelectorAll('span').forEach(span => {
+    span.style.cursor = 'pointer';
+    span.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const b = span.querySelector('b');
+      if (b) {
+        const keyText = b.textContent || '';
+        const key = keyText.toLowerCase();
+        const simulatedKey = key === 'esc' ? 'escape' : key;
+        const event = new KeyboardEvent('keydown', {
+          key: simulatedKey,
+          code: simulatedKey === 'escape' ? 'Escape' : `Key${key.toUpperCase()}`,
+          bubbles: true,
+          cancelable: true
+        });
+        window.dispatchEvent(event);
+      }
+    };
+  });
+}
+
+export function getActivePlayer(): Player | undefined {
+  return (window as any).__getActivePlayer ? (window as any).__getActivePlayer() : undefined;
+}
+
+export function applyGraphicsSettings(): void {
+  const renderer = (window as any).__renderer;
+  if (!renderer) return;
+
+  const isLow = localStorage.getItem('graphicsMode') === 'low';
+  if (isLow) {
+    renderer.shadowMap.enabled = false;
+    renderer.setPixelRatio(1.0);
+  } else {
+    renderer.shadowMap.enabled = true;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  }
+  renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+export async function executeCheatFlow(player: Player): Promise<void> {
+  try {
+    const code = await askName('Enter Cheat Code');
+    if (!code) return;
+    if (code.toLowerCase() === 'lemonquake') {
+      // Apply cheat: Lineup (current party) receives 10 levels
+      player.party.forEach(g => {
+        const targetLevel = Math.min(g.levelCap, g.level + 10);
+        const levelsGained = targetLevel - g.level;
+        g.level = targetLevel;
+        g.exp = expForLevel(g.level);
+        
+        // Add tech points for any multiples of 5 reached
+        for (let lvl = targetLevel - levelsGained + 1; lvl <= targetLevel; lvl++) {
+          if (lvl % 5 === 0) {
+            g.techPoints++;
+          }
+        }
+        
+        // Unlock any techniques learned up to the new level
+        const newTechs = g.species.techs
+          .filter(t => t.level <= g.level)
+          .map(t => t.tech);
+        
+        newTechs.forEach(techId => {
+          if (!g.learnedTechs.includes(techId)) {
+            g.learnedTechs.push(techId);
+          }
+        });
+        
+        g.hp = g.stats.hp;
+        g.sp = g.stats.sp;
+      });
+
+      // Receive 10 pieces of 3 items important for battle: Grand Elixir, Spirit Soda+, Dawn Leaf
+      player.inventory.set('elixir', (player.inventory.get('elixir') ?? 0) + 10);
+      player.inventory.set('soda_plus', (player.inventory.get('soda_plus') ?? 0) + 10);
+      player.inventory.set('revive_leaf', (player.inventory.get('revive_leaf') ?? 0) + 10);
+
+      // Give player 5000 gold (shards) and 5x ultra rare gifting items (Aether Confit)
+      player.shards += 5000;
+      player.inventory.set('aether_confit', (player.inventory.get('aether_confit') ?? 0) + 5);
+
+      player.save();
+      refreshHUD();
+      toast('Cheat Activated: Lineup +10 Levels, +30 items, +5000 Shards, +5 Aether Confit!', 'gold');
+    } else if (code.toLowerCase() === 'gold') {
+      player.shards += 10000;
+      player.save();
+      refreshHUD();
+      toast('Cheat Activated: +10,000 Shards!', 'gold');
+    } else {
+      toast('Invalid Cheat Code', 'red');
+    }
+  } catch (err) {
+    console.error('Cheat system error:', err);
+  }
 }
 
 export function showInteractHint(text: string | null): void {
@@ -252,9 +352,11 @@ let optionsOpen = false;
 export const isMenuOpen = () => menuOpen || optionsOpen;
 export const isOptionsOpen = () => optionsOpen;
 
-export function openOptionsMenu(): Promise<void> {
+export function openOptionsMenu(player?: Player): Promise<void> {
   return new Promise(resolve => {
     optionsOpen = true;
+    const activePlayer = player || getActivePlayer();
+    
     const modal = $('options-modal');
     const musicSlider = $<HTMLInputElement>('opt-music-slider');
     const soundSlider = $<HTMLInputElement>('opt-sound-slider');
@@ -262,6 +364,9 @@ export function openOptionsMenu(): Promise<void> {
     const soundVal = $('opt-sound-val');
     const muteBtn = $('opt-mute-btn');
     const mobileBtn = $('opt-mobile-btn');
+    const perfBtn = $('opt-perf-btn');
+    const cheatRow = $('opt-cheat-row');
+    const cheatBtn = $('opt-cheat-btn');
     const closeBtn = $('opt-close-btn');
 
     // 1. Load current values
@@ -287,6 +392,26 @@ export function openOptionsMenu(): Promise<void> {
       mobileBtn.style.borderColor = isMob ? 'var(--ui-gold)' : 'var(--ui-border)';
     };
     updateMobileBtnLabel();
+
+    const updatePerfBtnLabel = () => {
+      const isLow = localStorage.getItem('graphicsMode') === 'low';
+      perfBtn.textContent = isLow ? 'FPS Boost: ON' : 'FPS Boost: OFF';
+      perfBtn.style.borderColor = isLow ? 'var(--ui-green)' : 'var(--ui-border)';
+    };
+    updatePerfBtnLabel();
+
+    if (activePlayer) {
+      cheatRow.style.display = 'flex';
+      cheatBtn.onclick = async () => {
+        modal.style.display = 'none';
+        optionsOpen = false;
+        await executeCheatFlow(activePlayer);
+        optionsOpen = true;
+        modal.style.display = 'flex';
+      };
+    } else {
+      cheatRow.style.display = 'none';
+    }
 
     modal.style.display = 'flex';
 
@@ -314,9 +439,28 @@ export function openOptionsMenu(): Promise<void> {
 
     mobileBtn.onclick = () => {
       const isMob = localStorage.getItem('mobileMode') === 'true';
-      localStorage.setItem('mobileMode', isMob ? 'false' : 'true');
+      const nextMob = !isMob;
+      localStorage.setItem('mobileMode', nextMob ? 'true' : 'false');
+      
+      // Auto-enable low-power mode if mobile controls are turned OFF on a mobile/touch device
+      if (!nextMob) {
+        const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+        if (isMobileDevice) {
+          localStorage.setItem('graphicsMode', 'low');
+        }
+      }
+
       updateMobileBtnLabel();
+      updatePerfBtnLabel();
+      applyGraphicsSettings();
       import('./mobile').then(m => m.initMobileControls());
+    };
+
+    perfBtn.onclick = () => {
+      const isLow = localStorage.getItem('graphicsMode') === 'low';
+      localStorage.setItem('graphicsMode', isLow ? 'high' : 'low');
+      updatePerfBtnLabel();
+      applyGraphicsSettings();
     };
 
     const close = () => {
@@ -326,6 +470,8 @@ export function openOptionsMenu(): Promise<void> {
       soundSlider.onchange = null;
       muteBtn.onclick = null;
       mobileBtn.onclick = null;
+      perfBtn.onclick = null;
+      cheatBtn.onclick = null;
       closeBtn.onclick = null;
       optionsOpen = false;
       resolve();

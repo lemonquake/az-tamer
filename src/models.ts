@@ -1982,8 +1982,16 @@ export function updateVoxelHuman(g: THREE.Group, walking: boolean, dt: number): 
 export function makeRenderer(canvas: HTMLCanvasElement): THREE.WebGLRenderer {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.shadowMap.enabled = true;
+  
+  const isLow = localStorage.getItem('graphicsMode') === 'low';
+  if (isLow) {
+    renderer.shadowMap.enabled = false;
+    renderer.setPixelRatio(1.0);
+  } else {
+    renderer.shadowMap.enabled = true;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  }
+  
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   return renderer;

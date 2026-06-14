@@ -7,7 +7,7 @@ import { DUNGEONS, HOUSES, type DungeonDef, expForLevel } from './data';
 import { Player, Guardian, SAVE_SLOTS } from './state';
 import { RANKS } from './ranks';
 import { makeRenderer, updateTweens, updateRigs } from './models';
-import { say, conversation, choose, askName, toast, fadeIn, fadeOut, hideHUD, updateHUD, playStorySequence, isDialogueOpen, isMenuOpen, refreshHUD, openOptionsMenu } from './ui';
+import { say, conversation, choose, askName, toast, fadeIn, fadeOut, hideHUD, updateHUD, playStorySequence, isDialogueOpen, isMenuOpen, refreshHUD, openOptionsMenu, executeCheatFlow } from './ui';
 import { Battle, type BattleOptions, type BattleResult } from './battle';
 import { DungeonRun, type DungeonOutcome } from './dungeon';
 import { Town } from './town';
@@ -48,62 +48,7 @@ window.addEventListener('keydown', async e => {
     e.preventDefault();
     e.stopPropagation();
     
-    try {
-      const code = await askName('Enter Cheat Code');
-      if (code.toLowerCase() === 'lemonquake') {
-        // Apply cheat: Lineup (current party) receives 10 levels
-        player.party.forEach(g => {
-          const targetLevel = Math.min(g.levelCap, g.level + 10);
-          const before = g.stats;
-          const levelsGained = targetLevel - g.level;
-          g.level = targetLevel;
-          g.exp = expForLevel(g.level);
-          
-          // Add tech points for any multiples of 5 reached
-          for (let lvl = targetLevel - levelsGained + 1; lvl <= targetLevel; lvl++) {
-            if (lvl % 5 === 0) {
-              g.techPoints++;
-            }
-          }
-          
-          // Unlock any techniques learned up to the new level
-          const newTechs = g.species.techs
-            .filter(t => t.level <= g.level)
-            .map(t => t.tech);
-          
-          newTechs.forEach(techId => {
-            if (!g.learnedTechs.includes(techId)) {
-              g.learnedTechs.push(techId);
-            }
-          });
-          
-          g.hp = g.stats.hp;
-          g.sp = g.stats.sp;
-        });
-
-        // Receive 10 pieces of 3 items important for battle: Grand Elixir, Spirit Soda+, Dawn Leaf
-        player.inventory.set('elixir', (player.inventory.get('elixir') ?? 0) + 10);
-        player.inventory.set('soda_plus', (player.inventory.get('soda_plus') ?? 0) + 10);
-        player.inventory.set('revive_leaf', (player.inventory.get('revive_leaf') ?? 0) + 10);
-
-        // Give player 5000 gold (shards) and 5x ultra rare gifting items (Aether Confit)
-        player.shards += 5000;
-        player.inventory.set('aether_confit', (player.inventory.get('aether_confit') ?? 0) + 5);
-
-        player.save();
-        refreshHUD();
-        toast('Cheat Activated: Lineup +10 Levels, +30 items, +5000 Shards, +5 Aether Confit!', 'gold');
-      } else if (code.toLowerCase() === 'gold') {
-        player.shards += 10000;
-        player.save();
-        refreshHUD();
-        toast('Cheat Activated: +10,000 Shards!', 'gold');
-      } else {
-        toast('Invalid Cheat Code', 'red');
-      }
-    } catch (err) {
-      console.error('Cheat system error:', err);
-    }
+    await executeCheatFlow(player);
   }
 });
 
@@ -151,6 +96,7 @@ requestAnimationFrame(frame);
 
 // ---------------- battle bridge ----------------
 let player: Player;
+(window as any).__getActivePlayer = () => player;
 
 async function runBattle(specs: { speciesId: string; level: number }[], opts: BattleOptions): Promise<BattleResult> {
   const prev = activeView;

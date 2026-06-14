@@ -50,7 +50,82 @@ function releaseAllKeys() {
   }
 }
 
+function simulateEscapeKey() {
+  simulateKeyEvent('escape', 'keydown');
+  setTimeout(() => simulateKeyEvent('escape', 'keyup'), 50);
+}
+
+export function handleMobileBackAction(): void {
+  const optionsModal = document.getElementById('options-modal');
+  const isOptionsOpen = optionsModal && optionsModal.style.display === 'flex';
+
+  const dialogueBox = document.getElementById('dialogue-box');
+  const isDialogueVisible = dialogueBox && dialogueBox.style.display === 'block';
+
+  const menuScreen = document.getElementById('menu-screen');
+  const isMenuVisible = menuScreen && menuScreen.style.display === 'flex';
+
+  const nameModal = document.getElementById('name-modal');
+  const isNameVisible = nameModal && nameModal.style.display === 'flex';
+
+  const gcardOverlay = document.getElementById('gcard-overlay');
+  const isGCardVisible = gcardOverlay && gcardOverlay.style.display === 'flex';
+
+  const pcardOverlay = document.getElementById('pcard-overlay');
+  const isPCardVisible = pcardOverlay && pcardOverlay.style.display === 'flex';
+
+  const victoryScreen = document.getElementById('victory-screen');
+  const isVictoryVisible = victoryScreen && victoryScreen.style.display === 'flex';
+
+  const isAnyModalOpen = isOptionsOpen || isDialogueVisible || isMenuVisible || 
+                          isNameVisible || isGCardVisible || isPCardVisible || 
+                          isVictoryVisible;
+
+  if (isAnyModalOpen) {
+    if (isOptionsOpen) {
+      const closeBtn = document.getElementById('opt-close-btn');
+      if (closeBtn) {
+        closeBtn.click();
+      } else {
+        optionsModal.style.display = 'none';
+      }
+    } else {
+      simulateEscapeKey();
+    }
+  } else {
+    import('./ui').then(m => {
+      m.openOptionsMenu();
+    });
+  }
+}
+
+function onPopState(e: PopStateEvent) {
+  window.history.pushState({ main: true }, '');
+  handleMobileBackAction();
+}
+
+function onBackButton(e: Event) {
+  e.preventDefault();
+  handleMobileBackAction();
+}
+
 export function initMobileControls(): void {
+  const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+  
+  if (isMobileMode() || isMobileDevice) {
+    if (window.history.state?.main !== true) {
+      window.history.pushState({ main: true }, '');
+    }
+    window.removeEventListener('popstate', onPopState);
+    window.addEventListener('popstate', onPopState);
+
+    document.removeEventListener('backbutton', onBackButton);
+    document.addEventListener('backbutton', onBackButton);
+  } else {
+    window.removeEventListener('popstate', onPopState);
+    document.removeEventListener('backbutton', onBackButton);
+  }
+
   // Clean up any existing elements first
   const existing = document.getElementById('mobile-overlay');
   if (existing) existing.remove();
@@ -282,6 +357,7 @@ export function initMobileControls(): void {
 
     const joyContainer = document.getElementById('joystick-zone');
     const actionContainer = document.getElementById('mobile-action-buttons');
+    const hotkeysContainer = document.getElementById('hotkeys');
 
     const shouldHide = isDialogueVisible || isMenuVisible || isNameVisible || 
                        isGCardVisible || isPCardVisible || isBattleVisible || 
@@ -291,6 +367,10 @@ export function initMobileControls(): void {
       const displayStyle = shouldHide ? 'none' : 'block';
       joyContainer.style.display = displayStyle;
       actionContainer.style.display = displayStyle;
+    }
+
+    if (hotkeysContainer) {
+      hotkeysContainer.style.visibility = shouldHide ? 'hidden' : 'visible';
     }
 
     requestAnimationFrame(updateControlsVisibility);
