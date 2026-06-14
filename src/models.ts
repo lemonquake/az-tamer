@@ -1935,8 +1935,23 @@ export function setVoxelSeated(g: THREE.Group, seated: boolean, seatY = 0.42): v
   (g.userData as Record<string, unknown>).seatY = seatY;
 }
 
+/**
+ * Run any prestige cosmetic-FX updaters attached to a tamer rig (Terra City
+ * boutique gear). Stored on userData by clothes.ts so there's no import cycle.
+ * Called from updateVoxelHuman (every scene) and the boutique mirror loops.
+ */
+export function updateTamerFX(g: THREE.Group, dt: number): void {
+  const ud = g.userData as { fxUpdaters?: Array<(t: number, dt: number) => void>; fxT?: number };
+  const list = ud.fxUpdaters;
+  if (!list || list.length === 0) return;
+  ud.fxT = (ud.fxT ?? 0) + dt;
+  const t = ud.fxT;
+  for (let i = 0; i < list.length; i++) list[i](t, dt);
+}
+
 /** Smoothly blended idle/walk animation for a voxel human. Call every frame. */
 export function updateVoxelHuman(g: THREE.Group, walking: boolean, dt: number): void {
+  updateTamerFX(g, dt);
   const u = g.userData as { t: number; walk: number; seated?: boolean; seatY?: number };
   u.walk += ((walking ? 1 : 0) - u.walk) * Math.min(1, dt * 9);
   u.t += dt * (2.2 + u.walk * 8.5);

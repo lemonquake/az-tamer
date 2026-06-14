@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import { HOUSES, DUNGEONS, ITEMS, SHOP_STOCK, GEM_STOCK, CRAWLER_PARTS, SPECIES, type DungeonDef, type HouseDef } from './data';
 import { Player, Guardian } from './state';
 import {
-  makeTamer, makeVoxelHuman, updateVoxelHuman, setVoxelSeated, makeGuardian, disposeRig, makeCrawler, disposeCrawler,
+  makeTamer, makeVoxelHuman, updateVoxelHuman, updateTamerFX, setVoxelSeated, makeGuardian, disposeRig, makeCrawler, disposeCrawler,
   makeTree, makeStreetLamp, makeCustomCreature, mulberry, tween,
   plankTexture, stoneTexture, marbleTexture, tileTexture, bookshelfTexture,
   carpetTexture, wallpaperTexture, skyGradient, barkTexture, leafTexture,
@@ -7006,6 +7006,7 @@ export class Town {
 
       const updateUI = () => {
         (el.querySelector('#boutique-shards') as HTMLElement).textContent = `◆${p.shards} Shards`;
+        previewHandle.focus(activeTab === 'hat' ? 'head' : 'full'); // close-up on the head for hats
 
         // tabs: six wearable slots + the Style Studio
         const slots: Tab[] = ['hat', 'shirt', 'pants', 'gloves', 'backpack', 'shoes'];
@@ -7077,8 +7078,8 @@ export class Town {
           return;
         }
 
-        // ===== wardrobe tabs =====
-        const items = Object.values(CLOTHES_DATABASE).filter(item => item.slot === activeTab);
+        // ===== wardrobe tabs ===== (Terra City prestige gear is sold only at its own Atelier)
+        const items = Object.values(CLOTHES_DATABASE).filter(item => item.slot === activeTab && !item.terra);
         const canBeNone = ['hat', 'gloves', 'backpack'].includes(activeTab);
         let rowsHtml = '';
 
@@ -7303,7 +7304,7 @@ function initTamerPreview3D(
   container: HTMLElement,
   equipped: Record<string, string>,
   appearance?: Parameters<typeof updateTamerAppearance>[2],
-): { update: (eq: Record<string, string>, app?: Parameters<typeof updateTamerAppearance>[2]) => void; dispose: () => void } {
+): { update: (eq: Record<string, string>, app?: Parameters<typeof updateTamerAppearance>[2]) => void; focus: (part: 'full' | 'head') => void; dispose: () => void } {
   const width = container.clientWidth || 260;
   const height = container.clientHeight || 240;
 
@@ -7319,6 +7320,14 @@ function initTamerPreview3D(
 
   const camera = new THREE.PerspectiveCamera(42, width / height, 0.1, 10);
   camera.position.set(0, 0.95, 2.5);
+  // smooth-zoom framing: full body, or a close-up on the head for hats
+  const VIEWS = {
+    full: { pos: new THREE.Vector3(0, 0.95, 2.5), look: new THREE.Vector3(0, 0.82, 0) },
+    head: { pos: new THREE.Vector3(0, 1.62, 1.6), look: new THREE.Vector3(0, 1.66, 0) },
+  };
+  const posGoal = VIEWS.full.pos.clone();
+  const lookGoal = VIEWS.full.look.clone();
+  const lookNow = lookGoal.clone();
 
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
   renderer.setSize(width, height);
@@ -7379,6 +7388,11 @@ function initTamerPreview3D(
     if (!isDragging) {
       tamerGroup.rotation.y += dt * 0.4;
     }
+    updateTamerFX(tamerGroup, dt); // breathe life into any prestige cosmetics
+    const k = Math.min(1, dt * 6);
+    camera.position.lerp(posGoal, k);
+    lookNow.lerp(lookGoal, k);
+    camera.lookAt(lookNow);
     renderer.render(scene, camera);
   }
   requestAnimationFrame(animate);
@@ -7387,12 +7401,15 @@ function initTamerPreview3D(
     update: (eq: Record<string, string>, app?: Parameters<typeof updateTamerAppearance>[2]) => {
       updateTamerAppearance(tamerGroup, eq, app ?? appearance);
     },
+    focus: (part: 'full' | 'head') => { const v = VIEWS[part] ?? VIEWS.full; posGoal.copy(v.pos); lookGoal.copy(v.look); },
     dispose: () => {
       active = false;
       canvas.removeEventListener('pointerdown', onPointerDown);
       canvas.removeEventListener('pointermove', onPointerMove);
       canvas.removeEventListener('pointerup', onPointerUp);
       canvas.removeEventListener('pointercancel', onPointerUp);
+      const prevFx = (tamerGroup.userData as { fxDispose?: () => void }).fxDispose;
+      if (prevFx) prevFx(); // free any prestige-FX GPU resources before tearing down
       while (tamerGroup.children.length > 0) {
         tamerGroup.remove(tamerGroup.children[0]);
       }

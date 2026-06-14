@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { makeVoxelHuman, canvasTex, mulberry, DEFAULT_APPEARANCE, type Appearance } from './models';
+import { attachCosmeticFx, type FxSpec, type FxSlot } from './cosmetics';
 
 export interface ClothesItem {
   id: string;
@@ -12,6 +13,8 @@ export interface ClothesItem {
   textureColor?: string;
   patternColor?: string;
   accentColor?: string;
+  terra?: boolean;  // sold only at Terra City's Aetherline Atelier
+  fx?: FxSpec;      // animated prestige effect layered on the rig
 }
 
 export const CLOTHES_DATABASE: Record<string, ClothesItem> = {
@@ -73,6 +76,72 @@ export const CLOTHES_DATABASE: Record<string, ClothesItem> = {
 
   plaid_sneakers: { id: 'plaid_sneakers', name: 'Market-Day Plimsolls', slot: 'shoes', price: 130, desc: 'Cheerful plaid canvas, Tilda-approved.', textureType: 'plaid', textureColor: '#b83a3a', patternColor: '#2a2a2a', accentColor: '#f2c14e' },
   gold_treads: { id: 'gold_treads', name: 'Gilded Striders', slot: 'shoes', price: 780, desc: 'For tamers who want their footsteps remembered.', textureType: 'gold' },
+
+  // ============================================================
+  // TERRA CITY — the Aetherline Atelier prestige collection.
+  // Animated, glowing, expensive (◆8,000–◆40,000). Each carries an
+  // `fx` spec rendered by cosmetics.ts and only sold in Terra City.
+  // ============================================================
+
+  // ---- HATS: spinning, flaming, cosmic, crowned ----
+  terra_heli_cyan: { id: 'terra_heli_cyan', name: 'Skyspin Rotor Crown', slot: 'hat', price: 8500, desc: 'A live four-blade rotor whirs above your crown, washing cyan light over the plaza.', color: 0x18222e, terra: true, fx: { kind: 'heli', color: 0x6fe0ff, speed: 1 } },
+  terra_heli_gold: { id: 'terra_heli_gold', name: 'Aurelian Rotorcrown', slot: 'hat', price: 18000, desc: 'A five-blade championship rotor in Worldring gold. It never stops turning.', color: 0x2a2210, terra: true, fx: { kind: 'heli', color: 0xf2c14e, speed: 1.1, scale: 1.2 } },
+  terra_propeller: { id: 'terra_propeller', name: 'Voltwake Propeller Cap', slot: 'hat', price: 8000, desc: 'A tri-color propeller beanie, every blade a different neon. Pure Voltwake mischief.', color: 0x1a2030, terra: true, fx: { kind: 'propeller', color: 0xff5aa8, speed: 1 } },
+  terra_flame_inferno: { id: 'terra_flame_inferno', name: 'Inferno Diadem', slot: 'hat', price: 12000, desc: 'A living crown of fire crackling with rising embers. Warm to stand near.', color: 0x2a1208, terra: true, fx: { kind: 'flame', color: 0xff7a1a, color2: 0xffe23a } },
+  terra_flame_frost: { id: 'terra_flame_frost', name: 'Cryoflame Crown', slot: 'hat', price: 13500, desc: 'Cold fire that burns pale blue — flame without heat, the Lumenwrights\' parlor trick.', color: 0x0e2230, terra: true, fx: { kind: 'flame', color: 0x4fd6ff, color2: 0xffffff } },
+  terra_flame_void: { id: 'terra_flame_void', name: 'Voidfire Coronet', slot: 'hat', price: 17000, desc: 'Magenta voidfire licks upward in absolute silence. Unsettling. Magnificent.', color: 0x22102a, terra: true, fx: { kind: 'flame', color: 0xc23aff, color2: 0xff5aa8 } },
+  terra_cosmic_orb: { id: 'terra_cosmic_orb', name: 'Cosmic Orb Circlet', slot: 'hat', price: 22000, desc: 'A floating violet star ringed by orbiting moons and a halo of drifting stars.', color: 0x161028, terra: true, fx: { kind: 'cosmic_orb', color: 0x9a6cff, color2: 0x6fe0ff } },
+  terra_halo: { id: 'terra_halo', name: 'Aetherline Halo', slot: 'hat', price: 15000, desc: 'A slow-spinning ring of gold light hovering a hand above your head. Saintly.', color: 0x2a2410, terra: true, fx: { kind: 'halo', color: 0xffe27a } },
+  terra_atom: { id: 'terra_atom', name: 'Quantum Nucleus Cap', slot: 'hat', price: 16000, desc: 'A glowing nucleus orbited by three electrons on tilted rings. Engineer Vire approves.', color: 0x0e2418, terra: true, fx: { kind: 'atom', color: 0x5aff9a } },
+  terra_antenna: { id: 'terra_antenna', name: 'Signal-Crown Antennae', slot: 'hat', price: 9500, desc: 'Twin antennae with pulsing tip-lights and an arc that crackles between them.', color: 0x141c28, terra: true, fx: { kind: 'antenna', color: 0x6fe0ff } },
+  terra_plasma_crown: { id: 'terra_plasma_crown', name: 'Plasma Diadem', slot: 'hat', price: 14000, desc: 'A gold band crowned with eight dancing plasma spikes. Royalty, rewired.', color: 0x2a1422, terra: true, fx: { kind: 'plasma_crown', color: 0xff5aa8 } },
+  terra_saturn: { id: 'terra_saturn', name: 'Ringworld Coronet', slot: 'hat', price: 19000, desc: 'A tiny ringed planet turns above your head, its three rings tilted just so.', color: 0x2a1e0c, terra: true, fx: { kind: 'saturn', color: 0xf2c14e, color2: 0xff8a3a } },
+  terra_stormcloud: { id: 'terra_stormcloud', name: 'Thunderhead Topper', slot: 'hat', price: 16500, desc: 'A little storm cloud follows your head, flickering lightning at random.', color: 0x1a2230, terra: true, fx: { kind: 'stormcloud', color: 0xbfe8ff } },
+  terra_sparkler: { id: 'terra_sparkler', name: 'Festival Sparkler Crown', slot: 'hat', price: 11000, desc: 'Bursts of gold sparks erupt over your head on a festival rhythm. Finals-night ready.', color: 0x2a2410, terra: true, fx: { kind: 'sparkler', color: 0xffd23a } },
+  terra_prism: { id: 'terra_prism', name: 'Prismatic Halo-Crown', slot: 'hat', price: 25000, desc: 'A spinning crystal scatters a slow rainbow of light-motes around your head.', color: 0x1a1a24, terra: true, fx: { kind: 'prism', color: 0xffffff } },
+
+  // ---- SHIRTS: chrome, flashing, reactor, holographic ----
+  terra_chrome_silver: { id: 'terra_chrome_silver', name: 'Chrome Mirror Jersey', slot: 'shirt', price: 14000, desc: 'Liquid-chrome plating with a highlight that sweeps across it as you move.', color: 0x3a4150, terra: true, fx: { kind: 'chrome', color: 0x5a6478, color2: 0xffffff } },
+  terra_chrome_gold: { id: 'terra_chrome_gold', name: 'Gilded Mirror Plate', slot: 'shirt', price: 20000, desc: 'Mirror-polished gold that throws a moving streak of white light. Obscene. Perfect.', color: 0x4a3a14, terra: true, fx: { kind: 'chrome', color: 0x8a6a1a, color2: 0xfff0a0 } },
+  terra_flash_suit: { id: 'terra_flash_suit', name: 'Pulsewave Flash Suit', slot: 'shirt', price: 24000, desc: 'A black bodysuit veined with light-strips that flash and bleed cyan to magenta.', color: 0x0c1018, terra: true, fx: { kind: 'flash_suit', color: 0x4fa8ff, color2: 0xff5aa8, speed: 1 } },
+  terra_arc_reactor: { id: 'terra_arc_reactor', name: 'Arc-Reactor Vest', slot: 'shirt', price: 21000, desc: 'A plated vest built around a pulsing chest reactor with a spinning containment ring.', color: 0x232c3c, terra: true, fx: { kind: 'arc_reactor', color: 0x6fe0ff } },
+  terra_circuit_jersey: { id: 'terra_circuit_jersey', name: 'Livewire Circuit Jersey', slot: 'shirt', price: 13000, desc: 'Acid-green circuit traces flow endlessly across the weave like current through copper.', color: 0x223040, terra: true, fx: { kind: 'circuit_jersey', color: 0x5aff9a } },
+  terra_holo_shimmer: { id: 'terra_holo_shimmer', name: 'Holo-Shimmer Bodysuit', slot: 'shirt', price: 18000, desc: 'A translucent holographic skin that shimmers through the spectrum as light hits it.', color: 0x1a2a3a, terra: true, fx: { kind: 'holo_shimmer', color: 0x6fe0ff } },
+  terra_aurora_mantle: { id: 'terra_aurora_mantle', name: 'Aurora Mantle', slot: 'shirt', price: 20000, desc: 'Ribbons of aurora light ripple from the shoulders in slow teal-and-violet waves.', color: 0x0a0e1c, terra: true, fx: { kind: 'aurora_mantle', color: 0x5affc8, color2: 0x9a6cff } },
+  terra_magma_plate: { id: 'terra_magma_plate', name: 'Magmacore Plate', slot: 'shirt', price: 19000, desc: 'Cracked black armor with molten seams that pulse and shed rising embers.', color: 0x2a1410, terra: true, fx: { kind: 'magma_plate', color: 0xff5a1a } },
+  terra_nebula_suit: { id: 'terra_nebula_suit', name: 'Nebula Voidsuit', slot: 'shirt', price: 22000, desc: 'A deep-space suit holding a slow-drifting starfield that twinkles as you walk.', color: 0x141026, terra: true, fx: { kind: 'nebula_suit', color: 0x9a6cff } },
+
+  // ---- COSTUMES: full transformations ----
+  terra_robo: { id: 'terra_robo', name: 'MK-Sentinel Robo Frame', slot: 'shirt', price: 32000, desc: 'A complete chrome robo exoframe — helmet visor, chest core, pauldrons, the works.', color: 0x2a3142, terra: true, fx: { kind: 'robo', color: 0x6fe0ff } },
+  terra_mecha: { id: 'terra_mecha', name: 'Titan Mecha Carapace', slot: 'shirt', price: 38000, desc: 'A heavy mech carapace with a scrolling chest-screen, vents, and a crested war-helm.', color: 0x3a4252, terra: true, fx: { kind: 'mecha', color: 0xff8a1a } },
+  terra_star_paladin: { id: 'terra_star_paladin', name: 'Star-Paladin Regalia', slot: 'shirt', price: 36000, desc: 'Gilded paladin armor, a living star-cape, and four shards orbiting your shoulders.', color: 0xe8d28a, terra: true, fx: { kind: 'star_paladin', color: 0x9ad8ff } },
+  terra_gridrunner: { id: 'terra_gridrunner', name: 'Gridrunner Neon Skin', slot: 'shirt', price: 30000, desc: 'A jet-black suit edged head-to-toe in pulsing neon grid-lines. Pure Tron energy.', color: 0x05070e, terra: true, fx: { kind: 'gridrunner', color: 0x00e5ff } },
+  terra_phoenix: { id: 'terra_phoenix', name: 'Dawnflame Phoenix Garb', slot: 'shirt', price: 40000, desc: 'The Atelier\'s masterwork: ember-armor crowned by two beating wings of living flame.', color: 0x6a1a0a, terra: true, fx: { kind: 'phoenix', color: 0xff6a1a, color2: 0xffd23a } },
+
+  // ---- PANTS ----
+  terra_volt_greaves: { id: 'terra_volt_greaves', name: 'Voltline Greaves', slot: 'pants', price: 9000, desc: 'Plated greaves with twin acid-green light-channels that pulse as you stride.', color: 0x232c3c, terra: true, fx: { kind: 'volt_greaves', color: 0x5aff9a } },
+  terra_ember_legs: { id: 'terra_ember_legs', name: 'Emberstride Trousers', slot: 'pants', price: 9500, desc: 'Charcoal trousers that trail rising embers from the shins with every step.', color: 0x2a1410, terra: true, fx: { kind: 'ember_legs', color: 0xff5a1a } },
+  terra_circuit_legs: { id: 'terra_circuit_legs', name: 'Circuit-Trace Leggings', slot: 'pants', price: 9000, desc: 'Dark greaves veined in cyan trace-light that breathes in time with the city.', color: 0x232c3c, terra: true, fx: { kind: 'volt_greaves', color: 0x6fe0ff } },
+
+  // ---- SHOES / BOOTS ----
+  terra_thruster_cyan: { id: 'terra_thruster_cyan', name: 'Sky-Thruster Boots', slot: 'shoes', price: 12000, desc: 'Each boot ends in a roaring blue jet. They look one breath away from lift-off.', color: 0x2a3242, terra: true, fx: { kind: 'thruster', color: 0x4fa8ff, color2: 0xffffff } },
+  terra_thruster_orange: { id: 'terra_thruster_orange', name: 'Nova Rocket Boots', slot: 'shoes', price: 13000, desc: 'Hot orange rocket-flame pours from the soles. Mind the scorch marks.', color: 0x2a1c10, terra: true, fx: { kind: 'thruster', color: 0xff7a1a, color2: 0xffe23a } },
+  terra_glow_sole: { id: 'terra_glow_sole', name: 'Lumen-Tread Sneakers', slot: 'shoes', price: 8000, desc: 'Soles that glow acid-green and breathe a soft light-ring onto the ground.', color: 0x16201a, terra: true, fx: { kind: 'glow_sole', color: 0x5aff9a } },
+  terra_hover_disc: { id: 'terra_hover_disc', name: 'Hover-Disc Striders', slot: 'shoes', price: 17000, desc: 'You stand a finger\'s width off the ground on two humming anti-grav discs.', color: 0x2a3242, terra: true, fx: { kind: 'hover_disc', color: 0x6fe0ff } },
+  terra_cryo_step: { id: 'terra_cryo_step', name: 'Cryostep Boots', slot: 'shoes', price: 11000, desc: 'Frosted boots that breathe a pale mist and crust the floor with ice-spikes.', color: 0xbfe0f0, terra: true, fx: { kind: 'cryo_step', color: 0xa8e8ff } },
+  terra_spark_heel: { id: 'terra_spark_heel', name: 'Static-Kick Boots', slot: 'shoes', price: 8500, desc: 'Gold static bolts snap off the heels in time with your steps.', color: 0x1a1d28, terra: true, fx: { kind: 'spark_heel', color: 0xffd23a } },
+
+  // ---- BACKPACKS ----
+  terra_energy_wings: { id: 'terra_energy_wings', name: 'Aetherwing Pack', slot: 'backpack', price: 26000, desc: 'Two great wings of layered energy-feathers that beat slowly at your back.', terra: true, fx: { kind: 'energy_wings', color: 0x6fe0ff, color2: 0xb15aff } },
+  terra_fusion_pack: { id: 'terra_fusion_pack', name: 'Fusion Reactor Pack', slot: 'backpack', price: 19000, desc: 'A backpack reactor with a spinning acid-green core and venting heat-light.', terra: true, fx: { kind: 'fusion_pack', color: 0x5aff9a } },
+  terra_jetpack: { id: 'terra_jetpack', name: 'Nova Jetpack', slot: 'backpack', price: 21000, desc: 'Twin fuel tanks and idling orange thrust-flames. Strictly for the look. Mostly.', terra: true, fx: { kind: 'jetpack', color: 0xff8a1a } },
+  terra_orb_companion: { id: 'terra_orb_companion', name: 'Spark-Sprite Companion', slot: 'backpack', price: 23000, desc: 'A little ringed light-sprite drifts and loops at your shoulder, trailing sparks.', terra: true, fx: { kind: 'orb_companion', color: 0x6fe0ff } },
+  terra_comet_cape: { id: 'terra_comet_cape', name: 'Comet-Trail Cape', slot: 'backpack', price: 18000, desc: 'A flowing starlit cape that ripples like a comet\'s tail behind you.', terra: true, fx: { kind: 'comet_cape', color: 0x4fa8ff } },
+
+  // ---- GLOVES ----
+  terra_plasma_gauntlet: { id: 'terra_plasma_gauntlet', name: 'Plasma Gauntlets', slot: 'gloves', price: 12000, desc: 'Heavy gauntlets cradling a ball of magenta plasma in each palm.', color: 0x2a3242, terra: true, fx: { kind: 'plasma_gauntlet', color: 0xff5aa8 } },
+  terra_ion_claw: { id: 'terra_ion_claw', name: 'Ion Claws', slot: 'gloves', price: 14000, desc: 'Three blades of acid-green ion-light extend from each knuckle. Purely decorative. Probably.', color: 0x1a1d28, terra: true, fx: { kind: 'ion_claw', color: 0x5aff9a } },
+  terra_powercell_fist: { id: 'terra_powercell_fist', name: 'Powercell Fists', slot: 'gloves', price: 16000, desc: 'Bulky power-fists with glowing orange cells stacked across each knuckle.', color: 0x3a4252, terra: true, fx: { kind: 'powercell_fist', color: 0xff8a1a } },
 };
 
 // Cached textures to prevent re-creation
@@ -343,6 +412,10 @@ export function getClothesTexture(itemId: string): THREE.Texture | null {
 }
 
 export function updateTamerAppearance(tamer: THREE.Group, equipped: Record<string, string>, appearance?: Appearance): void {
+  // Tear down any prestige FX from the previous outfit (frees GPU resources).
+  const prevDispose = (tamer.userData as { fxDispose?: () => void }).fxDispose;
+  if (prevDispose) prevDispose();
+
   // Clear existing tamer hierarchy
   while (tamer.children.length > 0) {
     tamer.remove(tamer.children[0]);
@@ -429,4 +502,24 @@ export function updateTamerAppearance(tamer: THREE.Group, equipped: Record<strin
 
   // Keep animations going smoothly by syncing userData
   tamer.userData = { ...newHuman.userData, ...tamer.userData };
+
+  // Layer on any animated prestige effects (Terra City boutique gear).
+  const fxItems: { slot: FxSlot; spec: FxSpec }[] = [];
+  for (const slot of ['hat', 'shirt', 'pants', 'gloves', 'backpack', 'shoes'] as FxSlot[]) {
+    const id = equipped[slot];
+    if (!id || id === 'none') continue;
+    const item = CLOTHES_DATABASE[id];
+    if (item?.fx) fxItems.push({ slot, spec: item.fx });
+  }
+  if (fxItems.length) {
+    const { updaters, dispose } = attachCosmeticFx(tamer, fxItems);
+    const ud = tamer.userData as { fxUpdaters?: unknown; fxDispose?: () => void; fxT?: number };
+    ud.fxUpdaters = updaters;
+    ud.fxDispose = dispose;
+    ud.fxT = 0;
+  } else {
+    const ud = tamer.userData as { fxUpdaters?: unknown; fxDispose?: () => void };
+    ud.fxUpdaters = undefined;
+    ud.fxDispose = undefined;
+  }
 }

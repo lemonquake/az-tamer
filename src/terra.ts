@@ -14,7 +14,7 @@
 import * as THREE from 'three';
 import { Player } from './state';
 import {
-  makeTamer, makeVoxelHuman, updateVoxelHuman, setVoxelSeated, disposeRig, tween,
+  makeTamer, makeVoxelHuman, updateVoxelHuman, updateTamerFX, setVoxelSeated, disposeRig, tween,
   canvasTex, mulberry, skyGradient, tileTexture, type GuardianRig, type VoxelHumanOpts,
 } from './models';
 import { TERRA_LORE } from './lore';
@@ -24,7 +24,7 @@ import {
   isDialogueOpen, isMenuOpen, openPauseMenu, openPanel, openScreen, closeMenu, type PanelKind,
 } from './ui';
 import { drawAreaMap, hideAreaMap, type MapMarker } from './townmap';
-import { updateTamerAppearance } from './clothes';
+import { updateTamerAppearance, CLOTHES_DATABASE } from './clothes';
 import { worldOrbit } from './camorbit';
 import { tagNpc, attachNpcPicker } from './npccard';
 import { sfx } from './audio';
@@ -161,6 +161,8 @@ export class TerraCity {
   private patrollers: { grp: THREE.Group; angle: number; r: number; cx: number; cz: number; speed: number }[] = [];
   private drones: { grp: THREE.Group; angle: number; r: number; cx: number; cz: number; y: number; speed: number }[] = [];
   private podHover: THREE.Object3D | null = null;
+  // slowly-turning storefront mannequins modelling the Atelier's prestige FX gear
+  private displayRigs: { rig: THREE.Group; spin: number }[] = [];
 
   // forward-renderer light budget — only the nearest few point lights stay lit
   private static readonly MAX_POINT_LIGHTS = 10;
@@ -293,6 +295,11 @@ export class TerraCity {
     this.buildVenueExterior(s, 'sizzle', -19, 16, 'restaurant', ACID, '🍜 Spark & Sizzle');
     this.buildVenueExterior(s, 'voltmart', 22, -6, 'store', ACID, '🛒 Volt-Mart');
     this.buildVenueExterior(s, 'pulse', 19, 16, 'store', CYAN, '🏪 Pulse Pantry');
+
+    // ---- the Aetherline Atelier: Terra City's prestige fashion boutique ----
+    // West of the central axis, set back from the entrance, facing south so the
+    // player sees the storefront straight on as they arrive.
+    this.buildTerraBoutique(s, -7, 17);
 
     // ---- the return Pod platform (south — where you arrived) ----
     this.buildReturnPod(s, 0, 33);
@@ -562,8 +569,11 @@ export class TerraCity {
 
     this.label3d(s, '⬡ AETHERLINE — HOME', '#7fe6ff', new THREE.Vector3(x, 5.4, z), 4.6);
     this.streetColliders.push({ pos: new THREE.Vector3(x, 0, z - (z > 0 ? 1.2 : -1.2)), r: 2.4 });
+    // The boarding prompt sits on the plaza-facing (north) approach — the only
+    // side the player can actually reach, since the pod capsule's collider walls
+    // off the far side. A generous radius so it triggers anywhere on the dais.
     this.streetInteractables.push({
-      pos: new THREE.Vector3(x, 0, z + 4), radius: 2.6,
+      pos: new THREE.Vector3(x, 0, z - 5), radius: 4.6,
       label: 'Press <b>E</b> — board the Pod home to Haven City',
       handler: () => this.openReturnConsole(),
     });
@@ -985,6 +995,200 @@ export class TerraCity {
     });
   }
 
+  // =================== the Aetherline Atelier (prestige boutique) ===================
+
+  /** The boutique storefront: a magenta-and-gold atelier with live FX mannequins out front. */
+  private buildTerraBoutique(s: THREE.Scene, x: number, z: number): void {
+    const g = new THREE.Group(); g.position.set(x, 0, z);
+    // Terra's chase-cam always looks NORTH (from south of the player), so the
+    // storefront must face SOUTH (+z) to greet the player head-on rather than
+    // showing its back. Its front + mannequins + door all sit on the +z side.
+    g.rotation.y = 0;
+    const W = 9.5, H = 6.4, D = 8;
+    const body = new THREE.Mesh(new THREE.BoxGeometry(W, H, D),
+      new THREE.MeshStandardMaterial({ map: circuitPanelTexture('#1a0e22', MAGENTA, (x * 5 + z) | 0), metalness: 0.55, roughness: 0.4, color: 0x3a2240 }));
+    body.position.y = H / 2; body.castShadow = body.receiveShadow = true; g.add(body);
+    // gold roofline + glowing magenta cornice
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(W + 0.6, 0.5, D + 0.6), TerraCity.darkChrome());
+    roof.position.y = H + 0.15; g.add(roof);
+    const cornice = new THREE.Mesh(new THREE.BoxGeometry(W + 0.8, 0.18, D + 0.8), TerraCity.emis(GOLD, 1.0));
+    cornice.position.y = H + 0.42; cornice.name = 'legendpulse'; g.add(cornice);
+    const trim = new THREE.Mesh(new THREE.BoxGeometry(W + 0.85, 0.1, D + 0.85), TerraCity.emis(MAGENTA, 0.9));
+    trim.position.y = H + 0.05; trim.name = 'legendpulse'; g.add(trim);
+    // a tall holographic shop window facing the plaza (+z local)
+    const win = new THREE.Mesh(new THREE.PlaneGeometry(W - 2.6, H - 2.0),
+      new THREE.MeshStandardMaterial({ color: MAGENTA, emissive: MAGENTA, emissiveIntensity: 0.55, transparent: true, opacity: 0.42, roughness: 0.1 }));
+    win.position.set(0, H / 2, D / 2 + 0.06); win.name = 'portal'; g.add(win);
+    // gold door frame + glowing portal
+    const frame = new THREE.Mesh(new THREE.BoxGeometry(2.2, 2.8, 0.22), new THREE.MeshStandardMaterial({ color: GOLD, metalness: 0.85, roughness: 0.3 }));
+    frame.position.set(0, 1.4, D / 2 + 0.05); g.add(frame);
+    const doorGlow = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 2.4), TerraCity.glow(MAGENTA, 0.42));
+    doorGlow.position.set(0, 1.3, D / 2 + 0.17); doorGlow.name = 'portal'; g.add(doorGlow);
+    // jutting neon sign blade
+    const blade = this.neonSign('BOUTIQUE', MAGENTA);
+    blade.position.set(0, H - 0.4, D / 2 + 0.8); g.add(blade);
+    // a gilded mannequin-emblem floating in the window
+    const star = new THREE.Mesh(new THREE.OctahedronGeometry(0.5, 0), TerraCity.emis(GOLD, 1.4));
+    star.position.set(0, H / 2 + 0.6, D / 2 + 0.3); star.name = 'aetherfloat'; star.userData.baseY = star.position.y; star.userData.ph = 1.2; g.add(star);
+    s.add(g);
+    this.wire(s, new THREE.Vector3(x, H + 1, z), new THREE.Vector3(0, 12, 0), 2.5, MAGENTA, 0.07);
+
+    const lamp = new THREE.PointLight(MAGENTA, 11, 18); lamp.position.set(x, 3.4, z + (z > 0 ? -3 : 3)); s.add(lamp);
+    const lamp2 = new THREE.PointLight(GOLD, 8, 16); lamp2.position.set(x, 2.2, z + (z > 0 ? 4 : -4)); s.add(lamp2);
+
+    this.streetColliders.push({ pos: new THREE.Vector3(x, 0, z), r: 5.6 });
+    this.label3d(s, '✦ Aetherline Atelier', '#ff9ad6', new THREE.Vector3(x, H + 2.3, z), 4.6);
+    this.streetMarkers.push({ x, z, label: '✦ Boutique', color: '#ff9ad6', kind: 'building' });
+
+    // ---- two display pedestals out front, modelling hero FX outfits ----
+    const display = (dx: number, dz: number, rotY: number, outfit: Record<string, string>) => {
+      const ped = new THREE.Group();
+      const dais = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.85, 0.6, 20), TerraCity.darkChrome());
+      dais.position.y = 0.3; ped.add(dais);
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.72, 0.05, 8, 28), TerraCity.emis(GOLD, 1.1));
+      ring.rotation.x = -Math.PI / 2; ring.position.y = 0.62; ring.name = 'legendpulse'; ped.add(ring);
+      const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 4, 16, 1, true), TerraCity.glow(MAGENTA, 0.07));
+      beam.position.y = 2.6; ped.add(beam);
+      ped.position.set(dx, 0, dz); s.add(ped);
+      const rig = new THREE.Group();
+      updateTamerAppearance(rig, outfit);
+      rig.position.set(dx, 0.62, dz); rig.rotation.y = rotY; rig.scale.setScalar(1.05);
+      s.add(rig);
+      this.displayRigs.push({ rig, spin: 0.45 });
+      this.streetColliders.push({ pos: new THREE.Vector3(dx, 0, dz), r: 0.9 });
+    };
+    // place the pedestals flanking the door, in world space in front of the facade
+    const front = (lx: number, lz: number) => new THREE.Vector3(lx, 0, lz).applyAxisAngle(new THREE.Vector3(0, 1, 0), g.rotation.y).add(g.position);
+    const p1 = front(-3.0, D / 2 + 1.8), p2 = front(3.0, D / 2 + 1.8);
+    display(p1.x, p1.z, g.rotation.y + 0.3, { hat: 'terra_halo', shirt: 'terra_phoenix', pants: 'terra_ember_legs', gloves: 'none', backpack: 'none', shoes: 'terra_thruster_orange' });
+    display(p2.x, p2.z, g.rotation.y - 0.3, { hat: 'terra_heli_cyan', shirt: 'terra_robo', pants: 'none', gloves: 'terra_plasma_gauntlet', backpack: 'terra_energy_wings', shoes: 'terra_hover_disc' });
+
+    // the door interactable — clear of the collider, plaza-facing
+    const door = front(0, D / 2 + 2.6);
+    this.streetInteractables.push({
+      pos: door, radius: 2.4,
+      label: 'Press <b>E</b> — enter the Aetherline Atelier',
+      handler: () => this.openTerraBoutique(),
+    });
+  }
+
+  /** Browse + buy Terra City's animated prestige cosmetics. Mirrors Haven's atelier. */
+  private async openTerraBoutique(): Promise<void> {
+    sfx('open');
+    await say('Couturier Sable', 'Ahh — a tamer with the shards to dress like the Circuit-Crown deserves. Everything here MOVES, darling. Light, fire, rotors, wings. Try it on. The mirror never lies.');
+    this.busy = true;
+
+    await new Promise<void>(resolve => {
+      const p = this.player;
+      const SLOT_ICONS: Record<string, string> = { hat: '🎩', shirt: '👕', pants: '👖', gloves: '🧤', backpack: '🎒', shoes: '👟' };
+      type Slot = 'hat' | 'shirt' | 'pants' | 'gloves' | 'backpack' | 'shoes';
+      const slots: Slot[] = ['hat', 'shirt', 'pants', 'gloves', 'backpack', 'shoes'];
+      let activeTab: Slot = 'shirt';
+      const previewState: Record<string, string> = { ...p.equippedClothes };
+
+      const el = openScreen(`
+        <div style="text-align:center;margin-bottom:2px;color:#ff9ad6;letter-spacing:3px;font-size:12px">✦ THE AETHERLINE ATELIER</div>
+        <h3 style="text-align:center;margin:0 0 8px">Prestige Collection — <span id="tb-shards" class="goldcol">◆${p.shards}</span></h3>
+        <div class="grid2">
+          <div>
+            <div id="tb-tabs" class="panel-tabs" style="margin-bottom:8px"></div>
+            <div id="tb-list" style="max-height:392px;overflow-y:auto;padding-right:4px;"></div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;background:rgba(8,4,16,0.5);border:1px solid var(--ui-border);border-radius:8px;padding:12px;">
+            <h4 style="margin-bottom:8px;color:var(--ui-gold);text-transform:uppercase;font-size:14px;letter-spacing:1px;">Live Mirror</h4>
+            <div id="tb-mirror" style="width:260px;height:260px;position:relative;overflow:hidden;background:radial-gradient(circle at 50% 35%, #241038, #06040f);border-radius:6px;border:1px solid #4a2a5a"></div>
+            <div class="sub" style="margin-top:6px;font-size:11px;color:var(--ui-dim)">LIVE FX · DRAG TO ROTATE</div>
+            <div id="tb-outfit" style="width:100%;margin-top:10px;font-size:12px"></div>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;margin-top:12px">
+          <button class="ui-btn primary" id="tb-close">Leave the Atelier</button>
+        </div>`);
+
+      const mirror = el.querySelector('#tb-mirror') as HTMLElement;
+      const preview = initTerraBoutiquePreview(mirror, previewState, p.appearance);
+      const refresh = () => preview.update(previewState, p.appearance);
+
+      const render = () => {
+        (el.querySelector('#tb-shards') as HTMLElement).textContent = `◆${p.shards}`;
+        preview.focus(activeTab === 'hat' ? 'head' : 'full'); // zoom in on the head for hats
+        const tabsEl = el.querySelector('#tb-tabs') as HTMLElement;
+        tabsEl.innerHTML = slots.map(slot =>
+          `<button class="ui-btn tab ${slot === activeTab ? 'primary' : ''}" data-tab="${slot}">${SLOT_ICONS[slot]} ${slot.toUpperCase()}</button>`).join('');
+        tabsEl.querySelectorAll<HTMLElement>('[data-tab]').forEach(b => b.onclick = () => { activeTab = b.dataset.tab as Slot; render(); });
+
+        const outfitEl = el.querySelector('#tb-outfit') as HTMLElement;
+        outfitEl.innerHTML = slots.map(slot => {
+          const id = previewState[slot];
+          const item = id && id !== 'none' ? CLOTHES_DATABASE[id] : null;
+          const changed = previewState[slot] !== p.equippedClothes[slot];
+          return `<div class="row" style="display:flex;justify-content:space-between">
+            <span class="sub">${SLOT_ICONS[slot]} ${slot}</span>
+            <b style="${changed ? 'color:var(--ui-gold)' : ''}">${item ? item.name : '—'}</b></div>`;
+        }).join('');
+
+        const list = el.querySelector('#tb-list') as HTMLElement;
+        const items = Object.values(CLOTHES_DATABASE).filter(i => i.terra && i.slot === activeTab);
+        list.innerHTML = items.map(item => {
+          const owned = p.ownedClothes.includes(item.id);
+          const equipped = p.equippedClothes[activeTab] === item.id;
+          const tryingOn = previewState[activeTab] === item.id;
+          let action = '';
+          if (equipped) action = `<button class="ui-btn danger" data-unequip="${item.id}">Remove</button>`;
+          else if (owned) action = tryingOn ? `<button class="ui-btn primary" data-equip="${item.id}">Wear</button>` : `<button class="ui-btn" data-try="${item.id}">Try On</button>`;
+          else {
+            const canBuy = p.shards >= item.price;
+            action = tryingOn
+              ? `<button class="ui-btn gold" data-buy="${item.id}" ${canBuy ? '' : 'disabled'}>Buy ◆${item.price}</button>`
+              : `<div style="display:flex;gap:4px"><button class="ui-btn" data-try="${item.id}">Try</button><button class="ui-btn" data-buy="${item.id}" ${canBuy ? '' : 'disabled'}>◆${item.price}</button></div>`;
+          }
+          const dot = item.color !== undefined ? `#${item.color.toString(16).padStart(6, '0')}` : (item.fx?.color !== undefined ? `#${item.fx.color.toString(16).padStart(6, '0')}` : '#b18ae8');
+          const fxBadge = '<span class="tag" style="background:linear-gradient(90deg,#9a3aff,#ff5aa8);color:#fff;margin-left:5px">✨ FX</span>';
+          const onBadge = equipped ? '<span class="tag" style="background:var(--ui-green);color:#0c1022;margin-left:5px">WORN</span>' : '';
+          const tryBadge = (tryingOn && !equipped) ? '<span class="tag" style="background:var(--ui-gold);color:#0c1022;margin-left:5px">IN MIRROR</span>' : '';
+          return `<div class="list-row" style="${tryingOn ? 'border:1px solid var(--ui-gold);background:rgba(217,161,26,0.1);' : ''}">
+            <span class="swatch-dot sq" style="background:${dot};flex-shrink:0"></span>
+            <div style="flex:1;cursor:pointer" data-row="${item.id}"><b>${item.name}</b> ${fxBadge} ${tryBadge} ${onBadge}<div class="sub">${item.desc}</div></div>
+            <div style="margin-left:10px">${action}</div></div>`;
+        }).join('') || '<div class="sub" style="padding:12px">Nothing in this slot — try another tab, darling.</div>';
+
+        const tryOn = (id: string) => { previewState[activeTab] = id; refresh(); render(); };
+        list.querySelectorAll<HTMLElement>('[data-try]').forEach(b => b.onclick = e => { e.stopPropagation(); tryOn(b.dataset.try!); });
+        list.querySelectorAll<HTMLElement>('[data-row]').forEach(r => r.onclick = () => tryOn(r.dataset.row!));
+        list.querySelectorAll<HTMLElement>('[data-buy]').forEach(b => b.onclick = e => {
+          e.stopPropagation();
+          const item = CLOTHES_DATABASE[b.dataset.buy!];
+          if (p.shards >= item.price) {
+            p.shards -= item.price; p.ownedClothes.push(item.id);
+            sfx('confirm'); toast(`Bought ${item.name}!`, 'gold');
+            previewState[activeTab] = item.id; p.equippedClothes[activeTab] = item.id;
+            updateTamerAppearance(this.tamer, p.equippedClothes, p.appearance);
+            refresh(); render();
+          } else { sfx('cancel'); }
+        });
+        list.querySelectorAll<HTMLElement>('[data-equip]').forEach(b => b.onclick = e => {
+          e.stopPropagation();
+          p.equippedClothes[activeTab] = b.dataset.equip!; sfx('confirm'); toast('Equipped.');
+          updateTamerAppearance(this.tamer, p.equippedClothes, p.appearance); render();
+        });
+        list.querySelectorAll<HTMLElement>('[data-unequip]').forEach(b => b.onclick = e => {
+          e.stopPropagation();
+          p.equippedClothes[activeTab] = 'none';
+          if (previewState[activeTab] === b.dataset.unequip) previewState[activeTab] = 'none';
+          sfx('cancel'); toast('Unequipped.');
+          updateTamerAppearance(this.tamer, p.equippedClothes, p.appearance); refresh(); render();
+        });
+      };
+      render();
+
+      (el.querySelector('#tb-close') as HTMLElement).onclick = () => { preview.dispose(); sfx('cancel'); closeMenu(); resolve(); };
+    });
+
+    this.busy = false;
+    updateHUD(this.player, 'Terra City');
+    this.player.save();
+  }
+
   // =================== per-frame ===================
   private update(dt: number): void {
     if (!this.resolveExit) return;
@@ -1018,6 +1222,8 @@ export class TerraCity {
     updateVoxelHuman(this.tamer, this.walking, dt);
     this.staticNpcs.forEach(n => updateVoxelHuman(n, false, dt));
     this.intNpcs.forEach(n => updateVoxelHuman(n, false, dt));
+    // storefront mannequins: slow turntable + their prestige FX
+    if (this.mode === 'street') for (const d of this.displayRigs) { d.rig.rotation.y += dt * d.spin; updateTamerFX(d.rig, dt); }
 
     const now = performance.now();
     const tSec = now / 1000;
@@ -1188,4 +1394,77 @@ export class TerraCity {
       };
     });
   }
+}
+
+/** Live turntable mirror for the Atelier — drives prestige FX so effects animate as you try them on. */
+function initTerraBoutiquePreview(
+  container: HTMLElement,
+  equipped: Record<string, string>,
+  appearance?: Parameters<typeof updateTamerAppearance>[2],
+): { update: (eq: Record<string, string>, app?: Parameters<typeof updateTamerAppearance>[2]) => void; focus: (part: 'full' | 'head') => void; dispose: () => void } {
+  const width = container.clientWidth || 260, height = container.clientHeight || 260;
+  const canvas = document.createElement('canvas');
+  canvas.width = width; canvas.height = height;
+  canvas.style.width = '100%'; canvas.style.height = '100%';
+  container.appendChild(canvas);
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(42, width / height, 0.1, 12);
+  camera.position.set(0, 0.95, 2.6);
+  // camera framing: lerp toward a goal so 'focus' transitions are a smooth zoom.
+  // full body, or a close-up on the head so animated hats can be admired.
+  const VIEWS = {
+    full: { pos: new THREE.Vector3(0, 0.95, 2.6), look: new THREE.Vector3(0, 0.82, 0) },
+    head: { pos: new THREE.Vector3(0, 1.62, 1.6), look: new THREE.Vector3(0, 1.66, 0) },
+  };
+  const posGoal = VIEWS.full.pos.clone();
+  const lookGoal = VIEWS.full.look.clone();
+  const lookNow = lookGoal.clone();
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  renderer.setSize(width, height); renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+  scene.add(new THREE.AmbientLight(0x9fb0ff, 0.9));
+  const key = new THREE.DirectionalLight(0xffffff, 1.4); key.position.set(2, 4, 3); scene.add(key);
+  const rim = new THREE.PointLight(0xff5aa8, 8, 8); rim.position.set(-2, 1.5, 1); scene.add(rim);
+
+  const rig = new THREE.Group();
+  rig.position.set(0, 0.1, 0);
+  updateTamerAppearance(rig, equipped, appearance);
+  scene.add(rig);
+
+  let active = true, last = performance.now(), dragging = false, prevX = 0;
+  const down = (e: PointerEvent) => { if (e.button !== 0 && e.pointerType === 'mouse') return; dragging = true; prevX = e.clientX; canvas.style.cursor = 'grabbing'; canvas.setPointerCapture(e.pointerId); };
+  const move = (e: PointerEvent) => { if (!dragging) return; rig.rotation.y += (e.clientX - prevX) * 0.015; prevX = e.clientX; };
+  const up = (e: PointerEvent) => { if (dragging) { dragging = false; canvas.style.cursor = 'grab'; canvas.releasePointerCapture(e.pointerId); } };
+  canvas.style.cursor = 'grab';
+  canvas.addEventListener('pointerdown', down); canvas.addEventListener('pointermove', move);
+  canvas.addEventListener('pointerup', up); canvas.addEventListener('pointercancel', up);
+
+  const loop = () => {
+    if (!active) return;
+    requestAnimationFrame(loop);
+    const now = performance.now(); const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    if (!dragging) rig.rotation.y += dt * 0.4;
+    updateTamerFX(rig, dt);
+    const k = Math.min(1, dt * 6);
+    camera.position.lerp(posGoal, k);
+    lookNow.lerp(lookGoal, k);
+    camera.lookAt(lookNow);
+    renderer.render(scene, camera);
+  };
+  requestAnimationFrame(loop);
+
+  return {
+    update: (eq, app) => updateTamerAppearance(rig, eq, app ?? appearance),
+    focus: (part) => { const v = VIEWS[part] ?? VIEWS.full; posGoal.copy(v.pos); lookGoal.copy(v.look); },
+    dispose: () => {
+      active = false;
+      canvas.removeEventListener('pointerdown', down); canvas.removeEventListener('pointermove', move);
+      canvas.removeEventListener('pointerup', up); canvas.removeEventListener('pointercancel', up);
+      const prev = (rig.userData as { fxDispose?: () => void }).fxDispose; if (prev) prev();
+      while (rig.children.length > 0) rig.remove(rig.children[0]);
+      renderer.dispose(); canvas.remove();
+    },
+  };
 }
