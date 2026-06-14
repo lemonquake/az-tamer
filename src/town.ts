@@ -2051,7 +2051,7 @@ export class Town {
     }
 
     // the 5 Grand Houses crown the terrace
-    HOUSES.forEach((h, i) => {
+    HOUSES.slice(0, 5).forEach((h, i) => {
       const x = -20 + i * 10;
       const z = -31 - Math.abs(x) * 0.10;
       this.buildHouseExterior(h, x, z, 1.0);

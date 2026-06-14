@@ -138,6 +138,16 @@ export const SPECIES_ELEMENTS: Record<string, Element[]> = {
   luxavor: ['Light', 'Dark', 'Fire', 'Space'],
   nyxghul: ['Dark', 'Space', 'Ice', 'Light'],
   zerathuul: ['Space', 'Dark', 'Electric', 'Ice'],
+  // Legends' Nine Elements
+  firgara: ['Aether', 'Light', 'Fire'],
+  onthrofa: ['Space', 'Aether'],
+  vulfenix: ['Aether', 'Dark', 'Fire'],
+  raijura: ['Aether', 'Light', 'Electric'],
+  voltherion: ['Space', 'Aether', 'Electric'],
+  fulgrath: ['Aether', 'Dark', 'Electric'],
+  verdalune: ['Aether', 'Light', 'Nature'],
+  gaiathorn: ['Space', 'Aether', 'Nature'],
+  nyxroot: ['Aether', 'Dark', 'Nature'],
 };
 
 /** Elements of a species (falls back to its technique school's element). */
@@ -807,6 +817,53 @@ export const SPECIES: Record<string, SpeciesDef> = Object.fromEntries(([
     techs: [{ level: 1, tech: 'storm_lance' }, { level: 1, tech: 'thunder_dominion' }, { level: 1, tech: 'numbing_field' }],
     palette: { primary: 0x6a5a10, secondary: 0xe8c42a, accent: 0x3a9df2 },
     desc: 'A war-engine of the old empire, still executing its last order.', captureBase: 0, scale: 2.0 }),
+
+  // ===== Legends' Nine =====
+  S({ id: 'firgara', name: 'Firgara', type: 'Blaze', stage: 'Aether', archetype: 'brute',
+    base: stats(130, 40, 42, 30, 26, 28), growth: stats(11, 3.6, 4.0, 3.0, 2.4, 2.6),
+    techs: [{ level: 1, tech: 'ember_snap' }, { level: 20, tech: 'flame_burst' }, { level: 40, tech: 'inferno_maw' }],
+    palette: { primary: 0xc8202a, secondary: 0xe8b84a, accent: 0xff9ad2 },
+    desc: 'Aljay\'s first bond — a crimson dragonoid knight in mirror-bright scale, bearing Daybreak, a greatsword of living flame.', captureBase: 0, scale: 2.025 }),
+  S({ id: 'onthrofa', name: 'Onthrofa', type: 'Gale', stage: 'Aether', archetype: 'sprite',
+    base: stats(110, 55, 34, 28, 32, 36), growth: stats(9, 4.5, 3.0, 2.6, 3.2, 3.4),
+    techs: [{ level: 1, tech: 'tempest_gale' }, { level: 20, tech: 'razor_cyclone' }, { level: 40, tech: 'sky_sunder' }],
+    palette: { primary: 0x8a4af2, secondary: 0x2a1a5a, accent: 0xff9ad2 },
+    desc: 'A violet being of folded distance and borrowed hours, wreathed in the slow clockwork of Space and Time.', captureBase: 0, scale: 1.8 }),
+  S({ id: 'vulfenix', name: 'Vulfenix', type: 'Blaze', stage: 'Aether', archetype: 'avian',
+    base: stats(120, 45, 38, 26, 30, 32), growth: stats(10, 4.0, 3.6, 2.4, 2.8, 3.0),
+    techs: [{ level: 1, tech: 'ember_snap' }, { level: 20, tech: 'flame_burst' }, { level: 40, tech: 'inferno_maw' }],
+    palette: { primary: 0xff5aa8, secondary: 0x2a1a2e, accent: 0xffd8ec },
+    desc: 'The rose-fire phoenix that lit Aljay\'s way through Ghandra\'s dark — and has not landed since.', captureBase: 0, scale: 1.95 }),
+  S({ id: 'raijura', name: 'Raijura', type: 'Volt', stage: 'Aether', archetype: 'avian',
+    base: stats(118, 48, 40, 26, 32, 30), growth: stats(9.8, 4.2, 3.8, 2.4, 3.0, 2.8),
+    techs: [{ level: 1, tech: 'storm_lance' }, { level: 20, tech: 'numbing_field' }, { level: 40, tech: 'thunder_dominion' }],
+    palette: { primary: 0xf2d23a, secondary: 0xe8ecff, accent: 0xff9ad2 },
+    desc: 'A storm-roc hatched from the first thunderclap Greggy ever heard.', captureBase: 0, scale: 1.35 }),
+  S({ id: 'voltherion', name: 'Voltherion', type: 'Volt', stage: 'Aether', archetype: 'brute',
+    base: stats(132, 40, 44, 32, 24, 26), growth: stats(11.2, 3.6, 4.2, 3.2, 2.2, 2.4),
+    techs: [{ level: 1, tech: 'storm_lance' }, { level: 20, tech: 'numbing_field' }, { level: 40, tech: 'thunder_dominion' }],
+    palette: { primary: 0x4a5468, secondary: 0xf2d23a, accent: 0x7a8af2 },
+    desc: 'A walking dynamo wound around a captive star, wearing a custom grounding coil.', captureBase: 0, scale: 1.3 }),
+  S({ id: 'fulgrath', name: 'Fulgrath', type: 'Volt', stage: 'Aether', archetype: 'serpent',
+    base: stats(114, 52, 36, 26, 34, 32), growth: stats(9.5, 4.4, 3.4, 2.4, 3.2, 3.0),
+    techs: [{ level: 1, tech: 'storm_lance' }, { level: 20, tech: 'numbing_field' }, { level: 40, tech: 'thunder_dominion' }],
+    palette: { primary: 0x1a1a2e, secondary: 0xf2d23a, accent: 0xb14aff },
+    desc: 'Lightning that struck once in the dark of Ghandra and decided to stay.', captureBase: 0, scale: 1.25 }),
+  S({ id: 'verdalune', name: 'Verdalune', type: 'Verdant', stage: 'Aether', archetype: 'sprite',
+    base: stats(124, 50, 36, 28, 28, 34), growth: stats(10.4, 4.2, 3.4, 2.6, 2.6, 3.2),
+    techs: [{ level: 1, tech: 'bramble_whip' }, { level: 20, tech: 'giga_drain' }, { level: 40, tech: 'forest_fury' }],
+    palette: { primary: 0x4ec45e, secondary: 0xf2e8b8, accent: 0xff9ad2 },
+    desc: 'A moonlit spirit-bloom that opens only for Onnel. Five championship rings grew from its petals.', captureBase: 0, scale: 1.2 }),
+  S({ id: 'gaiathorn', name: 'Gaiathorn', type: 'Verdant', stage: 'Aether', archetype: 'shell',
+    base: stats(142, 36, 38, 36, 20, 28), growth: stats(12.2, 3.2, 3.6, 3.6, 1.8, 2.6),
+    techs: [{ level: 1, tech: 'bramble_whip' }, { level: 20, tech: 'giga_drain' }, { level: 40, tech: 'forest_fury' }],
+    palette: { primary: 0x5a3e22, secondary: 0x4ec45e, accent: 0x7a8af2 },
+    desc: 'A great shelled wanderer with a living garden on its back.', captureBase: 0, scale: 1.35 }),
+  S({ id: 'nyxroot', name: 'Nyxroot', type: 'Verdant', stage: 'Aether', archetype: 'brute',
+    base: stats(134, 42, 40, 30, 24, 30), growth: stats(11.4, 3.8, 3.8, 3.0, 2.2, 2.8),
+    techs: [{ level: 1, tech: 'bramble_whip' }, { level: 20, tech: 'giga_drain' }, { level: 40, tech: 'forest_fury' }],
+    palette: { primary: 0x241e32, secondary: 0x4ec45e, accent: 0xb14aff },
+    desc: 'The root that reaches where light gives up. It anchored the seal on Ghandra.', captureBase: 0, scale: 1.3 }),
 ] as SpeciesDef[]).map(s => [s.id, s]));
 
 // ---------------- Items ----------------
@@ -945,6 +1002,17 @@ export const HOUSES: HouseDef[] = [
   { id: 'thornward', name: 'House Thornward', type: 'Verdant', starter: 'sproutle', master: 'Warden Oakes', motto: 'Roots first, then branches.', color: '#4ec45e' },
   { id: 'stormcall', name: 'House Stormcall', type: 'Volt', starter: 'zaplet', master: 'Captain Vex', motto: 'Strike once, strike true.', color: '#f2d23a' },
   { id: 'duskwatch', name: 'House Duskwatch', type: 'Umbra', starter: 'shadekit', master: 'Keeper Nyx', motto: 'See what the light hides.', color: '#9a5af2' },
+  // Terra City Guilds (prestigious and old)
+  { id: 'devas', name: 'House Devas', type: 'Gale', starter: 'plumelet', master: 'Archon Kaelen', motto: 'Ascend above the worldly storms.', color: '#ffd700' },
+  { id: 'noctus', name: 'House Noctus', type: 'Umbra', starter: 'mournmoth', master: 'Sire Vesper', motto: 'The dark remembers what the light forgot.', color: '#7a00ff' },
+  { id: 'jurah', name: 'House Jurah', type: 'Verdant', starter: 'sproutle', master: 'Elder Morana', motto: 'Deep roots outlast the fiercest fire.', color: '#a0522d' },
+  { id: 'quazor', name: 'House Quazor', type: 'Volt', starter: 'zaplet', master: 'Master Quade', motto: 'Channel the cosmic spark.', color: '#00ffff' },
+  // Continent in the West (placeholders)
+  { id: 'west1', name: 'House Dustrunner', type: 'Gale', starter: 'plumelet', master: 'Warden Coyle', motto: 'Ride the desert winds.', color: '#d2b48c' },
+  { id: 'west2', name: 'House Ironclad', type: 'Umbra', starter: 'cryptling', master: 'Captain Ironwood', motto: 'Unyielding under pressure.', color: '#708090' },
+  { id: 'west3', name: 'House Sunforge', type: 'Blaze', starter: 'cindcub', master: 'Mistress Forge', motto: 'Shaped by fire, hardened by resolve.', color: '#ff4500' },
+  { id: 'west4', name: 'House Deepcurrent', type: 'Tide', starter: 'puddla', master: 'Diver Oron', motto: 'Fear no depths.', color: '#000080' },
+  { id: 'west5', name: 'House Stormwatch', type: 'Volt', starter: 'zaplet', master: 'Keeper Vance', motto: 'The eye of the tempest.', color: '#4682b4' },
 ];
 
 // ---------------- Dungeons ----------------

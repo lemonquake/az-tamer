@@ -94,13 +94,41 @@ function cardFront(g: Guardian, owned: boolean): HTMLCanvasElement {
   ctx.restore();
 
   // frame
-  ctx.strokeStyle = shade(tc, 0.35); ctx.lineWidth = 8;
-  roundRect(ctx, 14, 14, CARD_W - 28, CARD_H - 28, 26); ctx.stroke();
-  ctx.lineWidth = 2; ctx.strokeStyle = shade(tc, 0.6);
-  roundRect(ctx, 28, 28, CARD_W - 56, CARD_H - 56, 18); ctx.stroke();
+  const legendInfo = [
+    { id: 'firgara', owner: 'Aljay', title: 'The Dawnflame', color: '#f2603a' },
+    { id: 'onthrofa', owner: 'Aljay', title: 'The Dawnflame', color: '#f2603a' },
+    { id: 'vulfenix', owner: 'Aljay', title: 'The Dawnflame', color: '#f2603a' },
+    { id: 'raijura', owner: 'Greggy', title: 'The Stormheart', color: '#f2d23a' },
+    { id: 'voltherion', owner: 'Greggy', title: 'The Stormheart', color: '#f2d23a' },
+    { id: 'fulgrath', owner: 'Greggy', title: 'The Stormheart', color: '#f2d23a' },
+    { id: 'verdalune', owner: 'Onnel', title: 'The Worldroot', color: '#4ec45e' },
+    { id: 'gaiathorn', owner: 'Onnel', title: 'The Worldroot', color: '#4ec45e' },
+    { id: 'nyxroot', owner: 'Onnel', title: 'The Worldroot', color: '#4ec45e' },
+  ].find(x => x.id === sp.id);
+
+  if (legendInfo) {
+    ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 10;
+    roundRect(ctx, 14, 14, CARD_W - 28, CARD_H - 28, 26); ctx.stroke();
+    ctx.lineWidth = 3; ctx.strokeStyle = legendInfo.color;
+    roundRect(ctx, 28, 28, CARD_W - 56, CARD_H - 56, 18); ctx.stroke();
+  } else {
+    ctx.strokeStyle = shade(tc, 0.35); ctx.lineWidth = 8;
+    roundRect(ctx, 14, 14, CARD_W - 28, CARD_H - 28, 26); ctx.stroke();
+    ctx.lineWidth = 2; ctx.strokeStyle = shade(tc, 0.6);
+    roundRect(ctx, 28, 28, CARD_W - 56, CARD_H - 56, 18); ctx.stroke();
+  }
 
   // header
   ctx.textAlign = 'center';
+  if (legendInfo) {
+    // draw custom legend badge
+    ctx.fillStyle = 'rgba(255,215,0,0.15)';
+    roundRect(ctx, CARD_W / 2 - 220, 5, 440, 32, 6); ctx.fill();
+    ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = '#ffd700'; ctx.font = 'bold 14px Georgia, serif';
+    ctx.fillText(`★ THE LEGENDS' NINE · BONDED TO ${legendInfo.owner.toUpperCase()} ★`, CARD_W / 2, 26);
+  }
+
   ctx.fillStyle = '#f4f6ff';
   ctx.font = 'bold 46px Georgia, serif';
   ctx.fillText(g.nickname.toUpperCase(), CARD_W / 2, 92);
@@ -347,6 +375,177 @@ export function openGuardianCard(subject: Guardian | string, player?: Player): P
     haloRing.position.copy(pedestal.position).y += 0.12;
     scene.add(haloRing);
 
+    // custom epic legend effects
+    let legendUpdate: ((dt: number, now: number) => void) | null = null;
+
+    if (['firgara', 'onthrofa', 'vulfenix'].includes(g.speciesId)) {
+      // Aljay's blazing fire effect
+      const emberCount = 300;
+      const emberGeo = new THREE.BufferGeometry();
+      const pos = new Float32Array(emberCount * 3);
+      const vel = new Float32Array(emberCount * 3);
+      const life = new Float32Array(emberCount);
+      for (let i = 0; i < emberCount; i++) {
+        pos[i*3] = (Math.random() - 0.5) * 6;
+        pos[i*3+1] = -3 + Math.random() * 6;
+        pos[i*3+2] = -1 - Math.random() * 3;
+        vel[i*3] = (Math.random() - 0.5) * 0.4;
+        vel[i*3+1] = 0.8 + Math.random() * 1.2;
+        vel[i*3+2] = (Math.random() - 0.5) * 0.4;
+        life[i] = Math.random();
+      }
+      emberGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      const emberMat = new THREE.PointsMaterial({
+        color: 0xff6600,
+        size: 0.09,
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        opacity: 0.8
+      });
+      const embers = new THREE.Points(emberGeo, emberMat);
+      scene.add(embers);
+
+      const fireLight = new THREE.PointLight(0xff3300, 15, 8);
+      fireLight.position.set(2.1, -1.0, 0.5);
+      scene.add(fireLight);
+
+      legendUpdate = (dt, now) => {
+        const positions = emberGeo.attributes.position.array as Float32Array;
+        for (let i = 0; i < emberCount; i++) {
+          positions[i*3] += vel[i*3] * dt;
+          positions[i*3+1] += vel[i*3+1] * dt;
+          positions[i*3+2] += vel[i*3+2] * dt;
+          life[i] -= dt * 0.3;
+          if (life[i] <= 0 || positions[i*3+1] > 3) {
+            positions[i*3] = (Math.random() - 0.5) * 6;
+            positions[i*3+1] = -3;
+            positions[i*3+2] = -1 - Math.random() * 3;
+            life[i] = 1.0;
+          }
+        }
+        emberGeo.attributes.position.needsUpdate = true;
+        fireLight.intensity = 15 + Math.sin(now * 0.02) * 5;
+      };
+    } else if (['raijura', 'voltherion', 'fulgrath'].includes(g.speciesId)) {
+      // Greggy's electric storm effect
+      const sparkCount = 150;
+      const sparkGeo = new THREE.BufferGeometry();
+      const pos = new Float32Array(sparkCount * 3);
+      for (let i = 0; i < sparkCount; i++) {
+        pos[i*3] = (Math.random() - 0.5) * 8;
+        pos[i*3+1] = (Math.random() - 0.5) * 6;
+        pos[i*3+2] = -1 - Math.random() * 3;
+      }
+      sparkGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      const sparkMat = new THREE.PointsMaterial({
+        color: 0xffffaa,
+        size: 0.06,
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        opacity: 0.9
+      });
+      const sparks = new THREE.Points(sparkGeo, sparkMat);
+      scene.add(sparks);
+
+      const stormLight = new THREE.PointLight(0x5599ff, 10, 10);
+      stormLight.position.set(2.1, 1.0, 0.5);
+      scene.add(stormLight);
+
+      const lineMat = new THREE.LineBasicMaterial({ color: 0x88ddff, transparent: true });
+      const bolts: THREE.Line[] = [];
+      for (let i = 0; i < 3; i++) {
+        const lineGeo = new THREE.BufferGeometry();
+        const linePos = new Float32Array(18);
+        lineGeo.setAttribute('position', new THREE.BufferAttribute(linePos, 3));
+        const bolt = new THREE.Line(lineGeo, lineMat);
+        scene.add(bolt);
+        bolts.push(bolt);
+      }
+
+      let boltTimer = 0;
+      legendUpdate = (dt, now) => {
+        const positions = sparkGeo.attributes.position.array as Float32Array;
+        for (let i = 0; i < sparkCount; i++) {
+          if (Math.random() < 0.05) {
+            positions[i*3] = (Math.random() - 0.5) * 8;
+            positions[i*3+1] = (Math.random() - 0.5) * 6;
+            positions[i*3+2] = -1 - Math.random() * 3;
+          }
+        }
+        sparkGeo.attributes.position.needsUpdate = true;
+
+        boltTimer -= dt;
+        if (boltTimer <= 0) {
+          boltTimer = 0.2 + Math.random() * 0.4;
+          stormLight.intensity = 35;
+          bolts.forEach(bolt => {
+            const arr = bolt.geometry.attributes.position.array as Float32Array;
+            let sx = (Math.random() - 0.5) * 5;
+            let sy = 3;
+            let sz = -1 - Math.random() * 2;
+            for (let p = 0; p < 6; p++) {
+              arr[p*3] = sx;
+              arr[p*3+1] = sy;
+              arr[p*3+2] = sz;
+              sx += (Math.random() - 0.5) * 0.8;
+              sy -= 1.0;
+              sz += (Math.random() - 0.5) * 0.4;
+            }
+            bolt.geometry.attributes.position.needsUpdate = true;
+            (bolt.material as THREE.LineBasicMaterial).opacity = 0.9;
+          });
+        } else {
+          stormLight.intensity += (5 - stormLight.intensity) * dt * 10;
+          bolts.forEach(bolt => {
+            (bolt.material as THREE.LineBasicMaterial).opacity = Math.max(0, (bolt.material as THREE.LineBasicMaterial).opacity - dt * 5);
+          });
+        }
+      };
+    } else if (['verdalune', 'gaiathorn', 'nyxroot'].includes(g.speciesId)) {
+      // Onnel's nature/leaf drift effect
+      const leafCount = 120;
+      const leafGeo = new THREE.BufferGeometry();
+      const pos = new Float32Array(leafCount * 3);
+      const vel = new Float32Array(leafCount * 3);
+      for (let i = 0; i < leafCount; i++) {
+        pos[i*3] = (Math.random() - 0.5) * 6;
+        pos[i*3+1] = 3 - Math.random() * 6;
+        pos[i*3+2] = -1 - Math.random() * 3;
+        vel[i*3] = -0.5 - Math.random() * 0.5;
+        vel[i*3+1] = -0.3 - Math.random() * 0.4;
+        vel[i*3+2] = (Math.random() - 0.5) * 0.2;
+      }
+      leafGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      const leafMat = new THREE.PointsMaterial({
+        color: 0x4ec45e,
+        size: 0.12,
+        transparent: true,
+        opacity: 0.75
+      });
+      const leaves = new THREE.Points(leafGeo, leafMat);
+      scene.add(leaves);
+
+      const natureLight = new THREE.PointLight(0x4ec45e, 8, 8);
+      natureLight.position.set(2.1, -0.5, 0.5);
+      scene.add(natureLight);
+
+      legendUpdate = (dt, now) => {
+        const positions = leafGeo.attributes.position.array as Float32Array;
+        for (let i = 0; i < leafCount; i++) {
+          positions[i*3] += (vel[i*3] + Math.sin(now * 0.002 + i) * 0.1) * dt;
+          positions[i*3+1] += vel[i*3+1] * dt;
+          positions[i*3+2] += vel[i*3+2] * dt;
+          if (positions[i*3+1] < -3 || positions[i*3] < -3) {
+            positions[i*3] = 3;
+            positions[i*3+1] = 3 - Math.random() * 3;
+            positions[i*3+2] = -1 - Math.random() * 3;
+          }
+        }
+        leafGeo.attributes.position.needsUpdate = true;
+        natureLight.intensity = 6 + Math.sin(now * 0.001) * 2;
+      };
+    }
+
     // interaction (same feel as the guild card)
     let dragging = false, lastX = 0, lastY = 0;
     let velY = 0.35, rotX = 0;
@@ -394,6 +593,7 @@ export function openGuardianCard(subject: Guardian | string, player?: Player): P
       rig.group.rotation.y += dt * 0.7;
       rig.group.position.y = -1.3 + Math.sin(now * 0.0012) * 0.06;
       haloRing.rotation.z += dt * 0.4;
+      if (legendUpdate) legendUpdate(dt, now);
       renderer.render(scene, camera);
       requestAnimationFrame(loop);
     };

@@ -244,8 +244,18 @@ export function wireEvoTree(el: HTMLElement, p: Player, busyGuard?: { busy: bool
     if (busyGuard) busyGuard.busy = false;
   });
 
-  el.querySelectorAll<HTMLElement>('[data-legend]').forEach(node => node.onclick = () => {
+  el.querySelectorAll<HTMLElement>('[data-legend]').forEach(node => node.onclick = async () => {
     if (busyGuard?.busy) return;
-    openLegendLore(node.dataset.legend!);
+    if (busyGuard) busyGuard.busy = true;
+    const name = node.dataset.legend!;
+    const entry = LEGEND_GUARDIANS.find(lg => lg.guardian.name === name);
+    if (entry) {
+      const speciesId = name.toLowerCase();
+      const ownedG = [...p.party, ...p.reserve]
+        .filter(g => g.speciesId === speciesId)
+        .sort((a, b) => b.level - a.level)[0];
+      await openGuardianCard(ownedG ?? speciesId, p);
+    }
+    if (busyGuard) busyGuard.busy = false;
   });
 }

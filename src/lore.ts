@@ -245,19 +245,19 @@ export const LEGENDS: LegendDef[] = [
       {
         name: 'Firgara', epithet: 'The Dawn Unbroken', elements: ['Aether', 'Light', 'Fire'],
         desc: 'Aljay\'s first bond — a crimson dragonoid knight in mirror-bright scale, bearing Daybreak, a greatsword of living flame. Eight Coliseum finals ended at the drawing of that blade; the crowd swears that when Firgara raises it, night simply gives up and calls itself morning.',
-        archetype: 'brute', palette: { primary: 0xc8202a, secondary: 0xe8b84a, accent: 0xff9ad2 }, glow: 0xffb45a, scale: 1.35,
+        archetype: 'brute', palette: { primary: 0xc8202a, secondary: 0xe8b84a, accent: 0xff9ad2 }, glow: 0xffb45a, scale: 2.025,
         bespoke: 'firgara',
       },
       {
         name: 'Onthrofa', epithet: 'The Folded Sky', elements: ['Space', 'Aether'],
         desc: 'A violet being of folded distance and borrowed hours, wreathed in the slow clockwork of Space and Time — orbit-rings, a golden hour-dial, and one patient hourglass that has never finished pouring. Onthrofa does not dodge: the arena simply agrees the attack happened somewhere else, several seconds ago. Scholars still argue whether it walks or the world moves underneath it.',
-        archetype: 'sprite', palette: { primary: 0x8a4af2, secondary: 0x2a1a5a, accent: 0xff9ad2 }, glow: 0xb18aff, scale: 1.2,
+        archetype: 'sprite', palette: { primary: 0x8a4af2, secondary: 0x2a1a5a, accent: 0xff9ad2 }, glow: 0xb18aff, scale: 1.8,
         bespoke: 'onthrofa',
       },
       {
         name: 'Vulfenix', epithet: 'The Midnight Ember', elements: ['Aether', 'Dark', 'Fire'],
         desc: 'The rose-fire phoenix that lit Aljay\'s way through Ghandra\'s dark — and has not landed since. Vulfenix flies low and silent, shedding ribbons of pink flame that hang in the air long after it has passed; the Legion learned to dread streets that glowed faintly rose.',
-        archetype: 'avian', palette: { primary: 0xff5aa8, secondary: 0x2a1a2e, accent: 0xffd8ec }, glow: 0xff7ac8, scale: 1.3,
+        archetype: 'avian', palette: { primary: 0xff5aa8, secondary: 0x2a1a2e, accent: 0xffd8ec }, glow: 0xff7ac8, scale: 1.95,
         bespoke: 'vulfenix',
       },
     ],

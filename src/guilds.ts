@@ -107,6 +107,135 @@ export const GUILD_LORE: Record<string, GuildLore> = {
     effigyDesc: 'A crescent of black glass that casts a faint shadow even in darkness. It is always slightly colder than the room.',
     cardName: 'Dusk Sigil',
   },
+  devas: {
+    epithet: 'The Celestial Accord',
+    founder: 'Saint Sophia the Radiant',
+    founded: 'First Century of the Golden Era',
+    hall: 'The Aether Dome',
+    officer: 'Archon Valerius',
+    officerStyle: 'haughty but strictly fair',
+    history: [
+      'One of the oldest guilds of Terra City, founded by Saint Sophia to preserve the ancient celestial disciplines.',
+      'Devas tamers are known for their precision and purity, often clashing in legendary tournament finals against Aljay and Greggy.',
+    ],
+    creedLong: 'Walk above the dust; keep your gaze on the heavens.',
+    effigyName: 'The Solar Disk',
+    effigyDesc: 'A golden disk that floats and emits a warm celestial hum.',
+    cardName: 'Devas Crest',
+  },
+  noctus: {
+    epithet: 'The Midnight Syndicate',
+    founder: 'Vespera the Shadowless',
+    founded: 'Era of the Silent Moon',
+    hall: 'The Nightspire',
+    officer: 'Syndic Kaelen',
+    officerStyle: 'quiet, precise, moves like a shadow',
+    history: [
+      'Founded in the deep undercity of Terra, Noctus is the shadow to Devas\' light.',
+      'Their strategic and unpredictable battle styles have made them a constant threat to the Big 3 in the semi-finals.',
+    ],
+    creedLong: 'The shadow hides the strike, but the truth is revealed in the dark.',
+    effigyName: 'The Crescent Void',
+    effigyDesc: 'A sliver of pure obsidian that swallows nearby light.',
+    cardName: 'Noctus Emblem',
+  },
+  jurah: {
+    epithet: 'The Obsidian Roots',
+    founder: 'Eldest Jurah',
+    founded: 'Time Before the Spire',
+    hall: 'The Stoneheart Grove',
+    officer: 'Elder Morana',
+    officerStyle: 'stern, unyielding, smells of moss',
+    history: [
+      'An ancient order of geomancers and earth-keepers who claim the land itself gave them their name.',
+      'Jurah has fought in the tournament since its inception, their defensive walls breaking even Onnel\'s greatest offenses.',
+    ],
+    creedLong: 'The mountain does not bow to the storm.',
+    effigyName: 'The Corestone',
+    effigyDesc: 'A pulsing piece of the planet\'s heartwood.',
+    cardName: 'Jurah Sigil',
+  },
+  quazor: {
+    epithet: 'The Cosmic Spark',
+    founder: 'Grand Inventor Quade',
+    founded: 'Year 42 of the Machine Age',
+    hall: 'The Quazor Reactor',
+    officer: 'Artificer Quill',
+    officerStyle: 'fast-talking, surrounded by sparks',
+    history: [
+      'A guild founded on the fusion of electric magic and cosmic energy, pushing the boundaries of what is possible.',
+      'In the tournament arena, Quazor\'s lightning-fast assaults have led to some of the most memorable matches in history.',
+    ],
+    creedLong: 'Harness the spark, illuminate the void.',
+    effigyName: 'The Quazor Core',
+    effigyDesc: 'A floating reactor core that crackles with blue lightning.',
+    cardName: 'Quazor Sigil',
+  },
+  west1: {
+    epithet: 'The Desert Windrunners',
+    founder: 'Warden Coyle',
+    founded: 'Era of the Red Dunes',
+    hall: 'The Sandspire',
+    officer: 'Officer Vance',
+    officerStyle: 'weathered, rugged, speaks of sand',
+    history: ['A Western guild that has mastered riding and battling in the harsh desert dunes.'],
+    creedLong: 'Ride the desert winds.',
+    effigyName: 'The Sandglobe',
+    effigyDesc: 'A glass orb with sand that swirls on its own.',
+    cardName: 'Dune Sigil',
+  },
+  west2: {
+    epithet: 'The Iron Bulwark',
+    founder: 'Captain Ironwood',
+    founded: 'Year 14 of the Forge',
+    hall: 'The Iron Forge',
+    officer: 'Warden Brand',
+    officerStyle: 'tough, metallic voice',
+    history: ['A Western guild known for their heavy defensive structures and unyielding resolve.'],
+    creedLong: 'Unyielding under pressure.',
+    effigyName: 'The Iron Shield',
+    effigyDesc: 'A small heavy shield made of mysterious dark metal.',
+    cardName: 'Iron Sigil',
+  },
+  west3: {
+    epithet: 'The Solar Anvil',
+    founder: 'Mistress Forge',
+    founded: 'Era of the Smelting',
+    hall: 'The Sunforge',
+    officer: 'Smithy Aaron',
+    officerStyle: 'warm, soot-stained, speaks of fire',
+    history: ['A Western guild that combines deep earth metals with solar fire to forge legendary bonds.'],
+    creedLong: 'Shaped by fire, hardened by resolve.',
+    effigyName: 'The Sun Anvil',
+    effigyDesc: 'A glowing metal amulet in the shape of an anvil.',
+    cardName: 'Sun Sigil',
+  },
+  west4: {
+    epithet: 'The Abyssal Divers',
+    founder: 'Diver Oron',
+    founded: 'Year 8 of the Tide',
+    hall: 'The Deep Haven',
+    officer: 'Liaison Coral',
+    officerStyle: 'soft, calm, smells of the ocean',
+    history: ['A Western guild dedicated to exploring the deepest oceanic trenches and ruins.'],
+    creedLong: 'Fear no depths.',
+    effigyName: 'The Pearl of the Deep',
+    effigyDesc: 'A blue pearl that glows in pitch blackness.',
+    cardName: 'Abyss Sigil',
+  },
+  west5: {
+    epithet: 'The Storm Wardens',
+    founder: 'Keeper Vance',
+    founded: 'Era of the Great Tempest',
+    hall: 'The Sky Bastion',
+    officer: 'Sentry Sky',
+    officerStyle: 'alert, scanning the horizon',
+    history: ['A Western guild that watches the stormy borders and rides the lightning.'],
+    creedLong: 'The eye of the tempest.',
+    effigyName: 'The Storm Orb',
+    effigyDesc: 'A crystal orb filled with tiny rolling storm clouds.',
+    cardName: 'Stormwatch Sigil',
+  },
 };
 
 export const questsDoneCount = (p: Player): number =>
@@ -202,7 +331,7 @@ export function guildIconCanvas(houseId: string, size = 128): HTMLCanvasElement 
     ctx.lineTo(s * 0.53, s * 0.42);
     ctx.lineTo(s * 0.68, s * 0.12);
     ctx.closePath(); ctx.fill();
-  } else {
+  } else if (houseId === 'duskwatch') {
     // duskwatch — crescent moon and watching star
     ctx.beginPath();
     ctx.arc(m, s * 0.5, s * 0.3, Math.PI * -0.42, Math.PI * 0.92, false);
@@ -210,6 +339,55 @@ export function guildIconCanvas(houseId: string, size = 128): HTMLCanvasElement 
     ctx.closePath(); ctx.fill();
     star(ctx, s * 0.66, s * 0.3, s * 0.07);
     star(ctx, s * 0.74, s * 0.46, s * 0.045);
+  } else if (houseId === 'devas') {
+    // Devas celestial sun
+    ctx.beginPath();
+    ctx.arc(m, s * 0.5, s * 0.18, 0, Math.PI * 2);
+    ctx.fill();
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(m + Math.cos(a) * s * 0.18, s * 0.5 + Math.sin(a) * s * 0.18);
+      ctx.lineTo(m + Math.cos(a) * s * 0.3, s * 0.5 + Math.sin(a) * s * 0.3);
+      ctx.lineWidth = s * 0.03; ctx.stroke();
+    }
+  } else if (houseId === 'noctus') {
+    // Noctus crescent moon enclosing a watching eye
+    ctx.beginPath();
+    ctx.arc(m, s * 0.5, s * 0.26, Math.PI * -0.5, Math.PI * 0.8, false);
+    ctx.arc(m + s * 0.08, s * 0.44, s * 0.22, Math.PI * 0.7, Math.PI * -0.4, true);
+    ctx.closePath(); ctx.fill();
+    star(ctx, m - s * 0.04, s * 0.5, s * 0.06);
+  } else if (houseId === 'jurah') {
+    // Jurah mountain peak / rock crystal
+    ctx.beginPath();
+    ctx.moveTo(m, s * 0.2);
+    ctx.lineTo(s * 0.76, s * 0.65);
+    ctx.lineTo(m, s * 0.8);
+    ctx.lineTo(s * 0.24, s * 0.65);
+    ctx.closePath(); ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(m, s * 0.2);
+    ctx.lineTo(m, s * 0.8);
+    ctx.lineWidth = s * 0.02; ctx.stroke();
+  } else if (houseId === 'quazor') {
+    // Quazor cosmic reactor ring + atom orbits
+    ctx.beginPath();
+    ctx.arc(m, s * 0.5, s * 0.22, 0, Math.PI * 2);
+    ctx.lineWidth = s * 0.05; ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(m, s * 0.5, s * 0.08, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(m - s * 0.28, s * 0.5); ctx.lineTo(m + s * 0.28, s * 0.5);
+    ctx.stroke();
+  } else {
+    // Western / generic placeholder guilds
+    ctx.beginPath();
+    ctx.moveTo(m - s * 0.25, s * 0.3);
+    ctx.lineTo(m + s * 0.25, s * 0.3);
+    ctx.lineTo(m, s * 0.75);
+    ctx.closePath(); ctx.fill();
   }
   ctx.restore();
   iconCache.set(key, c);

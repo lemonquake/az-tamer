@@ -485,7 +485,7 @@ export class University {
     });
 
     // five guild banners across the north wall
-    HOUSES.forEach((h, i) => {
+    HOUSES.slice(0, 5).forEach((h, i) => {
       const x = (i - 2) * 6.4;
       const cloth = new THREE.Mesh(new THREE.PlaneGeometry(2.1, 4.4),
         new THREE.MeshStandardMaterial({ color: parseInt(h.color.slice(1), 16), roughness: 0.92, side: THREE.DoubleSide }));
@@ -1925,7 +1925,7 @@ export class University {
     });
 
     // five guild stations in an arc along the north wall
-    HOUSES.forEach((h, i) => {
+    HOUSES.slice(0, 5).forEach((h, i) => {
       const lore = GUILD_LORE[h.id];
       const x = (i - 2) * 4.8;
       const z = -r.d / 2 + 2.4;
