@@ -18,10 +18,10 @@ export class CameraOrbit {
   /** Total pixels of right-drag ever performed — the tutorial watches this. */
   dragTravel = 0;
 
-  private dragging = false;
+  public dragging = false;
   private lastX = 0;
   private lastY = 0;
-  private idleT = 0;
+  public idleT = 0;
 
   constructor() {
     // attach once, globally — only drags that begin on the 3D canvas count

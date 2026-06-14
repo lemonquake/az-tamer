@@ -631,6 +631,448 @@
     #story-box.in-battle { bottom: 220px; }
     #story-speaker { color: var(--ui-purple); font-weight: 700; font-size: 14px; margin-bottom: 4px; letter-spacing: 0.5px; }
     #story-text { font-size: 13px; line-height: 1.45; color: var(--ui-text); }
+
+    /* ============================================================ */
+    /* Mobile Mode & Virtual Touch Controls                         */
+    /* ============================================================ */
+    body.mobile-mode-active #joystick-zone {
+      position: absolute;
+      bottom: 24px;
+      left: 24px;
+      width: 140px;
+      height: 140px;
+      z-index: 99;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      touch-action: none;
+    }
+    body.mobile-mode-active #joystick-base {
+      width: 110px;
+      height: 110px;
+      border-radius: 50%;
+      background: rgba(12, 16, 34, 0.65);
+      border: 3px solid rgba(90, 123, 216, 0.45);
+      box-shadow: 0 0 15px rgba(90, 123, 216, 0.25), inset 0 0 10px rgba(0,0,0,0.5);
+      backdrop-filter: blur(4px);
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    body.mobile-mode-active #joystick-stick {
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      background: radial-gradient(circle, var(--ui-border) 0%, #0c1022 100%);
+      border: 2px solid var(--ui-gold);
+      box-shadow: 0 4px 8px rgba(0,0,0,0.6), 0 0 10px rgba(242,193,78,0.4);
+      transition: transform 0.05s ease-out;
+      position: absolute;
+      cursor: pointer;
+    }
+    body.mobile-mode-active #mobile-action-buttons {
+      position: absolute;
+      bottom: 24px;
+      right: 24px;
+      z-index: 99;
+      display: flex;
+      align-items: flex-end;
+      gap: 15px;
+      touch-action: none;
+    }
+    body.mobile-mode-active .mobile-btn {
+      background: rgba(12, 16, 34, 0.82);
+      border: 2px solid var(--ui-border);
+      color: var(--ui-text);
+      font-weight: 700;
+      padding: 10px 16px;
+      border-radius: 20px;
+      font-size: 14px;
+      cursor: pointer;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.5), inset 0 0 8px rgba(90,123,216,0.1);
+      backdrop-filter: blur(3px);
+      transition: transform 0.1s, background 0.1s;
+    }
+    body.mobile-mode-active .mobile-btn:active {
+      transform: scale(0.92);
+      background: rgba(90,123,216,0.3);
+    }
+    body.mobile-mode-active .mobile-btn-primary {
+      background: rgba(242, 193, 78, 0.18);
+      border: 2px solid var(--ui-gold);
+      color: var(--ui-gold);
+      font-weight: 800;
+      padding: 16px 24px;
+      border-radius: 25px;
+      font-size: 16px;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(242,193,78,0.3), inset 0 0 10px rgba(242,193,78,0.15);
+      backdrop-filter: blur(3px);
+      transition: transform 0.1s, background 0.1s;
+      letter-spacing: 1px;
+    }
+    body.mobile-mode-active .mobile-btn-primary:active {
+      transform: scale(0.92);
+      background: rgba(242,193,78,0.35);
+    }
+
+    /* Portrait warning overlay */
+    body.mobile-mode-active #portrait-warning {
+      position: fixed;
+      inset: 0;
+      z-index: 10000;
+      background: radial-gradient(circle at center, #101428 0%, #04060d 100%);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: var(--ui-text);
+      text-align: center;
+      padding: 30px;
+    }
+    body.mobile-mode-active .warning-inner {
+      max-width: 380px;
+    }
+    body.mobile-mode-active .warning-icon {
+      font-size: 70px;
+      margin-bottom: 20px;
+      animation: rotateNudge 2.2s infinite ease-in-out;
+    }
+    body.mobile-mode-active .warning-inner h2 {
+      color: var(--ui-gold);
+      font-family: Georgia, serif;
+      font-size: 26px;
+      margin-bottom: 12px;
+      letter-spacing: 1.5px;
+      text-shadow: 0 0 15px rgba(242,193,78,0.3);
+    }
+    body.mobile-mode-active .warning-inner p {
+      color: var(--ui-dim);
+      font-size: 15px;
+      line-height: 1.6;
+    }
+    @keyframes rotateNudge {
+      0%, 100% { transform: rotate(0deg); }
+      50% { transform: rotate(90deg); }
+    }
+
+    /* Landscape detection: show warning in portrait orientation */
+    @media screen and (orientation: portrait) {
+      body.mobile-mode-active #portrait-warning {
+        display: flex !important;
+      }
+    }
+
+    /* Adjust HUD and UI elements size and padding on mobile */
+    @media screen and (max-height: 520px) {
+      #dialogue-box {
+        bottom: 12px;
+        min-height: 96px;
+      }
+      #dialogue-text {
+        font-size: 15px;
+        line-height: 1.4;
+        min-height: 44px;
+      }
+      #hud {
+        top: 8px;
+        left: 8px;
+        padding: 8px 12px;
+        min-width: 190px;
+      }
+      #hud-zone {
+        font-size: 12px;
+      }
+      .hud-portrait {
+        width: 38px;
+        height: 38px;
+      }
+      .hud-name {
+        font-size: 13px;
+      }
+      #minimap {
+        top: 8px;
+        right: 8px;
+        width: 120px;
+        height: 120px;
+      }
+      #ow-panel {
+        width: 280px;
+      }
+      .screen .inner {
+        max-height: 94vh;
+      }
+    }
+
+    /* --- Mobile Landscape Sizing & Layout Compacting --- */
+    body.mobile-mode-active {
+      font-size: 13px;
+    }
+    body.mobile-mode-active .panel {
+      padding: 8px 12px;
+      border-radius: 8px;
+    }
+    body.mobile-mode-active .panel h3 {
+      font-size: 13px;
+      margin-bottom: 6px;
+    }
+
+    /* Dialogue box compacting */
+    body.mobile-mode-active #dialogue-box {
+      width: 95vw;
+      bottom: 8px;
+      min-height: 80px;
+      padding: 8px 12px;
+      z-index: 999;
+    }
+    body.mobile-mode-active #dialogue-speaker {
+      font-size: 12px;
+      padding: 2px 10px;
+      top: -12px;
+      left: 10px;
+    }
+    body.mobile-mode-active #dialogue-text {
+      font-size: 14px;
+      line-height: 1.35;
+      min-height: 36px;
+      padding-top: 2px;
+    }
+    body.mobile-mode-active #dialogue-choices {
+      flex-direction: row !important;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 6px;
+    }
+    body.mobile-mode-active .choice-btn,
+    body.mobile-mode-active .ui-btn {
+      padding: 6px 12px;
+      font-size: 13px;
+    }
+
+    /* Battle layout compacting */
+    body.mobile-mode-active #battle-menu {
+      width: 170px !important;
+      bottom: 12px;
+      left: 12px;
+    }
+    body.mobile-mode-active #battle-menu .ui-btn {
+      padding: 6px 8px;
+      font-size: 12px;
+      margin-bottom: 4px;
+    }
+    body.mobile-mode-active #battle-parties {
+      width: 180px !important;
+      bottom: 12px;
+      right: 12px;
+      gap: 4px;
+    }
+    body.mobile-mode-active .unit-card {
+      padding: 4px 8px;
+      font-size: 11px;
+    }
+    body.mobile-mode-active .unit-card .nm {
+      font-size: 11px;
+    }
+    body.mobile-mode-active .minibar {
+      height: 4px;
+      margin-top: 2px;
+    }
+    body.mobile-mode-active .bond-label {
+      font-size: 9px;
+      margin-top: 1px;
+    }
+    body.mobile-mode-active #battle-log {
+      font-size: 14px;
+      top: 8px;
+      width: 85vw;
+    }
+    body.mobile-mode-active #battle-speed {
+      top: 8px;
+      right: 12px;
+      padding: 3px 8px;
+      font-size: 11px;
+    }
+    body.mobile-mode-active #battle-auto {
+      top: 36px;
+      padding: 3px 10px;
+      font-size: 11px;
+    }
+
+    /* HUD and Minimap adjustments */
+    body.mobile-mode-active #hud {
+      top: 8px;
+      left: 8px;
+      min-width: 180px;
+      padding: 6px 10px;
+      font-size: 12px;
+    }
+    body.mobile-mode-active #hud-zone {
+      font-size: 12px;
+    }
+    body.mobile-mode-active .hud-portrait {
+      width: 32px;
+      height: 32px;
+    }
+    body.mobile-mode-active .hud-name {
+      font-size: 12px;
+    }
+    body.mobile-mode-active .hud-party {
+      gap: 3px;
+      margin-top: 4px;
+    }
+    body.mobile-mode-active .hud-chip {
+      padding: 3px 6px;
+    }
+    body.mobile-mode-active .hud-chip .nm {
+      font-size: 11px;
+    }
+    body.mobile-mode-active .bar {
+      height: 6px;
+      margin: 1px 0 2px;
+    }
+    body.mobile-mode-active #minimap {
+      top: 8px;
+      right: 8px;
+      width: 100px;
+      height: 100px;
+    }
+
+    /* Screen overlays layout stacking */
+    body.mobile-mode-active .screen .inner {
+      width: 96vw;
+      max-height: 95vh;
+    }
+    body.mobile-mode-active .grid2 {
+      gap: 8px;
+    }
+    body.mobile-mode-active .list-row {
+      padding: 6px 10px;
+      margin-bottom: 4px;
+    }
+    body.mobile-mode-active .inv-layout {
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }
+    body.mobile-mode-active .inv-grid {
+      max-height: 200px;
+      grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
+    }
+    body.mobile-mode-active .inv-tile {
+      padding: 6px 4px 4px;
+    }
+    body.mobile-mode-active .inv-icon {
+      font-size: 22px;
+    }
+    body.mobile-mode-active .inv-name {
+      font-size: 9px;
+    }
+    body.mobile-mode-active .inv-qty {
+      font-size: 9px;
+      top: 2px;
+      right: 3px;
+      padding: 0 4px;
+    }
+    body.mobile-mode-active .cr-layout {
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }
+    body.mobile-mode-active .cr-preview {
+      height: 140px;
+    }
+    body.mobile-mode-active .cr-slots {
+      grid-template-columns: repeat(3, 1fr);
+    }
+    body.mobile-mode-active .cr-slot {
+      padding: 4px 6px;
+    }
+    body.mobile-mode-active .cr-slot-icon {
+      font-size: 18px;
+    }
+    body.mobile-mode-active .cr-slot-part {
+      font-size: 11px;
+    }
+    body.mobile-mode-active .journal-grid {
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }
+    body.mobile-mode-active .journal-list {
+      max-height: 180px;
+    }
+    body.mobile-mode-active .journal-detail {
+      max-height: 220px;
+      padding: 8px 12px;
+    }
+    body.mobile-mode-active .jdetail-head {
+      margin-bottom: 4px;
+    }
+    body.mobile-mode-active .jdetail-icon {
+      width: 32px;
+      height: 32px;
+      font-size: 18px;
+    }
+    body.mobile-mode-active .jdetail-title {
+      font-size: 14px;
+    }
+    body.mobile-mode-active .jdetail-brief {
+      font-size: 11px;
+      margin: 6px 0;
+    }
+    body.mobile-mode-active #ow-panel {
+      width: 200px;
+      right: 8px;
+    }
+    body.mobile-mode-active #ow-panel h3 {
+      font-size: 12px;
+    }
+    body.mobile-mode-active #gcard-title,
+    body.mobile-mode-active #pcard-title {
+      font-size: 20px;
+      letter-spacing: 4px;
+    }
+    body.mobile-mode-active #gcard-sub,
+    body.mobile-mode-active #pcard-sub {
+      font-size: 11px;
+    }
+    body.mobile-mode-active #gcard-lore {
+      width: 220px;
+      left: 12px;
+      bottom: 12px;
+      font-size: 11px;
+      padding: 8px 10px;
+    }
+    body.mobile-mode-active #gcard-actions,
+    body.mobile-mode-active #pcard-actions {
+      right: 12px;
+      bottom: 12px;
+      gap: 6px;
+    }
+    body.mobile-mode-active #interact-hint {
+      bottom: 80px;
+      padding: 4px 12px;
+      font-size: 13px;
+    }
+    body.mobile-mode-active #hotkeys {
+      display: none !important;
+    }
+
+    /* Title screen scaling */
+    body.mobile-mode-active #title-screen h1 {
+      font-size: 44px !important;
+      letter-spacing: 5px !important;
+    }
+    body.mobile-mode-active #title-screen .subtitle {
+      font-size: 12px !important;
+      letter-spacing: 1.5px !important;
+      margin-top: -8px !important;
+    }
+    body.mobile-mode-active #title-menu {
+      width: 320px !important;
+    }
+    body.mobile-mode-active #title-menu .ui-btn {
+      font-size: 14px !important;
+      padding: 8px !important;
+    }
   </style>
 </head>
 <body>

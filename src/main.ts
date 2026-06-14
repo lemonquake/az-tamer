@@ -19,11 +19,13 @@ import { University } from './university';
 import { Cinematic } from './cinematic';
 import { syncStoryQuests } from './quests';
 import { initAudio, toggleMute } from './audio';
+import { initMobileControls } from './mobile';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
 
 // procedural audio: SFX + ambient pad; N toggles sound anywhere
 initAudio();
+initMobileControls();
 window.addEventListener('keydown', e => {
   if (e.key.toLowerCase() === 'n' && !(e.target instanceof HTMLInputElement)) {
     toast(toggleMute() ? '🔇 Sound off' : '🔊 Sound on');
@@ -467,6 +469,33 @@ function titleScreen(): Promise<{ mode: 'new' | 'continue'; slot: number }> {
         }
         menu.appendChild(row);
       }
+
+      // Add Mobile Mode Toggle
+      const mobileRow = document.createElement('div');
+      mobileRow.className = 'slot-row';
+      mobileRow.style.marginTop = '15px';
+      
+      const mobileBtn = document.createElement('button');
+      mobileBtn.className = 'ui-btn';
+      mobileBtn.style.textAlign = 'center';
+      mobileBtn.style.width = '100%';
+      
+      const updateMobileBtn = () => {
+        const isMob = localStorage.getItem('mobileMode') === 'true';
+        mobileBtn.innerHTML = isMob ? '📱 Mobile Controls: ON' : '💻 Mobile Controls: OFF';
+        mobileBtn.style.borderColor = isMob ? 'var(--ui-gold)' : 'var(--ui-border)';
+      };
+      
+      updateMobileBtn();
+      mobileBtn.onclick = () => {
+        const isMob = localStorage.getItem('mobileMode') === 'true';
+        localStorage.setItem('mobileMode', isMob ? 'false' : 'true');
+        updateMobileBtn();
+        initMobileControls();
+      };
+      
+      mobileRow.appendChild(mobileBtn);
+      menu.appendChild(mobileRow);
     };
     render();
   });
