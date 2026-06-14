@@ -86,9 +86,18 @@ window.addEventListener('keydown', async e => {
         player.inventory.set('soda_plus', (player.inventory.get('soda_plus') ?? 0) + 10);
         player.inventory.set('revive_leaf', (player.inventory.get('revive_leaf') ?? 0) + 10);
 
+        // Give player 5000 gold (shards) and 5x ultra rare gifting items (Aether Confit)
+        player.shards += 5000;
+        player.inventory.set('aether_confit', (player.inventory.get('aether_confit') ?? 0) + 5);
+
         player.save();
         refreshHUD();
-        toast('Cheat Activated: Lineup +10 Levels, +30 items!', 'gold');
+        toast('Cheat Activated: Lineup +10 Levels, +30 items, +5000 Shards, +5 Aether Confit!', 'gold');
+      } else if (code.toLowerCase() === 'gold') {
+        player.shards += 10000;
+        player.save();
+        refreshHUD();
+        toast('Cheat Activated: +10,000 Shards!', 'gold');
       } else {
         toast('Invalid Cheat Code', 'red');
       }

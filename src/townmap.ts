@@ -5,12 +5,16 @@
 // player is a facing arrow.
 // ============================================================
 
+import { questState } from './quests';
+import type { Player } from './state';
+
 export interface MapMarker {
   x: number; z: number;
   label?: string;
   color: string;
   /** building = square, poi = diamond, npc = dot, door = bar */
   kind: 'building' | 'poi' | 'npc' | 'door';
+  quest?: boolean;
 }
 
 export interface AreaMapOpts {
@@ -21,6 +25,103 @@ export interface AreaMapOpts {
   markers: MapMarker[];
   player: { x: number; z: number; rot: number };
   title: string;
+  playerState?: Player;
+}
+
+function decorateQuestMarkers(p: Player, markers: MapMarker[], title: string): MapMarker[] {
+  const t = title.toLowerCase();
+  
+  return markers.map(mk => {
+    if (!mk.label) return mk;
+    let isQuest = false;
+    const label = mk.label.toLowerCase();
+    
+    // Haven City / Town
+    if (t.includes('haven') || t.includes('pyrelight') || t.includes('mistveil') || t.includes('thornward') || t.includes('stormcall') || t.includes('duskwatch')) {
+      if (label.includes('azrin') && label.includes('azrael')) {
+        const state = questState(p, 'story_daughters');
+        if (state === 'active' || state === 'ready') isQuest = true;
+      }
+      if (label.includes('pyrelight')) {
+        const s1 = questState(p, 'pyrelight_m1'), s2 = questState(p, 'pyrelight_m2'), s3 = questState(p, 'pyrelight_m3'), s4 = questState(p, 'pyrelight_m4');
+        if (s1 === 'active' || s1 === 'ready' || s2 === 'active' || s2 === 'ready' || s3 === 'active' || s3 === 'ready' || s4 === 'active' || s4 === 'ready') isQuest = true;
+      }
+      if (label.includes('mistveil')) {
+        const s1 = questState(p, 'mistveil_m1'), s2 = questState(p, 'mistveil_m2'), s3 = questState(p, 'mistveil_m3'), s4 = questState(p, 'mistveil_m4');
+        if (s1 === 'active' || s1 === 'ready' || s2 === 'active' || s2 === 'ready' || s3 === 'active' || s3 === 'ready' || s4 === 'active' || s4 === 'ready') isQuest = true;
+      }
+      if (label.includes('thornward')) {
+        const s1 = questState(p, 'thornward_m1'), s2 = questState(p, 'thornward_m2'), s3 = questState(p, 'thornward_m3'), s4 = questState(p, 'thornward_m4');
+        if (s1 === 'active' || s1 === 'ready' || s2 === 'active' || s2 === 'ready' || s3 === 'active' || s3 === 'ready' || s4 === 'active' || s4 === 'ready') isQuest = true;
+      }
+      if (label.includes('stormcall')) {
+        const s1 = questState(p, 'stormcall_m1'), s2 = questState(p, 'stormcall_m2'), s3 = questState(p, 'stormcall_m3'), s4 = questState(p, 'stormcall_m4');
+        if (s1 === 'active' || s1 === 'ready' || s2 === 'active' || s2 === 'ready' || s3 === 'active' || s3 === 'ready' || s4 === 'active' || s4 === 'ready') isQuest = true;
+      }
+      if (label.includes('duskwatch')) {
+        const s1 = questState(p, 'duskwatch_m1'), s2 = questState(p, 'duskwatch_m2'), s3 = questState(p, 'duskwatch_m3'), s4 = questState(p, 'duskwatch_m4');
+        if (s1 === 'active' || s1 === 'ready' || s2 === 'active' || s2 === 'ready' || s3 === 'active' || s3 === 'ready' || s4 === 'active' || s4 === 'ready') isQuest = true;
+      }
+    }
+    
+    // Agdao Island
+    if (t.includes('agdao')) {
+      if (label.includes('bluff')) {
+        const sAgdao = questState(p, 'story_agdao');
+        const sCradle = questState(p, 'story_cradle');
+        const sEchoes = questState(p, 'story_echoes');
+        if (sAgdao === 'active' || sAgdao === 'ready' || sCradle === 'ready' || sEchoes === 'ready') isQuest = true;
+      }
+      if (label.includes('cradle hollow')) {
+        const sCradle = questState(p, 'story_cradle');
+        if (sCradle === 'active') isQuest = true;
+      }
+    }
+    
+    // University
+    if (t.includes('university')) {
+      if (label.includes('library')) {
+        const sHist = questState(p, 'story_historian'), sAmber = questState(p, 'story_amber'), sWren = questState(p, 'side_ledger');
+        if (sHist === 'active' || sHist === 'ready' || sAmber === 'ready' || sWren === 'active' || sWren === 'ready') isQuest = true;
+      }
+      if (label.includes('cafeteria')) {
+        const sChef = questState(p, 'side_chef'), sWren = questState(p, 'side_ledger');
+        if (sChef === 'active' || sChef === 'ready' || sWren === 'active' || sWren === 'ready') isQuest = true;
+      }
+      if (label.includes('lobby')) {
+        const sNiko = questState(p, 'side_niko'), sTomas = questState(p, 'side_wrench');
+        if (sNiko === 'active' || sNiko === 'ready' || sTomas === 'active' || sTomas === 'ready') isQuest = true;
+      }
+      if (label.includes('locker room')) {
+        const sTomas = questState(p, 'side_wrench');
+        if (sTomas === 'active' || sTomas === 'ready') isQuest = true;
+      }
+      if (label.includes('classroom')) {
+        const sLyra = questState(p, 'side_quiz');
+        if (sLyra === 'active' || sLyra === 'ready') isQuest = true;
+      }
+      if (label.includes('training hall')) {
+        const sKade = questState(p, 'side_spar');
+        if (sKade === 'active' || sKade === 'ready') isQuest = true;
+      }
+    }
+    
+    // New Salmonan
+    if (t.includes('salmonan')) {
+      const sVeil = questState(p, 'story_veilfall');
+      if (sVeil === 'active' || sVeil === 'ready') {
+        if (label.includes('relay tower') && !p.flags['salm_proof_relay']) isQuest = true;
+        if (label.includes('market') && !p.flags['salm_proof_crystal']) isQuest = true;
+        if (label.includes('mural') && !p.flags['salm_proof_stringer']) isQuest = true;
+        if (label.includes('ivan') && p.flags['salm_proof_relay'] && p.flags['salm_proof_crystal'] && p.flags['salm_proof_stringer']) isQuest = true;
+      }
+    }
+    
+    if (isQuest) {
+      return { ...mk, quest: true };
+    }
+    return mk;
+  });
 }
 
 const SIZE = 250;
@@ -34,6 +135,8 @@ export function drawAreaMap(cv: HTMLCanvasElement, o: AreaMapOpts): void {
   c.clearRect(0, 0, SIZE, SIZE);
   c.fillStyle = 'rgba(6,8,16,0.92)';
   c.fillRect(0, 0, SIZE, SIZE);
+
+  const finalMarkers = o.playerState ? decorateQuestMarkers(o.playerState, o.markers, o.title) : o.markers;
 
   // world → map transform
   let sc: number;
@@ -67,25 +170,54 @@ export function drawAreaMap(cv: HTMLCanvasElement, o: AreaMapOpts): void {
 
   // markers + labels
   c.textAlign = 'center';
-  for (const mk of o.markers) {
+  for (const mk of finalMarkers) {
     const x = tx(mk.x), y = tz(mk.z);
     c.fillStyle = mk.color;
-    if (mk.kind === 'building') {
-      c.fillRect(x - 4, y - 4, 8, 8);
-    } else if (mk.kind === 'poi') {
-      c.save(); c.translate(x, y); c.rotate(Math.PI / 4);
-      c.fillRect(-3.6, -3.6, 7.2, 7.2);
+    
+    if (mk.quest) {
+      const time = Date.now() * 0.005;
+      const pulse = 0.5 + 0.5 * Math.sin(time * 2);
+      const radius = 6 + pulse * 3.5;
+      c.save();
+      c.beginPath();
+      c.arc(x, y, radius, 0, Math.PI * 2);
+      c.fillStyle = `rgba(232, 90, 106, ${0.15 + 0.25 * (1 - pulse)})`;
+      c.fill();
+      
+      c.beginPath();
+      c.arc(x, y, 6.5, 0, Math.PI * 2);
+      c.fillStyle = '#e85a6a';
+      c.strokeStyle = '#ffffff';
+      c.lineWidth = 1.2;
+      c.stroke();
+      c.fill();
+      
+      const bob = Math.sin(time * 3.5) * 1.5;
+      c.fillStyle = '#ffffff';
+      c.font = 'bold 10px sans-serif';
+      c.textAlign = 'center';
+      c.textBaseline = 'middle';
+      c.fillText('!', x, y + bob - 0.5);
       c.restore();
-    } else if (mk.kind === 'door') {
-      c.fillRect(x - 5, y - 2, 10, 4);
     } else {
-      c.beginPath(); c.arc(x, y, 3, 0, Math.PI * 2); c.fill();
+      if (mk.kind === 'building') {
+        c.fillRect(x - 4, y - 4, 8, 8);
+      } else if (mk.kind === 'poi') {
+        c.save(); c.translate(x, y); c.rotate(Math.PI / 4);
+        c.fillRect(-3.6, -3.6, 7.2, 7.2);
+        c.restore();
+      } else if (mk.kind === 'door') {
+        c.fillRect(x - 5, y - 2, 10, 4);
+      } else {
+        c.beginPath(); c.arc(x, y, 3, 0, Math.PI * 2); c.fill();
+      }
     }
+    
     if (mk.label) {
       c.font = 'bold 9px Trebuchet MS';
       c.lineWidth = 3; c.strokeStyle = 'rgba(4,6,12,0.9)'; c.lineJoin = 'round';
       c.strokeText(mk.label, x, y - 7);
-      c.fillStyle = mk.color;
+      c.fillStyle = mk.quest ? '#e85a6a' : mk.color;
       c.fillText(mk.label, x, y - 7);
     }
   }

@@ -11,7 +11,7 @@ import {
   TECHS, ITEMS, TYPE_CSS, TYPE_COLORS, TYPE_ELEMENT, expForLevel,
   elementsOf, elementMult, ELEMENT_ICONS, type Technique, type GType,
 } from './data';
-import { sfx, playMusic, playMp3Sfx } from './audio';
+import { sfx, playMusic } from './audio';
 import { Guardian, Player } from './state';
 import {
   makeGuardian, disposeRig, tween, wait, Ease, makeFloatingDamageText, setTimeScale,
@@ -1656,7 +1656,7 @@ export class Battle {
         fill.style.width = pct + '%';
         if (lvlEl) lvlEl.textContent = `Lv${L}`;
         if (nextEl) nextEl.textContent = L >= cap ? 'MAX' : `${Math.max(0, Math.ceil(next - cur))} to next`;
-        if (L > shown) { shown = L; playMp3Sfx('level_up.mp3'); }
+        if (L > shown) { shown = L; playMusic('level_up'); }
       }, Ease.outQuad);
     });
   }
@@ -1751,7 +1751,7 @@ export class Battle {
     this.log(`<b>${oldName}</b> is evolving…`);
 
     const home = u.rig.group.position.clone();
-    playMp3Sfx('evolve.mp3');
+    playMusic('evolve');
     sfx('charge');
     this.fx.spiral(home.clone(), color, { up: true, dur: 1.3, radius: 0.95, height: 2.1 });
     this.fx.glow(this.chest(u), color, { scale: 2.0, life: 1.0 });

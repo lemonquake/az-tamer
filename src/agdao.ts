@@ -1243,6 +1243,7 @@ export class AgdaoIsland {
       markers: this.markers,
       player: { x: t.x, z: t.z, rot: this.tamer.rotation.y },
       title: `🏝️ Agdao Island — ${worldClock.label}`,
+      playerState: this.player,
     });
   }
 

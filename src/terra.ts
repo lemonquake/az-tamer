@@ -1295,6 +1295,7 @@ export class TerraCity {
         markers: [...this.streetMarkers, ...this.patrollers.map(p => ({ x: p.grp.position.x, z: p.grp.position.z, color: '#d8d8e8', kind: 'npc' as const }))],
         player: { x: t.x, z: t.z, rot: this.tamer.rotation.y },
         title: '⚡ Terra City — the Circuit-Crown',
+        playerState: this.player,
       });
     } else {
       drawAreaMap(cv, {
@@ -1302,6 +1303,7 @@ export class TerraCity {
         markers: this.intMarkers,
         player: { x: t.x, z: t.z, rot: this.tamer.rotation.y },
         title: this.intName,
+        playerState: this.player,
       });
     }
 

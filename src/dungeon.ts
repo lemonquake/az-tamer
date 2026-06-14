@@ -1097,7 +1097,20 @@ export class DungeonRun {
     else if (k === 'escape' && this.bigMapOpen) this.toggleBigMap();
     else if (k === 'escape') {
       this.busy = true;
-      openPauseMenu(this.ctx.player, { canSave: false }).then(() => {
+      openPauseMenu(this.ctx.player, {
+        canSave: false,
+        inDungeon: true,
+        floorNum: this.floorNum,
+        onRetreat: async () => {
+          const pick = await choose('', 'Teleport back to the surface? You will lose current floor progress, but keep all items and experience.', ['Teleport', 'Stay']);
+          if (pick === 0) {
+            this.finish('retreat');
+          }
+        }
+      }).then(() => {
+        if (this.finished === null) {
+          return;
+        }
         updateHUD(this.ctx.player, this.def.name, { floor: this.floorNum });
         this.busy = false;
       });

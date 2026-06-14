@@ -99,7 +99,7 @@ export function setSoundVolume(val: number): void {
   localStorage.setItem('az-tamer-sound-volume', String(soundVolume));
 }
 
-export function playMusic(trackKey: string): void {
+export function playMusic(trackKey: string, loop = true): void {
   if (currentTrackKey === trackKey) {
     updateMusicVolume();
     return;
@@ -128,7 +128,15 @@ export function playMusic(trackKey: string): void {
   currentTrackKey = trackKey;
   
   const newAudio = new Audio(src);
-  newAudio.loop = true;
+  newAudio.loop = loop;
+  if (!loop) {
+    newAudio.onended = () => {
+      if (currentAudio === newAudio) {
+        currentTrackKey = null;
+        currentAudio = null;
+      }
+    };
+  }
   newAudio.volume = 0;
   currentAudio = newAudio;
   

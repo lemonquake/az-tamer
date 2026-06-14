@@ -1368,6 +1368,7 @@ export class NewSalmonan {
       markers: this.markers,
       player: { x: t.x, z: t.z, rot: this.tamer.rotation.y },
       title: `🏞️ New Salmonan — ${worldClock.label}`,
+      playerState: this.player,
     });
   }
 

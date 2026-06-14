@@ -494,6 +494,7 @@ export class Overworld {
         label: m.agdao ? '🏝️ Agdao Island' : m.salmonan ? '🏞️ New Salmonan' : m.def ? m.def.name : '🏠 Haven City',
         color: m.agdao ? '#4ee4b8' : m.salmonan ? '#f2c14e' : m.def ? (m.quest ? '#e85a6a' : '#5ab8e8') : '#c9a24a',
         kind: m.def ? 'poi' : 'building',
+        quest: m.quest,
       });
     }
     drawAreaMap($('minimap') as unknown as HTMLCanvasElement, {

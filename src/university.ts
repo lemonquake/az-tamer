@@ -2242,12 +2242,21 @@ export class University {
           kind: door ? 'door' as const : 'poi' as const,
         };
       })
-      .filter(m => m.kind === 'door');
+      .filter(m => m.kind === 'door' || (m.label && (
+        m.label.toLowerCase().includes('niko') ||
+        m.label.toLowerCase().includes('tomas') ||
+        m.label.toLowerCase().includes('marlo') ||
+        m.label.toLowerCase().includes('lyra') ||
+        m.label.toLowerCase().includes('kade') ||
+        m.label.toLowerCase().includes('wren') ||
+        m.label.toLowerCase().includes('veyl')
+      )));
     drawAreaMap(document.getElementById('minimap') as HTMLCanvasElement, {
       shape: 'rect', w: r.w, d: r.d,
       markers: mapMarkers,
       player: { x: t.x, z: t.z, rot: this.tamer.rotation.y },
       title: ROOM_TITLES[this.current] ?? 'Leodones University',
+      playerState: this.player,
     });
 
     if (isDialogueOpen() || isMenuOpen() || this.busy) { showInteractHint(null); return; }

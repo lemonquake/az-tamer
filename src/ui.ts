@@ -1162,29 +1162,55 @@ export function applyItem(player: Player, itemId: string, g: Guardian): string {
 }
 
 // ---------------- pause hub (Esc) ----------------
-export function openPauseMenu(player: Player, opts: { canSave: boolean }): Promise<void> {
+export function openPauseMenu(
+  player: Player,
+  opts: {
+    canSave: boolean;
+    inDungeon?: boolean;
+    floorNum?: number;
+    onRetreat?: () => void;
+  }
+): Promise<void> {
   return new Promise(resolve => {
     const close = () => { closeMenu(); window.removeEventListener('keydown', esc); resolve(); };
     const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
     window.addEventListener('keydown', esc);
 
-    const el = openScreen(`
-      <h3>⛺ ${player.tamerName} — Field Menu</h3>
-      <div class="sub" style="margin-bottom:10px"><span class="goldcol">◆ ${player.shards} Shards</span> · Battles won: ${player.battlesWon} · Befriended: ${player.capturesMade}</div>
-      <div class="hub-grid">
-        <button class="ui-btn" data-hub="player">🧭 Tamer Data <span class="sub">(P)</span></button>
-        <button class="ui-btn" data-hub="inventory">🎒 Inventory <span class="sub">(I)</span></button>
-        <button class="ui-btn" data-hub="guardians">🐾 Guardians <span class="sub">(G)</span></button>
-        <button class="ui-btn" data-hub="crawler">🛞 Crawler <span class="sub">(C)</span></button>
-        <button class="ui-btn" data-hub="quests">📖 Quest Journal <span class="sub">(J)</span></button>
-        <button class="ui-btn" data-hub="evotree">🧬 Evolution Atlas <span class="sub">(V)</span></button>
-        <button class="ui-btn" id="hub-tutorial">🎓 Field Manual <span class="sub">(replay tutorials)</span></button>
-        <button class="ui-btn" id="hub-options">⚙️ Game Options</button>
-      </div>
-      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px">
-        ${opts.canSave ? '<button class="ui-btn" id="hub-save">💾 Save Game</button>' : ''}
-        <button class="ui-btn primary" id="hub-close">Resume (Esc)</button>
-      </div>`);
+    let menuHtml = '';
+    if (opts.inDungeon) {
+      menuHtml = `
+        <h3>🛞 Crawler Mode Menu</h3>
+        <div class="sub" style="margin-bottom:10px"><span class="goldcol">◆ ${player.shards} Shards</span> ${opts.floorNum ? `· Floor B${opts.floorNum}F` : ''}</div>
+        <div class="hub-grid">
+          <button class="ui-btn" data-hub="inventory">🎒 Use Item <span class="sub">(I)</span></button>
+          <button class="ui-btn" data-hub="guardians">🐾 Party Setup <span class="sub">(G)</span></button>
+          <button class="ui-btn danger" id="hub-retreat">🌀 Teleport Back</button>
+          <button class="ui-btn" id="hub-options">⚙️ Options</button>
+        </div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px">
+          <button class="ui-btn primary" id="hub-close">Resume (Esc)</button>
+        </div>`;
+    } else {
+      menuHtml = `
+        <h3>⛺ ${player.tamerName} — Field Menu</h3>
+        <div class="sub" style="margin-bottom:10px"><span class="goldcol">◆ ${player.shards} Shards</span> · Battles won: ${player.battlesWon} · Befriended: ${player.capturesMade}</div>
+        <div class="hub-grid">
+          <button class="ui-btn" data-hub="player">🧭 Tamer Data <span class="sub">(P)</span></button>
+          <button class="ui-btn" data-hub="inventory">🎒 Inventory <span class="sub">(I)</span></button>
+          <button class="ui-btn" data-hub="guardians">🐾 Guardians <span class="sub">(G)</span></button>
+          <button class="ui-btn" data-hub="crawler">🛞 Crawler <span class="sub">(C)</span></button>
+          <button class="ui-btn" data-hub="quests">📖 Quest Journal <span class="sub">(J)</span></button>
+          <button class="ui-btn" data-hub="evotree">🧬 Evolution Atlas <span class="sub">(V)</span></button>
+          <button class="ui-btn" id="hub-tutorial">🎓 Field Manual <span class="sub">(replay tutorials)</span></button>
+          <button class="ui-btn" id="hub-options">⚙️ Game Options</button>
+        </div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px">
+          ${opts.canSave ? '<button class="ui-btn" id="hub-save">💾 Save Game</button>' : ''}
+          <button class="ui-btn primary" id="hub-close">Resume (Esc)</button>
+        </div>`;
+    }
+
+    const el = openScreen(menuHtml);
     el.querySelectorAll<HTMLElement>('[data-hub]').forEach(b => b.onclick = async () => {
       window.removeEventListener('keydown', esc);
       closeMenu();
@@ -1206,6 +1232,17 @@ export function openPauseMenu(player: Player, opts: { canSave: boolean }): Promi
     }
     const save = el.querySelector<HTMLElement>('#hub-save');
     if (save) save.onclick = () => { player.save(); toast('Game saved.', 'gold'); };
+    
+    const retreatBtn = el.querySelector<HTMLElement>('#hub-retreat');
+    if (retreatBtn && opts.onRetreat) {
+      retreatBtn.onclick = async () => {
+        window.removeEventListener('keydown', esc);
+        closeMenu();
+        resolve();
+        opts.onRetreat!();
+      };
+    }
+
     const opt = el.querySelector<HTMLElement>('#hub-options');
     if (opt) opt.onclick = async () => {
       window.removeEventListener('keydown', esc);

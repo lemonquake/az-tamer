@@ -6924,6 +6924,7 @@ export class Town {
         ],
         player: { x: t.x, z: t.z, rot: this.tamer.rotation.y },
         title: `Haven City — ${worldClock.label}`,
+        playerState: this.player,
       });
     } else {
       // multi-storey halls swap the marker set + title to the current floor
@@ -6935,6 +6936,7 @@ export class Town {
         markers,
         player: { x: t.x, z: t.z, rot: this.tamer.rotation.y },
         title,
+        playerState: this.player,
       });
     }
 

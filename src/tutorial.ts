@@ -21,6 +21,7 @@ export interface TutStep {
   pointer?: 'top' | 'bottom' | 'left' | 'right';
   /** the step completes only when the player actually does the thing */
   action?: { hint: string; done: () => boolean };
+  onStart?: () => void;
 }
 
 // ---------------- spotlight machinery ----------------
@@ -126,6 +127,9 @@ export async function runTutorial(kicker: string, steps: TutStep[]): Promise<voi
   });
 
   for (const step of steps) {
+    if (step.onStart) {
+      try { step.onStart(); } catch (err) { console.error('Tut step onStart err:', err); }
+    }
     sfx('blip');
     // dress the stage
     if (step.highlight) highlightOn(step.highlight, step.pointer ?? 'bottom');
@@ -313,7 +317,31 @@ export async function runCityTutorial(player: Player, replay = false): Promise<v
       speaker: M,
       text: `Two city habits worth keeping: <b>right-click and drag</b> to look around — the camera minds its own way home — and <b>left-click anyone</b> to read their card. Half this city has a story worth a click. The other half has TWO.`,
     },
-    { speaker: M, text: `That's the tour! Check your journal with <b>J</b> if you lose the thread, save at any menu, and mind the ducks by the pond — they own the pier, legally speaking. Good luck, graduate. Haven City is glad you're here.` },
+    {
+      speaker: M,
+      text: `Also, see that beautiful body of water to the north-west? You can <b>go fishing</b> there! Just walk up to any active fishing spot near the docks to cast your line.`,
+      onStart: () => {
+        worldOrbit.yaw = -2.2;
+        worldOrbit.pitch = 0.3;
+        worldOrbit.idleT = 0;
+      }
+    },
+    {
+      speaker: M,
+      text: `Over there to the west, you will find Madame Celeste's <b>Boutique shop</b>. Stop by to customize your outfit and look! Be on the lookout for other Boutique stores in the wilds, as some carry even rarer and more unique items.`,
+      onStart: () => {
+        worldOrbit.yaw = 1.6;
+        worldOrbit.pitch = 0.2;
+        worldOrbit.idleT = 0;
+      }
+    },
+    {
+      speaker: M,
+      text: `That's the tour! Check your journal with <b>J</b> if you lose the thread, save at any menu, and mind the ducks by the pond — they own the pier, legally speaking. Good luck, graduate. Haven City is glad you're here.`,
+      onStart: () => {
+        worldOrbit.idleT = 10;
+      }
+    },
   ]);
   if (!replay) {
     player.flags['tut_city'] = true;
