@@ -268,7 +268,7 @@ export async function runBasicsTutorial(player: Player, getPos: () => { x: numbe
     },
     {
       speaker: H,
-      text: `Geography, quickly. You are in the <b>Tamer University of Aurel</b>. Through the great NORTH door is the <b>Officers' Hall</b> — five Grand Houses keep recruiting officers there. Pledge to one: you'll receive your first true partner Guardian and your guild Sigil. That is your next step, and yes, it's also mandatory. Wonderful things usually are.`,
+      text: `Geography, quickly. You are in the <b>Leodones University of Aurel</b>. Through the great NORTH door is the <b>Officers' Hall</b> — five Grand Houses keep recruiting officers there. Pledge to one: you'll receive your first true partner Guardian and your guild Sigil. That is your next step, and yes, it's also mandatory. Wonderful things usually are.`,
     },
     {
       speaker: H,
@@ -306,7 +306,7 @@ export async function runCityTutorial(player: Player, replay = false): Promise<v
     },
     {
       speaker: M,
-      text: `EAST: the <b>Expedition Gate</b> — the wide world, dungeons, the overworld globe. Guild members only, so wear your sigil proudly. WEST: the <b>University Shuttle</b> pad, whenever the old halls call you back. East to adventure, west to academia. My whole job in one sentence.`,
+      text: `EAST: the <b>Expedition Gate</b> — the wide world, dungeons, the overworld globe. Guild members only, so wear your sigil proudly. WEST: the <b>Aetherline Skyport</b> — board the floating Pod whenever the old halls call you back. East to adventure, west to academia. My whole job in one sentence.`,
       highlight: 'minimap', pointer: 'left',
     },
     {
@@ -348,8 +348,9 @@ export async function runBattleTutorial(player: Player, replay = false): Promise
   const prevHTML = menu.innerHTML;
   const prevDisplay = menu.style.display;
   menu.innerHTML = [
-    '⚔️ Technique', '👊 Strike <span class="sub">(builds SP)</span>', '🛡️ Guard <span class="sub">(half damage, +SP)</span>',
-    '🎒 Item', '🎁 Gift <span class="sub">(bond wild Guardians)</span>', '🔄 Swap', '🏃 Flee',
+    '👊 Attack <span class="sub">(normal · builds SP)</span>', '⚔️ Technique', '🛡️ Guard <span class="sub">(half damage, +SP)</span>',
+    '🎒 Item', '🎁 Gift <span class="sub">(bond wild Guardians)</span>', '🔄 Swap',
+    '⚡ Auto-Action <span class="sub">(repeat last orders · A)</span>', '🏃 Flee',
   ].map(l => `<button class="ui-btn" disabled style="display:block;width:100%;margin-bottom:5px">${l}</button>`).join('');
   menu.style.display = 'block';
 
@@ -362,12 +363,12 @@ export async function runBattleTutorial(player: Player, replay = false): Promise
     },
     {
       speaker: A,
-      text: `Bottom-left: your <b>command menu</b>, the heart of it all. <b>⚔️ Technique</b> spends SP for elemental power. <b>👊 Strike</b> is free and BUILDS SP. <b>🛡️ Guard</b> halves damage AND recovers SP. See the rhythm? <b>Strike and Guard charge you up — Techniques cash it in.</b> That's how SP regenerates: you earn it.`,
+      text: `Bottom-left: your <b>command menu</b>, the heart of it all. <b>👊 Attack</b> sits up top — it's your free normal hit and it BUILDS SP. <b>⚔️ Technique</b> spends SP for elemental power. <b>🛡️ Guard</b> halves damage AND recovers SP. See the rhythm? <b>Attack and Guard charge you up — Techniques cash it in.</b> Navigate with <b>W/S</b>, confirm with <b>Space</b> — or just click.`,
       highlight: 'battle-menu', pointer: 'right',
     },
     {
       speaker: A,
-      text: `<b>🎒 Item</b> uses tonics, sodas and revives from your cargo. <b>🎁 Gift</b> — listen closely — throw treats to WILD Guardians to build <b>Bond</b>. The <span style="color:#f28ac4">pink meter on their card</span> shows the live chance they ask to JOIN you after you win. That's how your team grows. <b>🔄 Swap</b> brings reserves in, <b>🏃 Flee</b> is honest cowardice (blocked against bosses, sorry).`,
+      text: `<b>🎒 Item</b> uses tonics, sodas and revives from your cargo. <b>🎁 Gift</b> — listen closely — throw treats to WILD Guardians to build <b>Bond</b>. The <span style="color:#f28ac4">pink meter on their card</span> shows the live chance they ask to JOIN you after you win. <b>🔄 Swap</b> brings reserves in. And <b>⚡ Auto-Action</b> (or press <b>A</b>) re-issues your whole team's last orders — targets and all — for breezing through easy fights; press <b>A</b> again to stop. The <b>speed chip</b> top-right (or <b>F</b>) fast-forwards to 2× or 3×. <b>🏃 Flee</b> is honest cowardice (blocked against bosses, sorry).`,
       highlight: 'battle-menu', pointer: 'right',
     },
     {
@@ -377,7 +378,7 @@ export async function runBattleTutorial(player: Player, replay = false): Promise
     },
     {
       speaker: A,
-      text: `Last thing — the top line narrates everything: crits, effectiveness, who's down. Win for EXP, Shards and the occasional dropped treasure; level-ups can trigger <b>Evolution</b>, and you should almost always say yes to those. Right! Menu's live. Open with a Strike to bank some SP, then make something explode. Go! *kssht*`,
+      text: `Last thing — the top line narrates everything: crits, effectiveness, who's down. Win for EXP, Shards and the occasional dropped treasure; level-ups can trigger <b>Evolution</b>, and you should almost always say yes to those. Right! Menu's live. Open with an Attack to bank some SP, then make something explode. Go! *kssht*`,
       highlight: 'battle-log', pointer: 'bottom',
     },
   ]);

@@ -67,9 +67,9 @@ const STORY_QUESTS: QuestDef[] = [
   M({
     id: 'story_historian', kind: 'story', chapter: 2, icon: '📜', requires: 'story_roads',
     title: 'The Man Who Maps Storms', giver: 'Instructor Hale', location: 'University — Library',
-    brief: '"Veyl," Hale said, as if the name were a full sentence. "Historian. Library. Smells of ink and thunderstorms. The man has spent nine years charting every verified sighting of Greggy the Stormheart — where the legend has been, and more importantly, where he hasn\'t. If anyone alive can point you at a living legend, it\'s Veyl. Take the shuttle. Mind your manners. Do NOT touch his charts."',
+    brief: '"Veyl," Hale said, as if the name were a full sentence. "Historian. Library. Smells of ink and thunderstorms. The man has spent nine years charting every verified sighting of Greggy the Stormheart — where the legend has been, and more importantly, where he hasn\'t. If anyone alive can point you at a living legend, it\'s Veyl. Take the Pod. Mind your manners. Do NOT touch his charts."',
     objective: 'Speak with Historian Veyl in the University library',
-    hint: 'Ride the University shuttle from the west side of Haven City plaza, then take the Library door off the lobby.',
+    hint: 'Board the Aetherline Skyport Pod on the west side of Haven City plaza, then take the Library door off the lobby.',
     check: p => !!p.flags['met_historian'],
     reward: { shards: 300 },
   }),

@@ -199,21 +199,21 @@ const DOSSIERS: Record<string, Omit<NpcProfile, 'name'>> = {
     portrait: { top: '#6a4a9a', hair: '#241a2e' },
   },
 
-  // ----- Tamer University -----
+  // ----- Leodones University -----
   'Receptionist Dana': {
-    title: 'First Face of the University', guild: { name: 'Tamer University of Aurel', color: '#c9a24a', epithet: 'Every Tamer Passed This Desk' }, rank: 'Head Receptionist',
+    title: 'First Face of the University', guild: { name: 'Leodones University of Aurel', color: '#c9a24a', epithet: 'Every Tamer Passed This Desk' }, rank: 'Head Receptionist',
     bio: 'Every licensed tamer on the continent crossed her lobby once, usually wearing the same stunned expression. Keeps the notice board, the visitors\' ledger, and — unofficially — the entire institution.',
     stats: [['Graduates greeted', '12,406'], ['Stunned expressions catalogued', 'all of them'], ['Notice-board quests posted', '3,118'], ['Years at the desk', '17']],
     portrait: { top: '#e8e8e8', hair: '#6a3a1a', cap: '#e8e8e8' },
   },
   'Historian Veyl': {
-    title: 'Historian of the Deep Charts', guild: { name: 'Tamer University of Aurel', color: '#c9a24a', epithet: 'History Is Watching' }, rank: 'Senior Historian',
+    title: 'Historian of the Deep Charts', guild: { name: 'Leodones University of Aurel', color: '#c9a24a', epithet: 'History Is Watching' }, rank: 'Senior Historian',
     bio: 'Smells of ink and thunderstorms, exactly as advertised. Spent nine years charting the seal\'s slow weakening before anyone agreed to listen. History, he notes, is watching you with considerable interest.',
     stats: [['Years of charts', '9'], ['Charts vindicated', 'one boat ride\'s worth'], ['Volumes authored', '14'], ['Storms smelled approaching', 'all of them']],
     portrait: { top: '#4a5a8a', hair: '#8a8a92' },
   },
   'Archivist Wren': {
-    title: 'Keeper of the Restricted Stacks', guild: { name: 'Tamer University of Aurel', color: '#c9a24a', epithet: 'Quiet, Please' }, rank: 'Archivist',
+    title: 'Keeper of the Restricted Stacks', guild: { name: 'Leodones University of Aurel', color: '#c9a24a', epithet: 'Quiet, Please' }, rank: 'Archivist',
     bio: 'Knows where every book in the Archive sleeps, including the ones that pretend not to be there. There is a sandwich in chapter forty. Do not tell them. They are telling themself.',
     stats: [['Volumes shelved', '88,212'], ['Volumes that shelved themselves back wrong', '12'], ['Silence enforced', 'institutionally'], ['Sandwiches found in chapters', '1']],
     portrait: { top: '#5a3a9a', hair: '#c8c8d0' },
@@ -362,6 +362,111 @@ const DOSSIERS: Record<string, Omit<NpcProfile, 'name'>> = {
     bio: 'Nine championships — the longest reign in Coliseum history — and the Legion\'s armies learned to fear distant thunder. Grounded the Storm-Tyrant with a coil built overnight. Now roosts on the closest land in the world to Ghandra\'s seal, listening. Lately, something is nibbling.',
     stats: [['World Championships', '9 (AE 17–28)'], ['Aether Guardians bonded', 'Raijura · Voltherion · Fulgrath'], ['Generals grounded', 'Voltrazar, personally'], ['Years on the bluff', '9'], ['Fishing hooks bent into coils', 'all of Bayan\'s']],
     portrait: { top: '#b09a22', hair: '#d8d8d8' },
+  },
+
+  // ----- Terra City — the Circuit-Crown of Tharkand -----
+  'Stationmaster Kel': {
+    title: 'Line-Keeper of the Terra Aetherline', guild: { name: 'The Filament Concord', color: '#4fe0ff', epithet: 'One City, One Bright Nerve' }, rank: 'Line-Keeper',
+    bio: 'Fifteen years she kept the dead Terra platform swept, the cradle oiled and the arrival board lit for a Pod that never came — "a line is only severed if you let it forget it is a line." The dawn the Olivar signal finally answered, she wept onto the console, then briskly filed the incident report.',
+    stats: [['Years the line lay dark', '15'], ['Dawns the platform was swept anyway', 'all of them'], ['Pods welcomed home, day one', '1'], ['Reports filed while crying', '1']],
+    portrait: { top: '#1c5a6a', hair: '#2a2a3a', cap: '#4fe0ff' },
+  },
+  'Engineer Vire': {
+    title: 'Trace-Wright of the Filament Concord', guild: { name: 'The Filament Concord', color: '#4fe0ff', epithet: 'One City, One Bright Nerve' }, rank: 'Trace-Wright',
+    bio: 'Apprenticed at nine to the crews who poured Terra\'s first living circuit after the war. Can read a city block\'s health by the color of its traces the way a medic reads a pulse. Holds that the old empire built engines to take cities, and the Concord builds circuits to keep them.',
+    stats: [['Trace-miles laid', '4,180'], ['Engine-spirits woken and bonded', '37'], ['Blackouts on her grid', '0'], ['Years rebuilding Terra', '15']],
+    portrait: { top: '#2a8aa8', hair: '#3a2a1a' },
+  },
+  'Circuit-Marshal Tace': {
+    title: 'Bracket-Marshal of the Worldring', guild: { name: 'The Worldring Conclave', color: '#f2c14e', epithet: 'Bring the Crown Home' }, rank: 'Bracket-Marshal',
+    bio: 'Runs the World Championship brackets to the second and the seat-map to the cushion. Spent fifteen years administering the title in exile in Haven and never once stopped calling them "away games." Has the Worldring\'s reopening date inked where her watch should be.',
+    stats: [['Championships administered', '15, all in exile'], ['Brackets argued as scripture', 'every one'], ['Big Three finals officiated', '22'], ['Years until the crown comes home', '0']],
+    portrait: { top: '#c89a2a', hair: '#2a2a3a', cap: '#f2c14e' },
+  },
+  'Big Bolt Ovan': {
+    title: 'Stand Captain of the Voltwake Faithful', guild: { name: 'The Voltwake Runners', color: '#5aff9a', epithet: 'Loudest Legion on Four Continents' }, rank: 'Stand Captain',
+    bio: 'Leads the green end of the Worldring, where the chants are written and the foam fingers are union-made. Will tell you, unprompted, that twenty years of Big Three is "a crime against fairness" — then, in the same breath, that he has seen Aljay\'s Vulfenix live four times and would sell a kidney for a fifth.',
+    stats: [['Finals attended', '19'], ['Chants authored', '64'], ['Voice lost, season-ending', 'annually'], ['Kidneys offered for Big Three seats', '1 (standing)']],
+    portrait: { top: '#2a9a5a', hair: '#1a1a2e', cap: '#5aff9a' },
+  },
+  'Chef Lumen Doss': {
+    title: 'Master Holo-Chef of the Lumen Table', guild: { name: 'The Lumenwrights\' Guild', color: '#ff5aa8', epithet: 'The Warmest Light in the City' }, rank: 'Master Holo-Chef',
+    bio: 'Plates light as readily as food — every dish arrives under a little hovering aurora keyed to its flavor. Believes a city of machines owes its travelers the warmest table they will ever sit at, and cooks like he is personally apologizing for the last fifteen cold years.',
+    stats: [['Dishes plated under aurora', '92,000'], ['Lost-looking travelers fed free', 'all of them'], ['War-lost recipes rebuilt from memory', '211'], ['Beige food served', '0']],
+    portrait: { top: '#d84a8a', hair: '#2a2a3a', cap: '#f2ead0' },
+  },
+  'Noodle-Master Tok': {
+    title: 'Steam-Cook of Spark & Sizzle', guild: { name: 'The Lumenwrights\' Guild', color: '#ff5aa8', epithet: 'The Warmest Light in the City' }, rank: 'Steam-Cook',
+    bio: 'Runs the loudest, brightest noodle counter under the conduit-rails, where the broth has simmered since the year the lights came back on. Claims the secret ingredient is the neon. It is not the neon. He knows it is not the neon. He will, regardless, tell you it is the neon.',
+    stats: [['Bowls pulled', 'nonstop since reopening'], ['Broth, hours unbroken', 'all of them'], ['Runners fed mid-race, no charge', 'the whole green legion'], ['The real secret ingredient', 'told to no one']],
+    portrait: { top: '#e85a9a', hair: '#1a1a26', cap: '#ffd8ec' },
+  },
+  'Clerk Bizzy': {
+    title: 'Night Clerk of the Volt-Mart', guild: { name: 'The Voltwake Runners', color: '#5aff9a', epithet: 'Loudest Legion on Four Continents' }, rank: 'Off-Shift Runner',
+    bio: 'Works the 24-hour counter between conduit-races, which is to say always. Knows every traveler\'s slushie order before they reach the chiller, and every score from every continent before the boards post it. The Volt-Mart never closes; neither, apparently, does Bizzy.',
+    stats: [['Hours the lights stay on', 'all of them'], ['Slushie flavors stocked', '17'], ['Scores known before the boards', 'all of them'], ['Naps taken on shift', 'denied']],
+    portrait: { top: '#3aaa6a', hair: '#2a2a3a', cap: '#5aff9a' },
+  },
+  'Clerk Onla': {
+    title: 'Counter-Tech of the Pulse Pantry', guild: { name: 'The Filament Concord', color: '#4fe0ff', epithet: 'One City, One Bright Nerve' }, rank: 'Counter-Tech',
+    bio: 'Keeps the corner store whose shelves are wired to restock themselves — when the conduit cooperates, which it mostly does, because Onla rewired it herself. Half provisioner, half engineer, entirely unimpressed by tourists who gasp at the self-stocking shelves. "It is a SHELF."',
+    stats: [['Self-stocking shelves maintained', '40'], ['Conduit faults fixed at the counter', '1,902'], ['Tourists left unimpressed', 'all of them'], ['Years on the corner', '11']],
+    portrait: { top: '#2a8aa8', hair: '#6a3a1a', cap: '#4fe0ff' },
+  },
+  'Elder Sema': {
+    title: 'Eldest Voice of Terra', guild: { name: 'Terra City', color: '#4fe0ff', epithet: 'Citizen of the Circuit-Crown' }, rank: 'Elder',
+    bio: 'Remembers the old Terra — glass and trade and the dawn Pods leaving six ways at once — and remembers the night the Sundering took the lights, the roads, and the answer to "is anyone coming." She also remembers picking up the first trowel. "They mourned us in Haven," she says, not unkindly. "We were busy."',
+    stats: [['Years remembered, before and after', '70-some'], ['Nights the city went truly dark', '1, the first'], ['Trowels picked up', '1, then 14 more'], ['Cities mourned while alive', '1, hers']],
+    portrait: { top: '#3a6a7a', hair: '#d8d8d8' },
+  },
+  'Paxi': {
+    title: 'Future Worldring Champion (self-declared)', guild: { name: 'Terra City', color: '#4fe0ff', epithet: 'Citizen of the Circuit-Crown' }, rank: 'Hopeful',
+    bio: 'Has never seen the Big Three lose and has therefore concluded the only way to beat them is to become them. Rehearses the Dawnflame\'s finishing stance in the plaza glow nightly. Knows they are from across the strait. Does not care. "Good is good, and I\'m gonna be gooder."',
+    stats: [['Big Three losses witnessed', '0'], ['Finishing stances rehearsed', '8,000-ish'], ['Continents held against heroes', '0'], ['Years until eligible', 'lots, ugh']],
+    portrait: { top: '#f2c14e', hair: '#1a1a2e' },
+  },
+  'Pilgrim Dass': {
+    title: 'Olivar Traveler · First Pod East', guild: { name: 'Haven Guild Authority', color: '#f2c14e', epithet: 'Across the Strait' }, rank: 'Visitor',
+    bio: 'Rode the Pod the day the Terra line reopened, half-expecting ruins. Walked out into a city of light and has not closed his mouth since. Keeps muttering that they told him Terra was lost. Terra, overhearing, keeps offering him a chair and a hot bowl.',
+    stats: [['Expected ruins', 'yes'], ['Found ruins', 'no'], ['Jaw, current location', 'the floor'], ['Bowls accepted from strangers', '4 and counting']],
+    portrait: { top: '#3a6aa8', hair: '#6a3a1a' },
+  },
+  // — Terra street crowd (named so their cards read true to the Circuit-Crown) —
+  'Solder Jin': {
+    title: 'Trace-Welder of the Lower Conduits', guild: { name: 'Terra City', color: '#4fe0ff', epithet: 'Citizen of the Circuit-Crown' },
+    bio: 'Welds the copper that keeps the plaza glowing. Swears you can hear a healthy trace sing if the street is quiet, which in Terra it never is.',
+    stats: [['Traces welded', '12,000'], ['Quiet streets found', '0'], ['Years on the conduits', '9']],
+    portrait: { top: '#2a7a8a', hair: '#1a1a2e' },
+  },
+  'Neon Vey': {
+    title: 'Sign-Painter in Light', guild: { name: 'The Lumenwrights\' Guild', color: '#ff5aa8', epithet: 'The Warmest Light in the City' },
+    bio: 'Bends cold light into hot color for every shopfront on the strip. Has one rule: no sign she makes is allowed to be sad.',
+    stats: [['Signs bent', '3,400'], ['Sad signs permitted', '0'], ['Favorite color', 'the loud one']],
+    portrait: { top: '#e85a9a', hair: '#6a3a1a' },
+  },
+  'Cabla Ross': {
+    title: 'Conduit-Rail Runner', guild: { name: 'The Voltwake Runners', color: '#5aff9a', epithet: 'Loudest Legion on Four Continents' },
+    bio: 'Delivers across the city on the live rails faster than the message crystals can. On finals nights, trades the satchel for a flag.',
+    stats: [['Deliveries this year', '21,400'], ['Rails ridden', 'the live ones'], ['Flags waved', 'one, enormous']],
+    portrait: { top: '#2a9a5a', hair: '#1a1a26' },
+  },
+  'Pixel Tam': {
+    title: 'Holo-Busker of the Core Plaza', guild: { name: 'Terra City', color: '#4fe0ff', epithet: 'Citizen of the Circuit-Crown' },
+    bio: 'Sculpts little hovering light-creatures for coins by the core spire. The kids think they are real. Tam refuses, on artistic principle, to confirm or deny.',
+    stats: [['Light-creatures sculpted', '6,000'], ['Children delighted', 'all of them'], ['Trade secrets revealed', '0']],
+    portrait: { top: '#5a8ad8', hair: '#2a2a3a' },
+  },
+  'Fuse Dara': {
+    title: 'Worldring Concessioner', guild: { name: 'The Worldring Conclave', color: '#f2c14e', epithet: 'Bring the Crown Home' },
+    bio: 'Sold roasted nuts at the Worldring before the war and intends to sell them again the day the championship comes home. Has kept the cart polished for fifteen years.',
+    stats: [['Years the cart waited', '15'], ['Cart, current shine', 'mirror'], ['Practice batches roasted in exile', 'weekly']],
+    portrait: { top: '#c89a2a', hair: '#7a4a2a', cap: '#f2ead0' },
+  },
+  'Relay Bo': {
+    title: 'Crystal-Caster of Terra', guild: { name: 'Terra City', color: '#4fe0ff', epithet: 'Citizen of the Circuit-Crown' },
+    bio: 'Runs the plaza broadcast crystal and, unlike a certain four-continent network, reports only what actually happened. A small, stubborn island of true news.',
+    stats: [['Broadcasts cast', '40,000'], ['Stories invented', '0'], ['Foretales feeds carried', 'none, thanks']],
+    portrait: { top: '#3a6a7a', hair: '#d8d8d8' },
   },
 };
 
@@ -556,7 +661,7 @@ function themeFor(p: NpcProfile): CardTheme {
       color: house.color, org: house.name, epithet: lore.epithet,
       cardKind: lore.cardName, emblem: guildIconCanvas(house.id, 256),
       motto: house.motto, pattern: ctx => cardPattern(ctx, house.id, house.color),
-      footer: `${lore.hall} · Registered by the Tamer University of Aurel`, isGuild: true,
+      footer: `${lore.hall} · Registered by the Leodones University of Aurel`, isGuild: true,
     };
   }
   if (p.guild) {

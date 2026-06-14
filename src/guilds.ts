@@ -574,7 +574,7 @@ export async function drawCardFront(p: Player, h: HouseDef): Promise<HTMLCanvasE
   // footer
   ctx.fillStyle = '#787e96';
   ctx.font = '16px Georgia, serif';
-  ctx.fillText(`${lore.hall} · Registered by the Tamer University of Aurel`, CARD_W / 2, 906);
+  ctx.fillText(`${lore.hall} · Registered by the Leodones University of Aurel`, CARD_W / 2, 906);
   return c;
 }
 

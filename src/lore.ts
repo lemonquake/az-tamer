@@ -44,7 +44,7 @@ export const WORLD_LORE = {
   continents: [
     {
       id: 'olivar', name: 'Olivar',
-      desc: 'The Capital Region, governed under the Leodones line. Haven City and the Tamer University of Aurel stand here. Every year, hundreds of aspiring tamers gather in the capital to train and graduate as official Tamers. The five Grand Houses were raised in Olivar after the Legion War.',
+      desc: 'The Capital Region, governed under the Leodones line. Haven City and the Leodones University of Aurel stand here. Every year, hundreds of aspiring tamers gather in the capital to train and graduate as official Tamers. The five Grand Houses were raised in Olivar after the Legion War.',
     },
     {
       id: 'veyra', name: 'Veyra',
@@ -97,6 +97,24 @@ export const FORETALES_LORE = {
   glaze: 'And yet the Big Three shine from every crystal — endless retrospectives, soft-lit documentaries, anniversary specials. It is glaze. A standing directive, found spooled at the heart of the Mirrorhouse, names the only three people on four continents Foretales is forbidden to touch: "GLAZE. DO NOT TOUCH. NOT YET. SOON." Aljay never sat for them. Count the true interviews on one hand; everything else is fabricated — and something more.',
 };
 
+// ---------------- Terra City — the Circuit-Crown of Tharkand ----------------
+// Fifteen years ago the Sundering severed the Aetherline and the eastern
+// overland roads alike; Terra City went dark, and Olivar mourned a city it
+// believed lost. It was not lost. Cut off on the far Tharkand coast, the
+// Tharkandi spent those fifteen years rebuilding their ruined engine-capital
+// into something new: a metropolis of living circuitry, where the old empire's
+// dead war-iron was reforged into glowing copper traces and glass spires —
+// engine-craft turned at last from war to light. The Pod line has only just
+// been restored, and few in Haven yet know Terra not only stands, but shines.
+export const TERRA_LORE = {
+  name: 'Terra City',
+  epithet: 'The Circuit-Crown of Tharkand',
+  desc: 'A neon metropolis on the far eastern coast of Tharkand, raised over the fifteen years the Aetherline lay severed. Where the old engine-empire left dead iron beneath the dunes, Terra grew glass towers veined in glowing copper, plazas stitched with running light, and data-conduits humming between spires like a city wired into a single bright nerve. To Olivar it was the lost city; to Tharkand it is home — rebuilt brighter than the war ever broke it.',
+  built: 'After the Grand War — the Sundering, fifteen years gone — Terra was cut from the four-continent grid: the Pod line dead, the eastern roads buried under shifting waste and Legion wreckage. The Tharkandi did not wait to be found. Trace by trace, spire by spire, they rebuilt the ruined engine-capital into the Circuit-Crown, reforging the empire\'s war-craft into circuit-craft — power and word made visible, flowing as light through every street.',
+  coliseum: 'The Grand Coliseum of Terra — the Worldring — is the grandest arena on any shore, and the ancient home where the World Championships were first held. Through the severed years the title was contested far away in Haven; now the Pod hums again, and the championship is coming home to the Worldring, where ten thousand voices and a crown of light wait each year for the last tamer standing.',
+  bigThree: 'For twenty years the World Championships have belonged to three foreigners — Aljay the Dawnflame, Greggy the Stormheart, Onnel the Worldroot — twenty-two titles between them, all from Olivar across the strait. Terra grumbles that it is not even fair, and means it; Terra also fills the Worldring to the rafters to watch them, and means that more. The rivalry runs in Terra the way the tide runs: deep, loud, and never quite settled.',
+};
+
 // ---------------- the Guilds of the world ----------------
 // The five Grand Houses of Olivar are one famous chapter among
 // hundreds of Guilds bound by the Compact. These are the ones any
@@ -113,6 +131,15 @@ export const WORLD_GUILDS: WorldGuildDef[] = [
     desc: 'Keepers of the frozen south, who watch the auroras for Ghandra\'s reflection. They take the long view: their duty roster is planned eighty years ahead.' },
   { id: 'grand_houses', name: 'The Five Grand Houses', seat: 'Haven City', continent: 'Olivar', color: '#f2c14e',
     desc: 'Pyrelight, Mistveil, Thornward, Stormcall, Duskwatch — raised after the Legion War to train the tamers who will stand ready when the seal breaks. The youngest of the great Guilds, and the loudest.' },
+  // ---- the Guilds of Terra City, the Circuit-Crown of Tharkand ----
+  { id: 'filament_concord', name: 'The Filament Concord', seat: 'Terra City', continent: 'Tharkand', color: '#4fe0ff',
+    desc: 'The circuit-wrights who rebuilt the ruined engine-capital into Terra City, trace by glowing trace. They bond with the engine-spirits that woke in the old war-iron, and keep the whole metropolis lit as one living nerve.' },
+  { id: 'worldring_conclave', name: 'The Worldring Conclave', seat: 'Terra City', continent: 'Tharkand', color: '#f2c14e',
+    desc: 'Wardens of the Grand Coliseum and stewards of the World Championships. For fifteen years they ran the title in exile; now they prepare to bring the crown home to the Worldring — and argue the brackets like scripture.' },
+  { id: 'lumenwrights', name: 'The Lumenwrights\' Guild', seat: 'Terra City', continent: 'Tharkand', color: '#ff5aa8',
+    desc: 'Light-artisans, neon-smiths and holo-chefs who make Terra beautiful after dark — which, in the Circuit-Crown, is always. They hold that a city of machines must be the warmest place a traveler ever eats.' },
+  { id: 'voltwake_runners', name: 'The Voltwake Runners', seat: 'Terra City', continent: 'Tharkand', color: '#5aff9a',
+    desc: 'Courier-racers who ride the conduit-rails and, on finals nights, the loudest fan-legion on four continents. To wear the Voltwake green is to have an opinion about the Big Three and to share it at volume.' },
 ];
 
 // ---------------- the daughters of the Dawnflame ----------------

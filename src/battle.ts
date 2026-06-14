@@ -8,13 +8,13 @@
 // ============================================================
 import * as THREE from 'three';
 import {
-  TECHS, ITEMS, TYPE_CSS, TYPE_COLORS, TYPE_ELEMENT,
+  TECHS, ITEMS, TYPE_CSS, TYPE_COLORS, TYPE_ELEMENT, expForLevel,
   elementsOf, elementMult, ELEMENT_ICONS, type Technique, type GType,
 } from './data';
 import { sfx } from './audio';
 import { Guardian, Player } from './state';
 import {
-  makeGuardian, disposeRig, tween, wait, Ease, makeFloatingDamageText,
+  makeGuardian, disposeRig, tween, wait, Ease, makeFloatingDamageText, setTimeScale,
   stoneTexture, skyGradient, canvasTex, caveRockTexture, drownedBrickTexture,
   stormPanelTexture, stormSeamEmissive, type GuardianRig,
 } from './models';
@@ -23,6 +23,43 @@ import { say, choose, toast, askName, setStoryInBattle } from './ui';
 import { runBattleTutorial } from './tutorial';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
+
+/**
+ * Wire keyboard navigation onto a vertical list of buttons:
+ *   W / ↑   move focus up        S / ↓   move focus down
+ *   Space / Enter  pick          A  auto-shortcut (if provided)
+ *   Esc     back (if provided)
+ * Mouse hover syncs the focus. Returns a disposer that unbinds the listener.
+ */
+function attachKbNav(
+  buttons: HTMLButtonElement[],
+  handlers: { onSelect: (i: number) => void; onAuto?: () => void; onBack?: () => void },
+): () => void {
+  let focus = buttons.findIndex(b => !b.disabled);
+  if (focus < 0) focus = 0;
+  const paint = () => buttons.forEach((b, i) => b.classList.toggle('kb-focus', i === focus));
+  const setFocus = (i: number) => { if (i >= 0 && i < buttons.length && !buttons[i].disabled) { focus = i; paint(); } };
+  const move = (dir: number) => {
+    for (let n = 0; n < buttons.length; n++) {
+      focus = (focus + dir + buttons.length) % buttons.length;
+      if (!buttons[focus].disabled) break;
+    }
+    paint();
+    sfx('blip');
+  };
+  buttons.forEach((b, i) => b.addEventListener('mouseenter', () => setFocus(i)));
+  paint();
+  const onKey = (e: KeyboardEvent) => {
+    const k = e.key.toLowerCase();
+    if (k === 'w' || k === 'arrowup') { e.preventDefault(); move(-1); }
+    else if (k === 's' || k === 'arrowdown') { e.preventDefault(); move(1); }
+    else if (k === ' ' || k === 'enter') { e.preventDefault(); if (!buttons[focus]?.disabled) handlers.onSelect(focus); }
+    else if (k === 'a' && handlers.onAuto) { e.preventDefault(); handlers.onAuto(); }
+    else if (k === 'escape' && handlers.onBack) { e.preventDefault(); handlers.onBack(); }
+  };
+  window.addEventListener('keydown', onKey);
+  return () => window.removeEventListener('keydown', onKey);
+}
 
 export type BattleResult = 'win' | 'lose' | 'flee';
 
@@ -43,6 +80,27 @@ interface Unit {
   favor: number;      // hidden per-enemy gift taste multiplier
   wild: boolean;
   cardEl?: HTMLElement;
+}
+
+/** A replayable player order — what a Guardian did, so Auto-Action can redo it. */
+type PlayerAction =
+  | { kind: 'strike'; target: Unit }
+  | { kind: 'tech'; tech: Technique; target: Unit | null }
+  | { kind: 'guard' }
+  | { kind: 'item'; itemId: string; target: Unit }
+  | { kind: 'gift'; itemId: string; target: Unit };
+
+/** Per-Guardian battle tally shown on the victory report. */
+interface GuardianStat { dealt: number; taken: number; kos: number; assists: number; guards: number; }
+
+/** What happened to one winner when EXP was applied — drives the victory cards. */
+interface GuardianResult {
+  g: Guardian;
+  beforeLevel: number;
+  afterLevel: number;
+  beforeExp: number;
+  gained: number;
+  newTechs: Technique[];
 }
 
 export interface BattleOptions {
@@ -107,6 +165,14 @@ export class Battle {
   private camDist = 9.2;
   private baseFov = 50;
   private envTick: ((dt: number) => void)[] = [];
+
+  // --- battle report + auto-action state ---
+  private timeline: { icon: string; html: string }[] = [];
+  private stats = new Map<string, GuardianStat>();
+  private lastAction = new Map<string, PlayerAction>();
+  private autoMode = false;
+  private speedMul = 1;
+  private autoKeyHandler?: (e: KeyboardEvent) => void;
 
   constructor(private player: Player, private enemySpecs: EnemySpec[], private opts: BattleOptions) {}
 
@@ -520,6 +586,24 @@ export class Battle {
   // ---------- UI ----------
   private log(msg: string): void { $('battle-log').innerHTML = msg; }
 
+  /** Lazily fetch a Guardian's running battle tally. */
+  private stat(gid: string): GuardianStat {
+    let s = this.stats.get(gid);
+    if (!s) { s = { dealt: 0, taken: 0, kos: 0, assists: 0, guards: 0 }; this.stats.set(gid, s); }
+    return s;
+  }
+  /** Credit damage dealt/taken and KOs to the player units involved. */
+  private recordHit(att: Unit, def: Unit, dmg: number): void {
+    if (att.side === 'player') this.stat(att.g.id).dealt += dmg;
+    if (def.side === 'player') this.stat(def.g.id).taken += dmg;
+    if (def.g.fainted && att.side === 'player') this.stat(att.g.id).kos += 1;
+  }
+  /** Append a line to the post-battle report (kept bounded). */
+  private pushLog(icon: string, html: string): void {
+    this.timeline.push({ icon, html });
+    if (this.timeline.length > 80) this.timeline.shift();
+  }
+
   /** Chance this wild enemy joins after victory, given its current bond. */
   private captureChance(e: Unit): number {
     if (!e.wild) return 0;
@@ -556,18 +640,30 @@ export class Battle {
     this.units.forEach(x => x.cardEl?.classList.toggle('active', x === u));
   }
 
-  private menu(buttons: { label: string; disabled?: boolean; cls?: string }[]): Promise<number> {
+  private menu(buttons: { label: string; disabled?: boolean; cls?: string; key?: string }[]): Promise<number> {
     return new Promise(resolve => {
       const m = $('battle-menu');
       m.innerHTML = '';
       m.style.display = 'block';
+      const els: HTMLButtonElement[] = [];
+      let dispose = () => {};
+      const done = (i: number) => { m.style.display = 'none'; dispose(); resolve(i); };
       buttons.forEach((b, i) => {
         const btn = document.createElement('button');
         btn.className = `ui-btn ${b.cls ?? ''}`;
         btn.innerHTML = b.label;
         btn.disabled = !!b.disabled;
-        btn.onclick = () => { m.style.display = 'none'; resolve(i); };
+        btn.onclick = () => { if (!btn.disabled) done(i); };
         m.appendChild(btn);
+        els.push(btn);
+      });
+      // W/S to move, Space/Enter to pick; A jumps to Auto-Action, Esc to Back.
+      const autoIdx = buttons.findIndex(b => b.key === 'auto' && !b.disabled);
+      const backIdx = buttons.findIndex(b => b.key === 'back' || /← Back/.test(b.label));
+      dispose = attachKbNav(els, {
+        onSelect: done,
+        onAuto: autoIdx >= 0 ? () => done(autoIdx) : undefined,
+        onBack: backIdx >= 0 ? () => done(backIdx) : undefined,
       });
     });
   }
@@ -879,6 +975,8 @@ export class Battle {
       this.fx.glow(this.chest(tgt), 0x8af2b0, { scale: 1.6, life: 0.5 });
       this.fx.burst(this.chest(tgt).setY(2.3), 0x8af2b0, { count: 16, speed: 1.1, gravity: -2, life: 0.9, size: 0.11 });
       makeFloatingDamageText(this.scene, tgt.rig.group.position.clone().setY(2), `+${amount}`, '#5ad88a', 1.15);
+      if (att.side === 'player') this.stat(att.g.id).assists += 1;
+      this.pushLog('💚', `<b>${who}</b> used ${tech.name} — restored ${amount} HP to ${tgt.g.nickname}.`);
       this.renderCards();
       await wait(500);
       return;
@@ -895,6 +993,8 @@ export class Battle {
         this.fx.spiral(att.rig.group.position.clone(), 0x5ab8e8, { up: true, dur: 0.8 });
         this.fx.ring(att.rig.group.position, 0x5ab8e8, { maxR: 1.4, y: 1.0, tube: 0.04 });
       }
+      if (att.side === 'player') this.stat(att.g.id).assists += 1;
+      this.pushLog('🔼', `<b>${who}</b> used ${tech.name} — ${tech.effect === 'buffAtk' ? 'Attack' : 'Defense'} rose.`);
       this.log(`${who}'s ${tech.effect === 'buffAtk' ? 'Attack' : 'Defense'} rose!`);
       await wait(600);
       return;
@@ -903,6 +1003,7 @@ export class Battle {
       await this.castWindup(att, color);
       const foes = this.alive(att.side === 'player' ? 'enemy' : 'player');
       sfx('debuff');
+      let dealt = 0;
       for (const f of foes) {
         if (tech.effect === 'debuffDef') f.mods.def = Math.max(0.5, f.mods.def - 0.2);
         else f.mods.spd = Math.max(0.5, f.mods.spd - 0.2);
@@ -911,10 +1012,13 @@ export class Battle {
         if (tech.power > 0) {
           const { dmg, eff, crit } = this.computeDamage(att, f, tech);
           f.g.hp = Math.max(0, f.g.hp - dmg);
+          this.recordHit(att, f, dmg);
+          dealt += dmg;
           this.elementalImpact(f, tech.type, false);
           await this.hitReact(f, dmg, eff, crit, att.rig.group.position);
         }
       }
+      this.pushLog('🔽', `<b>${who}</b> used ${tech.name} — foes' ${tech.effect === 'debuffDef' ? 'Defense' : 'Speed'} fell${dealt ? ` (${dealt} dmg)` : ''}.`);
       this.log(`The foes' ${tech.effect === 'debuffDef' ? 'Defense' : 'Speed'} fell!`);
       this.renderCards();
       await this.cleanupKOs();
@@ -927,6 +1031,7 @@ export class Battle {
       ? this.alive(att.side === 'player' ? 'enemy' : 'player')
       : target ? [target] : [];
     const big = tech.power >= 55 || tech.target === 'all';
+    let totalDmg = 0;
 
     if (tech.kind === 'phys' && targets.length === 1) {
       const tgt = targets[0];
@@ -934,6 +1039,8 @@ export class Battle {
       await this.meleeRush(att, tgt, color);
       const { dmg, eff, crit } = this.computeDamage(att, tgt, tech);
       tgt.g.hp = Math.max(0, tgt.g.hp - dmg);
+      this.recordHit(att, tgt, dmg);
+      totalDmg += dmg;
       this.elementalImpact(tgt, tech.type, big || crit);
       if (tech.effect === 'drain') this.drainFX(att, tgt, dmg);
       this.log(`<b>${who}</b> uses <b>${tech.name}</b>!${this.effText(eff, crit)}`);
@@ -951,6 +1058,8 @@ export class Battle {
         if (tgt.g.fainted) continue;
         const { dmg, eff, crit } = this.computeDamage(att, tgt, tech);
         tgt.g.hp = Math.max(0, tgt.g.hp - dmg);
+        this.recordHit(att, tgt, dmg);
+        totalDmg += dmg;
         this.elementalImpact(tgt, tech.type, big || crit);
         if (tech.effect === 'drain') this.drainFX(att, tgt, dmg);
         this.log(`<b>${who}</b> uses <b>${tech.name}</b>!${this.effText(eff, crit)}`);
@@ -959,6 +1068,7 @@ export class Battle {
       }
       this.faceHome(att);
     }
+    this.pushLog(tech.kind === 'phys' ? '⚔️' : '✦', `<b>${who}</b> used ${tech.name} — ${totalDmg} dmg${targets.length > 1 ? ` to ${targets.length} foes` : ''}.`);
     this.renderCards();
     await this.cleanupKOs();
     await wait(420);
@@ -990,11 +1100,13 @@ export class Battle {
     if (target.guarding) pct *= 0.45;
     const dmg = Math.max(1, Math.floor(ds.hp * Math.min(0.45, pct)));
     target.g.hp = Math.max(0, target.g.hp - dmg);
+    this.recordHit(att, target, dmg);
     att.g.sp = Math.min(as.sp, att.g.sp + Math.max(2, Math.floor(as.sp * 0.08))); // striking builds SP
     this.fx.burst(this.chest(target), 0xfff0d0, { count: 14, speed: 2.6, gravity: -3, life: 0.45, size: 0.1 });
     this.fx.glow(this.chest(target), color, { scale: 1.0, life: 0.22 });
     await this.hitReact(target, dmg, 1, crit, att.rig.group.position);
     await this.meleeReturn(att, home);
+    this.pushLog('👊', `<b>${who}</b> attacked ${target.g.nickname} — ${dmg} dmg.`);
     this.renderCards();
     await this.cleanupKOs();
     await wait(380);
@@ -1004,6 +1116,7 @@ export class Battle {
     for (const u of this.units) {
       if (u.g.fainted && u.rig.group.visible) {
         this.log(`<b>${u.g.nickname}</b> is down!`);
+        this.pushLog('💀', `<b>${u.g.nickname}</b> was defeated.`);
         await this.koAnim(u);
       }
     }
@@ -1023,28 +1136,42 @@ export class Battle {
   }
 
   private async playerTurn(u: Unit): Promise<'acted' | 'fled'> {
+    // Auto-Action: if engaged and this Guardian has a remembered order, redo it.
+    if (this.autoMode) {
+      const replay = this.reresolveAction(u, this.lastAction.get(u.g.id));
+      if (replay) { await this.performAction(u, replay); return 'acted'; }
+      // nothing usable to repeat for this one — fall through to the manual menu
+    }
+
     while (true) {
       this.log(`What will <b style="color:${TYPE_CSS[u.g.species.type]}">${u.g.nickname}</b> do?`);
       const giftItems = [...this.player.inventory.keys()].filter(id => ITEMS[id].kind === 'gift');
       const usable = [...this.player.inventory.keys()].filter(id => ['heal', 'sp', 'revive'].includes(ITEMS[id].kind));
-      const choice = await this.menu([
-        { label: '⚔️ Technique' },
-        { label: '👊 Strike <span class="sub">(builds SP)</span>' },
-        { label: '🛡️ Guard <span class="sub">(half damage, +SP)</span>' },
-        { label: `🎒 Item <span class="sub">(${usable.length})</span>`, disabled: !usable.length },
-        { label: `🎁 Gift <span class="sub">(bond wild Guardians)</span>`, disabled: !this.opts.wild || !giftItems.length },
-        { label: '🔄 Swap <span class="sub">(reserve)</span>', disabled: !this.player.reserve.some(g => !g.fainted) },
-        { label: '🏃 Flee', disabled: !!this.opts.boss, cls: 'danger' },
-      ]);
+      const buttons = [
+        { key: 'strike', label: '👊 Attack <span class="sub">(normal · builds SP)</span>' },
+        { key: 'tech', label: '⚔️ Technique' },
+        { key: 'guard', label: '🛡️ Guard <span class="sub">(half damage, +SP)</span>' },
+        { key: 'item', label: `🎒 Item <span class="sub">(${usable.length})</span>`, disabled: !usable.length },
+        { key: 'gift', label: `🎁 Gift <span class="sub">(bond wild Guardians)</span>`, disabled: !this.opts.wild || !giftItems.length },
+        { key: 'swap', label: '🔄 Swap <span class="sub">(reserve)</span>', disabled: !this.player.reserve.some(g => !g.fainted) },
+        { key: 'auto', label: '⚡ Auto-Action <span class="sub">(repeat last orders · A)</span>', disabled: !this.lastAction.has(u.g.id), cls: 'primary' },
+        { key: 'flee', label: '🏃 Flee', disabled: !!this.opts.boss, cls: 'danger' },
+      ];
+      const act = buttons[await this.menu(buttons)].key;
 
-      if (choice === 0) {
+      if (act === 'strike') {
+        const target = await this.pickTarget('Attack which foe?', this.alive('enemy'));
+        if (!target) continue;
+        return this.commit(u, { kind: 'strike', target });
+      }
+      if (act === 'tech') {
         const techs = u.g.techniques;
         const ti = await this.menu([
           ...techs.map(t => ({
             label: `<span style="color:${TYPE_CSS[t.type]}">${t.name}</span> <span class="sub">${t.spCost} SP · Pow ${t.power} · ${t.target}</span>`,
             disabled: u.g.sp < t.spCost,
           })),
-          { label: '← Back', cls: 'danger' },
+          { key: 'back', label: '← Back', cls: 'danger' },
         ]);
         if (ti >= techs.length) continue;
         const tech = techs[ti];
@@ -1056,31 +1183,16 @@ export class Battle {
           target = await this.pickTarget('Heal which ally?', this.alive('player'));
           if (!target) continue;
         }
-        await this.execTech(u, tech, target);
-        return 'acted';
+        return this.commit(u, { kind: 'tech', tech, target });
       }
-      if (choice === 1) {
-        const target = await this.pickTarget('Strike which foe?', this.alive('enemy'));
-        if (!target) continue;
-        await this.basicStrike(u, target);
-        return 'acted';
+      if (act === 'guard') {
+        return this.commit(u, { kind: 'guard' });
       }
-      if (choice === 2) {
-        u.guarding = true;
-        u.g.sp = Math.min(u.g.stats.sp, u.g.sp + Math.max(3, Math.floor(u.g.stats.sp * 0.12)));
-        sfx('guard');
-        this.fx.ring(u.rig.group.position, 0x5ab8e8, { maxR: 1.3, y: 0.9, tube: 0.05, life: 0.6 });
-        this.fx.glow(this.chest(u), 0x8ad0f2, { scale: 1.5, life: 0.5, grow: 0.6 });
-        this.log(`<b>${u.g.nickname}</b> braces for impact!`);
-        this.renderCards();
-        await wait(600);
-        return 'acted';
-      }
-      if (choice === 3) {
+      if (act === 'item') {
         const usableIds = [...this.player.inventory.keys()].filter(id => ['heal', 'sp', 'revive'].includes(ITEMS[id].kind));
         const ii = await this.menu([
           ...usableIds.map(id => ({ label: `${ITEMS[id].name} ×${this.player.itemCount(id)} <span class="sub">${ITEMS[id].desc}</span>` })),
-          { label: '← Back', cls: 'danger' },
+          { key: 'back', label: '← Back', cls: 'danger' },
         ]);
         if (ii >= usableIds.length) continue;
         const itemId = usableIds[ii];
@@ -1091,33 +1203,14 @@ export class Battle {
         if (!pool.length) { toast('No valid target.', 'red'); continue; }
         const target = await this.pickTarget(`Use ${it.name} on whom?`, pool);
         if (!target) continue;
-        this.player.removeItem(itemId);
-        const s = target.g.stats;
-        if (it.kind === 'heal') target.g.hp = Math.min(s.hp, target.g.hp + it.value);
-        else if (it.kind === 'sp') target.g.sp = Math.min(s.sp, target.g.sp + it.value);
-        else if (it.kind === 'revive') {
-          target.g.hp = Math.floor(s.hp * it.value);
-          target.rig.group.visible = true;
-          target.rig.group.rotation.z = 0;
-          target.rig.group.scale.setScalar(1);
-          target.rig.group.position.copy(this.slotPos('player', target.slot));
-          this.fx.pillar(target.rig.group.position, 0x8af2b0, { height: 4, radius: 0.6, life: 0.8 });
-        }
-        sfx('heal');
-        this.fx.spiral(target.rig.group.position.clone(), 0x5ad88a, { up: true, dur: 0.8 });
-        this.fx.glow(this.chest(target), 0x8af2b0, { scale: 1.3, life: 0.4 });
-        this.log(`Used <b>${it.name}</b> on ${target.g.nickname}!`);
-        makeFloatingDamageText(this.scene, target.rig.group.position.clone().setY(2), '♥', '#5ad88a');
-        this.renderCards();
-        await wait(600);
-        return 'acted';
+        return this.commit(u, { kind: 'item', itemId, target });
       }
-      if (choice === 4) {
+      if (act === 'gift') {
         const giftIds = [...this.player.inventory.keys()].filter(id => ITEMS[id].kind === 'gift');
         this.log(`💜 Gifts build <b>Bond</b>. Win the battle, and bonded wild Guardians may ask to <b>join you</b> — watch the pink meter on their card.`);
         const gi = await this.menu([
           ...giftIds.map(id => ({ label: `${ITEMS[id].name} ×${this.player.itemCount(id)} <span class="sub">${ITEMS[id].desc} (+${ITEMS[id].value}~ bond)</span>` })),
-          { label: '← Back', cls: 'danger' },
+          { key: 'back', label: '← Back', cls: 'danger' },
         ]);
         if (gi >= giftIds.length) continue;
         // target pick shows each wild foe's live bond and join chance
@@ -1126,58 +1219,33 @@ export class Battle {
         if (cands.length > 1) {
           this.log('Gift to which wild Guardian?');
           const ti = await this.menu([
-            ...cands.map(u => ({
-              label: `<span style="color:${TYPE_CSS[u.g.species.type]}">${u.g.nickname}</span> Lv${u.g.level} <span class="sub">💜 bond ${u.bond} · ${Math.round(this.captureChance(u) * 100)}% join chance</span>`,
+            ...cands.map(c => ({
+              label: `<span style="color:${TYPE_CSS[c.g.species.type]}">${c.g.nickname}</span> Lv${c.g.level} <span class="sub">💜 bond ${c.bond} · ${Math.round(this.captureChance(c) * 100)}% join chance</span>`,
             })),
-            { label: '← Back', cls: 'danger' },
+            { key: 'back', label: '← Back', cls: 'danger' },
           ]);
           target = ti < cands.length ? cands[ti] : null;
         }
         if (!target) continue;
-        const it = ITEMS[giftIds[gi]];
-        this.player.removeItem(giftIds[gi]);
-        const gain = Math.floor(it.value * target.favor);
-        target.bond += gain;
-        const reaction = target.favor > 1.15 ? 'devours it joyfully!' : target.favor < 0.95 ? 'sniffs it cautiously…' : 'munches it happily.';
-        this.log(`Wild <b>${target.g.nickname}</b> ${reaction} <span style="color:var(--ui-purple)">(bond +${gain} → ${Math.round(this.captureChance(target) * 100)}% join chance)</span>`);
-        makeFloatingDamageText(this.scene, target.rig.group.position.clone().setY(2.1), '♥', '#f25aa8');
-        sfx('heal');
-        this.fx.spiral(target.rig.group.position.clone(), 0xf25aa8, { up: true, dur: 0.9 });
-        this.fx.burst(this.chest(target), 0xf28ac4, { count: 16, speed: 1.4, gravity: -1.4, life: 0.8, size: 0.12 });
-        this.renderCards();
-        await wait(700);
-        return 'acted';
+        return this.commit(u, { kind: 'gift', itemId: giftIds[gi], target });
       }
-      if (choice === 5) {
+      if (act === 'swap') {
         const cands = this.player.reserve.filter(g => !g.fainted);
         const si = await this.menu([
           ...cands.map(g => ({ label: `${g.nickname} Lv${g.level} <span class="sub">${g.hp}/${g.stats.hp} HP</span>` })),
-          { label: '← Back', cls: 'danger' },
+          { key: 'back', label: '← Back', cls: 'danger' },
         ]);
         if (si >= cands.length) continue;
-        const incoming = cands[si];
-        // swap party slot
-        const pi = this.player.party.indexOf(u.g);
-        const ri = this.player.reserve.indexOf(incoming);
-        this.player.party[pi] = incoming;
-        this.player.reserve[ri] = u.g;
-        disposeRig(u.rig);
-        u.g = incoming;
-        u.rig = makeGuardian(incoming.speciesId);
-        u.rig.group.position.copy(this.slotPos('player', u.slot));
-        u.rig.group.rotation.y = Math.PI / 2;
-        this.scene.add(u.rig.group);
-        u.mods = { atk: 1, def: 1, spd: 1 };
-        const swapColor = TYPE_COLORS[incoming.species.type];
-        this.fx.pillar(u.rig.group.position, swapColor, { height: 4, radius: 0.6, life: 0.7 });
-        this.fx.ring(u.rig.group.position, swapColor, { maxR: 1.5 });
-        sfx('confirm');
-        this.log(`Go, <b>${incoming.nickname}</b>!`);
-        this.renderCards();
-        await wait(600);
+        await this.doSwap(u, cands[si]);   // swaps aren't remembered for Auto-Action
         return 'acted';
       }
-      if (choice === 6) {
+      if (act === 'auto') {
+        this.setAuto(true);
+        const replay = this.reresolveAction(u, this.lastAction.get(u.g.id));
+        if (replay) { await this.performAction(u, replay); return 'acted'; }
+        continue;   // no memory yet for this Guardian — let the player choose
+      }
+      if (act === 'flee') {
         const mySpd = this.alive('player').reduce((s, x) => s + x.g.stats.spd, 0) / Math.max(1, this.alive('player').length);
         const foeSpd = this.alive('enemy').reduce((s, x) => s + x.g.stats.spd, 0) / Math.max(1, this.alive('enemy').length);
         const chance = Math.min(0.95, Math.max(0.25, 0.55 + (mySpd - foeSpd) * 0.02));
@@ -1191,6 +1259,181 @@ export class Battle {
         return 'acted';
       }
     }
+  }
+
+  /** Remember an order (so Auto-Action can redo it) and carry it out. */
+  private async commit(u: Unit, action: PlayerAction): Promise<'acted'> {
+    this.lastAction.set(u.g.id, action);
+    await this.performAction(u, action);
+    return 'acted';
+  }
+
+  /** Carry out a previously-chosen order. Targets are assumed resolved. */
+  private async performAction(u: Unit, a: PlayerAction): Promise<void> {
+    switch (a.kind) {
+      case 'strike': await this.basicStrike(u, a.target); break;
+      case 'tech': await this.execTech(u, a.tech, a.target); break;
+      case 'guard': await this.doGuard(u); break;
+      case 'item': await this.doItem(u, a.itemId, a.target); break;
+      case 'gift': await this.doGift(u, a.itemId, a.target); break;
+    }
+  }
+
+  /**
+   * Re-validate a remembered order against the current field for Auto-Action:
+   * dead targets are re-picked, spent SP / used-up items fall back to a basic
+   * Attack. Returns null only when nothing at all can be done.
+   */
+  private reresolveAction(u: Unit, a: PlayerAction | undefined): PlayerAction | null {
+    if (!a) return null;
+    switch (a.kind) {
+      case 'guard':
+        return { kind: 'guard' };
+      case 'strike': {
+        const t = a.target && !a.target.g.fainted ? a.target : this.weakestEnemy();
+        return t ? { kind: 'strike', target: t } : this.fallbackStrike();
+      }
+      case 'tech': {
+        const tech = u.g.techniques.find(t => t.id === a.tech.id);
+        if (!tech || u.g.sp < tech.spCost) return this.fallbackStrike();
+        if (tech.target === 'one') {
+          const t = a.target && !a.target.g.fainted ? a.target : this.weakestEnemy();
+          return t ? { kind: 'tech', tech, target: t } : this.fallbackStrike();
+        }
+        if (tech.target === 'ally') {
+          const t = a.target && a.target.side === 'player' && !a.target.g.fainted ? a.target : (this.mostHurtAlly() ?? u);
+          return { kind: 'tech', tech, target: t };
+        }
+        return { kind: 'tech', tech, target: null };  // all / self
+      }
+      case 'item': {
+        if (this.player.itemCount(a.itemId) <= 0) return this.fallbackStrike();
+        const it = ITEMS[a.itemId];
+        const pool = it.kind === 'revive'
+          ? this.units.filter(x => x.side === 'player' && x.g.fainted)
+          : this.alive('player');
+        let t = a.target && pool.includes(a.target) ? a.target
+          : it.kind === 'heal' ? this.mostHurtAlly() : pool[0];
+        if (!t || !pool.includes(t)) t = pool[0];
+        return t ? { kind: 'item', itemId: a.itemId, target: t } : this.fallbackStrike();
+      }
+      case 'gift': {
+        if (!this.opts.wild || this.player.itemCount(a.itemId) <= 0) return this.fallbackStrike();
+        const t = a.target && !a.target.g.fainted ? a.target : this.alive('enemy')[0];
+        return t ? { kind: 'gift', itemId: a.itemId, target: t } : this.fallbackStrike();
+      }
+    }
+  }
+
+  private weakestEnemy(): Unit | null {
+    const e = this.alive('enemy');
+    return e.length ? e.reduce((a, b) => (a.g.hp <= b.g.hp ? a : b)) : null;
+  }
+  private mostHurtAlly(): Unit | null {
+    const a = this.alive('player');
+    if (!a.length) return null;
+    return a.reduce((x, y) => (x.g.hp / x.g.stats.hp <= y.g.hp / y.g.stats.hp ? x : y));
+  }
+  private fallbackStrike(): PlayerAction | null {
+    const t = this.weakestEnemy();
+    return t ? { kind: 'strike', target: t } : null;
+  }
+
+  /** Toggle Auto-Action and reflect it on the HUD banner. */
+  private setAuto(on: boolean): void {
+    this.autoMode = on;
+    const el = document.getElementById('battle-auto');
+    if (el) el.style.display = on ? 'block' : 'none';
+    toast(on ? '⚡ Auto-Action ON — repeating your last orders. Press A to stop.' : '⚡ Auto-Action off.', on ? 'gold' : '');
+  }
+
+  /** Cycle battle speed 1× → 2× → 3× and apply it to all timing. */
+  private cycleSpeed(): void {
+    this.speedMul = this.speedMul >= 3 ? 1 : this.speedMul + 1;
+    setTimeScale(this.speedMul);
+    const el = document.getElementById('battle-speed');
+    if (el) {
+      el.textContent = `${this.speedMul > 1 ? '⏩' : '▶'} ${this.speedMul}×`;
+      el.classList.toggle('fast', this.speedMul > 1);
+    }
+  }
+
+  // ---------- action executors (shared by manual play and Auto-Action) ----------
+  private async doGuard(u: Unit): Promise<void> {
+    u.guarding = true;
+    u.g.sp = Math.min(u.g.stats.sp, u.g.sp + Math.max(3, Math.floor(u.g.stats.sp * 0.12)));
+    sfx('guard');
+    this.fx.ring(u.rig.group.position, 0x5ab8e8, { maxR: 1.3, y: 0.9, tube: 0.05, life: 0.6 });
+    this.fx.glow(this.chest(u), 0x8ad0f2, { scale: 1.5, life: 0.5, grow: 0.6 });
+    this.log(`<b>${u.g.nickname}</b> braces for impact!`);
+    if (u.side === 'player') this.stat(u.g.id).guards += 1;
+    this.pushLog('🛡️', `<b>${u.g.nickname}</b> guarded.`);
+    this.renderCards();
+    await wait(600);
+  }
+
+  private async doItem(u: Unit, itemId: string, target: Unit): Promise<void> {
+    const it = ITEMS[itemId];
+    this.player.removeItem(itemId);
+    const s = target.g.stats;
+    if (it.kind === 'heal') target.g.hp = Math.min(s.hp, target.g.hp + it.value);
+    else if (it.kind === 'sp') target.g.sp = Math.min(s.sp, target.g.sp + it.value);
+    else if (it.kind === 'revive') {
+      target.g.hp = Math.floor(s.hp * it.value);
+      target.rig.group.visible = true;
+      target.rig.group.rotation.z = 0;
+      target.rig.group.scale.setScalar(1);
+      target.rig.group.position.copy(this.slotPos('player', target.slot));
+      this.fx.pillar(target.rig.group.position, 0x8af2b0, { height: 4, radius: 0.6, life: 0.8 });
+    }
+    sfx('heal');
+    this.fx.spiral(target.rig.group.position.clone(), 0x5ad88a, { up: true, dur: 0.8 });
+    this.fx.glow(this.chest(target), 0x8af2b0, { scale: 1.3, life: 0.4 });
+    this.log(`Used <b>${it.name}</b> on ${target.g.nickname}!`);
+    makeFloatingDamageText(this.scene, target.rig.group.position.clone().setY(2), '♥', '#5ad88a');
+    if (u.side === 'player') this.stat(u.g.id).assists += 1;
+    this.pushLog('🎒', `Used <b>${it.name}</b> on ${target.g.nickname}.`);
+    this.renderCards();
+    await wait(600);
+  }
+
+  private async doGift(u: Unit, itemId: string, target: Unit): Promise<void> {
+    const it = ITEMS[itemId];
+    this.player.removeItem(itemId);
+    const gain = Math.floor(it.value * target.favor);
+    target.bond += gain;
+    const reaction = target.favor > 1.15 ? 'devours it joyfully!' : target.favor < 0.95 ? 'sniffs it cautiously…' : 'munches it happily.';
+    this.log(`Wild <b>${target.g.nickname}</b> ${reaction} <span style="color:var(--ui-purple)">(bond +${gain} → ${Math.round(this.captureChance(target) * 100)}% join chance)</span>`);
+    makeFloatingDamageText(this.scene, target.rig.group.position.clone().setY(2.1), '♥', '#f25aa8');
+    sfx('heal');
+    this.fx.spiral(target.rig.group.position.clone(), 0xf25aa8, { up: true, dur: 0.9 });
+    this.fx.burst(this.chest(target), 0xf28ac4, { count: 16, speed: 1.4, gravity: -1.4, life: 0.8, size: 0.12 });
+    if (u.side === 'player') this.stat(u.g.id).assists += 1;
+    this.pushLog('🎁', `Gifted <b>${it.name}</b> to wild ${target.g.nickname} (bond +${gain}).`);
+    this.renderCards();
+    await wait(700);
+  }
+
+  private async doSwap(u: Unit, incoming: Guardian): Promise<void> {
+    const pi = this.player.party.indexOf(u.g);
+    const ri = this.player.reserve.indexOf(incoming);
+    this.player.party[pi] = incoming;
+    this.player.reserve[ri] = u.g;
+    disposeRig(u.rig);
+    u.g = incoming;
+    u.rig = makeGuardian(incoming.speciesId);
+    u.rig.group.position.copy(this.slotPos('player', u.slot));
+    u.rig.group.rotation.y = Math.PI / 2;
+    this.scene.add(u.rig.group);
+    u.mods = { atk: 1, def: 1, spd: 1 };
+    const swapColor = TYPE_COLORS[incoming.species.type];
+    this.fx.pillar(u.rig.group.position, swapColor, { height: 4, radius: 0.6, life: 0.7 });
+    this.fx.ring(u.rig.group.position, swapColor, { maxR: 1.5 });
+    sfx('confirm');
+    this.log(`Go, <b>${incoming.nickname}</b>!`);
+    this.pushLog('🔄', `Swapped in <b>${incoming.nickname}</b>.`);
+    this.renderCards();
+    await wait(600);
   }
 
   // ---------- enemy AI ----------
@@ -1236,6 +1479,7 @@ export class Battle {
       sfx('guard');
       this.fx.ring(u.rig.group.position, 0x5ab8e8, { maxR: 1.3, y: 0.9, tube: 0.05, life: 0.6 });
       this.log(`Wild <b>${u.g.nickname}</b> turtles up!`);
+      this.pushLog('🛡️', `Wild ${u.g.nickname} guarded.`);
       await wait(550);
       return;
     }
@@ -1244,59 +1488,312 @@ export class Battle {
     await this.basicStrike(u, target);
   }
 
-  // ---------- rewards ----------
+  // ============================================================
+  // Victory sequence — report → EXP/levels → evolutions →
+  // new techniques → befriended wild Guardians.
+  // ============================================================
   private async grantRewards(): Promise<void> {
-    const stageMult: Record<string, number> = { Novice: 1, Adept: 1.8, Elite: 3.2, Apex: 5.5 };
+    const stageMult: Record<string, number> = { Novice: 1, Adept: 1.8, Elite: 3.2, Apex: 5.5, Legendary: 8, Aether: 12 };
     let exp = 0, shards = 0;
     for (const e of this.units.filter(x => x.side === 'enemy')) {
-      exp += Math.floor(e.g.level * 9 * stageMult[e.g.species.stage]);
+      exp += Math.floor(e.g.level * 9 * (stageMult[e.g.species.stage] ?? 1));
       shards += Math.floor(e.g.level * (4 + Math.random() * 5));
     }
     if (this.opts.boss) { exp = Math.floor(exp * 1.6); shards = Math.floor(shards * 2.5); }
     this.player.shards += shards;
     this.player.battlesWon++;
 
-    const winners = this.player.party.filter(g => !g.fainted && !g.isTemp);
-    const share = winners.length ? Math.floor(exp / Math.max(1, Math.ceil(winners.length * 0.75))) : 0;
-    await say('', `Victory! Gained ${exp} EXP and ◆${shards} Shards!`);
-
-    for (const g of winners) {
-      const levels = g.gainExp(share);
-      if (levels > 0) {
-        sfx('fanfare');
-        toast(`${g.nickname} grew to Lv${g.level}!`, 'gold');
-        await say('', `${g.nickname} grew to Level ${g.level}!`);
-      }
-      const evo = g.pendingEvolution;
-      if (evo) {
-        const pick = await choose('', `✨ ${g.nickname} is radiating power… Allow evolution into ${evo.name} (${evo.stage})?`, ['Evolve!', 'Not yet']);
-        if (pick === 0) {
-          const oldName = g.nickname;
-          g.evolve();
-          sfx('fanfare');
-          await say('', `${oldName} evolved into ${g.species.name}! Its power surges!`);
-          toast(`${oldName} → ${g.species.name}!`, 'gold');
-        }
-      }
-    }
-
-    // random item drop
+    // a foe may drop an item
+    let dropName: string | null = null;
     if (Math.random() < 0.45) {
       const drops = ['tonic', 'berry', 'cell', 'soda', 'plating', 'honey_roll'];
       const drop = drops[Math.floor(Math.random() * drops.length)];
-      if (this.player.addItem(drop)) {
-        await say('', `The foes dropped a ${ITEMS[drop].name}!`);
+      if (this.player.addItem(drop)) dropName = ITEMS[drop].name;
+    }
+
+    // award EXP, capturing before/after so the screen can show the climb
+    const winners = this.player.party.filter(g => !g.fainted && !g.isTemp);
+    const share = winners.length ? Math.floor(exp / Math.max(1, Math.ceil(winners.length * 0.75))) : 0;
+    const results: GuardianResult[] = winners.map(g => {
+      const beforeLevel = g.level, beforeExp = g.exp;
+      g.gainExp(share);
+      return { g, beforeLevel, afterLevel: g.level, beforeExp, gained: share, newTechs: this.newlyAvailableTechs(g, beforeLevel) };
+    });
+
+    sfx('fanfare');
+    await this.showVictorySummary(shards, share, dropName, results);
+
+    // evolutions — each its own cinematic
+    for (const r of results) {
+      if (r.g.pendingEvolution) await this.evolutionScreen(r.g);
+    }
+    // newly-reachable techniques
+    for (const r of results) {
+      for (const tech of r.newTechs) {
+        if (!r.g.learnedTechs.includes(tech.id)) await this.learnTechFlow(r.g, tech);
       }
     }
 
-    // capture resolution (gifting bonds) — bonded wild ones may stay
+    // befriended wild Guardians cross over (3D ceremony — hide the overlay first)
+    this.showVictoryOverlay(false);
     for (const e of this.units.filter(x => x.side === 'enemy' && x.wild && x.bond > 0)) {
-      if (Math.random() < this.captureChance(e)) {
-        await this.befriendScene(e);
-      } else {
-        await say('', `💔 The wild ${e.g.species.name} looks back at you once… then slips away into the dark. (A higher bond would have kept it.)`);
+      if (Math.random() < this.captureChance(e)) await this.befriendScene(e);
+      else await say('', `💔 The wild ${e.g.species.name} looks back at you once… then slips away into the dark. (A higher bond would have kept it.)`);
+    }
+    $('victory-screen').style.display = 'none';
+  }
+
+  /** Techniques whose unlock level was crossed this battle and aren't known yet. */
+  private newlyAvailableTechs(g: Guardian, beforeLevel: number): Technique[] {
+    return g.species.techs
+      .filter(t => t.level > beforeLevel && t.level <= g.level && !g.learnedTechs.includes(t.tech))
+      .map(t => TECHS[t.tech])
+      .filter(Boolean);
+  }
+
+  // ---------- victory overlay primitives ----------
+  /** Render one victory card and resolve with the picked button index. */
+  private victoryCard(bodyHtml: string, buttons: { label: string; cls?: string }[]): Promise<number> {
+    return new Promise(resolve => {
+      const screen = $('victory-screen');
+      const inner = $('victory-inner');
+      screen.style.display = 'flex';
+      inner.scrollTop = 0;
+      inner.innerHTML = `<div class="vc-body">${bodyHtml}</div><div class="vc-actions"></div>`;
+      const actions = inner.querySelector('.vc-actions') as HTMLElement;
+      const els: HTMLButtonElement[] = [];
+      let dispose = () => {};
+      const done = (i: number) => { dispose(); resolve(i); };
+      buttons.forEach((b, i) => {
+        const btn = document.createElement('button');
+        btn.className = `ui-btn ${b.cls ?? ''}`;
+        btn.innerHTML = b.label;
+        btn.onclick = () => done(i);
+        actions.appendChild(btn);
+        els.push(btn);
+      });
+      dispose = attachKbNav(els, { onSelect: done });
+    });
+  }
+  private showVictoryOverlay(on: boolean): void {
+    $('victory-screen').style.display = on ? 'flex' : 'none';
+  }
+  /** Fade the full-screen white-out used at the heart of an evolution. */
+  private evoFlash(target: number, dur: number): Promise<void> {
+    const el = $('evo-flash');
+    el.style.display = 'block';
+    const start = parseFloat(el.style.opacity || '0');
+    return tween(dur, t => { el.style.opacity = String(start + (target - start) * t); }).then(() => {
+      el.style.opacity = String(target);
+      if (target <= 0) el.style.display = 'none';
+    });
+  }
+
+  // ---------- victory summary ----------
+  private async showVictorySummary(shards: number, share: number, dropName: string | null, results: GuardianResult[]): Promise<void> {
+    const reward = `
+      <div class="vc-reward-row">
+        <div class="vc-reward"><div class="v gold">◆ ${shards}</div><div class="k">Shards</div></div>
+        <div class="vc-reward"><div class="v exp">+${share}</div><div class="k">EXP each</div></div>
+        ${dropName ? `<div class="vc-reward"><div class="v" style="color:var(--ui-green)">🎁</div><div class="k">${dropName}</div></div>` : ''}
+      </div>`;
+
+    const guardianRows = results.map((r, idx) => {
+      const g = r.g;
+      const color = TYPE_CSS[g.species.type];
+      const levels = r.afterLevel - r.beforeLevel;
+      const base = expForLevel(r.beforeLevel), next = expForLevel(r.beforeLevel + 1);
+      const startPct = Math.max(0, Math.min(100, (r.beforeExp - base) / Math.max(1, next - base) * 100));
+      const chips =
+        (levels > 0 ? `<span class="vc-chip up">▲ Lv +${levels}</span>` : '') +
+        (g.pendingEvolution ? `<span class="vc-chip evo">✦ Evolves!</span>` : '') +
+        (r.newTechs.length ? `<span class="vc-chip move">+${r.newTechs.length} move${r.newTechs.length > 1 ? 's' : ''}</span>` : '');
+      return `
+        <div class="vc-guardian">
+          <div class="vc-g-main">
+            <div class="vc-g-top">
+              <span class="vc-g-name" style="color:${color}">${g.nickname}${chips}</span>
+              <span class="vc-g-lvl" id="vc-lvl-${idx}">Lv${r.beforeLevel}</span>
+            </div>
+            <div class="vc-expbar" id="vc-exp-${idx}"><div style="width:${startPct}%"></div></div>
+            <div class="vc-g-meta"><span>${g.species.name}</span><span id="vc-next-${idx}"></span></div>
+          </div>
+        </div>`;
+    }).join('') || '<div class="vc-sub">No EXP earned this battle.</div>';
+
+    const body = `
+      <h2 class="vc-title">✦ VICTORY ✦</h2>
+      <p class="vc-sub">${this.opts.boss ? 'A mighty foe has fallen!' : 'The wild Guardians are defeated!'}</p>
+      ${reward}
+      <div class="vc-section-title">Guardians</div>
+      ${guardianRows}
+      <div class="vc-section-title">Battle Report</div>
+      ${this.buildReportHtml()}`;
+
+    const picked = this.victoryCard(body, [{ label: 'Continue ▶', cls: 'primary' }]);
+    this.animateExpBars(results);   // play the climb while the card is up
+    await picked;
+  }
+
+  /** Tween each EXP bar from its pre-battle fill to its new total, rolling levels. */
+  private animateExpBars(results: GuardianResult[]): void {
+    const inner = $('victory-inner');
+    results.forEach((r, idx) => {
+      const fill = inner.querySelector<HTMLElement>(`#vc-exp-${idx} > div`);
+      const lvlEl = inner.querySelector<HTMLElement>(`#vc-lvl-${idx}`);
+      const nextEl = inner.querySelector<HTMLElement>(`#vc-next-${idx}`);
+      if (!fill) return;
+      const startExp = r.beforeExp, endExp = r.g.exp, cap = r.g.levelCap;
+      let shown = r.beforeLevel;
+      tween(1.2, t => {
+        if (!fill.isConnected) return;
+        const cur = startExp + (endExp - startExp) * t;
+        let L = 1;
+        while (L < cap && cur >= expForLevel(L + 1)) L++;
+        const base = expForLevel(L), next = expForLevel(L + 1);
+        const pct = L >= cap ? 100 : Math.max(0, Math.min(100, (cur - base) / Math.max(1, next - base) * 100));
+        fill.style.width = pct + '%';
+        if (lvlEl) lvlEl.textContent = `Lv${L}`;
+        if (nextEl) nextEl.textContent = L >= cap ? 'MAX' : `${Math.max(0, Math.ceil(next - cur))} to next`;
+        if (L > shown) { shown = L; sfx('confirm'); }
+      }, Ease.outQuad);
+    });
+  }
+
+  /** The scrolling action log + a per-Guardian stat table. */
+  private buildReportHtml(): string {
+    const rows = this.timeline.slice(-22).map(e =>
+      `<div class="vc-log-row"><span class="ic">${e.icon}</span><span>${e.html}</span></div>`).join('')
+      || '<div class="vc-sub" style="text-align:left">A swift, clean victory.</div>';
+    const players = this.units.filter(u => u.side === 'player');
+    const statRows = players.map(u => {
+      const s = this.stats.get(u.g.id) ?? { dealt: 0, taken: 0, kos: 0, assists: 0, guards: 0 };
+      return `<tr><td style="color:${TYPE_CSS[u.g.species.type]}">${u.g.nickname}</td>
+        <td>${s.dealt}</td><td>${s.taken}</td><td>${s.kos}</td><td>${s.assists}</td><td>${s.guards}</td></tr>`;
+    }).join('');
+    return `
+      <div class="vc-report">${rows}</div>
+      <table class="vc-statgrid">
+        <thead><tr><th>Guardian</th><th>Dmg</th><th>Taken</th><th>KOs</th><th>Assists</th><th>Guards</th></tr></thead>
+        <tbody>${statRows}</tbody>
+      </table>`;
+  }
+
+  // ---------- technique learning ----------
+  private techCardHtml(tech: Technique): string {
+    const tgt = tech.target === 'all' ? 'All foes' : tech.target === 'ally' ? 'An ally' : tech.target === 'self' ? 'Self' : 'One foe';
+    return `<div class="vc-techcard"><div class="vc-tech">
+      <b style="color:${TYPE_CSS[tech.type]}">${tech.name}</b>
+      <div class="vc-sub">${tech.kind === 'phys' ? 'Physical' : 'Art'} · ${tech.type} · Pow ${tech.power} · ${tech.spCost} SP · ${tgt}</div>
+      <div class="vc-sub">${tech.desc}</div>
+    </div></div>`;
+  }
+
+  private async learnTechFlow(g: Guardian, tech: Technique): Promise<void> {
+    if (g.learnedTechs.length < 4) {
+      g.learnedTechs.push(tech.id);
+      sfx('fanfare');
+      await this.victoryCard(
+        `<div class="vc-evo-emoji">✨</div>
+         <h2 class="vc-title">New Technique!</h2>
+         <p class="vc-sub"><b style="color:${TYPE_CSS[g.species.type]}">${g.nickname}</b> learned <b style="color:${TYPE_CSS[tech.type]}">${tech.name}</b>!</p>
+         ${this.techCardHtml(tech)}`,
+        [{ label: 'Nice!', cls: 'primary' }],
+      );
+    } else {
+      const current = g.techniques;
+      const pick = await this.victoryCard(
+        `<div class="vc-evo-emoji">✨</div>
+         <h2 class="vc-title">Learn ${tech.name}?</h2>
+         <p class="vc-sub"><b style="color:${TYPE_CSS[g.species.type]}">${g.nickname}</b> can learn <b style="color:${TYPE_CSS[tech.type]}">${tech.name}</b>, but already knows four. Forget one to make room?</p>
+         ${this.techCardHtml(tech)}`,
+        [
+          ...current.map(t => ({ label: `Forget <span style="color:${TYPE_CSS[t.type]}">${t.name}</span> <span class="sub">(Pow ${t.power} · ${t.spCost} SP)</span>` })),
+          { label: `Keep current moves`, cls: 'danger' },
+        ],
+      );
+      if (pick < current.length) {
+        const forgo = current[pick];
+        const i = g.learnedTechs.indexOf(forgo.id);
+        if (i >= 0) g.learnedTechs.splice(i, 1, tech.id); else g.learnedTechs.push(tech.id);
+        sfx('fanfare');
+        toast(`${g.nickname} learned ${tech.name}!`, 'gold');
       }
     }
+  }
+
+  // ---------- evolution cinematic ----------
+  private async evolutionScreen(g: Guardian): Promise<void> {
+    const evo = g.pendingEvolution;
+    if (!evo) return;
+    const u = this.units.find(x => x.side === 'player' && x.g === g);
+    if (!u) { const old = g.nickname; g.evolve(); toast(`${old} → ${g.species.name}!`, 'gold'); return; }
+
+    const pick = await this.victoryCard(
+      `<div class="vc-evo-emoji">✨</div>
+       <h2 class="vc-title">${g.nickname} is evolving!</h2>
+       <p class="vc-sub">${g.species.name} is wreathed in light — it can become
+         <b style="color:${TYPE_CSS[evo.type]}">${evo.name}</b> <span class="sub">(${evo.stage})</span>.</p>`,
+      [{ label: '✨ Evolve!', cls: 'primary' }, { label: 'Not yet' }],
+    );
+    if (pick === 1) { toast(`${g.nickname} held back its evolution.`); return; }
+
+    const oldName = g.nickname;
+    const color = TYPE_COLORS[g.species.type];
+    const newColor = TYPE_COLORS[evo.type];
+
+    // reveal the 3D stage
+    this.showVictoryOverlay(false);
+    const parties = $('battle-parties');
+    const prevVis = parties.style.visibility;
+    parties.style.visibility = 'hidden';
+    this.log(`<b>${oldName}</b> is evolving…`);
+
+    const home = u.rig.group.position.clone();
+    sfx('charge');
+    this.fx.spiral(home.clone(), color, { up: true, dur: 1.3, radius: 0.95, height: 2.1 });
+    this.fx.glow(this.chest(u), color, { scale: 2.0, life: 1.0 });
+    // accelerating shudder + spin while light gathers
+    await tween(1.6, t => {
+      const k = 1 + Math.sin(t * Math.PI * 7) * 0.12 * (0.3 + t);
+      u.rig.group.scale.setScalar(k);
+      u.rig.group.rotation.y += 0.05 + t * 0.28;
+    });
+    this.fx.implode(this.chest(u), 0xffffff, { count: 44, radius: 2.3, life: 0.6 });
+    sfx('boom');
+    this.fx.shake(0.18, 0.6);
+    await this.evoFlash(1, 0.34);
+
+    // swap the form at the peak of the white-out
+    g.evolve();
+    disposeRig(u.rig);
+    u.rig = makeGuardian(g.speciesId);
+    u.rig.group.position.copy(home);
+    u.rig.group.rotation.y = Math.PI / 2;
+    this.scene.add(u.rig.group);
+    await wait(280);
+    await this.evoFlash(0, 0.5);
+
+    // the new form blooms
+    sfx('fanfare');
+    this.fx.pillar(home, newColor, { height: 5, radius: 0.8, life: 1.1 });
+    this.fx.ring(home, newColor, { maxR: 2.6, life: 0.9 });
+    this.fx.burst(this.chest(u), newColor, { count: 40, speed: 2.6, gravity: -0.6, life: 1.2, size: 0.14 });
+    this.fx.glow(this.chest(u), 0xffffff, { scale: 2.4, life: 0.7 });
+    makeFloatingDamageText(this.scene, home.clone().setY(2.4), g.species.name, '#ffffff', 1.6);
+    await tween(0.6, t => { u.rig.group.scale.setScalar(1 + Math.sin(t * Math.PI) * 0.2); });
+    u.rig.group.scale.setScalar(1);
+    await wait(500);
+
+    parties.style.visibility = prevVis;
+    this.renderCards();
+    toast(`${oldName} → ${g.species.name}!`, 'gold');
+    await this.victoryCard(
+      `<div class="vc-evo-emoji">🌟</div>
+       <h2 class="vc-title">${oldName} evolved into ${g.species.name}!</h2>
+       <p class="vc-sub">A new ${evo.stage}-stage Guardian stands at your side. Its power surges.</p>`,
+      [{ label: 'Continue ▶', cls: 'primary' }],
+    );
   }
 
   /** The befriending ceremony: the bonded wild one crosses the arena,
@@ -1359,6 +1856,13 @@ export class Battle {
       const where = this.player.addGuardian(newG);
       this.player.capturesMade++;
       await say('', `✨ From this day on, this ${sp.name} is ${name} — bonded, not caught. ${name} joined your ${where === 'party' ? 'party' : 'reserve'}!`);
+      await this.victoryCard(
+        `<div class="vc-evo-emoji">💜</div>
+         <h2 class="vc-title">${name} joined your team!</h2>
+         <p class="vc-sub">A wild <b style="color:${TYPE_CSS[sp.type]}">${sp.name}</b> was won over by your kindness — it now fights at your side, in your ${where === 'party' ? 'party' : 'reserve'}.</p>`,
+        [{ label: 'Welcome aboard!', cls: 'primary' }],
+      );
+      this.showVictoryOverlay(false);   // hide again for any further 3D ceremonies
     } else {
       // it bounds home with a parting sparkle
       this.faceTo(e, start);
@@ -1401,7 +1905,25 @@ export class Battle {
   async run(): Promise<BattleResult> {
     this.buildArena();
     $('battle-ui').style.display = 'block';
+    $('battle-auto').style.display = 'none';
+    $('victory-screen').style.display = 'none';
     setStoryInBattle(true);
+
+    // battle speed chip (click or F) — starts at 1×
+    this.speedMul = 1;
+    setTimeScale(1);
+    const speedEl = $('battle-speed');
+    speedEl.style.display = 'block';
+    speedEl.textContent = '▶ 1×';
+    speedEl.classList.remove('fast');
+    speedEl.onclick = () => this.cycleSpeed();
+
+    // A cancels Auto-Action; F cycles battle speed — live the whole fight.
+    this.autoKeyHandler = (e: KeyboardEvent) => {
+      if ((e.key === 'a' || e.key === 'A') && this.autoMode) { e.preventDefault(); this.setAuto(false); }
+      else if (e.key === 'f' || e.key === 'F') { e.preventDefault(); this.cycleSpeed(); }
+    };
+    window.addEventListener('keydown', this.autoKeyHandler);
 
     this.player.party.forEach((g, i) => this.units.push(this.spawnUnit(g, 'player', i)));
     this.enemySpecs.forEach((e, i) => {
@@ -1469,15 +1991,26 @@ export class Battle {
       else if (!this.alive('player').length) result = 'lose';
     }
 
+    // the auto-action shortcut shouldn't bleed into the victory screen or beyond
+    this.autoMode = false;
+    $('battle-auto').style.display = 'none';
+
     if (result === 'win') await this.grantRewards();
     else if (result === 'lose') await say('', 'Your party was overwhelmed…');
 
     // cleanup
+    if (this.autoKeyHandler) { window.removeEventListener('keydown', this.autoKeyHandler); this.autoKeyHandler = undefined; }
+    setTimeScale(1);   // never let battle speed bleed into the overworld
     setStoryInBattle(false);
     this.units.forEach(u => disposeRig(u.rig));
     this.disposeArena();
     $('battle-ui').style.display = 'none';
     $('battle-menu').style.display = 'none';
+    $('battle-auto').style.display = 'none';
+    $('battle-speed').style.display = 'none';
+    $('battle-speed').onclick = null;
+    $('victory-screen').style.display = 'none';
+    $('evo-flash').style.display = 'none';
     return result;
   }
 }

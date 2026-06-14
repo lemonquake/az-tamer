@@ -14,6 +14,7 @@ import { Town } from './town';
 import { Overworld } from './overworld';
 import { AgdaoIsland } from './agdao';
 import { NewSalmonan } from './salmonan';
+import { TerraCity } from './terra';
 import { University } from './university';
 import { Cinematic } from './cinematic';
 import { syncStoryQuests } from './quests';
@@ -217,7 +218,7 @@ async function academyExam(cine?: Cinematic): Promise<void> {
   await conversation([
     ['Instructor Hale', 'Ironhusk, destroyed?! Outstanding work, ' + player.tamerName + '!'],
     ['Instructor Hale', 'By the authority of the Tamer Academy, I declare you a GRADUATE. The loaner Guardians return to the academy now — your own story starts today.'],
-    ['Instructor Hale', 'Every graduate is presented at the Tamer University of Aurel — the five Grand Houses keep recruiting officers there, and the halls are full of tamers who were once exactly where you stand.'],
+    ['Instructor Hale', 'Every graduate is presented at the Leodones University of Aurel — the five Grand Houses keep recruiting officers there, and the halls are full of tamers who were once exactly where you stand.'],
     ['Instructor Hale', 'The transport circle is charged and waiting. Hold still, keep your arms in… and make me proud, graduate!'],
   ]);
   player.clearTempGuardians();
@@ -225,7 +226,7 @@ async function academyExam(cine?: Cinematic): Promise<void> {
   player.save();
 }
 
-// ---------------- Tamer University ----------------
+// ---------------- Leodones University ----------------
 async function runUniversity(revisit: boolean): Promise<void> {
   await fadeOut();
   const uni = new University({ player, runBattle }, revisit);
@@ -297,6 +298,22 @@ async function runSalmonan(): Promise<void> {
   hideHUD();
 }
 
+// ---------------- Terra City (the Circuit-Crown of Tharkand) ----------------
+/** Pod across the strait to Terra City and explore until the player rides home. */
+async function runTerra(): Promise<void> {
+  const firstArrival = !player.flags['terra_visited'];
+  const city = new TerraCity(player, firstArrival);
+  await fadeOut();
+  setView(city.view);
+  await fadeIn();
+  await city.run(); // resolves when the player boards the Pod home to Haven City
+  await fadeOut();
+  setView(null);
+  hideHUD();
+  syncStoryQuests(player).forEach(n => toast(n, 'gold'));
+  player.save();
+}
+
 // ---------------- main game loop ----------------
 async function cityLoop(): Promise<never> {
   let firstArrival = !player.flags['arrived_city'];
@@ -327,6 +344,11 @@ async function cityLoop(): Promise<never> {
 
     if (dest === 'university') {
       await runUniversity(true);
+      continue;
+    }
+
+    if (dest === 'terra') {
+      await runTerra();
       continue;
     }
 

@@ -1,5 +1,5 @@
 // ============================================================
-// AZ Tamer — Tamer University of Aurel: a grand interior hub.
+// AZ Tamer — Leodones University of Aurel: a grand interior hub.
 // Marble lobby with living NPCs (wandering, seated, chatting),
 // seven rooms behind real doors — Cafeteria, Classroom, Library,
 // Locker Room, Training Hall, Infirmary and the Officers' Hall
@@ -144,6 +144,8 @@ export class University {
   private keys = new Set<string>();
   private busy = false;
   private walking = false;
+  private live = false;                              // true once the lobby is built and the player has control
+  private readonly bootScene = new THREE.Scene();    // rendered for the black frame before the lobby exists
 
   private rooms = new Map<RoomId, RoomData>();
   private current: RoomId = 'lobby';
@@ -163,7 +165,7 @@ export class University {
   get view() {
     const self = this;
     return {
-      get scene() { return self.room.scene; },
+      get scene() { return self.rooms.get(self.current)?.scene ?? self.bootScene; },
       camera: this.camera,
       update: (dt: number) => this.update(dt),
     };
@@ -327,7 +329,7 @@ export class University {
       const summary = completeQuest(p, questId);
       toast(`Quest complete: ${q.title}!`, 'gold');
       if (summary) toast(`Received ${summary}`, 'gold');
-      updateHUD(p, 'Tamer University');
+      updateHUD(p, 'Leodones University');
       return;
     }
     await say(giver, lines.accepted);
@@ -359,7 +361,7 @@ export class University {
         ['Historian Veyl', `Now — the price of my next sentence. The wild Guardians in that mire are shedding STORM-TOUCHED AMBER: fossil resin with a living spark sealed inside. Amber remembers the storm that made it. Bring me one piece and I can read where that storm has been roosting.`],
         ['Historian Veyl', `One piece. Unbruised. The wilds drop it after an honest scrap. Off you go — and if Hale asks, tell him I was charming.`],
       ]);
-      updateHUD(p, 'Tamer University');
+      updateHUD(p, 'Leodones University');
       return;
     }
 
@@ -377,7 +379,7 @@ export class University {
       toast('🏝️ Agdao Island is now on your overworld map!', 'gold');
       syncStoryQuests(p).forEach(n => toast(n, 'gold'));
       await say('Historian Veyl', 'When you find him — and you will — tell him Veyl finally worked it out. He\'ll laugh. It\'s a good laugh. It\'s why nobody minds that he hides.');
-      updateHUD(p, 'Tamer University');
+      updateHUD(p, 'Leodones University');
       return;
     }
     if (questState(p, 'story_amber') === 'active') {
@@ -518,7 +520,7 @@ export class University {
       label: 'speak with Receptionist Dana',
       handler: async () => {
         await conversation([
-          ['Receptionist Dana', `Welcome to the Tamer University of Aurel, ${this.player.tamerName}! Congratulations on surviving — ah, passing your exam.`],
+          ['Receptionist Dana', `Welcome to the Leodones University of Aurel, ${this.player.tamerName}! Congratulations on surviving — ah, passing your exam.`],
           ['Receptionist Dana', 'The Officers\' Hall is through the grand door to the north — the five Grand Houses are recruiting graduates like you today.'],
           ['Receptionist Dana', 'Cafeteria and Training Hall are along the east wall; Classroom, Library and Locker Room to the west. The Infirmary is the east door nearest the entrance — Nurse Imelda patches up Guardians for free.'],
           ['Receptionist Dana', 'And do read the notice board beside me. Half the staff here will pay good Shards for a capable graduate\'s help.'],
@@ -1790,7 +1792,7 @@ export class University {
       const summary = completeQuest(p, 'side_spar');
       toast('Quest complete: Schoolyard Legend!', 'gold');
       if (summary) toast(`Received ${summary}`, 'gold');
-      updateHUD(p, 'Tamer University');
+      updateHUD(p, 'Leodones University');
     } else {
       p.healAll();
       await say('Rival Kade', 'Twenty-two! WOO! …Hey, no shame — Cinder and I drill every morning. Your team\'s patched up, on the house. Come back stronger; legends need good rivals.');
@@ -1871,7 +1873,7 @@ export class University {
         this.player.healAll();
         this.player.save();
         toast('Party fully healed. Crawler restocked.', 'gold');
-        updateHUD(this.player, 'Tamer University');
+        updateHUD(this.player, 'Leodones University');
       },
     });
 
@@ -2015,7 +2017,7 @@ export class University {
       else break;
     }
     const joined = await guildJoinCeremony(p, h, lore.officer);
-    if (joined) updateHUD(p, 'Tamer University');
+    if (joined) updateHUD(p, 'Leodones University');
   }
 
   // ================= notice board =================
@@ -2096,7 +2098,7 @@ export class University {
       officers: 'University — Officers\' Hall', infirmary: 'University — Infirmary',
     };
     toast(names[this.current], 'gold');
-    updateHUD(this.player, 'Tamer University');
+    updateHUD(this.player, 'Leodones University');
   }
 
   private async leaveUniversity(): Promise<void> {
@@ -2105,7 +2107,7 @@ export class University {
       const pick = await choose('Doorwarden', 'Haven City lies beyond — but graduates usually pledge to a Grand House at the Officers\' Hall first. Leave anyway? (You can also pledge at the house halls in the city.)', ['Leave for Haven City', 'Stay a while longer']);
       if (pick !== 0) return;
     } else {
-      const pick = await choose('Doorwarden', `Off to Haven City, ${p.tamerName}? The shuttle to the University runs from the city plaza whenever you wish to return.`, ['Depart for Haven City', 'Stay a while longer']);
+      const pick = await choose('Doorwarden', `Off to Haven City, ${p.tamerName}? The Aetherline Pod docks at the Skyport on the city's west plaza whenever you wish to ride back.`, ['Depart for Haven City', 'Stay a while longer']);
       if (pick !== 0) return;
     }
     p.flags['university_done'] = true;
@@ -2115,7 +2117,7 @@ export class University {
 
   // ================= per-frame =================
   private update(dt: number): void {
-    if (!this.resolveExit) return;
+    if (!this.live) return;
     const r = this.room;
     // guidance: Officers' Hall until the player has pledged, then the way out
     if (this.officersBeacon && this.doorsBeacon) {
@@ -2245,7 +2247,7 @@ export class University {
       shape: 'rect', w: r.w, d: r.d,
       markers: mapMarkers,
       player: { x: t.x, z: t.z, rot: this.tamer.rotation.y },
-      title: ROOM_TITLES[this.current] ?? 'Tamer University',
+      title: ROOM_TITLES[this.current] ?? 'Leodones University',
     });
 
     if (isDialogueOpen() || isMenuOpen() || this.busy) { showInteractHint(null); return; }
@@ -2256,7 +2258,7 @@ export class University {
   private openPanelGuarded(kind: PanelKind): void {
     this.busy = true;
     openPanel(kind, this.player, { canSave: true }).then(() => {
-      updateHUD(this.player, 'Tamer University');
+      updateHUD(this.player, 'Leodones University');
       this.busy = false;
     });
   }
@@ -2298,7 +2300,7 @@ export class University {
     else if (k === 'escape') {
       this.busy = true;
       openPauseMenu(this.player, { canSave: true }).then(() => {
-        updateHUD(this.player, 'Tamer University');
+        updateHUD(this.player, 'Leodones University');
         this.busy = false;
       });
     }
@@ -2316,8 +2318,9 @@ export class University {
     this.tamer.position.set(0, 0, 11.5);
     this.tamer.rotation.y = Math.PI;
     this.camera.position.set(0, 7.2, 20);
+    this.live = true;   // the world is live now — update() drives the player through the intro and tutorial
 
-    updateHUD(this.player, 'Tamer University');
+    updateHUD(this.player, 'Leodones University');
     showHotkeys(true);
     // debug handle for automated testing
     (window as unknown as Record<string, unknown>).__uni = { uni: this, tamer: this.tamer };
@@ -2337,7 +2340,7 @@ export class University {
       await conversation([
         ['???', '…and mind the step. Welcome through, graduate!'],
         ['Receptionist Dana', `Tamer ${this.player.tamerName}! The exam board sent word ahead — Ironhusk, defeated! You're the talk of the whole University.`],
-        ['Receptionist Dana', 'This is the Tamer University of Aurel — every licensed tamer on the continent passed through this lobby once, just like you, usually with the same stunned expression.'],
+        ['Receptionist Dana', 'This is the Leodones University of Aurel — every licensed tamer on the continent passed through this lobby once, just like you, usually with the same stunned expression.'],
         ['Receptionist Dana', 'The five Grand Houses keep recruiting officers in the Officers\' Hall, through the great north door. Pledge to one and you\'ll receive your first true partner — and your guild Sigil.'],
         ['Receptionist Dana', 'Do explore! Cafeteria, Training Hall and Infirmary east; Classroom, Library and Locker Room west. Folk here always need a hand — check the notice board by my desk. When you\'re ready for the wide world, the Grand Doors south lead to Haven City.'],
       ]);
@@ -2356,6 +2359,7 @@ export class University {
         showHotkeys(false);
         hideAreaMap(document.getElementById('minimap') as HTMLCanvasElement);
         this.rooms.forEach(rd => rd.rigs.forEach(disposeRig));
+        this.live = false;
         this.resolveExit = null;
         res();
       };

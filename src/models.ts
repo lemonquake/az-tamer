@@ -24,17 +24,24 @@ export function tween(dur: number, fn: TweenFn, ease = Ease.outQuad): Promise<vo
   });
 }
 
+// Global speed multiplier for tween()/wait(). Drives the battle speed toggle;
+// always reset to 1 outside battle so the overworld plays at normal pace.
+let timeScale = 1;
+export const setTimeScale = (s: number): void => { timeScale = Math.max(0.1, s); };
+export const getTimeScale = (): number => timeScale;
+
 export function updateTweens(dt: number): void {
+  const scaled = dt * timeScale;
   for (let i = tweens.length - 1; i >= 0; i--) {
     const tw = tweens[i];
-    tw.t += dt;
+    tw.t += scaled;
     const x = Math.min(1, tw.t / tw.dur);
     tw.fn(tw.ease(x));
     if (x >= 1) { tweens.splice(i, 1); tw.done?.(); }
   }
 }
 
-export const wait = (ms: number) => new Promise<void>(res => setTimeout(res, ms));
+export const wait = (ms: number) => new Promise<void>(res => setTimeout(res, ms / timeScale));
 
 // ---------------- canvas textures ----------------
 export function canvasTex(size: number, draw: (ctx: CanvasRenderingContext2D, s: number) => void, repeat = 1): THREE.Texture {
