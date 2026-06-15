@@ -4,7 +4,7 @@
 import {
   SPECIES, TECHS, ITEMS, CRAWLER_PARTS, expForLevel,
   type SpeciesDef, type Stats, type StatKey, type Technique, type CrawlerPart,
-  HOUSES, TYPE_ELEMENT, elementsOf,
+  HOUSES, TYPE_ELEMENT, elementsOf, type Element,
 } from './data';
 import { DEFAULT_APPEARANCE, type Appearance } from './models';
 import { defaultFishingState, normalizeFishingState, type FishingState } from './fishingdata';
@@ -28,6 +28,7 @@ export interface GuardianSave {
   learnedTechs?: string[];
   isStarter?: boolean;
   customization?: GuardianCustomization;
+  elements?: Element[];
 }
 
 export class Guardian {
@@ -45,6 +46,7 @@ export class Guardian {
   learnedTechs: string[] = [];
   isStarter = false;
   customization?: GuardianCustomization;
+  elements: Element[];
 
   constructor(speciesId: string, level = 1, nickname?: string) {
     this.id = uid();
@@ -53,6 +55,7 @@ export class Guardian {
     this.level = level;
     this.exp = expForLevel(level);
     this.bonus = { hp: 0, sp: 0, atk: 0, def: 0, spd: 0, wis: 0 };
+    this.elements = [...elementsOf(speciesId)];
     
     // Default starting techniques
     this.learnedTechs = this.species.techs
@@ -80,7 +83,7 @@ export class Guardian {
       const house = HOUSES.find(h => h.id === Player.activeInstance!.houseId);
       if (house) {
         const guildEl = TYPE_ELEMENT[house.type];
-        if (elementsOf(this.speciesId).includes(guildEl)) {
+        if (elementsOf(this).includes(guildEl)) {
           const perkLvl = Player.activeInstance.guildPerks?.elementMastery ?? 1;
           const boost = 1.05 + (perkLvl - 1) * 0.0075;
           baseStats.hp = Math.floor(baseStats.hp * boost);
@@ -209,6 +212,7 @@ export class Guardian {
       learnedTechs: [...this.learnedTechs],
       isStarter: this.isStarter || undefined,
       customization: this.customization ? JSON.parse(JSON.stringify(this.customization)) : undefined,
+      elements: [...this.elements],
     };
   }
 
@@ -221,6 +225,7 @@ export class Guardian {
     g.learnedTechs = s.learnedTechs ? [...s.learnedTechs] : [];
     g.isStarter = !!s.isStarter;
     g.customization = s.customization ? JSON.parse(JSON.stringify(s.customization)) : undefined;
+    g.elements = s.elements ? [...s.elements] : [...elementsOf(s.speciesId)];
     return g;
   }
 }

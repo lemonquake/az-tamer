@@ -143,7 +143,7 @@ function cardFront(g: Guardian, owned: boolean): HTMLCanvasElement {
     ctx.fillStyle = fg; ctx.font = 'bold 18px Georgia, serif';
     ctx.fillText(text, x + w / 2, 164);
   };
-  const els = elementsOf(sp.id);
+  const els = elementsOf(g);
   const pills: { text: string; bg: string; fg: string }[] = [
     ...els.map(el => ({ text: `${ELEMENT_ICONS[el]} ${el.toUpperCase()}`, bg: ELEMENT_CSS[el], fg: '#0c1022' })),
     { text: sp.stage.toUpperCase(), bg: 'rgba(255,255,255,0.12)', fg: '#e8ecff' },
@@ -302,7 +302,7 @@ export function openGuardianCard(subject: Guardian | string, player?: Player): P
     overlay.innerHTML = `
       <div id="pcard-head">
         <div id="pcard-title" style="color:${shade(tc, 0.45)}">${g.nickname.toUpperCase()}</div>
-        <div id="pcard-sub">${sp.name} · ${sp.stage} · ${elementsOf(sp.id).map(e => `${ELEMENT_ICONS[e]} ${e}`).join(' / ')} ${inCare ? '· <b style="color:var(--ui-green)">IN YOUR CARE</b>' : ''}</div>
+        <div id="pcard-sub">${sp.name} · ${sp.stage} · ${elementsOf(g).map(e => `${ELEMENT_ICONS[e]} ${e}`).join(' / ')} ${inCare ? '· <b style="color:var(--ui-green)">IN YOUR CARE</b>' : ''}</div>
       </div>
       <canvas id="pcard-canvas"></canvas>
       <div id="pcard-hint">🖱 drag to rotate — techniques & evolution line are on the back</div>

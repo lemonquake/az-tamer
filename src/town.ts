@@ -7652,7 +7652,7 @@ export class Town {
 
       const getOutcomes = () => {
         if (!parentA || !parentB) return [];
-        const hybridSpecies = findReadyMadeFusion(elementsOf(parentA.speciesId), elementsOf(parentB.speciesId));
+        const hybridSpecies = findReadyMadeFusion(elementsOf(parentA), elementsOf(parentB));
         return [
           { name: `Primary Hybrid (50%)`, speciesId: hybridSpecies, desc: `Fully synthesized bespoke hybrid combining elements.` },
           { name: `${parentA.species.name} Variant (25%)`, speciesId: parentA.speciesId, desc: `Evolved variant of Parent A carrying Parent B's palette.` },
@@ -7676,7 +7676,7 @@ export class Town {
           return `<div class="list-row candidate-row" data-pick="${g.id}">
             <div style="flex:1">
               <b>${g.nickname}</b> <span class="sub">(Lv.${g.level} ${g.species.name})</span>
-              <div class="sub">Stage: ${g.species.stage} · Elements: ${elementsOf(g.speciesId).join(', ')}</div>
+              <div class="sub">Stage: ${g.species.stage} · Elements: ${elementsOf(g).join(', ')}</div>
             </div>
             <button class="ui-btn">Select</button>
           </div>`;
@@ -7979,6 +7979,35 @@ export class Town {
               wis: Math.floor(pAStats.wis * 0.15 + pBStats.wis * 0.05)
             };
             
+            // Determine elements of offspring
+            const parentElements = Array.from(new Set([...elementsOf(parentA!), ...elementsOf(parentB!)]));
+            let offspringElements: Element[] = [];
+
+            const getRandomSubset = <T>(arr: T[], n: number): T[] => {
+              const shuffled = [...arr].sort(() => 0.5 - Math.random());
+              return shuffled.slice(0, n);
+            };
+
+            if (parentElements.length <= 2) {
+              offspringElements = [...parentElements];
+            } else if (parentElements.length === 3) {
+              if (Math.random() < 0.35) {
+                offspringElements = [...parentElements]; // 35% chance of 3 elements
+              } else {
+                offspringElements = getRandomSubset(parentElements, 2); // else 2 elements
+              }
+            } else { // >= 4 elements
+              const r = Math.random();
+              if (r < 0.15) {
+                offspringElements = getRandomSubset(parentElements, 4); // 15% chance of 4 elements
+              } else if (r < 0.15 + 0.35) {
+                offspringElements = getRandomSubset(parentElements, 3); // 35% chance of 3 elements
+              } else {
+                offspringElements = getRandomSubset(parentElements, 2); // else 2 elements
+              }
+            }
+            offspring.elements = offspringElements;
+
             offspring.hp = offspring.stats.hp;
             offspring.sp = offspring.stats.sp;
 
@@ -7998,21 +8027,155 @@ export class Town {
                 display: flex; flex-direction: column; justify-content: center; align-items: center;
                 color: #e5e9f0; font-family: 'Outfit', sans-serif; padding: 24px; box-sizing: border-box;
               `;
-              congrats.innerHTML = `
-                <h1 style="color:var(--ui-gold);font-family:Georgia,serif;margin-bottom:8px;">🧬 FUSION SUCCESSFUL!</h1>
-                <div class="sub" style="margin-bottom:20px;">The genetic profiles of ${parentA!.nickname} and ${parentB!.nickname} have synthesized.</div>
-                <div id="congrats-canvas" style="width:300px;height:280px;background:rgba(6,8,16,0.55);border:1px solid #2c3666;border-radius:8px;"></div>
-                <h2 style="color:#ffffff;margin-top:16px;">${offspring.nickname} (Lv.${offspring.level})</h2>
-                <div style="margin-top:20px">
-                  <button class="ui-btn primary" id="congrats-ok">Accept matrix offspring</button>
-                </div>
-              `;
+
+              const isMultiElementSpecial = offspring.elements.length >= 3;
+
+              if (isMultiElementSpecial) {
+                sfx('achievement');
+                setTimeout(() => sfx('fanfare'), 350);
+
+                const elChips = offspring.elements.map(el => 
+                  `<span style="display:inline-flex;align-items:center;gap:4px;padding:6px 12px;background:${ELEMENT_CSS[el]}22;border:1.5px solid ${ELEMENT_CSS[el]};border-radius:20px;color:${ELEMENT_CSS[el]};font-size:14px;font-weight:bold;box-shadow:0 0 10px ${ELEMENT_CSS[el]}33">
+                    ${ELEMENT_ICONS[el]} ${el.toUpperCase()}
+                  </span>`
+                ).join(' ');
+
+                congrats.innerHTML = `
+                  <style>
+                    @keyframes rainbow-border {
+                      0% { border-color: #f2603a; box-shadow: 0 0 25px rgba(242,96,58,0.5); }
+                      20% { border-color: #3a9df2; box-shadow: 0 0 25px rgba(58,157,242,0.5); }
+                      40% { border-color: #4ec45e; box-shadow: 0 0 25px rgba(78,196,94,0.5); }
+                      60% { border-color: #f2d23a; box-shadow: 0 0 25px rgba(242,210,58,0.5); }
+                      80% { border-color: #9a5af2; box-shadow: 0 0 25px rgba(154,90,242,0.5); }
+                      100% { border-color: #f2603a; box-shadow: 0 0 25px rgba(242,96,58,0.5); }
+                    }
+                    @keyframes text-glow {
+                      0% { text-shadow: 0 0 12px rgba(255,215,0,0.4); transform: scale(1); }
+                      50% { text-shadow: 0 0 30px rgba(255,215,0,0.85), 0 0 50px #ffd700; transform: scale(1.02); }
+                      100% { text-shadow: 0 0 12px rgba(255,215,0,0.4); transform: scale(1); }
+                    }
+                    .special-congrats-card {
+                      border: 3px solid #ffd700;
+                      animation: rainbow-border 4s linear infinite;
+                    }
+                    .special-title {
+                      animation: text-glow 2s ease-in-out infinite;
+                      background: linear-gradient(45deg, #ffd700, #ff8c00, #ff0080, #9a5af2, #3a9df2, #4ec45e);
+                      -webkit-background-clip: text;
+                      -webkit-text-fill-color: transparent;
+                      font-weight: 900;
+                      font-size: 38px;
+                      letter-spacing: 2px;
+                      margin-bottom: 8px;
+                    }
+                  </style>
+                  <canvas id="particles-canvas" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:4999;"></canvas>
+                  <div class="special-title">🌟 DEITY-CLASS FUSION 🌟</div>
+                  <h1 style="color:#ffffff;font-family:Georgia,serif;margin:0 0 8px 0;font-size:32px;">${offspring.nickname}</h1>
+                  <div class="sub" style="margin-bottom:16px;font-size:16px;">
+                    Unbelievable! The offspring has synthesized <b>${offspring.elements.length} Elements</b>!
+                  </div>
+                  <div style="display:flex;gap:10px;margin-bottom:24px;justify-content:center;">
+                    ${elChips}
+                  </div>
+                  <div id="congrats-canvas" class="special-congrats-card" style="width:320px;height:300px;background:rgba(6,8,16,0.75);border-radius:12px;z-index:5001;position:relative;"></div>
+                  <div class="sub" style="margin-top:16px;color:#a0aabf;max-width:400px;text-align:center;">
+                    Base: ${parentA!.nickname} + ${parentB!.nickname}
+                  </div>
+                  <div style="margin-top:24px;z-index:5002;">
+                    <button class="ui-btn primary" id="congrats-ok" style="padding:10px 24px;font-size:16px;font-weight:bold;background:#5ad88a;border-color:#48b773;color:#0c1022;">Accept divine matrix</button>
+                  </div>
+                `;
+              } else {
+                sfx('fanfare');
+
+                congrats.innerHTML = `
+                  <h1 style="color:var(--ui-gold);font-family:Georgia,serif;margin-bottom:8px;">🧬 FUSION SUCCESSFUL!</h1>
+                  <div class="sub" style="margin-bottom:20px;">The genetic profiles of ${parentA!.nickname} and ${parentB!.nickname} have synthesized.</div>
+                  <div id="congrats-canvas" style="width:300px;height:280px;background:rgba(6,8,16,0.55);border:1px solid #2c3666;border-radius:8px;"></div>
+                  <h2 style="color:#ffffff;margin-top:16px;">${offspring.nickname} (Lv.${offspring.level})</h2>
+                  <div style="margin-top:20px">
+                    <button class="ui-btn primary" id="congrats-ok">Accept matrix offspring</button>
+                  </div>
+                `;
+              }
+
               document.body.appendChild(congrats);
 
               const congratsContainer = congrats.querySelector('#congrats-canvas') as HTMLElement;
               const congratsPreview = initGuardianPreview3D(congratsContainer, offspring.speciesId, offspring.customization);
 
+              // Particle effect setup
+              let animId: number | null = null;
+              if (isMultiElementSpecial) {
+                const pCanvas = congrats.querySelector('#particles-canvas') as HTMLCanvasElement;
+                if (pCanvas) {
+                  const pCtx = pCanvas.getContext('2d')!;
+                  pCanvas.width = window.innerWidth;
+                  pCanvas.height = window.innerHeight;
+                  const particles: any[] = [];
+                  const colors = ['#f2603a', '#3a9df2', '#4ec45e', '#f2d23a', '#9a5af2', '#ff5a8a', '#9adff2'];
+                  
+                  // create initial burst
+                  for (let i = 0; i < 120; i++) {
+                    particles.push({
+                      x: window.innerWidth / 2,
+                      y: window.innerHeight / 2 - 50,
+                      vx: (Math.random() - 0.5) * 12,
+                      vy: (Math.random() - 0.5) * 12 - 3,
+                      size: Math.random() * 6 + 4,
+                      color: colors[Math.floor(Math.random() * colors.length)],
+                      alpha: 1,
+                      decay: Math.random() * 0.015 + 0.005,
+                      gravity: 0.05
+                    });
+                  }
+
+                  // ambient rising stars
+                  const addRisingStar = () => {
+                    particles.push({
+                      x: Math.random() * window.innerWidth,
+                      y: window.innerHeight + 10,
+                      vx: (Math.random() - 0.5) * 2,
+                      vy: -Math.random() * 3 - 2,
+                      size: Math.random() * 4 + 2,
+                      color: colors[Math.floor(Math.random() * colors.length)],
+                      alpha: 0.8,
+                      decay: 0.003,
+                      gravity: -0.01
+                    });
+                  };
+
+                  const updateParticles = () => {
+                    pCtx.clearRect(0, 0, pCanvas.width, pCanvas.height);
+                    if (Math.random() < 0.2) addRisingStar();
+
+                    for (let i = particles.length - 1; i >= 0; i--) {
+                      const p = particles[i];
+                      p.x += p.vx;
+                      p.y += p.vy;
+                      p.vy += p.gravity;
+                      p.alpha -= p.decay;
+                      if (p.alpha <= 0) {
+                        particles.splice(i, 1);
+                        continue;
+                      }
+                      pCtx.globalAlpha = p.alpha;
+                      pCtx.fillStyle = p.color;
+                      pCtx.beginPath();
+                      pCtx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                      pCtx.fill();
+                    }
+                    pCtx.globalAlpha = 1;
+                    animId = requestAnimationFrame(updateParticles);
+                  };
+                  updateParticles();
+                }
+              }
+
               (congrats.querySelector('#congrats-ok') as HTMLElement).onclick = () => {
+                if (animId !== null) cancelAnimationFrame(animId);
                 congratsPreview.dispose();
                 congrats.remove();
                 resolve();

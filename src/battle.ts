@@ -619,14 +619,14 @@ export class Battle {
       el.className = `unit-card${u.g.fainted ? ' dead' : ''}`;
       const s = u.g.stats;
       const side = u.side === 'enemy' ? `<span style="color:var(--ui-red)">FOE</span> ` : '';
-      const els = elementsOf(u.g.speciesId).map(e => ELEMENT_ICONS[e]).join('');
+      const els = elementsOf(u.g).map(e => ELEMENT_ICONS[e]).join('');
       // wild foes show their bond meter: the live chance they join you after victory
       const chance = this.captureChance(u);
       const bondRow = u.wild && u.g.species.captureBase > 0
         ? `<div class="minibar bond" title="Bond — chance this Guardian joins you after victory"><div style="width:${Math.round(chance * 100)}%"></div></div>
            <div class="bond-label">💜 Bond ${u.bond} · <b>${Math.round(chance * 100)}%</b> join chance</div>`
         : '';
-      el.innerHTML = `<div class="nm"><span style="color:${TYPE_CSS[u.g.species.type]}">${side}${u.g.nickname}</span><span><span style="font-size:11px" title="${elementsOf(u.g.speciesId).join(' · ')}">${els}</span> Lv${u.g.level}</span></div>
+      el.innerHTML = `<div class="nm"><span style="color:${TYPE_CSS[u.g.species.type]}">${side}${u.g.nickname}</span><span><span style="font-size:11px" title="${elementsOf(u.g).join(' · ')}">${els}</span> Lv${u.g.level}</span></div>
         <div class="minibar hp"><div style="width:${Math.max(0, (u.g.hp / s.hp)) * 100}%"></div></div>
         <div class="minibar sp"><div style="width:${Math.max(0, (u.g.sp / s.sp)) * 100}%"></div></div>${bondRow}`;
       u.cardEl = el;
@@ -934,8 +934,8 @@ export class Battle {
     const defStat = (tech.kind === 'phys' ? ds.def : (ds.def + ds.wis) / 2) * def.mods.def;
     // element effectiveness: attack element vs every defender element
     const attEl = TYPE_ELEMENT[tech.type];
-    const eff = elementMult(attEl, elementsOf(def.g.speciesId));
-    const stab = elementsOf(att.g.speciesId).includes(attEl) ? 1.15 : 1;
+    const eff = elementMult(attEl, elementsOf(def.g));
+    const stab = elementsOf(att.g).includes(attEl) ? 1.15 : 1;
     const crit = Math.random() < 0.08;
     const variance = 0.9 + Math.random() * 0.2;
     const pressure = atkStat / (atkStat + defStat * 1.15);   // 0.5 at parity
@@ -952,9 +952,9 @@ export class Battle {
       if (att.side === 'player') {
         // Mono-Element Synergy: All active units share at least one element
         if (perks.monoSynergy > 0 && playerUnits.length > 0) {
-          let shared = elementsOf(playerUnits[0].g.speciesId);
+          let shared = elementsOf(playerUnits[0].g);
           for (let i = 1; i < playerUnits.length; i++) {
-            const el = elementsOf(playerUnits[i].g.speciesId);
+            const el = elementsOf(playerUnits[i].g);
             shared = shared.filter(x => el.includes(x));
           }
           if (shared.length > 0) {
@@ -977,7 +977,7 @@ export class Battle {
         if (perks.rainbowSynergy > 0 && playerUnits.length > 0) {
           const union = new Set<Element>();
           for (const u of playerUnits) {
-            for (const el of elementsOf(u.g.speciesId)) {
+            for (const el of elementsOf(u.g)) {
               union.add(el);
             }
           }
@@ -1510,7 +1510,7 @@ export class Battle {
       let best: { t: Technique; tgt: Unit; score: number } | null = null;
       for (const t of dmgTechs) {
         for (const f of foes) {
-          const eff = elementMult(TYPE_ELEMENT[t.type], elementsOf(f.g.speciesId));
+          const eff = elementMult(TYPE_ELEMENT[t.type], elementsOf(f.g));
           const lowHpBias = 1 + (1 - f.g.hp / f.g.stats.hp) * 0.5;
           const score = t.power * eff * lowHpBias * (t.target === 'all' ? 1.4 : 1) * (0.9 + Math.random() * 0.2);
           if (!best || score > best.score) best = { t, tgt: f, score };

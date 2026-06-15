@@ -173,8 +173,14 @@ export const SPECIES_ELEMENTS: Record<string, Element[]> = {
   shadeclaw: ['Dark', 'Electric'],
 };
 
-/** Elements of a species (falls back to its technique school's element). */
-export function elementsOf(speciesId: string): Element[] {
+/** Elements of a species (falls back to its technique school's element). Supports Guardian / Unit objects. */
+export function elementsOf(speciesIdOrGuardian: any): Element[] {
+  if (speciesIdOrGuardian && typeof speciesIdOrGuardian === 'object') {
+    if (Array.isArray(speciesIdOrGuardian.elements)) return speciesIdOrGuardian.elements;
+    if (speciesIdOrGuardian.g && Array.isArray(speciesIdOrGuardian.g.elements)) return speciesIdOrGuardian.g.elements;
+  }
+  const speciesId = typeof speciesIdOrGuardian === 'string' ? speciesIdOrGuardian : speciesIdOrGuardian?.speciesId;
+  if (!speciesId) return [];
   return SPECIES_ELEMENTS[speciesId]
     ?? [TYPE_ELEMENT[SPECIES[speciesId]?.type ?? 'Blaze']];
 }
