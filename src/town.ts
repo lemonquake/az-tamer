@@ -7971,12 +7971,12 @@ export class Town {
             const pAStats = parentA!.stats;
             const pBStats = parentB!.stats;
             offspring.bonus = {
-              hp: Math.floor((pAStats.hp + pBStats.hp) * 0.1),
-              sp: Math.floor((pAStats.sp + pBStats.sp) * 0.1),
-              atk: Math.floor((pAStats.atk + pBStats.atk) * 0.1),
-              def: Math.floor((pAStats.def + pBStats.def) * 0.1),
-              spd: Math.floor((pAStats.spd + pBStats.spd) * 0.1),
-              wis: Math.floor((pAStats.wis + pBStats.wis) * 0.1)
+              hp: Math.floor(pAStats.hp * 0.15 + pBStats.hp * 0.05),
+              sp: Math.floor(pAStats.sp * 0.15 + pBStats.sp * 0.05),
+              atk: Math.floor(pAStats.atk * 0.15 + pBStats.atk * 0.05),
+              def: Math.floor(pAStats.def * 0.15 + pBStats.def * 0.05),
+              spd: Math.floor(pAStats.spd * 0.15 + pBStats.spd * 0.05),
+              wis: Math.floor(pAStats.wis * 0.15 + pBStats.wis * 0.05)
             };
             
             offspring.hp = offspring.stats.hp;
