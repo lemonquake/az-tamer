@@ -940,6 +940,7 @@ export class Battle {
     const variance = 0.9 + Math.random() * 0.2;
     const pressure = atkStat / (atkStat + defStat * 1.15);   // 0.5 at parity
     let pct = (tech.power / 90) * pressure * eff * stab * variance;
+    pct *= 1.5; // increase all damage output by 50%
     if (crit) pct *= 1.5;
     if (def.guarding) pct *= 0.45;
 

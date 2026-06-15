@@ -7963,9 +7963,22 @@ export class Town {
             p.reserve = p.reserve.filter(x => x.id !== parentA!.id && x.id !== parentB!.id);
 
             const nextLvl = Math.max(1, Math.max(parentA!.level, parentB!.level) - 10);
-            const nickname = SPECIES[finalOutcome.speciesId].name;
+            const speciesName = SPECIES[finalOutcome.speciesId].name;
+            const nickname = window.prompt(`Give a name to your new ${speciesName}!`, speciesName) || speciesName;
             const offspring = new Guardian(finalOutcome.speciesId, nextLvl, nickname);
             offspring.customization = getCustomization();
+            
+            const pAStats = parentA!.stats;
+            const pBStats = parentB!.stats;
+            offspring.bonus = {
+              hp: Math.floor((pAStats.hp + pBStats.hp) * 0.1),
+              sp: Math.floor((pAStats.sp + pBStats.sp) * 0.1),
+              atk: Math.floor((pAStats.atk + pBStats.atk) * 0.1),
+              def: Math.floor((pAStats.def + pBStats.def) * 0.1),
+              spd: Math.floor((pAStats.spd + pBStats.spd) * 0.1),
+              wis: Math.floor((pAStats.wis + pBStats.wis) * 0.1)
+            };
+            
             offspring.hp = offspring.stats.hp;
             offspring.sp = offspring.stats.sp;
 
