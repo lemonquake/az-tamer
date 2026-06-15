@@ -4,9 +4,10 @@
 // the player's photo (uploadable) and rich guild service data.
 // ============================================================
 import * as THREE from 'three';
-import { HOUSES } from './data';
-import type { Player } from './state';
-import { GUILD_LORE, drawCardFront, drawCardBack, makeEffigy, rankFor, shade } from './guilds';
+import { HOUSES, type Element } from './data';
+import type { Player, GuildPerks } from './state';
+import { GUILD_LORE, drawCardFront, drawCardBack, makeEffigy, rankFor, shade, questsDoneCount } from './guilds';
+import { toast } from './ui';
 
 /** Downscale an uploaded image file to a 256×256 cover-cropped JPEG data URL. */
 function fileToAvatar(file: File): Promise<string> {
@@ -52,6 +53,7 @@ export function openGuildCard(player: Player, onPhotoChanged?: () => void): Prom
       </div>
       <div id="gcard-actions">
         <button class="ui-btn" id="gcard-upload">📷 Upload profile photo</button>
+        <button class="ui-btn" id="gcard-perks" style="background:rgba(217,161,26,0.18);color:var(--ui-gold);border:1px solid var(--ui-gold)">🧬 Guild Perks & Quests</button>
         <button class="ui-btn primary" id="gcard-close">Close (Esc)</button>
       </div>
       <input type="file" id="gcard-file" accept="image/*" style="display:none">`;
@@ -114,6 +116,14 @@ export function openGuildCard(player: Player, onPhotoChanged?: () => void): Prom
     };
     refreshFront();
 
+    const refreshBack = () => {
+      const tex = new THREE.CanvasTexture(drawCardBack(player, house));
+      tex.colorSpace = THREE.SRGBColorSpace;
+      backMat.map?.dispose();
+      backMat.map = tex;
+      backMat.needsUpdate = true;
+    };
+
     // the guild effigy hovers beside the card
     const effigy = makeEffigy(house.id);
     effigy.scale.setScalar(0.85);
@@ -157,6 +167,12 @@ export function openGuildCard(player: Player, onPhotoChanged?: () => void): Prom
       fileInput.value = '';
     };
 
+    overlay.querySelector<HTMLElement>('#gcard-perks')!.onclick = () => {
+      openGuildPerksPanel(player, house.color, () => {
+        refreshBack();
+      });
+    };
+
     // ---------- lifecycle ----------
     let active = true;
     const close = () => {
@@ -197,4 +213,372 @@ export function openGuildCard(player: Player, onPhotoChanged?: () => void): Prom
     size();
     requestAnimationFrame(loop);
   });
+}
+
+interface QuestDef {
+  id: string;
+  name: string;
+  desc: string;
+  target: number;
+  reward: number;
+  getVal: (p: Player) => number;
+}
+const GUILD_QUESTS: QuestDef[] = [
+  { id: 'wild_skirmish', name: 'Wild Skirmish', desc: 'Win 5 battles', target: 5, reward: 50, getVal: p => p.battlesWon },
+  { id: 'tamer_bond', name: 'Tamer Bond', desc: 'Befriend 1 wild Guardian', target: 1, reward: 60, getVal: p => p.capturesMade },
+  { id: 'mossdeep', name: 'Burrows Recon', desc: 'Conquer Mossdeep Burrows', target: 1, reward: 80, getVal: p => p.dungeonClears['mossdeep'] ?? 0 },
+  { id: 'sunken', name: 'Vault Recon', desc: 'Conquer Sunken Vault', target: 1, reward: 80, getVal: p => p.dungeonClears['sunken'] ?? 0 },
+  { id: 'thunderfen', name: 'Fen Recon', desc: 'Conquer Thunderfen Mire', target: 1, reward: 100, getVal: p => p.dungeonClears['thunderfen'] ?? 0 },
+  { id: 'cradle', name: 'Cradle Recon', desc: 'Conquer Cradle Hollow', target: 1, reward: 120, getVal: p => p.dungeonClears['cradle'] ?? 0 },
+  { id: 'stormspire', name: 'Spire Recon', desc: 'Conquer Stormspire Depths', target: 1, reward: 150, getVal: p => p.dungeonClears['stormspire'] ?? 0 },
+];
+
+interface PerkDef {
+  key: keyof GuildPerks;
+  name: string;
+  desc: string;
+  maxLvl: number;
+  costFormula: (lvl: number) => number;
+  effectDesc: (lvl: number) => string;
+}
+const GUILD_PERKS_DEFS: PerkDef[] = [
+  {
+    key: 'elementMastery',
+    name: 'Element Mastery',
+    desc: 'Permanent boost to all stats for your Guild Element (starts at +5%, +0.75% per level, max Lv. 10).',
+    maxLvl: 10,
+    costFormula: lvl => lvl * 100,
+    effectDesc: lvl => `+${(5 + (lvl - 1) * 0.75).toFixed(2)}% stats`
+  },
+  {
+    key: 'itemDiscount',
+    name: 'Item Discount',
+    desc: 'Discount on items purchased from Pina\'s Provisions and Celeste\'s Boutique (3% per level, max Lv. 5).',
+    maxLvl: 5,
+    costFormula: lvl => (lvl + 1) * 150,
+    effectDesc: lvl => lvl > 0 ? `-${lvl * 3}% item prices` : 'Inactive'
+  },
+  {
+    key: 'crawlerDiscount',
+    name: 'Crawler Discount',
+    desc: 'Discount on parts and paints purchased from Dax\'s Crawler Workshop (3% per level, max Lv. 5).',
+    maxLvl: 5,
+    costFormula: lvl => (lvl + 1) * 150,
+    effectDesc: lvl => lvl > 0 ? `-${lvl * 3}% crawler prices` : 'Inactive'
+  },
+  {
+    key: 'monoSynergy',
+    name: 'Mono-Element Synergy',
+    desc: 'Damage boost in Battle if all active, non-fainted party members share an element (+5% level 1, +1% per level after, max Lv. 5).',
+    maxLvl: 5,
+    costFormula: lvl => (lvl + 1) * 150,
+    effectDesc: lvl => lvl > 0 ? `+${5 + (lvl - 1) * 1}% damage` : 'Inactive'
+  },
+  {
+    key: 'rainbowSynergy',
+    name: 'Rainbow Guard Synergy',
+    desc: 'Damage reduction in Battle if active party contains 3+ distinct elements (-5% level 1, -1% per level after, max Lv. 5).',
+    maxLvl: 5,
+    costFormula: lvl => (lvl + 1) * 150,
+    effectDesc: lvl => lvl > 0 ? `-${5 + (lvl - 1) * 1}% damage taken` : 'Inactive'
+  },
+  {
+    key: 'tacticalSynergy',
+    name: 'Tactical Strike Synergy',
+    desc: 'Damage boost in Battle on super-effective element hits (+5% level 1, +1% per level after, max Lv. 5).',
+    maxLvl: 5,
+    costFormula: lvl => (lvl + 1) * 150,
+    effectDesc: lvl => lvl > 0 ? `+${5 + (lvl - 1) * 1}% damage` : 'Inactive'
+  }
+];
+
+export function openGuildPerksPanel(player: Player, houseColor: string, onClose?: () => void): void {
+  const overlay = document.createElement('div');
+  overlay.id = 'gperks-overlay';
+  overlay.style.cssText = `
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(8, 10, 20, 0.95);
+    backdrop-filter: blur(12px);
+    z-index: 1000;
+    color: #e5e9f0;
+    font-family: 'Outfit', sans-serif;
+    display: flex;
+    flex-direction: column;
+    padding: 24px;
+    box-sizing: border-box;
+    overflow-y: auto;
+  `;
+
+  const styleEl = document.createElement('style');
+  styleEl.textContent = `
+    #gperks-overlay h2, #gperks-overlay h3 { font-family: 'Georgia', serif; }
+    .gperks-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 2px solid ${houseColor}55;
+      padding-bottom: 16px;
+      margin-bottom: 20px;
+    }
+    .gperks-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      flex: 1;
+      min-height: 0;
+    }
+    .gperks-panel {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      box-sizing: border-box;
+    }
+    .gperks-scroll {
+      flex: 1;
+      overflow-y: auto;
+      padding-right: 8px;
+    }
+    .gperks-card {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: all 0.2s ease;
+    }
+    .gperks-card:hover {
+      background: rgba(255, 255, 255, 0.04);
+      border-color: ${houseColor}88;
+    }
+    .gperks-card-info {
+      flex: 1;
+      margin-right: 16px;
+    }
+    .gperks-card-title {
+      font-weight: bold;
+      color: #ffffff;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 15px;
+    }
+    .gperks-card-desc {
+      font-size: 12px;
+      color: #a0aabf;
+      line-height: 1.4;
+      margin-bottom: 6px;
+    }
+    .gperks-card-badge {
+      display: inline-block;
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.08);
+      color: #d1d9e6;
+      font-weight: 500;
+    }
+    .gperks-card-effect {
+      font-size: 11px;
+      color: ${houseColor};
+      margin-left: 8px;
+      font-weight: bold;
+    }
+    .gperks-btn {
+      background: ${houseColor}aa;
+      border: 1px solid ${houseColor};
+      color: #ffffff;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+    }
+    .gperks-btn:hover:not(:disabled) {
+      background: ${houseColor};
+      transform: translateY(-1px);
+    }
+    .gperks-btn:disabled {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: rgba(255, 255, 255, 0.1);
+      color: #5a607a;
+      cursor: not-allowed;
+    }
+    .gperks-progress-bg {
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 6px;
+      height: 14px;
+      width: 100%;
+      overflow: hidden;
+      margin-top: 6px;
+      position: relative;
+    }
+    .gperks-progress-bar {
+      height: 100%;
+      background: linear-gradient(90deg, ${houseColor}cc, ${houseColor});
+      transition: width 0.3s ease;
+    }
+    .gperks-progress-text {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      font-size: 10px;
+      font-weight: bold;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      color: #ffffff;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+    }
+    .gperks-btn-claim {
+      background: #5ad88a;
+      border: 1px solid #48b773;
+      color: #0c1022;
+    }
+    .gperks-btn-claim:hover:not(:disabled) {
+      background: #6bec9c;
+    }
+  `;
+  overlay.appendChild(styleEl);
+
+  const draw = () => {
+    const gp = player.guildPoints ?? 0;
+    const perkLvl = (key: keyof GuildPerks) => player.guildPerks?.[key] ?? 0;
+
+    let perksHtml = '';
+    GUILD_PERKS_DEFS.forEach(pDef => {
+      const lvl = perkLvl(pDef.key);
+      const isMax = lvl >= pDef.maxLvl;
+      const cost = isMax ? 0 : pDef.costFormula(lvl);
+      const canUpgrade = !isMax && gp >= cost;
+      
+      perksHtml += `
+        <div class="gperks-card">
+          <div class="gperks-card-info">
+            <div class="gperks-card-title">
+              ${pDef.name}
+              <span class="gperks-card-badge">Lv. ${lvl} / ${pDef.maxLvl}</span>
+              <span class="gperks-card-effect">${pDef.effectDesc(lvl)}</span>
+            </div>
+            <div class="gperks-card-desc">${pDef.desc}</div>
+          </div>
+          <div>
+            ${isMax ? `
+              <button class="gperks-btn" disabled>Maxed</button>
+            ` : `
+              <button class="gperks-btn" data-upgrade="${pDef.key}" ${canUpgrade ? '' : 'disabled'}>
+                Upgrade (◆${cost} GP)
+              </button>
+            `}
+          </div>
+        </div>
+      `;
+    });
+
+    let questsHtml = '';
+    GUILD_QUESTS.forEach(q => {
+      if (player.guildQuestProgress[q.id] === undefined) {
+        player.guildQuestProgress[q.id] = q.getVal(player);
+      }
+      const baseline = player.guildQuestProgress[q.id];
+      const curVal = q.getVal(player);
+      const rawProgress = Math.max(0, curVal - baseline);
+      const progress = Math.min(q.target, rawProgress);
+      const pct = (progress / q.target) * 100;
+      const isReady = progress >= q.target;
+
+      questsHtml += `
+        <div class="gperks-card">
+          <div class="gperks-card-info">
+            <div class="gperks-card-title">
+              ${q.name}
+              <span class="gperks-card-badge">+${q.reward} GP</span>
+            </div>
+            <div class="gperks-card-desc">${q.desc}</div>
+            <div class="gperks-progress-bg">
+              <div class="gperks-progress-bar" style="width: ${pct}%"></div>
+              <div class="gperks-progress-text">${progress} / ${q.target}</div>
+            </div>
+          </div>
+          <div>
+            <button class="gperks-btn ${isReady ? 'gperks-btn-claim' : ''}" data-claim="${q.id}" ${isReady ? '' : 'disabled'}>
+              ${isReady ? 'Claim GP' : 'In Progress'}
+            </button>
+          </div>
+        </div>
+      `;
+    });
+
+    overlay.innerHTML = `
+      ${styleEl.outerHTML}
+      <div class="gperks-header">
+        <div>
+          <h2 style="margin: 0; font-size: 26px; color: var(--ui-gold);">🧬 GUILD PERKS & QUESTS</h2>
+          <div style="font-size: 14px; color: #aab0c8; margin-top: 4px;">Earn Guild Points (GP) through quests to upgrade passive masteries.</div>
+        </div>
+        <div style="display: flex; gap: 20px; align-items: center;">
+          <div style="font-size: 16px; font-weight: bold; background: rgba(255,255,255,0.05); padding: 8px 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+            <span style="color: #aab0c8;">Guild Points:</span>
+            <span style="color: var(--ui-gold);">◆ ${gp} GP</span>
+          </div>
+          <button class="gperks-btn" id="gperks-back" style="background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.2); color: #ffffff;">Back to Card</button>
+        </div>
+      </div>
+      <div class="gperks-grid">
+        <div class="gperks-panel" style="flex:1;min-height:0;">
+          <h3 style="margin-top: 0; margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 8px; color: #ffffff;">🧬 Upgrade Perks</h3>
+          <div class="gperks-scroll">${perksHtml}</div>
+        </div>
+        <div class="gperks-panel" style="flex:1;min-height:0;">
+          <h3 style="margin-top: 0; margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 8px; color: #ffffff;">📋 Repeatable Guild Quests</h3>
+          <div class="gperks-scroll">${questsHtml}</div>
+        </div>
+      </div>
+    `;
+
+    (overlay.querySelector('#gperks-back') as HTMLElement).onclick = () => {
+      overlay.remove();
+      onClose?.();
+    };
+
+    overlay.querySelectorAll<HTMLElement>('[data-upgrade]').forEach(b => {
+      b.onclick = () => {
+        const key = b.dataset.upgrade as keyof GuildPerks;
+        const curLvl = player.guildPerks[key] ?? 0;
+        const pDef = GUILD_PERKS_DEFS.find(x => x.key === key)!;
+        const cost = pDef.costFormula(curLvl);
+        if ((player.guildPoints ?? 0) >= cost) {
+          player.guildPoints = (player.guildPoints ?? 0) - cost;
+          player.guildPerks[key] = (player.guildPerks[key] ?? 0) + 1;
+          player.save();
+          toast(`Upgraded ${pDef.name} to Level ${player.guildPerks[key]}!`, 'gold');
+          draw();
+        }
+      };
+    });
+
+    overlay.querySelectorAll<HTMLElement>('[data-claim]').forEach(b => {
+      b.onclick = () => {
+        const id = b.dataset.claim!;
+        const q = GUILD_QUESTS.find(x => x.id === id)!;
+        const curVal = q.getVal(player);
+        player.guildPoints = (player.guildPoints ?? 0) + q.reward;
+        player.guildQuestProgress[id] = curVal;
+        player.save();
+        toast(`Claimed +${q.reward} GP from ${q.name}!`, 'gold');
+        draw();
+      };
+    });
+  };
+
+  draw();
+  document.getElementById('app')!.appendChild(overlay);
 }

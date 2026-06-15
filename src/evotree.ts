@@ -19,12 +19,13 @@ const BOSS_IDS = new Set(['ironhusk', 'gravemaw', 'voltigarch', ...CORRUPTED_LEG
 interface EvoChain { type: GType; nodes: { sp: SpeciesDef; lvFromPrev: number | null }[]; }
 
 /** Build every evolution chain, walking forward from each root form. */
-function buildChains(): EvoChain[] {
+function buildChains(p: Player): EvoChain[] {
   const evolvedInto = new Set<string>();
   Object.values(SPECIES).forEach(s => { if (s.evolvesTo) evolvedInto.add(s.evolvesTo.species); });
   const chains: EvoChain[] = [];
   for (const root of Object.values(SPECIES)) {
     if (evolvedInto.has(root.id) || BOSS_IDS.has(root.id)) continue;
+    if (root.isFusion && !p.flags['unlocked_fusion_' + root.id]) continue;
     const nodes: EvoChain['nodes'] = [{ sp: root, lvFromPrev: null }];
     let cur = root;
     const guard = new Set([root.id]);
@@ -42,8 +43,7 @@ function buildChains(): EvoChain[] {
   return chains;
 }
 
-let chainsCache: EvoChain[] | null = null;
-const chains = (): EvoChain[] => (chainsCache ??= buildChains());
+const chains = (p: Player): EvoChain[] => buildChains(p);
 
 function ownedSpecies(p: Player): Map<string, { level: number; nickname: string }> {
   const m = new Map<string, { level: number; nickname: string }>();
@@ -99,7 +99,7 @@ function damageTableHTML(): string {
 /** Panel body HTML for the Evolution Atlas. */
 export function evoTreeHTML(p: Player): string {
   const owned = ownedSpecies(p);
-  const total = new Set(chains().flatMap(c => c.nodes.map(n => n.sp.id))).size;
+  const total = new Set(chains(p).flatMap(c => c.nodes.map(n => n.sp.id))).size;
   const ownedCount = [...owned.keys()].filter(id => !BOSS_IDS.has(id)).length;
 
   let html = `
@@ -112,7 +112,7 @@ export function evoTreeHTML(p: Player): string {
     <div class="evo-scroll">`;
 
   let lastType: GType | null = null;
-  for (const chain of chains()) {
+  for (const chain of chains(p)) {
     if (chain.type !== lastType) {
       lastType = chain.type;
       html += `<div class="evo-type-head" style="color:${TYPE_CSS[chain.type]};border-color:${TYPE_CSS[chain.type]}">

@@ -789,6 +789,8 @@ export function drawCardBack(p: Player, h: HouseDef): HTMLCanvasElement {
   ctx.beginPath(); ctx.moveTo(80, 140); ctx.lineTo(CARD_W - 80, 140); ctx.stroke();
 
   const rows: [string, string][] = [
+    ['Guild level', `Lv ${p.guildPerks?.elementMastery ?? 1}`],
+    ['Guild points (GP)', `${p.guildPoints ?? 0} GP`],
     ['Guild quests completed', `${questsDoneCount(p)}`],
     ['Battles won', `${p.battlesWon}`],
     ['Guardians befriended', `${p.capturesMade}`],
@@ -796,19 +798,19 @@ export function drawCardBack(p: Player, h: HouseDef): HTMLCanvasElement {
     ['Expeditions conquered', `${Object.values(p.dungeonClears).reduce((a, b) => a + b, 0)}`],
     ['Shard holdings', `◆ ${p.shards}`],
   ];
-  ctx.font = '23px Georgia, serif';
+  ctx.font = '21px Georgia, serif';
   rows.forEach(([k, v], i) => {
-    const y = 196 + i * 58;
+    const y = 175 + i * 49;
     ctx.textAlign = 'left';
     ctx.fillStyle = '#aab0c8';
     ctx.fillText(k, 96, y);
     ctx.textAlign = 'right';
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 23px Georgia, serif';
+    ctx.font = 'bold 21px Georgia, serif';
     ctx.fillText(v, CARD_W - 96, y);
-    ctx.font = '23px Georgia, serif';
+    ctx.font = '21px Georgia, serif';
     ctx.strokeStyle = 'rgba(255,255,255,0.10)';
-    ctx.beginPath(); ctx.moveTo(96, y + 16); ctx.lineTo(CARD_W - 96, y + 16); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(96, y + 14); ctx.lineTo(CARD_W - 96, y + 14); ctx.stroke();
   });
 
   // universal rank ladder — the same nine ranks across every guild

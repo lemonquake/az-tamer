@@ -2092,13 +2092,9 @@ export class University {
     }
     const r = this.room;
     this.camera.position.set(this.tamer.position.x, r.camHeight, this.tamer.position.z + r.camDist);
-    const names: Record<RoomId, string> = {
-      lobby: 'University — Grand Lobby', cafeteria: 'University — Cafeteria', classroom: 'University — Classroom',
-      library: 'University — Library', lockers: 'University — Locker Room', training: 'University — Training Hall',
-      officers: 'University — Officers\' Hall', infirmary: 'University — Infirmary',
-    };
-    toast(names[this.current], 'gold');
+    toast(ROOM_TITLES[this.current], 'gold');
     updateHUD(this.player, 'Leodones University');
+    this.player.savedLocation = { type: 'university', room: id };
   }
 
   private async leaveUniversity(): Promise<void> {
@@ -2320,13 +2316,27 @@ export class University {
   /** Resolves when the player departs through the Grand Doors. */
   async run(): Promise<void> {
     syncStoryQuests(this.player).forEach(n => toast(n, 'gold'));
-    this.builders.lobby();
+    const startRoom = (this as any).initialRoom as RoomId || 'lobby';
     updateTamerAppearance(this.tamer, this.player.equippedClothes);
-    this.current = 'lobby';
-    this.room.scene.add(this.tamer);
-    this.tamer.position.set(0, 0, 11.5);
-    this.tamer.rotation.y = Math.PI;
-    this.camera.position.set(0, 7.2, 20);
+    
+    if (startRoom !== 'lobby') {
+      if (!this.rooms.has(startRoom)) this.builders[startRoom]();
+      this.current = startRoom;
+      const r = this.room;
+      r.scene.add(this.tamer);
+      this.tamer.position.copy(r.spawn);
+      this.tamer.rotation.y = r.spawnRotY;
+      this.camera.position.set(r.spawn.x, r.camHeight, r.spawn.z + r.camDist);
+    } else {
+      this.builders.lobby();
+      this.current = 'lobby';
+      this.room.scene.add(this.tamer);
+      this.tamer.position.set(0, 0, 11.5);
+      this.tamer.rotation.y = Math.PI;
+      this.camera.position.set(0, 7.2, 20);
+    }
+    
+    this.player.savedLocation = { type: 'university', room: this.current };
     this.live = true;   // the world is live now — update() drives the player through the intro and tutorial
 
     updateHUD(this.player, 'Leodones University');

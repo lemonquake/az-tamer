@@ -4,6 +4,7 @@
 import {
   SPECIES, TECHS, ITEMS, CRAWLER_PARTS, expForLevel,
   type SpeciesDef, type Stats, type StatKey, type Technique, type CrawlerPart,
+  HOUSES, TYPE_ELEMENT, elementsOf,
 } from './data';
 import { DEFAULT_APPEARANCE, type Appearance } from './models';
 import { defaultFishingState, normalizeFishingState, type FishingState } from './fishingdata';
@@ -12,6 +13,12 @@ let uidCounter = 1;
 export const uid = () => `g${Date.now().toString(36)}${(uidCounter++).toString(36)}`;
 
 // ---------------- Guardian ----------------
+export interface GuardianCustomization {
+  colors?: { primary?: number; secondary?: number; accent?: number };
+  partsScale?: { head?: number; tail?: number; wings?: number };
+  replacedParts?: { tail?: string; wings?: string };
+}
+
 export interface GuardianSave {
   id: string; speciesId: string; nickname: string;
   level: number; exp: number; bonus: Stats;
@@ -20,6 +27,7 @@ export interface GuardianSave {
   techPoints?: number;
   learnedTechs?: string[];
   isStarter?: boolean;
+  customization?: GuardianCustomization;
 }
 
 export class Guardian {
@@ -36,6 +44,7 @@ export class Guardian {
   techPoints = 0;
   learnedTechs: string[] = [];
   isStarter = false;
+  customization?: GuardianCustomization;
 
   constructor(speciesId: string, level = 1, nickname?: string) {
     this.id = uid();
@@ -62,9 +71,28 @@ export class Guardian {
   get stats(): Stats {
     const s = this.species;
     const l = this.level - 1;
-    const mult = this.isStarter ? 1.35 : 1.0;
+    const mult = this.isStarter ? 2.025 : 1.0;
     const calc = (k: StatKey) => Math.floor((s.base[k] + s.growth[k] * l + this.bonus[k]) * mult);
-    return { hp: calc('hp'), sp: calc('sp'), atk: calc('atk'), def: calc('def'), spd: calc('spd'), wis: calc('wis') };
+    const baseStats = { hp: calc('hp'), sp: calc('sp'), atk: calc('atk'), def: calc('def'), spd: calc('spd'), wis: calc('wis') };
+
+    // Apply Guild Perk stat boost if element matches active guild element
+    if (Player.activeInstance && Player.activeInstance.houseId) {
+      const house = HOUSES.find(h => h.id === Player.activeInstance!.houseId);
+      if (house) {
+        const guildEl = TYPE_ELEMENT[house.type];
+        if (elementsOf(this.speciesId).includes(guildEl)) {
+          const perkLvl = Player.activeInstance.guildPerks?.elementMastery ?? 1;
+          const boost = 1.05 + (perkLvl - 1) * 0.0075;
+          baseStats.hp = Math.floor(baseStats.hp * boost);
+          baseStats.sp = Math.floor(baseStats.sp * boost);
+          baseStats.atk = Math.floor(baseStats.atk * boost);
+          baseStats.def = Math.floor(baseStats.def * boost);
+          baseStats.spd = Math.floor(baseStats.spd * boost);
+          baseStats.wis = Math.floor(baseStats.wis * boost);
+        }
+      }
+    }
+    return baseStats;
   }
 
   get techniques(): Technique[] {
@@ -108,6 +136,12 @@ export class Guardian {
     return null;
   }
 
+  get pendingExtraEvolution(): SpeciesDef | null {
+    const evo = this.species.extraEvolvesTo;
+    if (evo && this.level >= evo.level) return SPECIES[evo.species];
+    return null;
+  }
+
   evolve(): void {
     const evo = this.species.evolvesTo;
     if (!evo) return;
@@ -136,6 +170,33 @@ export class Guardian {
     this.sp = this.stats.sp;
   }
 
+  extraEvolve(): void {
+    const evo = this.species.extraEvolvesTo;
+    if (!evo) return;
+    const keepNick = this.nickname !== this.species.name;
+    const old = this.stats;
+    this.speciesId = evo.species;
+    if (!keepNick) this.nickname = this.species.name;
+
+    if (this.species.stage === 'Adept') {
+      this.levelCap = Math.max(this.levelCap, 24);
+    } else if (this.species.stage === 'Elite') {
+      this.levelCap = Math.max(this.levelCap, 32);
+    } else if (this.species.stage === 'Apex') {
+      this.levelCap = Math.max(this.levelCap, 50);
+    } else if (this.species.stage === 'Legendary' || this.species.stage === 'Aether') {
+      this.levelCap = Math.max(this.levelCap, 99);
+    }
+
+    (['atk', 'def', 'spd', 'wis'] as StatKey[]).forEach(k => {
+      this.bonus[k] += Math.floor(old[k] * 0.12);
+    });
+    this.bonus.hp += Math.floor(old.hp * 0.08);
+    this.bonus.sp += Math.floor(old.sp * 0.08);
+    this.hp = this.stats.hp;
+    this.sp = this.stats.sp;
+  }
+
   healFull(): void { this.hp = this.stats.hp; this.sp = this.stats.sp; }
 
   save(): GuardianSave {
@@ -147,6 +208,7 @@ export class Guardian {
       techPoints: this.techPoints,
       learnedTechs: [...this.learnedTechs],
       isStarter: this.isStarter || undefined,
+      customization: this.customization ? JSON.parse(JSON.stringify(this.customization)) : undefined,
     };
   }
 
@@ -158,6 +220,7 @@ export class Guardian {
     g.techPoints = s.techPoints ?? 0;
     g.learnedTechs = s.learnedTechs ? [...s.learnedTechs] : [];
     g.isStarter = !!s.isStarter;
+    g.customization = s.customization ? JSON.parse(JSON.stringify(s.customization)) : undefined;
     return g;
   }
 }
@@ -233,9 +296,15 @@ export class Crawler {
 // ---------------- Player / GameState ----------------
 // Save slots: slot 1 keeps the legacy key so old saves keep working.
 const SAVE_KEY_BASE = 'az-tamer-save-v1';
-export const SAVE_SLOTS = 3;
+export const SAVE_SLOTS = 12;
 let activeSlot = 1;
 const slotKey = (slot: number) => (slot <= 1 ? SAVE_KEY_BASE : `${SAVE_KEY_BASE}-s${slot}`);
+
+export interface SavedLocation {
+  type: 'town' | 'university' | 'terra' | 'agdao' | 'salmonan' | 'overworld';
+  room?: string;
+  spawnAt?: string;
+}
 
 /** What the title screen needs to describe a slot, without building a Player. */
 export interface SlotSummary {
@@ -245,6 +314,16 @@ export interface SlotSummary {
   tournamentPoints: number;
   battlesWon: number;
   savedAt?: number;
+  partyNames?: string[];
+}
+
+export interface GuildPerks {
+  elementMastery: number; // 1-10
+  itemDiscount: number;   // 0-5
+  crawlerDiscount: number;// 0-5
+  monoSynergy: number;    // 0-5
+  rainbowSynergy: number; // 0-5
+  tacticalSynergy: number;// 0-5
 }
 
 export interface PlayerSave {
@@ -264,9 +343,19 @@ export interface PlayerSave {
   ownedClothes?: string[];
   appearance?: Appearance;
   fishing?: FishingState;
+  guildPoints?: number;
+  guildPerks?: GuildPerks;
+  guildQuestProgress?: Record<string, number>;
+  savedLocation?: SavedLocation;
 }
 
+
 export class Player {
+  static activeInstance: Player | null = null;
+
+  inDungeon = false;
+  savedLocation?: SavedLocation;
+
   tamerName = 'Tamer';
   shards = 0;
   party: Guardian[] = [];       // up to 3 active
@@ -295,6 +384,21 @@ export class Player {
   appearance: Appearance = { ...DEFAULT_APPEARANCE };
   /** Fishing Expansion — progression, gear, encyclopedia, leaderboard standing. */
   fishing: FishingState = defaultFishingState();
+
+  guildPoints = 0;
+  guildPerks: GuildPerks = {
+    elementMastery: 1,
+    itemDiscount: 0,
+    crawlerDiscount: 0,
+    monoSynergy: 0,
+    rainbowSynergy: 0,
+    tacticalSynergy: 0,
+  };
+  guildQuestProgress: Record<string, number> = {};
+
+  constructor() {
+    Player.activeInstance = this;
+  }
 
   get alive(): Guardian[] { return this.party.filter(g => !g.fainted); }
 
@@ -327,7 +431,20 @@ export class Player {
     this.crawler.restock();
   }
 
-  save(): void {
+  save(isAutosave = true): void {
+    if (this.inDungeon) return; // Cannot save inside a dungeon
+
+    if (isAutosave) {
+      if (localStorage.getItem('autosaveMode') === 'false') {
+        return;
+      }
+      const el = document.getElementById('autosave-indicator');
+      if (el) {
+        el.classList.add('show');
+        setTimeout(() => el.classList.remove('show'), 1500);
+      }
+    }
+
     const data: PlayerSave = {
       tamerName: this.tamerName, shards: this.shards,
       party: this.party.map(g => g.save()), reserve: this.reserve.map(g => g.save()),
@@ -342,6 +459,10 @@ export class Player {
       ownedClothes: [...this.ownedClothes],
       appearance: { ...this.appearance },
       fishing: this.fishing,
+      guildPoints: this.guildPoints,
+      guildPerks: { ...this.guildPerks },
+      guildQuestProgress: { ...this.guildQuestProgress },
+      savedLocation: this.savedLocation,
     };
     localStorage.setItem(slotKey(activeSlot), JSON.stringify(data));
   }
@@ -352,6 +473,14 @@ export class Player {
 
   static hasSave(slot = activeSlot): boolean { return localStorage.getItem(slotKey(slot)) !== null; }
   static deleteSave(slot = activeSlot): void { localStorage.removeItem(slotKey(slot)); }
+  static duplicateSave(srcSlot: number, destSlot: number): void {
+    const raw = localStorage.getItem(slotKey(srcSlot));
+    if (raw) {
+      localStorage.setItem(slotKey(destSlot), raw);
+    } else {
+      localStorage.removeItem(slotKey(destSlot));
+    }
+  }
 
   /** Lightweight peek at a slot for the title screen. */
   static slotSummary(slot: number): SlotSummary | null {
@@ -359,10 +488,16 @@ export class Player {
     if (!raw) return null;
     try {
       const d: PlayerSave = JSON.parse(raw);
+      const partyNames = d.party?.map(g => {
+        const name = SPECIES[g.speciesId]?.name || g.nickname;
+        return `${name} Lvl ${g.level}`;
+      }) ?? [];
+
       return {
         tamerName: d.tamerName ?? 'Tamer', shards: d.shards ?? 0,
         houseId: d.houseId ?? null, tournamentPoints: d.tournamentPoints ?? 0,
         battlesWon: d.battlesWon ?? 0, savedAt: d.savedAt,
+        partyNames,
       };
     } catch {
       return null;
@@ -397,6 +532,45 @@ export class Player {
       p.ownedClothes = d.ownedClothes ? [...d.ownedClothes] : ['default_cap', 'default_shirt', 'default_pants', 'default_gloves', 'default_backpack', 'default_shoes'];
       p.appearance = d.appearance ? { ...DEFAULT_APPEARANCE, ...d.appearance } : { ...DEFAULT_APPEARANCE };
       p.fishing = normalizeFishingState(d.fishing);
+      p.guildPoints = d.guildPoints ?? 0;
+      p.guildPerks = d.guildPerks ? {
+        elementMastery: d.guildPerks.elementMastery ?? 1,
+        itemDiscount: d.guildPerks.itemDiscount ?? 0,
+        crawlerDiscount: d.guildPerks.crawlerDiscount ?? 0,
+        monoSynergy: d.guildPerks.monoSynergy ?? 0,
+        rainbowSynergy: d.guildPerks.rainbowSynergy ?? 0,
+        tacticalSynergy: d.guildPerks.tacticalSynergy ?? 0,
+      } : {
+        elementMastery: 1,
+        itemDiscount: 0,
+        crawlerDiscount: 0,
+        monoSynergy: 0,
+        rainbowSynergy: 0,
+        tacticalSynergy: 0,
+      };
+      p.guildQuestProgress = d.guildQuestProgress ? { ...d.guildQuestProgress } : {};
+      p.savedLocation = d.savedLocation;
+
+      // Retroactive stat adjustment for existing starter Guardians
+      if (!p.flags['starter_stats_migrated_v2']) {
+        const migrate = (g: Guardian) => {
+          if (g.isStarter) {
+            const sDef = g.species;
+            const l = g.level - 1;
+            const oldMult = 1.35;
+            const oldMaxHp = Math.floor((sDef.base.hp + sDef.growth.hp * l + g.bonus.hp) * oldMult);
+            const oldMaxSp = Math.floor((sDef.base.sp + sDef.growth.sp * l + g.bonus.sp) * oldMult);
+            if (oldMaxHp > 0) g.hp = Math.min(g.stats.hp, Math.ceil((g.hp / oldMaxHp) * g.stats.hp));
+            if (oldMaxSp > 0) g.sp = Math.min(g.stats.sp, Math.ceil((g.sp / oldMaxSp) * g.stats.sp));
+          }
+        };
+        p.party.forEach(migrate);
+        p.reserve.forEach(migrate);
+        p.flags['starter_stats_migrated_v2'] = true;
+        p.save(false); // save manually to bypass auto-save setting
+      }
+
+      Player.activeInstance = p;
       return p;
     } catch {
       return null;

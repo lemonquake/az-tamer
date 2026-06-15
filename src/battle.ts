@@ -9,7 +9,7 @@
 import * as THREE from 'three';
 import {
   TECHS, ITEMS, TYPE_CSS, TYPE_COLORS, TYPE_ELEMENT, expForLevel,
-  elementsOf, elementMult, ELEMENT_ICONS, type Technique, type GType,
+  elementsOf, elementMult, ELEMENT_ICONS, type Technique, type GType, type Element,
 } from './data';
 import { sfx, playMusic } from './audio';
 import { Guardian, Player } from './state';
@@ -563,7 +563,7 @@ export class Battle {
   }
 
   private spawnUnit(g: Guardian, side: 'player' | 'enemy', slot: number): Unit {
-    const rig = makeGuardian(g.speciesId);
+    const rig = makeGuardian(g.speciesId, g.customization);
     rig.group.position.copy(this.slotPos(side, slot));
     rig.group.rotation.y = side === 'player' ? Math.PI / 2 : -Math.PI / 2;
     this.scene.add(rig.group);
@@ -942,6 +942,53 @@ export class Battle {
     let pct = (tech.power / 90) * pressure * eff * stab * variance;
     if (crit) pct *= 1.5;
     if (def.guarding) pct *= 0.45;
+
+    // Apply Player Guild Perks / Battle Synergies
+    const perks = Player.activeInstance?.guildPerks;
+    const playerUnits = this.alive('player');
+
+    if (perks) {
+      if (att.side === 'player') {
+        // Mono-Element Synergy: All active units share at least one element
+        if (perks.monoSynergy > 0 && playerUnits.length > 0) {
+          let shared = elementsOf(playerUnits[0].g.speciesId);
+          for (let i = 1; i < playerUnits.length; i++) {
+            const el = elementsOf(playerUnits[i].g.speciesId);
+            shared = shared.filter(x => el.includes(x));
+          }
+          if (shared.length > 0) {
+            const boost = 0.05 + (perks.monoSynergy - 1) * 0.01;
+            pct *= (1 + boost);
+            this.log(`<span style="color:var(--ui-gold)">[Mono-Element Synergy: +${Math.round(boost * 100)}% Damage!]</span>`);
+          }
+        }
+
+        // Tactical Strike Synergy: Hit super-effective elements
+        if (perks.tacticalSynergy > 0 && eff > 1.0) {
+          const boost = 0.05 + (perks.tacticalSynergy - 1) * 0.01;
+          pct *= (1 + boost);
+          this.log(`<span style="color:var(--ui-gold)">[Tactical Strike Synergy: +${Math.round(boost * 100)}% Damage!]</span>`);
+        }
+      }
+
+      if (def.side === 'player') {
+        // Rainbow Guard Synergy: Union of all elements across active player units is >= 3
+        if (perks.rainbowSynergy > 0 && playerUnits.length > 0) {
+          const union = new Set<Element>();
+          for (const u of playerUnits) {
+            for (const el of elementsOf(u.g.speciesId)) {
+              union.add(el);
+            }
+          }
+          if (union.size >= 3) {
+            const reduction = 0.05 + (perks.rainbowSynergy - 1) * 0.01;
+            pct *= (1 - reduction);
+            this.log(`<span style="color:var(--ui-gold)">[Rainbow Guard Synergy: -${Math.round(reduction * 100)}% Damage Taken!]</span>`);
+          }
+        }
+      }
+    }
+
     pct = Math.min(0.7, pct); // hard ceiling — never a one-shot
     return { dmg: Math.max(1, Math.floor(ds.hp * pct)), eff, crit };
   }
@@ -1421,7 +1468,7 @@ export class Battle {
     this.player.reserve[ri] = u.g;
     disposeRig(u.rig);
     u.g = incoming;
-    u.rig = makeGuardian(incoming.speciesId);
+    u.rig = makeGuardian(incoming.speciesId, incoming.customization);
     u.rig.group.position.copy(this.slotPos('player', u.slot));
     u.rig.group.rotation.y = Math.PI / 2;
     this.scene.add(u.rig.group);
@@ -1769,7 +1816,7 @@ export class Battle {
     // swap the form at the peak of the white-out
     g.evolve();
     disposeRig(u.rig);
-    u.rig = makeGuardian(g.speciesId);
+    u.rig = makeGuardian(g.speciesId, g.customization);
     u.rig.group.position.copy(home);
     u.rig.group.rotation.y = Math.PI / 2;
     this.scene.add(u.rig.group);

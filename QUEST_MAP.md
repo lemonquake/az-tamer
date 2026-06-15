@@ -112,7 +112,7 @@ and opens the Expedition Gate and the Sunken Vault.
 | ⚡ Stormcall | Captain Vex | Zaplet | "Strike once, strike true." |
 | 🌑 Duskwatch | Keeper Nyx | Shadekit | "See what the light hides." |
 
-> Your starter is special — it carries a **1.35× stat bloom** no wild Guardian gets.
+> Your starter is special — it carries a **2.025× stat bloom** no wild Guardian gets.
 > It is your wall, your sword, and your reason Mossdeep is survivable. Keep it front.
 
 ### THE CHRONICLE — main story chapters

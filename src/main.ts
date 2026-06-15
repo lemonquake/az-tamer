@@ -152,6 +152,7 @@ async function runFishing(info: FishingSpotInfo): Promise<void> {
 async function runDungeon(def: DungeonDef): Promise<DungeonOutcome> {
   await fadeOut();
   playMusic('overworld');
+  player.inDungeon = true;
   const dungeon = new DungeonRun({ player, runBattle }, def);
   setView(dungeon.view);
   await fadeIn();
@@ -159,6 +160,7 @@ async function runDungeon(def: DungeonDef): Promise<DungeonOutcome> {
   await fadeOut();
   setView(null);
   hideHUD();
+  player.inDungeon = false;
   return outcome;
 }
 
@@ -226,10 +228,13 @@ async function academyExam(cine?: Cinematic): Promise<void> {
 }
 
 // ---------------- Leodones University ----------------
-async function runUniversity(revisit: boolean): Promise<void> {
+async function runUniversity(revisit: boolean, initialRoom?: string): Promise<void> {
   await fadeOut();
   playMusic('university');
   const uni = new University({ player, runBattle }, revisit);
+  if (initialRoom) {
+    (uni as any).initialRoom = initialRoom;
+  }
   setView(uni.view);
   await fadeIn();
   await uni.run(); // resolves when the player exits through the Grand Doors
@@ -240,8 +245,8 @@ async function runUniversity(revisit: boolean): Promise<void> {
 
 // ---------------- Agdao Island ----------------
 /** The island loop: explore ↔ Cradle Hollow, until the player sails home. */
-async function runAgdao(): Promise<void> {
-  let spawnAt: 'pier' | 'cave' = 'pier';
+async function runAgdao(startSpawn?: 'pier' | 'cave'): Promise<void> {
+  let spawnAt: 'pier' | 'cave' = startSpawn || 'pier';
   while (true) {
     const isle = new AgdaoIsland(player, spawnAt);
     await fadeOut();
@@ -271,8 +276,8 @@ async function runAgdao(): Promise<void> {
 
 // ---------------- New Salmonan ----------------
 /** The valley loop: explore ↔ the Mirrorhouse, until the player ferries out. */
-async function runSalmonan(): Promise<void> {
-  let spawnAt: 'pier' | 'ridge' = 'pier';
+async function runSalmonan(startSpawn?: 'pier' | 'ridge'): Promise<void> {
+  let spawnAt: 'pier' | 'ridge' = startSpawn || 'pier';
   while (true) {
     const valley = new NewSalmonan({ player, runBattle }, spawnAt);
     await fadeOut();
@@ -302,9 +307,12 @@ async function runSalmonan(): Promise<void> {
 
 // ---------------- Terra City (the Circuit-Crown of Tharkand) ----------------
 /** Pod across the strait to Terra City and explore until the player rides home. */
-async function runTerra(): Promise<void> {
+async function runTerra(initialRoom?: string): Promise<void> {
   const firstArrival = !player.flags['terra_visited'];
   const city = new TerraCity(player, firstArrival);
+  if (initialRoom) {
+    (city as any).initialRoom = initialRoom;
+  }
   await fadeOut();
   playMusic('terra_city');
   setView(city.view);
@@ -318,33 +326,128 @@ async function runTerra(): Promise<void> {
 }
 
 // ---------------- main game loop ----------------
+async function runOverworldLoop(startRegion = 'aurel'): Promise<DungeonDef | 'agdao' | 'salmonan' | null> {
+  let region = startRegion;
+  while (true) {
+    const overworld = new Overworld(player, region);
+    await fadeOut();
+    playMusic('overworld');
+    setView(overworld.view);
+    await fadeIn();
+    const dest = await overworld.run();
+    if (dest && typeof dest === 'object' && 'travel' in dest) {
+      region = dest.travel;
+      continue;
+    }
+    return dest;
+  }
+}
+
+async function handleDungeonOutcome(outcome: DungeonOutcome, dungeonDef: DungeonDef): Promise<void> {
+  if (outcome === 'dead') {
+    // night recovery camp cinematic — the medic patches you up by the fire
+    const camp = new Cinematic('camp');
+    setView(camp.view);
+    await fadeIn();
+    camp.shot('fire');
+    const lost = Math.floor(player.shards * 0.4);
+    player.shards -= lost;
+    player.healAll();
+    await say('', 'You wake to woodsmoke and starlight. The recovery team\'s camp. Your Guardians are bandaged and snoring in a pile beside you.');
+    camp.shot('medic');
+    await conversation([
+      ['Field Medic', `Easy, easy — you took a real beating down there. Everyone's patched, your Crawler's running again… and the rescue bill came to ◆${lost} Shards. Recovery flights aren't cheap, tamer.`],
+      ['Field Medic', 'Rest by the fire a moment. The road back to Haven City is short — and the ruins will still be there when you\'re stronger.'],
+    ]);
+    camp.shot('wide');
+    await fadeOut();
+    setView(null);
+  } else if (outcome === 'cleared' && dungeonDef.id === 'sunken' && !player.flags['vault_cleared']) {
+    // victory camp cinematic — word of the Vault spreads
+    const camp = new Cinematic('camp');
+    setView(camp.view);
+    await fadeIn();
+    camp.shot('fire');
+    player.flags['vault_cleared'] = true;
+    await say('', 'That night, your camp is loud with celebration — the Vault\'s drowned halls finally quiet behind you.');
+    camp.shot('medic');
+    await say('Guide Mara', 'Word travels fast — the Vault\'s master has fallen! The guilds have unsealed the Stormspire Depths for you. A war-engine of the old empire waits below…');
+    camp.shot('wide');
+    await fadeOut();
+    setView(null);
+  }
+  syncStoryQuests(player).forEach(n => toast(n, 'gold'));
+  player.save();
+}
+
 async function cityLoop(): Promise<never> {
   let firstArrival = !player.flags['arrived_city'];
+  
+  let startLoc = player.savedLocation;
+  player.savedLocation = undefined; // clear after reading
+
+  if (!startLoc) {
+    startLoc = { type: 'town' };
+  }
+
   while (true) {
     player.flags['arrived_city'] = true;
-
-    // advance the Chronicle (auto-accept / auto-complete story chapters)
     syncStoryQuests(player).forEach(n => toast(n, 'gold'));
 
-    const town = new Town(player, firstArrival, { runFishing });
-    firstArrival = false;
-    await fadeOut();
-    playMusic('haven_town');
-    setView(town.view);
-    await fadeIn();
+    let dest: 'expedition' | 'university' | 'terra' | null = null;
 
-    // Chapter I opens with Hale on the Crawler radio, once, over the city
-    if (player.quests['story_roads'] === 'active' && !player.flags['story_ch1_intro']) {
-      player.flags['story_ch1_intro'] = true;
-      player.save();
-      playStorySequence([
-        ['Instructor Hale', `${player.tamerName}! Hale here — yes, I keep graduate frequencies. A diploma isn't a tamer; the wild needs two honest chances to eat you first.`],
-        ['Instructor Hale', `Your road: descend the MOSSDEEP BURROWS to the deepest floor, and conquer the SUNKEN VAULT. Both are on the overworld, past the city gate.`],
-        ['Instructor Hale', `Do that, and go see VEYL at the University library. Historian. Smells of ink and thunderstorms. Trust me — what he's been charting will change your year. Hale out.`],
-      ]);
+    if (startLoc.type === 'town') {
+      const town = new Town(player, firstArrival, { runFishing });
+      firstArrival = false;
+      if (startLoc.room) {
+        (town as any).initialRoom = startLoc.room;
+      }
+      await fadeOut();
+      playMusic('haven_town');
+      setView(town.view);
+      await fadeIn();
+
+      // Chapter I opens with Hale on the Crawler radio, once, over the city
+      if (player.quests['story_roads'] === 'active' && !player.flags['story_ch1_intro']) {
+        player.flags['story_ch1_intro'] = true;
+        player.save();
+        playStorySequence([
+          ['Instructor Hale', `${player.tamerName}! Hale here — yes, I keep graduate frequencies. A diploma isn't a tamer; the wild needs two honest chances to eat you first.`],
+          ['Instructor Hale', `Your road: descend the MOSSDEEP BURROWS to the deepest floor, and conquer the SUNKEN VAULT. Both are on the overworld, past the city gate.`],
+          ['Instructor Hale', `Do that, and go see VEYL at the University library. Historian. Smells of ink and thunderstorms. Trust me — what he's been charting will change your year. Hale out.`],
+        ]);
+      }
+
+      dest = await town.run();
+    } else {
+      // Bypassing town and routing directly
+      if (startLoc.type === 'university') {
+        await runUniversity(true, startLoc.room);
+      } else if (startLoc.type === 'terra') {
+        await runTerra(startLoc.room);
+      } else if (startLoc.type === 'agdao') {
+        const spawnAt = (startLoc.spawnAt as 'pier' | 'cave') || 'pier';
+        await runAgdao(spawnAt);
+      } else if (startLoc.type === 'salmonan') {
+        const spawnAt = (startLoc.spawnAt as 'pier' | 'ridge') || 'pier';
+        await runSalmonan(spawnAt);
+      } else if (startLoc.type === 'overworld') {
+        const startRegion = startLoc.room || 'aurel';
+        const dungeonDef = await runOverworldLoop(startRegion);
+        if (dungeonDef) {
+          if (dungeonDef === 'agdao') {
+            await runAgdao();
+          } else if (dungeonDef === 'salmonan') {
+            await runSalmonan();
+          } else {
+            const outcome = await runDungeon(dungeonDef);
+            await handleDungeonOutcome(outcome, dungeonDef);
+          }
+        }
+      }
+      startLoc = { type: 'town' };
+      continue;
     }
-
-    const dest = await town.run(); // resolves when the player departs the city
 
     if (dest === 'university') {
       await runUniversity(true);
@@ -356,27 +459,8 @@ async function cityLoop(): Promise<never> {
       continue;
     }
 
-    // overworld globe: pick an expedition (or walk back to Haven City).
-    // The Region Atlas (T) hops between unlocked overworlds — each hop
-    // rebuilds the globe for the chosen region.
-    let dungeonDef: DungeonDef | 'agdao' | 'salmonan' | null = null;
-    {
-      let region = 'aurel';
-      while (true) {
-        const overworld = new Overworld(player, region);
-        await fadeOut();
-        playMusic('overworld');
-        setView(overworld.view);
-        await fadeIn();
-        const dest = await overworld.run();
-        if (dest && typeof dest === 'object' && 'travel' in dest) {
-          region = dest.travel;
-          continue;
-        }
-        dungeonDef = dest;
-        break;
-      }
-    }
+    // Otherwise, run overworld:
+    const dungeonDef = await runOverworldLoop('aurel');
     if (!dungeonDef) continue; // returned to the city
     if (dungeonDef === 'agdao') {
       await runAgdao();
@@ -388,40 +472,7 @@ async function cityLoop(): Promise<never> {
     }
 
     const outcome = await runDungeon(dungeonDef);
-    if (outcome === 'dead') {
-      // night recovery camp cinematic — the medic patches you up by the fire
-      const camp = new Cinematic('camp');
-      setView(camp.view);
-      await fadeIn();
-      camp.shot('fire');
-      const lost = Math.floor(player.shards * 0.4);
-      player.shards -= lost;
-      player.healAll();
-      await say('', 'You wake to woodsmoke and starlight. The recovery team\'s camp. Your Guardians are bandaged and snoring in a pile beside you.');
-      camp.shot('medic');
-      await conversation([
-        ['Field Medic', `Easy, easy — you took a real beating down there. Everyone's patched, your Crawler's running again… and the rescue bill came to ◆${lost} Shards. Recovery flights aren't cheap, tamer.`],
-        ['Field Medic', 'Rest by the fire a moment. The road back to Haven City is short — and the ruins will still be there when you\'re stronger.'],
-      ]);
-      camp.shot('wide');
-      await fadeOut();
-      setView(null);
-    } else if (outcome === 'cleared' && dungeonDef.id === 'sunken' && !player.flags['vault_cleared']) {
-      // victory camp cinematic — word of the Vault spreads
-      const camp = new Cinematic('camp');
-      setView(camp.view);
-      await fadeIn();
-      camp.shot('fire');
-      player.flags['vault_cleared'] = true;
-      await say('', 'That night, your camp is loud with celebration — the Vault\'s drowned halls finally quiet behind you.');
-      camp.shot('medic');
-      await say('Guide Mara', 'Word travels fast — the Vault\'s master has fallen! The guilds have unsealed the Stormspire Depths for you. A war-engine of the old empire waits below…');
-      camp.shot('wide');
-      await fadeOut();
-      setView(null);
-    }
-    syncStoryQuests(player).forEach(n => toast(n, 'gold'));
-    player.save();
+    await handleDungeonOutcome(outcome, dungeonDef);
   }
 }
 
@@ -436,59 +487,173 @@ function titleScreen(): Promise<{ mode: 'new' | 'continue'; slot: number }> {
     const pick = (mode: 'new' | 'continue', slot: number) => {
       Player.setSlot(slot);
       ts.style.display = 'none';
+      
+      const banner = $('title-copy-banner');
+      if (banner) banner.remove();
+      
       resolve({ mode, slot });
     };
 
+    let copySourceSlot: number | null = null;
+
     const render = () => {
       menu.innerHTML = '';
-      for (let slot = 1; slot <= SAVE_SLOTS; slot++) {
-        const sum = Player.slotSummary(slot);
-        const row = document.createElement('div');
-        row.className = 'slot-row';
-        const main = document.createElement('button');
-        main.className = 'ui-btn slot-main';
-        if (sum) {
-          const rank = [...RANKS].reverse().find(r => sum.tournamentPoints >= r.threshold) ?? RANKS[0];
-          const house = HOUSES.find(h => h.id === sum.houseId);
-          const when = sum.savedAt ? new Date(sum.savedAt).toLocaleDateString() : '';
-          main.innerHTML = `<span class="slot-name">↻ ${sum.tamerName}</span>
-            <span class="sub">Slot ${slot}${house ? ` · ${house.name.replace('House ', '')}` : ''} · <span style="color:${rank.color}">${rank.name}</span> · ◆${sum.shards}${when ? ` · ${when}` : ''}</span>`;
-          main.onclick = () => pick('continue', slot);
-          const del = document.createElement('button');
-          del.className = 'ui-btn danger slot-del';
-          del.textContent = '✕';
-          del.title = 'Delete this save';
-          del.onclick = () => {
-            if (confirm(`Delete Slot ${slot} (${sum.tamerName})? This cannot be undone.`)) {
-              Player.deleteSave(slot);
-              render();
-            }
-          };
-          row.append(main, del);
-        } else {
-          main.innerHTML = `<span class="slot-name">▶ New Game</span><span class="sub">Slot ${slot} — empty</span>`;
-          main.onclick = () => pick('new', slot);
-          row.append(main);
+
+      // Render the duplicate banner if we are in Copy Mode
+      let banner = $('title-copy-banner');
+      if (copySourceSlot !== null) {
+        if (!banner) {
+          banner = document.createElement('div');
+          banner.id = 'title-copy-banner';
+          banner.className = 'copy-banner';
+          menu.parentNode!.insertBefore(banner, menu);
         }
-        menu.appendChild(row);
+        const sourceName = Player.slotSummary(copySourceSlot)?.tamerName ?? `Slot ${copySourceSlot}`;
+        banner.innerHTML = `<span>👯 Duplicating <b>${sourceName} (Slot ${copySourceSlot})</b>. Select target slot below:</span>
+          <button class="ui-btn danger" style="padding:4px 10px; font-size:12px" id="cancel-copy-btn">Cancel</button>`;
+        $('cancel-copy-btn').onclick = () => {
+          copySourceSlot = null;
+          render();
+        };
+      } else {
+        if (banner) banner.remove();
       }
 
-      // Add Options Button
-      const optRow = document.createElement('div');
-      optRow.className = 'slot-row';
-      optRow.style.marginTop = '15px';
-      
-      const optBtn = document.createElement('button');
-      optBtn.className = 'ui-btn';
-      optBtn.style.textAlign = 'center';
-      optBtn.style.width = '100%';
-      optBtn.innerHTML = '⚙️ Game Options';
-      optBtn.onclick = async () => {
-        await openOptionsMenu();
-      };
-      
-      optRow.appendChild(optBtn);
-      menu.appendChild(optRow);
+      for (let slot = 1; slot <= SAVE_SLOTS; slot++) {
+        const sum = Player.slotSummary(slot);
+        const card = document.createElement('div');
+
+        if (copySourceSlot !== null) {
+          if (slot === copySourceSlot) {
+            card.className = 'slot-card copying-source';
+          } else {
+            card.className = 'slot-card';
+          }
+        } else {
+          card.className = `slot-card ${sum ? '' : 'empty'}`;
+        }
+
+        // Header
+        const header = document.createElement('div');
+        header.className = 'slot-header';
+        header.innerHTML = `<span class="slot-number">SLOT ${slot}</span>`;
+        card.appendChild(header);
+
+        if (copySourceSlot !== null) {
+          if (slot === copySourceSlot) {
+            const body = document.createElement('div');
+            body.className = 'slot-body';
+            body.style.cursor = 'default';
+            body.innerHTML = `
+              <div class="slot-body-name" style="text-align:center; margin-top:20px; color:var(--ui-gold)">SOURCE FILE</div>
+              <div class="slot-body-stats" style="text-align:center">Copying from this slot...</div>
+            `;
+            card.appendChild(body);
+          } else {
+            const body = document.createElement('div');
+            body.className = 'slot-body';
+            body.style.justifyContent = 'center';
+            body.style.alignItems = 'center';
+            
+            const pasteBtn = document.createElement('button');
+            if (sum) {
+              pasteBtn.className = 'ui-btn danger';
+              pasteBtn.innerHTML = '⚠️ Overwrite';
+            } else {
+              pasteBtn.className = 'ui-btn primary';
+              pasteBtn.innerHTML = '📋 Paste Here';
+            }
+            pasteBtn.style.width = '80%';
+            pasteBtn.style.padding = '10px';
+            pasteBtn.onclick = (e) => {
+              e.stopPropagation();
+              if (!sum || confirm(`Overwrite Slot ${slot} (${sum.tamerName}) with Slot ${copySourceSlot}'s save? This cannot be undone.`)) {
+                Player.duplicateSave(copySourceSlot!, slot);
+                copySourceSlot = null;
+                render();
+              }
+            };
+            body.appendChild(pasteBtn);
+            card.appendChild(body);
+          }
+        } else {
+          if (sum) {
+            const rank = [...RANKS].reverse().find(r => sum.tournamentPoints >= r.threshold) ?? RANKS[0];
+            const house = HOUSES.find(h => h.id === sum.houseId);
+            const when = sum.savedAt ? new Date(sum.savedAt).toLocaleDateString() : '';
+            
+            const body = document.createElement('div');
+            body.className = 'slot-body';
+            body.onclick = () => pick('continue', slot);
+            
+            body.innerHTML = `
+              <div class="slot-body-name">${sum.tamerName}</div>
+              <div class="slot-body-house" style="color:${house ? house.color : 'var(--ui-dim)'}">
+                ${house ? `🛡️ ${house.name}` : '🔰 Freelance Tamer'}
+              </div>
+              <div class="slot-body-stats">
+                ◆ ${sum.shards.toLocaleString()} Shards · <span style="color:${rank.color}">${rank.name}</span>
+              </div>
+              ${sum.partyNames && sum.partyNames.length > 0 ? `<div class="slot-body-party">🐾 ${sum.partyNames.join(' · ')}</div>` : ''}
+              <div class="slot-body-date">${when}</div>
+            `;
+            card.appendChild(body);
+
+            // Actions row
+            const actions = document.createElement('div');
+            actions.className = 'slot-actions';
+            
+            const dupBtn = document.createElement('button');
+            dupBtn.className = 'ui-btn';
+            dupBtn.innerHTML = '👯 Duplicate';
+            dupBtn.onclick = (e) => {
+              e.stopPropagation();
+              copySourceSlot = slot;
+              render();
+            };
+            
+            const delBtn = document.createElement('button');
+            delBtn.className = 'ui-btn danger';
+            delBtn.innerHTML = '🗑️ Delete';
+            delBtn.onclick = (e) => {
+              e.stopPropagation();
+              if (confirm(`Delete Slot ${slot} (${sum.tamerName})? This cannot be undone.`)) {
+                Player.deleteSave(slot);
+                render();
+              }
+            };
+            
+            actions.append(dupBtn, delBtn);
+            card.appendChild(actions);
+          } else {
+            const body = document.createElement('div');
+            body.className = 'slot-body';
+            body.style.justifyContent = 'center';
+            body.style.alignItems = 'center';
+            body.innerHTML = `
+              <div class="slot-body-name" style="color:var(--ui-dim); margin-bottom: 8px">EMPTY SLOT</div>
+              <button class="ui-btn primary" style="font-size:14px; padding:8px 16px">▶ New Game</button>
+            `;
+            body.onclick = () => pick('new', slot);
+            card.appendChild(body);
+          }
+        }
+
+        menu.appendChild(card);
+      }
+
+      // Bind static Options Button
+      const optBtn = $('title-opts-btn');
+      if (copySourceSlot !== null) {
+        optBtn.style.opacity = '0.5';
+        optBtn.style.pointerEvents = 'none';
+      } else {
+        optBtn.style.opacity = '1';
+        optBtn.style.pointerEvents = 'auto';
+        optBtn.onclick = async () => {
+          await openOptionsMenu();
+        };
+      }
     };
     render();
   });

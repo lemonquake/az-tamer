@@ -4,8 +4,8 @@
 // sanctum, bounty board, dungeon gate
 // ============================================================
 import * as THREE from 'three';
-import { HOUSES, DUNGEONS, ITEMS, SHOP_STOCK, GEM_STOCK, CRAWLER_PARTS, SPECIES, type DungeonDef, type HouseDef } from './data';
-import { Player, Guardian } from './state';
+import { HOUSES, DUNGEONS, ITEMS, SHOP_STOCK, GEM_STOCK, CRAWLER_PARTS, SPECIES, ELEMENTS, ELEMENT_ICONS, elementsOf, type DungeonDef, type HouseDef, type Element } from './data';
+import { Player, Guardian, type GuardianCustomization } from './state';
 import {
   makeTamer, makeVoxelHuman, updateVoxelHuman, updateTamerFX, setVoxelSeated, makeGuardian, disposeRig, makeCrawler, disposeCrawler,
   makeTree, makeStreetLamp, makeCustomCreature, mulberry, tween,
@@ -13,6 +13,7 @@ import {
   carpetTexture, wallpaperTexture, skyGradient, barkTexture, leafTexture,
   aetherMarbleTexture, legendFriezeTexture, emberCrackTexture,
   caveRockTexture, stormPanelTexture, stormSeamEmissive, groundTexture,
+  labFloorTexture, labWallTexture, computerScreenTexture,
   makeGuideBeacon, type BeaconRig,
   HAIRSTYLES, SKIN_TONES, HAIR_COLORS, type GuardianRig, type TreeKind, type CrawlerLook,
 } from './models';
@@ -3050,7 +3051,7 @@ export class Town {
     const themes = {
       shop:     { floor: () => plankTexture('#7a5a36', 4), wall: () => plankTexture('#5a4226', 3), sky: ['#2a2014', '#140e08'] as [string, string], light: 0xffd9a0 },
       garage:   { floor: () => tileTexture('#5a6070', '#3a4050', 6), wall: () => stoneTexture('#4a5060', '#2a3040', 3), sky: ['#1a2028', '#0a0e14'] as [string, string], light: 0xaad4ff },
-      sanctum:  { floor: () => marbleTexture(), wall: () => marbleTexture('#bcc2d2', '#8a90a5', 3), sky: ['#1a2a22', '#0a1410'] as [string, string], light: 0xb8ffd8 },
+      sanctum:  { floor: () => labFloorTexture(), wall: () => labWallTexture(), sky: ['#0d1117', '#070a0e'] as [string, string], light: 0x8af2ff },
       boutique: { floor: () => carpetTexture('#4a1a35', '#d9a11a', 2), wall: () => wallpaperTexture('#4a1a35', '#2a0a1e', '#d9a11a', 2), sky: ['#2a1022', '#140510'] as [string, string], light: 0xffe6b8 }
     } as const;
     const th = themes[kind];
@@ -3076,8 +3077,10 @@ export class Town {
     mkWall(w, 0.4, 0, -d / 2);
     mkWall(0.4, d, -w / 2, 0);
     mkWall(0.4, d, w / 2, 0);
-    mkWall(w / 2 - 1.4, 0.4, -(w / 4 + 0.7), d / 2);
-    mkWall(w / 2 - 1.4, 0.4, w / 4 + 0.7, d / 2);
+    if (kind !== 'sanctum') {
+      mkWall(w / 2 - 1.4, 0.4, -(w / 4 + 0.7), d / 2);
+      mkWall(w / 2 - 1.4, 0.4, w / 4 + 0.7, d / 2);
+    }
 
     if (kind === 'shop') {
       this.intName = "Pina's Provisions";
@@ -3191,132 +3194,128 @@ export class Town {
         { x: 0, z: d / 2, label: 'Exit', color: '#e8d9a8', kind: 'door' },
       ];
     } else if (kind === 'sanctum') {
-      this.intName = 'The Sanctum';
-      // ------------------------------------------------------------------
-      // Where faith met instrumentation and decided they liked each other:
-      // the old healing spring at the heart, recovery capsules and a vitals
-      // wall along one side, the aether condenser humming on the other, and
-      // a research aide who annotates miracles in triplicate.
-      // ------------------------------------------------------------------
+      this.intName = 'Aurelian Fusion Laboratory';
 
-      // the healing spring, ringed by an aether-script inlay
-      const pool = new THREE.Mesh(new THREE.CylinderGeometry(2.4, 2.6, 0.5, 20),
-        new THREE.MeshStandardMaterial({ map: marbleTexture(), roughness: 0.3 }));
-      pool.position.set(0, 0.25, -2);
-      const springWater = new THREE.Mesh(new THREE.CylinderGeometry(2.1, 2.1, 0.12, 20),
-        new THREE.MeshStandardMaterial({ color: 0x5ad88a, emissive: 0x2a8a4a, emissiveIntensity: 0.8, roughness: 0.05, transparent: true, opacity: 0.85 }));
-      springWater.position.set(0, 0.56, -2);
-      springWater.name = 'springwater';
-      const springLight = new THREE.PointLight(0x5ad88a, 14, 12);
-      springLight.position.set(0, 2, -2);
-      s.add(pool, springWater, springLight);
-      this.intColliders.push({ pos: new THREE.Vector3(0, 0, -2), r: 3.0 });
-      const runeRing = new THREE.Mesh(new THREE.TorusGeometry(3.3, 0.06, 8, 40),
-        new THREE.MeshStandardMaterial({ color: 0x4ad8c8, emissive: 0x2aa890, emissiveIntensity: 1.0, roughness: 0.3 }));
-      runeRing.rotation.x = Math.PI / 2;
-      runeRing.position.set(0, 0.03, -2);
-      runeRing.name = 'legendpulse';
-      s.add(runeRing);
-      // sensor probes leaning over the water — the spring is monitored now
-      for (const a of [0.8, 2.4]) {
-        const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 1.9, 6),
-          new THREE.MeshStandardMaterial({ color: 0x8a93a8, metalness: 0.8, roughness: 0.3 }));
-        arm.position.set(Math.cos(a) * 2.7, 1.4, -2 + Math.sin(a) * 2.7);
-        arm.rotation.z = Math.cos(a) * 0.5;
-        arm.rotation.x = -Math.sin(a) * 0.5;
-        const probe = new THREE.Mesh(new THREE.OctahedronGeometry(0.1),
-          new THREE.MeshStandardMaterial({ color: 0x5ad8e8, emissive: 0x5ad8e8, emissiveIntensity: 1.2 }));
-        probe.position.set(Math.cos(a) * 2.0, 2.0, -2 + Math.sin(a) * 2.0);
-        probe.name = 'stormtip';
-        s.add(arm, probe);
+      // 1. Central Fusion Reactor console
+      const reactor = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.8, 1.2, 20),
+        new THREE.MeshStandardMaterial({ color: 0x242b35, metalness: 0.85, roughness: 0.15 }));
+      reactor.position.set(0, 0.6, -2);
+      
+      const coreLight = new THREE.PointLight(0x5ad8e8, 16, 12);
+      coreLight.position.set(0, 2.2, -2);
+      s.add(reactor, coreLight);
+      this.intColliders.push({ pos: new THREE.Vector3(0, 0, -2), r: 2.0 });
+
+      // Holographic spinning reactor rings wreathed in light
+      for (let i = 0; i < 3; i++) {
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(2.0 - i * 0.35, 0.05, 8, 30),
+          new THREE.MeshStandardMaterial({ color: 0x5ad8e8, emissive: 0x2aa890, emissiveIntensity: 1.2, roughness: 0.1, transparent: true, opacity: 0.85 }));
+        ring.position.set(0, 1.2 + i * 0.4, -2);
+        ring.rotation.x = Math.PI / 2;
+        ring.name = 'stormtip'; // auto-rotates
+        s.add(ring);
       }
 
-      // candle columns hold the corners — the old faith keeps its seats
+      // 2. High-Tech corner columns (Metallic Server Columns) with glowing diodes
       for (const [cx, cz] of [[-8, -5.5], [8, -5.5], [-8, 4.5], [8, 4.5]] as const) {
-        const col = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.3, 2.6, 10),
-          new THREE.MeshStandardMaterial({ map: marbleTexture(), roughness: 0.4 }));
-        col.position.set(cx, 1.3, cz);
-        const flame = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.34, 8),
-          new THREE.MeshStandardMaterial({ color: 0xffd9a0, emissive: 0xffb45a, emissiveIntensity: 1.4 }));
-        flame.position.set(cx, 2.85, cz);
-        flame.name = 'flame';
-        s.add(col, flame);
+        const col = new THREE.Mesh(new THREE.BoxGeometry(0.6, 3.8, 0.6),
+          new THREE.MeshStandardMaterial({ color: 0x1c2330, metalness: 0.9, roughness: 0.2 }));
+        col.position.set(cx, 1.9, cz);
+        s.add(col);
         this.intColliders.push({ pos: new THREE.Vector3(cx, 0, cz), r: 0.5 });
-      }
-      const candleLight = new THREE.PointLight(0xffb45a, 7, 14);
-      candleLight.position.set(0, 3.4, 2);
-      s.add(candleLight);
 
-      // ---- the recovery wing: two guardian capsules + the vitals wall ----
-      for (const [capZ, fluidCol, occupied] of [[-3.6, 0x4ad8c8, true], [-0.6, 0x9a6af2, false]] as const) {
+        // Add small blinking status lights on columns
+        for (let yVal = 0.5; yVal < 3.8; yVal += 0.8) {
+          const diode = new THREE.Mesh(new THREE.SphereGeometry(0.06, 6, 6),
+            new THREE.MeshStandardMaterial({
+              color: Math.random() > 0.5 ? 0x5ad88a : 0xe85a8a,
+              emissive: Math.random() > 0.5 ? 0x5ad88a : 0xe85a8a,
+              emissiveIntensity: 1.5
+            }));
+          diode.position.set(cx + (cx > 0 ? -0.31 : 0.31), yVal, cz);
+          diode.name = 'legendpulse';
+          s.add(diode);
+        }
+      }
+
+      // 3. Recovery wing: two guardian capsules (filled with bubbling green diagnostic fluid)
+      for (const [capZ, fluidCol, occupied] of [[-3.6, 0x4ad88a, true], [-0.6, 0x5ad8e8, false]] as const) {
         const cx = -7.2;
         const base = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 1.1, 0.4, 14),
-          new THREE.MeshStandardMaterial({ color: 0x3a4250, metalness: 0.75, roughness: 0.3 }));
+          new THREE.MeshStandardMaterial({ color: 0x242b35, metalness: 0.85, roughness: 0.2 }));
         base.position.set(cx, 0.2, capZ);
         const glass = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 2.3, 14, 1, true),
           new THREE.MeshStandardMaterial({
-            color: 0xbfe8f2, transparent: true, opacity: 0.22, roughness: 0.05,
+            color: 0xbfe8f2, transparent: true, opacity: 0.25, roughness: 0.05,
             side: THREE.DoubleSide, depthWrite: false,
           }));
         glass.position.set(cx, 1.55, capZ);
         const fluid = new THREE.Mesh(new THREE.CylinderGeometry(0.74, 0.74, 1.9, 12),
           new THREE.MeshStandardMaterial({
-            color: fluidCol, emissive: fluidCol, emissiveIntensity: 0.4,
-            transparent: true, opacity: 0.3, depthWrite: false,
+            color: fluidCol, emissive: fluidCol, emissiveIntensity: 0.5,
+            transparent: true, opacity: 0.35, depthWrite: false,
           }));
         fluid.position.set(cx, 1.45, capZ);
         const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 0.85, 0.3, 14),
-          new THREE.MeshStandardMaterial({ color: 0x3a4250, metalness: 0.75, roughness: 0.3 }));
+          new THREE.MeshStandardMaterial({ color: 0x242b35, metalness: 0.85, roughness: 0.2 }));
         cap.position.set(cx, 2.85, capZ);
         s.add(base, glass, fluid, cap);
+
         // a rising scan ring sweeps the tube
         const scan = new THREE.Mesh(new THREE.TorusGeometry(0.78, 0.02, 6, 20),
-          new THREE.MeshBasicMaterial({ color: 0x9af2e8, transparent: true, opacity: 0.7 }));
+          new THREE.MeshBasicMaterial({ color: 0x9af2e8, transparent: true, opacity: 0.85 }));
         scan.rotation.x = Math.PI / 2;
         scan.position.set(cx, 0.6, capZ);
         scan.name = 'scanline';
         scan.userData.ph = capZ;
         s.add(scan);
+
         if (occupied) {
-          // a small guardian dozing in the fluid, on the mend
           const patient = new THREE.Mesh(new THREE.SphereGeometry(0.4, 10, 8),
-            new THREE.MeshStandardMaterial({ color: 0x6ab48a, roughness: 0.7 }));
+            new THREE.MeshStandardMaterial({ color: 0x3a6af2, roughness: 0.7 }));
           patient.scale.set(1.2, 0.85, 1);
           patient.position.set(cx, 1.2, capZ);
           patient.name = 'aetherfloat';
           patient.userData.baseY = 1.2;
           patient.userData.ph = 1.3;
-          const fin = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.34, 6),
-            new THREE.MeshStandardMaterial({ color: 0x4a946a, roughness: 0.7 }));
-          fin.position.set(cx, 1.62, capZ);
-          fin.name = 'aetherfloat';
-          fin.userData.baseY = 1.62;
-          fin.userData.ph = 1.3;
-          s.add(patient, fin);
+          s.add(patient);
         }
         this.intColliders.push({ pos: new THREE.Vector3(cx, 0, capZ), r: 1.25 });
       }
+
+      // Check recovery capsule interactable
       this.intInteractables.push({
         pos: new THREE.Vector3(-5.8, 0, -2.1), radius: 1.8,
-        label: 'Press <b>E</b> — check on the recovery capsules',
+        label: 'Press <b>E</b> — check recovery diagnostics',
         handler: async () => {
-          await say('', 'A marshfin drifts in the teal capsule, fins stirring in its sleep, vitals tracing slow green hills on the readout. The chart clipped to the glass says: "Day 3. Ate well. Dreamed loudly."');
-          await say('', 'The violet capsule stands empty and freshly cleaned. The Keeper insists an empty capsule is the best possible news a sanctum can have.');
+          await say('Rejuvenator Pod', 'Diagnostics: Aqueous suspension stable. Reconstructing genetic alignment. Growth rate: 98.4%.');
+          await say('Rejuvenator Pod', 'Status: Pod 2 empty. Sterilization cycle complete. Ready for next genetic candidate.');
         },
       });
-      // the vitals wall: a bank of soft-glowing EKG monitors
+
+      // 4. Vitals Wall: bank of soft-glowing EKG and grid telemetry monitors
       {
         const cv = document.createElement('canvas');
         cv.width = 512; cv.height = 192;
         const ctx = cv.getContext('2d')!;
-        ctx.fillStyle = '#081410';
+        ctx.fillStyle = '#0a0f18';
         ctx.fillRect(0, 0, 512, 192);
+        // Draw grid lines
+        ctx.strokeStyle = '#1e293b';
+        ctx.lineWidth = 1;
+        for (let x = 0; x <= 512; x += 32) {
+          ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, 192); ctx.stroke();
+        }
+        for (let y = 0; y <= 192; y += 32) {
+          ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(512, y); ctx.stroke();
+        }
+        // Draw waves
         for (let row = 0; row < 3; row++) {
-          ctx.strokeStyle = ['#4ad88a', '#5ad8e8', '#c9a24a'][row];
+          ctx.strokeStyle = ['#5ad8e8', '#5ad88a', '#c9a24a'][row];
           ctx.lineWidth = 3;
           ctx.beginPath();
           for (let x = 0; x <= 512; x += 4) {
-            const beat = (x % 170 > 140) ? Math.sin(((x % 170) - 140) / 30 * Math.PI) * 26 : Math.sin(x * 0.05 + row * 2) * 4;
+            const beat = (x % 170 > 140) ? Math.sin(((x % 170) - 140) / 30 * Math.PI) * 26 : Math.sin(x * 0.06 + row * 1.5) * 4;
             const y = 36 + row * 60 - beat;
             if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
           }
@@ -3325,123 +3324,153 @@ export class Town {
         const tex = new THREE.CanvasTexture(cv);
         tex.colorSpace = THREE.SRGBColorSpace;
         const monitor = new THREE.Mesh(new THREE.PlaneGeometry(3.0, 1.15),
-          new THREE.MeshStandardMaterial({ map: tex, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.5, roughness: 0.4 }));
+          new THREE.MeshStandardMaterial({ map: tex, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.6, roughness: 0.2 }));
         monitor.position.set(-w / 2 + 0.45, 2.4, -2.1);
         monitor.rotation.y = Math.PI / 2;
         const mFrame = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.35, 3.3),
-          new THREE.MeshStandardMaterial({ color: 0x2a303c, metalness: 0.6, roughness: 0.4 }));
+          new THREE.MeshStandardMaterial({ color: 0x151c2c, metalness: 0.9, roughness: 0.2 }));
         mFrame.position.set(-w / 2 + 0.38, 2.4, -2.1);
         s.add(mFrame, monitor);
       }
 
-      // ---- the aether condenser: rings, crystal, contained weather ----
+      // 5. Server Rack Unit (containing quantum compute buffers)
       {
-        const cx = 7.2, cz = -2.4;
-        const plinth = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.1, 0.5, 12),
-          new THREE.MeshStandardMaterial({ map: marbleTexture(), roughness: 0.4 }));
-        plinth.position.set(cx, 0.25, cz);
-        s.add(plinth);
-        for (let i = 0; i < 3; i++) {
-          const ring = new THREE.Mesh(new THREE.TorusGeometry(0.62 - i * 0.14, 0.045, 8, 22),
-            new THREE.MeshStandardMaterial({ color: 0xc9892a, metalness: 0.85, roughness: 0.3 }));
-          ring.position.set(cx, 1.0 + i * 0.5, cz);
-          ring.rotation.x = Math.PI / 2 + (i - 1) * 0.3;
-          ring.name = 'stormtip';
-          s.add(ring);
-        }
-        const crystal = new THREE.Mesh(new THREE.OctahedronGeometry(0.3),
-          new THREE.MeshStandardMaterial({ color: 0xbe9af2, emissive: 0x9a6af2, emissiveIntensity: 1.3, roughness: 0.2 }));
-        crystal.position.set(cx, 2.5, cz);
-        crystal.name = 'aetherfloat';
-        crystal.userData.baseY = 2.5;
-        crystal.userData.ph = 0.4;
-        const cLight = new THREE.PointLight(0x9a6af2, 8, 9);
-        cLight.position.set(cx, 2.6, cz);
-        s.add(crystal, cLight);
-        this.intColliders.push({ pos: new THREE.Vector3(cx, 0, cz), r: 1.3 });
+        const sx = 7.2, sz = -2.4;
+        const serverRack = new THREE.Mesh(new THREE.BoxGeometry(1.2, 2.8, 1.2),
+          new THREE.MeshStandardMaterial({ color: 0x151c2c, metalness: 0.85, roughness: 0.2 }));
+        serverRack.position.set(sx, 1.4, sz);
+        s.add(serverRack);
+        this.intColliders.push({ pos: new THREE.Vector3(sx, 0, sz), r: 1.1 });
+
+        // Server screen mapping computer screen texture
+        const scrTex = computerScreenTexture();
+        scrTex.colorSpace = THREE.SRGBColorSpace;
+        const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 1.2),
+          new THREE.MeshStandardMaterial({ map: scrTex, emissive: 0xffffff, emissiveMap: scrTex, emissiveIntensity: 0.8 }));
+        screen.position.set(sx - 0.61, 1.6, sz);
+        screen.rotation.y = -Math.PI / 2;
+        s.add(screen);
+
         this.intInteractables.push({
-          pos: new THREE.Vector3(cx - 1.4, 0, cz), radius: 1.7,
-          label: 'Press <b>E</b> — study the aether condenser',
+          pos: new THREE.Vector3(sx - 1.4, 0, sz), radius: 1.6,
+          label: 'Press <b>E</b> — check Server diagnostics',
           handler: async () => {
-            await say('', 'Three gimbaled rings spin around a sliver of aether crystal — the tenth element, in a jar, technically. A brass plate reads: "Distills 0.4 drams of restorative essence per day. DO NOT TAP THE GLASS. It taps back."');
+            await say('Quantum Server', 'System status: Online. Fusion matrices buffered. Heat sink: 34°C. Ready for energy transfer calculations.');
           },
         });
       }
 
-      // ---- the research bench: vials, alembic, and Aide Lumen's notes ----
+      // 6. Research workstation: desks with terminals and Aide Lumen's notes
       {
         const bench = new THREE.Mesh(new THREE.BoxGeometry(4.2, 1.0, 1.0),
-          new THREE.MeshStandardMaterial({ map: plankTexture('#5a4632', 2), roughness: 0.7 }));
+          new THREE.MeshStandardMaterial({ color: 0x242b35, metalness: 0.8, roughness: 0.3 }));
         bench.position.set(5.6, 0.5, 4.6);
         s.add(bench);
         this.intColliders.push({ pos: new THREE.Vector3(5.6, 0, 4.6), r: 1.6 });
-        for (let i = 0; i < 5; i++) {
-          const vial = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.075, 0.3, 8),
-            new THREE.MeshStandardMaterial({
-              color: [0x4ad88a, 0x5ad8e8, 0xe85a8a, 0xf2d23a, 0x9a6af2][i],
-              emissive: [0x4ad88a, 0x5ad8e8, 0xe85a8a, 0xf2d23a, 0x9a6af2][i],
-              emissiveIntensity: 0.5, transparent: true, opacity: 0.85,
-            }));
-          vial.position.set(4.0 + i * 0.45, 1.17, 4.4);
-          s.add(vial);
-        }
-        const alembic = new THREE.Mesh(new THREE.SphereGeometry(0.26, 10, 8),
-          new THREE.MeshStandardMaterial({ color: 0xbfe8f2, transparent: true, opacity: 0.4, roughness: 0.05 }));
-        alembic.position.set(6.8, 1.3, 4.6);
-        const spout = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.05, 0.7, 6),
-          new THREE.MeshStandardMaterial({ color: 0xbfe8f2, transparent: true, opacity: 0.4 }));
-        spout.rotation.z = 1.0;
-        spout.position.set(6.45, 1.5, 4.6);
-        s.add(alembic, spout);
+
+        // Add a computer terminal on the desk
+        const scrTex = computerScreenTexture();
+        const monitor = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.6, 0.1),
+          new THREE.MeshStandardMaterial({ color: 0x111622 }));
+        monitor.position.set(5.6, 1.4, 4.6);
+        const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.5),
+          new THREE.MeshStandardMaterial({ map: scrTex, emissive: 0xffffff, emissiveMap: scrTex, emissiveIntensity: 0.8 }));
+        screen.position.set(5.6, 1.4, 4.54);
+        s.add(monitor, screen);
+
         this.intInteractables.push({
           pos: new THREE.Vector3(5.6, 0, 3.4), radius: 1.7,
-          label: 'Press <b>E</b> — read the research notes',
+          label: 'Press <b>E</b> — read the research journal',
           handler: async () => {
-            await say('Lumen\'s notebook', '"Day 212: spring output up 3% during the Coliseum finals. Hypothesis: the water responds to ten thousand people hoping at once. The Keeper says \'obviously\'. I require a larger sample of hope."');
-            await say('Lumen\'s notebook', '"Day 215: tonic distilled from condenser essence outperforms shelf tonic by 11%. Keeper poured it back into the spring \'as a thank-you\'. Science and the spring remain in negotiation."');
+            await say('Alex\'s Log', '"June 12: Evolving starter species like Cindcub or Zaplet into their extra-branch forms requires specific element catalysts. Novice species cannot handle direct fusion; their genetic templates are too fluid. Evolved forms are required."');
+            await say('Alex\'s Log', '"June 14: Guardian Fusion previews show a predictable breakdown: 50% chance of primary hybrid, 25% Parent A element dominance, 25% Parent B element dominance. Parts customization remains stable during hybridization."');
           },
         });
       }
-      // Aide Lumen, mid-measurement
-      const lumen = makeVoxelHuman({ top: 0x5a8ad8, hair: 0xc46a2a, cap: null, hairstyle: 'buns' });
-      lumen.position.set(4.4, 0, 3.0);
+
+      // 7. Automated Healing Station (healing grid in the corner)
+      {
+        const hx = -6.5, hz = 4.2;
+        const pad = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.1, 0.15, 16),
+          new THREE.MeshStandardMaterial({ color: 0x242b35, metalness: 0.8, roughness: 0.3 }));
+        pad.position.set(hx, 0.075, hz);
+        const glow = new THREE.Mesh(new THREE.TorusGeometry(0.9, 0.04, 6, 24),
+          new THREE.MeshStandardMaterial({ color: 0x5ad88a, emissive: 0x5ad88a, emissiveIntensity: 1.2 }));
+        glow.rotation.x = Math.PI / 2;
+        glow.position.set(hx, 0.16, hz);
+        glow.name = 'legendpulse';
+        s.add(pad, glow);
+        this.intColliders.push({ pos: new THREE.Vector3(hx, 0, hz), r: 1.15 });
+
+        this.intInteractables.push({
+          pos: new THREE.Vector3(hx, 0, hz), radius: 1.5,
+          label: 'Press <b>E</b> — activate Healing Grid',
+          handler: () => this.visitSanctum(),
+        });
+      }
+
+      // 8. Aide Lumen
+      const lumen = makeVoxelHuman({ top: 0x3a4f7c, hair: 0xc46a2a, cap: null, hairstyle: 'buns' });
+      lumen.position.set(4.2, 0, 3.2);
       lumen.rotation.y = Math.PI * 0.8;
       tagNpc(lumen, 'Aide Lumen');
       s.add(lumen);
       this.intNpcs.push(lumen);
-      this.intColliders.push({ pos: new THREE.Vector3(4.4, 0, 3.0), r: 0.55 });
+      this.intColliders.push({ pos: new THREE.Vector3(4.2, 0, 3.2), r: 0.55 });
       this.intInteractables.push({
-        pos: new THREE.Vector3(4.4, 0, 3.0), radius: 1.7,
+        pos: new THREE.Vector3(4.2, 0, 3.2), radius: 1.7,
         label: 'Press <b>E</b> — talk to Aide Lumen',
         handler: async () => {
           const lines = [
-            'The spring healed people for seven hundred years before anyone measured HOW. I\'ve measured for three. Current findings: it\'s the water, it\'s the aether, and it\'s also, infuriatingly, the kindness. All three. The math only balances with the kindness term.',
-            'The capsules aren\'t a replacement for the spring — they\'re for patients who\'d drown in it. Fish guardians excepted. Fish guardians LOVE the capsules. We have a waiting list.',
-            'The Keeper blesses every instrument I install. I used to find it unscientific. Then the unblessed spectrometer caught fire, twice, and I revised my methodology.',
+            'Professor Alex is a genius. Genetic splicing and color alteration was just a theory until he built the Fusion Reactor.',
+            'We keep Aljay\'s old notes in the logs. He spent years tracking ancient Guardian migration patterns before he left for the ruins.',
+            'Be careful when selecting parents for fusion. The process is irreversible — their matrices are permanently woven into the offspring.'
           ];
           await say('Aide Lumen', lines[Math.floor(Math.random() * lines.length)]);
         },
       });
 
-      // the keeper beside the spring, where the keeper has always been
-      const keeper = makeVoxelHuman({ top: 0x4ec45e, robe: true, hair: 0xd8d8e8, cap: null });
-      keeper.position.set(2.8, 0, -3.1);
-      keeper.rotation.y = Math.PI / 1.5;
-      tagNpc(keeper, 'Sanctum Keeper');
-      s.add(keeper);
-      this.intNpcs.push(keeper);
-      this.intColliders.push({ pos: new THREE.Vector3(2.8, 0, -3.1), r: 0.6 });
+      // 9. Professor Alex (Father of Aljay, Keeper of the Laboratory)
+      const alex = makeVoxelHuman({ top: 0xeeeeee, robe: false, hair: 0x888888, cap: null });
+      alex.position.set(0, 0, -3.8);
+      alex.rotation.y = 0; // facing forward (+z) towards the player
+      tagNpc(alex, 'Professor Alex');
+      s.add(alex);
+      this.intNpcs.push(alex);
+      this.intColliders.push({ pos: new THREE.Vector3(0, 0, -3.8), r: 0.6 });
+
       this.intInteractables.push({
-        pos: new THREE.Vector3(2.8, 0, -3.1), radius: 1.9,
-        label: 'Press <b>E</b> — ask for the spring\'s blessing',
-        handler: () => this.visitSanctum(),
+        pos: new THREE.Vector3(0, 0, -3.8), radius: 1.8,
+        label: 'Press <b>E</b> — consult Professor Alex',
+        handler: async () => {
+          const options = [
+            '🧬 Guardian Fusion',
+            '🧬 Extra Evolution',
+            '📖 Fusion Book',
+            '💬 Talk',
+            '❌ Cancel'
+          ];
+          const pick = await choose('Professor Alex', 'Hello, young tamer. I am Professor Alex. In this Laboratory, we harness the quantum matrices of the Guardians to unlock their full genetic potential. What services do you require?', options);
+          if (pick === 0) {
+            this.openFusionUI();
+          } else if (pick === 1) {
+            this.openExtraEvolutionUI();
+          } else if (pick === 2) {
+            this.openFusionBookUI();
+          } else if (pick === 3) {
+            await this.talkToAlex();
+          }
+        }
       });
+
+      // 10. Minimap Markers
       this.intMarkers = [
-        { x: 2.8, z: -3.1, label: 'Keeper', color: '#5ad88a', kind: 'npc' },
-        { x: 0, z: -2, label: 'Healing Spring', color: '#5ad88a', kind: 'poi' },
-        { x: -7.2, z: -2.1, label: 'Recovery Wing', color: '#5ad8e8', kind: 'poi' },
-        { x: 7.2, z: -2.4, label: 'Condenser', color: '#9a6af2', kind: 'poi' },
-        { x: 5.6, z: 4.6, label: 'Research', color: '#5a8ad8', kind: 'poi' },
+        { x: 0, z: -3.8, label: 'Prof. Alex', color: '#f2c14e', kind: 'npc' },
+        { x: 0, z: -2, label: 'Fusion Reactor', color: '#5ad8e8', kind: 'poi' },
+        { x: -7.2, z: -2.1, label: 'Recovery Wing', color: '#5ad88a', kind: 'poi' },
+        { x: 7.2, z: -2.4, label: 'Quantum Server', color: '#9a6af2', kind: 'poi' },
+        { x: -6.5, z: 4.2, label: 'Healing Grid', color: '#5ad88a', kind: 'poi' },
+        { x: 5.6, z: 4.6, label: 'Research Terminal', color: '#5a8ad8', kind: 'poi' },
         { x: 0, z: d / 2, label: 'Exit', color: '#e8d9a8', kind: 'door' },
       ];
     } else if (kind === 'boutique') {
@@ -4355,6 +4384,7 @@ export class Town {
     this.camera.position.set(p.x, r.camH, p.z + r.camD);
     this.camera.lookAt(p.x, 1.2, p.z);
     toast(r.title, 'gold');
+    this.player.savedLocation = { type: 'town', room: `hall:${id}` };
   }
 
   // ---------------- room-graph building blocks ----------------
@@ -5561,6 +5591,7 @@ export class Town {
     this.camera.position.set(0, 6, this.intRoom.d / 2 + 4);
     this.mode = 'interior';
     toast(this.intName, 'gold');
+    this.player.savedLocation = { type: 'town', room: `service:${kind}` };
     this.busy = false;
   }
 
@@ -5575,6 +5606,7 @@ export class Town {
     this.camera.position.set(0, 6, this.intRoom.d / 2 + 4);
     this.mode = 'interior';
     toast(`${h.name}`, 'gold');
+    this.player.savedLocation = { type: 'town', room: `house:${h.id}` };
     this.busy = false;
   }
 
@@ -5585,6 +5617,7 @@ export class Town {
     this.streetScene.remove(this.tamer);
     this.mode = 'interior';
     this.enterHallRoom('f1');      // step into the Grand Lobby
+    this.player.savedLocation = { type: 'town', room: 'hall:f1' };
     this.busy = false;
   }
 
@@ -5603,6 +5636,7 @@ export class Town {
     this.interiorScene = null;
     this.hallRooms = null;         // release the Hall's seven scenes
     this.podHover = null;          // release the Skyport's floating Pod
+    this.player.savedLocation = { type: 'town' };
   }
 
   // ================= the Aetherline Skyport =================
@@ -6233,9 +6267,11 @@ export class Town {
         const p = this.player;
         const rows = stock.map(id => {
           const it = ITEMS[id];
-          return `<div class="list-row"><div style="flex:1"><b>${it.name}</b> <span class="goldcol">◆${it.price}</span>
+          const discount = p.guildPerks?.itemDiscount ?? 0;
+          const price = discount > 0 ? Math.max(1, Math.round(it.price * (1 - discount * 0.03))) : it.price;
+          return `<div class="list-row"><div style="flex:1"><b>${it.name}</b> <span class="goldcol">◆${price}</span>
             <div class="sub">${it.desc} (owned: ${p.itemCount(id)})</div></div>
-            <button class="ui-btn" data-buy="${id}" ${p.shards < it.price ? 'disabled' : ''}>Buy</button></div>`;
+            <button class="ui-btn" data-buy="${id}" ${p.shards < price ? 'disabled' : ''}>Buy</button></div>`;
         }).join('');
         const sellables = [...p.inventory.entries()].map(([id, qty]) => {
           const it = ITEMS[id];
@@ -6252,8 +6288,10 @@ export class Town {
           <div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="ui-btn primary" id="shop-close">Leave Shop</button></div>`);
         el.querySelectorAll<HTMLElement>('[data-buy]').forEach(b => b.onclick = () => {
           const it = ITEMS[b.dataset.buy!];
-          if (p.shards >= it.price && p.addItem(it.id)) { p.shards -= it.price; toast(`Bought ${it.name}.`); }
-          else if (p.shards >= it.price) toast('Cargo hold is full!', 'red');
+          const discount = p.guildPerks?.itemDiscount ?? 0;
+          const price = discount > 0 ? Math.max(1, Math.round(it.price * (1 - discount * 0.03))) : it.price;
+          if (p.shards >= price && p.addItem(it.id)) { p.shards -= price; toast(`Bought ${it.name}.`); }
+          else if (p.shards >= price) toast('Cargo hold is full!', 'red');
           render();
         });
         el.querySelectorAll<HTMLElement>('[data-sell]').forEach(b => b.onclick = () => {
@@ -6338,12 +6376,14 @@ export class Town {
           const owned = c.owned.includes(part.id);
           const equipped = c.parts[activeSlot] === part.id;
           const trying = previewParts[activeSlot] === part.id;
+          const discount = p.guildPerks?.crawlerDiscount ?? 0;
+          const price = discount > 0 ? Math.max(1, Math.round(part.price * (1 - discount * 0.03))) : part.price;
           let btn: string;
           if (equipped && trying) btn = '<span class="tag" style="background:var(--ui-green);color:#0c1022">EQUIPPED</span>';
           else if (owned && trying) btn = `<button class="ui-btn primary" data-fit="${part.id}">Install</button>`;
           else if (owned) btn = `<button class="ui-btn" data-try="${part.id}">Try On</button>`;
-          else if (trying) btn = `<button class="ui-btn gold" data-buyfit="${part.id}" ${p.shards < part.price ? 'disabled' : ''}>Buy & Install ◆${part.price}</button>`;
-          else btn = `<div style="display:flex;gap:4px"><button class="ui-btn" data-try="${part.id}">Try</button><button class="ui-btn" data-buyfit="${part.id}" ${p.shards < part.price ? 'disabled' : ''}>◆${part.price}</button></div>`;
+          else if (trying) btn = `<button class="ui-btn gold" data-buyfit="${part.id}" ${p.shards < price ? 'disabled' : ''}>Buy & Install ◆${price}</button>`;
+          else btn = `<div style="display:flex;gap:4px"><button class="ui-btn" data-try="${part.id}">Try</button><button class="ui-btn" data-buyfit="${part.id}" ${p.shards < price ? 'disabled' : ''}>◆${price}</button></div>`;
           const tierStars = '★'.repeat(part.tier) + '☆'.repeat(4 - part.tier);
           const tryBadge = trying && !equipped ? '<span class="tag" style="background:var(--ui-gold);color:#0c1022;margin-left:5px">ON RIG</span>' : '';
           return `<div class="list-row" style="${trying ? 'border-color:var(--ui-gold);background:rgba(217,161,26,0.08);' : ''}">
@@ -6366,8 +6406,10 @@ export class Town {
         list.querySelectorAll<HTMLElement>('[data-buyfit]').forEach(b => b.onclick = e => {
           e.stopPropagation();
           const part = CRAWLER_PARTS[b.dataset.buyfit!];
-          if (p.shards < part.price) return;
-          p.shards -= part.price;
+          const discount = p.guildPerks?.crawlerDiscount ?? 0;
+          const price = discount > 0 ? Math.max(1, Math.round(part.price * (1 - discount * 0.03))) : part.price;
+          if (p.shards < price) return;
+          p.shards -= price;
           c.owned.push(part.id);
           c.equip(part.id);
           previewParts[activeSlot] = part.id;
@@ -6380,13 +6422,15 @@ export class Town {
         const curPaint = previewPaint[activeSlot];
         const stockSel = !curPaint ? 'sel' : '';
         let paintHtml = `<div class="swatch ${stockSel}" data-paint="" title="Stock finish"><span class="swatch-dot" style="background:linear-gradient(135deg,#7a7a88,#3a3a44)"></span><span class="swatch-name">Stock</span></div>`;
+        const discount = p.guildPerks?.crawlerDiscount ?? 0;
         paintHtml += Object.values(PAINT_JOBS).map(pj => {
           const owned = c.ownedPaints.includes(pj.id);
           const sel = curPaint === pj.id ? 'sel' : '';
+          const price = discount > 0 ? Math.max(1, Math.round(pj.price * (1 - discount * 0.03))) : pj.price;
           return `<div class="swatch ${sel}" data-paint="${pj.id}" title="${pj.desc}">
             <span class="swatch-dot" style="background:${pj.swatch};${pj.emissive ? 'box-shadow:0 0 8px ' + pj.swatch : ''}"></span>
             <span class="swatch-name">${pj.name}</span>
-            ${owned ? '<span class="swatch-owned">✔</span>' : `<span class="swatch-price">◆${pj.price}</span>`}
+            ${owned ? '<span class="swatch-owned">✔</span>' : `<span class="swatch-price">◆${price}</span>`}
           </div>`;
         }).join('');
         // commit row: apply the previewed paint if it differs from what's saved
@@ -6395,7 +6439,8 @@ export class Town {
         if (curPaint !== savedPaint) {
           const pj = curPaint ? PAINT_JOBS[curPaint] : null;
           if (pj && !c.ownedPaints.includes(pj.id)) {
-            commitHtml = `<button class="ui-btn gold" id="paint-buy" ${p.shards < pj.price ? 'disabled' : ''} style="margin-top:6px">Buy "${pj.name}" ◆${pj.price} — unlocks for every part</button>`;
+            const price = discount > 0 ? Math.max(1, Math.round(pj.price * (1 - discount * 0.03))) : pj.price;
+            commitHtml = `<button class="ui-btn gold" id="paint-buy" ${p.shards < price ? 'disabled' : ''} style="margin-top:6px">Buy "${pj.name}" ◆${price} — unlocks for every part</button>`;
           } else {
             commitHtml = `<button class="ui-btn primary" id="paint-apply" style="margin-top:6px">Apply ${pj ? `"${pj.name}"` : 'stock finish'} to the ${CRAWLER_SLOT_INFO[activeSlot].label}</button>`;
           }
@@ -6410,8 +6455,9 @@ export class Town {
         const buyBtn = paintBox.querySelector<HTMLElement>('#paint-buy');
         if (buyBtn) buyBtn.onclick = () => {
           const pj = PAINT_JOBS[curPaint!];
-          if (p.shards < pj.price) return;
-          p.shards -= pj.price;
+          const price = discount > 0 ? Math.max(1, Math.round(pj.price * (1 - discount * 0.03))) : pj.price;
+          if (p.shards < price) return;
+          p.shards -= price;
           c.ownedPaints.push(pj.id);
           c.applyPaint(activeSlot, pj.id);
           toast(`"${pj.name}" is yours — sprayed on the ${CRAWLER_SLOT_INFO[activeSlot].label}.`, 'gold');
@@ -7031,6 +7077,50 @@ export class Town {
   async run(): Promise<'expedition' | 'university' | 'terra'> {
     this.buildStreet();
     updateTamerAppearance(this.tamer, this.player.equippedClothes, this.player.appearance);
+
+    const startRoom = (this as any).initialRoom as string;
+    if (startRoom) {
+      if (startRoom.startsWith('hall:')) {
+        const id = startRoom.slice(5) as HallId;
+        this.exitSpot.set(0, 0, 6.8);
+        this.buildHall();
+        this.streetScene.remove(this.tamer);
+        this.mode = 'interior';
+        this.enterHallRoom(id);
+      } else if (startRoom.startsWith('house:')) {
+        const houseId = startRoom.slice(6);
+        const houseDef = HOUSES.find(h => h.id === houseId)!;
+        this.exitSpot.set(0, 0, 6.8);
+        this.buildInterior(houseDef);
+        this.streetScene.remove(this.tamer);
+        this.interiorScene!.add(this.tamer);
+        this.tamer.position.set(0, 0, this.intRoom.d / 2 - 1.4);
+        this.tamer.rotation.y = Math.PI;
+        this.camera.position.set(0, 6, this.intRoom.d / 2 + 4);
+        this.mode = 'interior';
+        toast(this.intName, 'gold');
+        this.player.savedLocation = { type: 'town', room: `house:${houseId}` };
+      } else if (startRoom.startsWith('service:')) {
+        const kind = startRoom.slice(8) as 'shop' | 'garage' | 'sanctum' | 'coliseum' | 'boutique';
+        this.exitSpot.set(0, 0, 6.8);
+        if (kind === 'coliseum') {
+          this.buildColiseumInterior();
+        } else {
+          this.buildServiceInterior(kind);
+        }
+        this.streetScene.remove(this.tamer);
+        this.interiorScene!.add(this.tamer);
+        this.tamer.position.set(0, 0, this.intRoom.d / 2 - 1.4);
+        this.tamer.rotation.y = Math.PI;
+        this.camera.position.set(0, 6, this.intRoom.d / 2 + 4);
+        this.mode = 'interior';
+        toast(this.intName, 'gold');
+        this.player.savedLocation = { type: 'town', room: `service:${kind}` };
+      }
+    } else {
+      this.player.savedLocation = { type: 'town' };
+    }
+
     updateHUD(this.player, 'Haven City');
     showHotkeys(true);
     // debug handle for automated testing
@@ -7291,12 +7381,14 @@ export class Town {
               ? `<button class="ui-btn primary" data-equip="${item.id}">Wear</button>`
               : `<button class="ui-btn" data-try="${item.id}">Try On</button>`;
           } else {
-            const canBuy = p.shards >= item.price;
+            const discount = p.guildPerks?.itemDiscount ?? 0;
+            const price = discount > 0 ? Math.max(1, Math.round(item.price * (1 - discount * 0.03))) : item.price;
+            const canBuy = p.shards >= price;
             actionBtn = tryingOn
-              ? `<button class="ui-btn gold" data-buy="${item.id}" ${canBuy ? '' : 'disabled'}>Buy ◆${item.price}</button>`
+              ? `<button class="ui-btn gold" data-buy="${item.id}" ${canBuy ? '' : 'disabled'}>Buy ◆${price}</button>`
               : `<div style="display:flex;gap:4px;">
                   <button class="ui-btn" data-try="${item.id}">Try</button>
-                  <button class="ui-btn" data-buy="${item.id}" ${canBuy ? '' : 'disabled'}>◆${item.price}</button>
+                  <button class="ui-btn" data-buy="${item.id}" ${canBuy ? '' : 'disabled'}>◆${price}</button>
                 </div>`;
           }
           const dotColor = item.textureColor ?? (item.color !== undefined ? `#${item.color.toString(16).padStart(6, '0')}` : '#6a7290');
@@ -7325,8 +7417,10 @@ export class Town {
         listContainer.querySelectorAll<HTMLElement>('[data-buy]').forEach(b => b.onclick = e => {
           e.stopPropagation();
           const item = CLOTHES_DATABASE[b.dataset.buy!];
-          if (p.shards >= item.price) {
-            p.shards -= item.price;
+          const discount = p.guildPerks?.itemDiscount ?? 0;
+          const price = discount > 0 ? Math.max(1, Math.round(item.price * (1 - discount * 0.03))) : item.price;
+          if (p.shards >= price) {
+            p.shards -= price;
             p.ownedClothes.push(item.id);
             toast(`Bought ${item.name}!`, 'gold');
             tryOn(item.id);
@@ -7368,6 +7462,557 @@ export class Town {
     this.busy = false;
     updateHUD(this.player, 'Haven City');
     this.player.save();
+  }
+
+  private async talkToAlex(): Promise<void> {
+    const dialogues = [
+      "Aljay is my son... He is headstrong, and he wanders far. I hope he finds what he is looking for in those ancient ruins.",
+      "Fusion energy does not destroy the Guardians; it weaves their essence together into a new matrix. A perfect synergy.",
+      "The ancient Guardians carried up to four elements. Through fusion, we can begin to recreate those singular beings.",
+      "To fuse two Guardians, they must be at least of Adept rank, or level 10. Beginner Novice Guardians cannot handle the energy transfer.",
+      "Extra Evolution allows Novice starter Guardians to branch out in their evolution trees, unlocking entirely new possibilities."
+    ];
+    await say('Professor Alex', dialogues[Math.floor(Math.random() * dialogues.length)]);
+  }
+
+  private async openExtraEvolutionUI(): Promise<void> {
+    this.busy = true;
+    await new Promise<void>(resolve => {
+      const p = this.player;
+      const candidates = [...p.party, ...p.reserve].filter(g => g.species.extraEvolvesTo !== undefined && g.level >= g.species.extraEvolvesTo.level);
+      
+      if (candidates.length === 0) {
+        say('Professor Alex', "I don't see any Novice starter Guardians in your party or reserve that meet the level 15 threshold for Extra Evolution. Train them further, tamer.").then(() => {
+          resolve();
+        });
+        return;
+      }
+
+      const render = () => {
+        const rows = candidates.map(g => {
+          const targetSpecies = SPECIES[g.species.extraEvolvesTo!.species];
+          return `<div class="list-row">
+            <div style="flex:1">
+              <b>${g.nickname}</b> <span class="sub">(Lv.${g.level} ${g.species.name})</span>
+              <div class="sub" style="color:var(--ui-gold)">Evolves to: <b>${targetSpecies.name}</b> (Lv.15+)</div>
+            </div>
+            <button class="ui-btn gold" data-evolve="${g.id}">Engage Metamorphosis</button>
+          </div>`;
+        }).join('');
+
+        const el = openScreen(`
+          <h3>🧬 Professor Alex — Extra Evolution Lab</h3>
+          <div class="sub" style="margin-bottom:12px">Select an eligible Novice starter Guardian to evolve along its extra-evolution branch path.</div>
+          <div style="max-height:360px;overflow-y:auto">${rows}</div>
+          <div style="display:flex;justify-content:flex-end;margin-top:14px">
+            <button class="ui-btn primary" id="evo-close">Cancel</button>
+          </div>`);
+
+        el.querySelectorAll<HTMLElement>('[data-evolve]').forEach(b => b.onclick = () => {
+          const g = candidates.find(x => x.id === b.dataset.evolve!)!;
+          sfx('charge');
+          const oldName = g.nickname;
+          g.extraEvolve();
+          p.save();
+          toast(`${oldName} evolved into ${g.species.name}!`, 'gold');
+          closeMenu();
+          resolve();
+        });
+
+        (el.querySelector('#evo-close') as HTMLElement).onclick = () => {
+          closeMenu();
+          resolve();
+        };
+      };
+
+      render();
+    });
+    this.busy = false;
+    updateHUD(this.player, 'Haven City');
+  }
+
+  private async openFusionBookUI(): Promise<void> {
+    this.busy = true;
+    await new Promise<void>(resolve => {
+      const p = this.player;
+      const fusions = Object.values(SPECIES).filter(sp => sp.isFusion);
+      let curPage = 0;
+      let previewHandle: any = null;
+
+      const render = () => {
+        const sp = fusions[curPage];
+        const unlocked = p.flags['unlocked_fusion_' + sp.id] === true;
+
+        const leftBtnDisabled = curPage === 0 ? 'disabled' : '';
+        const rightBtnDisabled = curPage === fusions.length - 1 ? 'disabled' : '';
+        const els = elementsOf(sp.id);
+
+        const el = openScreen(`
+          <h3>📖 Professor Alex's Fusion Book — Catalog</h3>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:10px;">
+            <div style="display:flex;flex-direction:column;align-items:center;background:rgba(0,0,0,0.35);border:1px solid var(--ui-border);border-radius:8px;padding:12px;">
+              <h4 style="color:var(--ui-gold);text-transform:uppercase;font-size:14px;letter-spacing:1px;margin-bottom:8px">Visual Matrix</h4>
+              <div id="fusion-book-preview" style="width:260px;height:240px;position:relative;overflow:hidden;background:rgba(6,8,16,0.55);border-radius:6px;border:1px solid #2c3666"></div>
+              <div class="sub" style="margin-top:6px;font-size:11px;color:var(--ui-dim)">MATRIX TELEMETRY</div>
+            </div>
+            <div style="display:flex;flex-direction:column;justify-content:space-between">
+              <div>
+                <h2 style="margin:0 0 8px 0;font-family:Georgia,serif;color:${unlocked ? 'var(--ui-gold)' : '#5a607a'}">
+                  ${unlocked ? sp.name : '??? Locked ???'}
+                </h2>
+                <div class="sub" style="font-size:13px;line-height:1.4;margin-bottom:12px">
+                  ${unlocked ? sp.desc : 'This fusion matrix has not yet been synthesized. Perform Guardian Fusion with matching elements to unlock this page.'}
+                </div>
+                ${unlocked ? `
+                  <div style="margin-bottom:10px">
+                    <b>Elements:</b> 
+                    ${els.map(e => `<span style="background:${ELEMENT_CSS[e]};color:#000;padding:2px 6px;border-radius:4px;font-size:11px;font-weight:bold;margin-right:4px">${ELEMENT_ICONS[e]} ${e}</span>`).join('')}
+                  </div>
+                  <div style="margin-bottom:10px">
+                    <b>Archetype:</b> <span style="text-transform:capitalize">${sp.archetype}</span>
+                  </div>
+                  <div>
+                    <b>Stage:</b> ${sp.stage}
+                  </div>
+                ` : `
+                  <div><b>Elements:</b> ???</div>
+                  <div style="margin-top:6px"><b>Recipe Hint:</b> Fusing Guardians containing elements of this type may synthesize this matrix.</div>
+                `}
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
+                <button class="ui-btn" id="book-prev" ${leftBtnDisabled}>◀ Page Left</button>
+                <span>Page ${curPage + 1} / ${fusions.length}</span>
+                <button class="ui-btn" id="book-next" ${rightBtnDisabled}>Page Right ▶</button>
+              </div>
+            </div>
+          </div>
+          <div style="display:flex;justify-content:flex-end;margin-top:14px">
+            <button class="ui-btn primary" id="book-close">Close Book</button>
+          </div>`);
+
+        const container = el.querySelector('#fusion-book-preview') as HTMLElement;
+        if (unlocked) {
+          previewHandle = initGuardianPreview3D(container, sp.id);
+        } else {
+          previewHandle = initGuardianPreview3D(container, sp.id, {
+            colors: { primary: 0x07090f, secondary: 0x07090f, accent: 0x07090f }
+          });
+        }
+
+        (el.querySelector('#book-prev') as HTMLElement).onclick = () => {
+          if (curPage > 0) {
+            curPage--;
+            previewHandle?.dispose();
+            render();
+          }
+        };
+
+        (el.querySelector('#book-next') as HTMLElement).onclick = () => {
+          if (curPage < fusions.length - 1) {
+            curPage++;
+            previewHandle?.dispose();
+            render();
+          }
+        };
+
+        (el.querySelector('#book-close') as HTMLElement).onclick = () => {
+          previewHandle?.dispose();
+          closeMenu();
+          resolve();
+        };
+      };
+
+      render();
+    });
+    this.busy = false;
+    updateHUD(this.player, 'Haven City');
+  }
+
+  private async openFusionUI(): Promise<void> {
+    this.busy = true;
+    await new Promise<void>(resolve => {
+      const p = this.player;
+      
+      let parentA: Guardian | null = null;
+      let parentB: Guardian | null = null;
+      let currentOutcomeIdx = 0;
+      
+      let headScale = 1.0;
+      let tailScale = 1.0;
+      let wingScale = 1.0;
+      
+      let primaryCol = 0xffffff;
+      let secondaryCol = 0xffffff;
+      let accentCol = 0xffffff;
+      
+      let tailPart = 'default';
+      let wingPart = 'default';
+      
+      let previewHandle: any = null;
+
+      const getOutcomes = () => {
+        if (!parentA || !parentB) return [];
+        const hybridSpecies = findReadyMadeFusion(elementsOf(parentA.speciesId), elementsOf(parentB.speciesId));
+        return [
+          { name: `Primary Hybrid (50%)`, speciesId: hybridSpecies, desc: `Fully synthesized bespoke hybrid combining elements.` },
+          { name: `${parentA.species.name} Variant (25%)`, speciesId: parentA.speciesId, desc: `Evolved variant of Parent A carrying Parent B's palette.` },
+          { name: `${parentB.species.name} Variant (25%)`, speciesId: parentB.speciesId, desc: `Evolved variant of Parent B carrying Parent A's palette.` }
+        ];
+      };
+
+      const openCandidatePicker = (slot: 'A' | 'B') => {
+        const eligible = [...p.party, ...p.reserve].filter(g => {
+          if (slot === 'A' && parentB && g.id === parentB.id) return false;
+          if (slot === 'B' && parentA && g.id === parentA.id) return false;
+          return g.species.stage !== 'Novice' || g.level >= 10;
+        });
+
+        if (eligible.length === 0) {
+          toast('No eligible Adept/level 10+ Guardians available!', 'red');
+          return;
+        }
+
+        const rows = eligible.map(g => {
+          return `<div class="list-row candidate-row" data-pick="${g.id}">
+            <div style="flex:1">
+              <b>${g.nickname}</b> <span class="sub">(Lv.${g.level} ${g.species.name})</span>
+              <div class="sub">Stage: ${g.species.stage} · Elements: ${elementsOf(g.speciesId).join(', ')}</div>
+            </div>
+            <button class="ui-btn">Select</button>
+          </div>`;
+        }).join('');
+
+        const pickerEl = document.createElement('div');
+        pickerEl.style.cssText = `
+          position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+          background: rgba(8,10,20,0.92); backdrop-filter: blur(8px);
+          z-index: 2000; display: flex; flex-direction: column; justify-content: center; align-items: center;
+        `;
+        pickerEl.innerHTML = `
+          <div class="panel" style="width: 480px; max-height: 80%; overflow: hidden; display: flex; flex-direction: column;">
+            <h3>Select Candidate for Parent ${slot}</h3>
+            <div style="overflow-y: auto; flex: 1; margin-bottom: 12px;">${rows}</div>
+            <button class="ui-btn primary" id="picker-cancel" style="width: 100%">Cancel</button>
+          </div>
+        `;
+        document.getElementById('app')!.appendChild(pickerEl);
+
+        pickerEl.querySelectorAll<HTMLElement>('[data-pick]').forEach(r => r.onclick = () => {
+          const g = eligible.find(x => x.id === r.dataset.pick!)!;
+          if (slot === 'A') parentA = g; else parentB = g;
+          pickerEl.remove();
+          
+          const outs = getOutcomes();
+          if (outs.length > 0) {
+            const def = SPECIES[outs[currentOutcomeIdx].speciesId];
+            if (currentOutcomeIdx === 0) {
+              primaryCol = def.palette.primary;
+              secondaryCol = def.palette.secondary;
+              accentCol = def.palette.accent;
+            } else if (currentOutcomeIdx === 1) {
+              primaryCol = parentA!.species.palette.primary;
+              secondaryCol = parentB!.species.palette.secondary;
+              accentCol = parentB!.species.palette.accent;
+            } else if (currentOutcomeIdx === 2) {
+              primaryCol = parentB!.species.palette.primary;
+              secondaryCol = parentA!.species.palette.secondary;
+              accentCol = parentA!.species.palette.accent;
+            }
+          }
+          render();
+        });
+
+        (pickerEl.querySelector('#picker-cancel') as HTMLElement).onclick = () => pickerEl.remove();
+      };
+
+      const getCustomization = (): GuardianCustomization => {
+        return {
+          colors: { primary: primaryCol, secondary: secondaryCol, accent: accentCol },
+          partsScale: { head: headScale, tail: tailScale, wings: wingScale },
+          replacedParts: {
+            tail: tailPart === 'default' ? undefined : tailPart,
+            wings: wingPart === 'default' ? undefined : wingPart
+          }
+        };
+      };
+
+      const updatePreview = () => {
+        const outs = getOutcomes();
+        if (outs.length === 0 || !previewHandle) return;
+        const out = outs[currentOutcomeIdx];
+        previewHandle.update(out.speciesId, getCustomization());
+      };
+
+      const render = () => {
+        const outs = getOutcomes();
+        
+        let screenHtml = '';
+        if (outs.length === 0) {
+          screenHtml = `
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:12px;text-align:center;">
+              <div class="panel" style="padding:24px;border:1px dashed var(--ui-border);background:none;cursor:pointer;" id="select-a">
+                <div style="font-size:48px;">${parentA ? '🧬' : '➕'}</div>
+                <h3 style="margin:10px 0 6px 0;">${parentA ? parentA.nickname : 'Select Parent A'}</h3>
+                <div class="sub">${parentA ? `Lv.${parentA.level} ${parentA.species.name}` : 'Adept or level 10+ candidate'}</div>
+              </div>
+              <div class="panel" style="padding:24px;border:1px dashed var(--ui-border);background:none;cursor:pointer;" id="select-b">
+                <div style="font-size:48px;">${parentB ? '🧬' : '➕'}</div>
+                <h3 style="margin:10px 0 6px 0;">${parentB ? parentB.nickname : 'Select Parent B'}</h3>
+                <div class="sub">${parentB ? `Lv.${parentB.level} ${parentB.species.name}` : 'Adept or level 10+ candidate'}</div>
+              </div>
+            </div>
+            <div style="display:flex;justify-content:flex-end;margin-top:24px">
+              <button class="ui-btn primary" id="fusion-close">Leave Chamber</button>
+            </div>
+          `;
+        } else {
+          const out = outs[currentOutcomeIdx];
+          
+          const outcomesTabsHtml = outs.map((o, idx) => {
+            const isSel = idx === currentOutcomeIdx ? 'primary' : '';
+            return `<button class="ui-btn tab ${isSel}" style="display:block;width:100%;text-align:left;margin-bottom:6px;" data-out-idx="${idx}">
+              <b>${o.name}</b><br><span class="sub" style="font-size:11px">${SPECIES[o.speciesId].name}</span>
+            </button>`;
+          }).join('');
+
+          const colorPaletteHtml = [
+            { name: 'Crimson', val: 0xf2603a },
+            { name: 'Aqua', val: 0x3a9df2 },
+            { name: 'Emerald', val: 0x4ec45e },
+            { name: 'Gold', val: 0xf2d23a },
+            { name: 'Amethyst', val: 0x9a5af2 },
+            { name: 'Crimson Rose', val: 0xff5a8a },
+            { name: 'Ice', val: 0x9adff2 },
+            { name: 'Obsidian', val: 0x1a1a24 }
+          ].map(c => {
+            const isSelP = primaryCol === c.val ? 'border:2px solid #fff;' : '';
+            const isSelS = secondaryCol === c.val ? 'border:2px solid #fff;' : '';
+            const isSelA = accentCol === c.val ? 'border:2px solid #fff;' : '';
+            return `<div style="display:flex;gap:4px;align-items:center;margin-bottom:4px">
+              <span class="sub" style="width:70px;font-size:11px">${c.name}:</span>
+              <span class="swatch-dot" data-col-type="primary" data-col-val="${c.val}" style="background:#${c.val.toString(16).padStart(6, '0')};cursor:pointer;${isSelP}" title="Set Primary"></span>
+              <span class="swatch-dot" data-col-type="secondary" data-col-val="${c.val}" style="background:#${c.val.toString(16).padStart(6, '0')};cursor:pointer;${isSelS}" title="Set Secondary"></span>
+              <span class="swatch-dot" data-col-type="accent" data-col-val="${c.val}" style="background:#${c.val.toString(16).padStart(6, '0')};cursor:pointer;${isSelA}" title="Set Accent"></span>
+            </div>`;
+          }).join('');
+
+          const tailPartsHtml = ['default', 'scorpion', 'leaf', 'scythe'].map(pPart => {
+            const isSel = tailPart === pPart ? 'primary' : '';
+            return `<button class="ui-btn ${isSel}" style="font-size:11px;padding:4px 8px" data-tail="${pPart}">${pPart}</button>`;
+          }).join('');
+
+          const wingPartsHtml = ['default', 'feathered', 'dragon', 'cosmic', 'spark'].map(pPart => {
+            const isSel = wingPart === pPart ? 'primary' : '';
+            return `<button class="ui-btn ${isSel}" style="font-size:11px;padding:4px 8px" data-wings="${pPart}">${pPart}</button>`;
+          }).join('');
+
+          screenHtml = `
+            <div class="grid2" style="grid-template-columns: 1fr 1.2fr; gap: 20px;">
+              <div style="display:flex;flex-direction:column;gap:12px;">
+                <div>
+                  <h4 style="margin:0 0 6px 0;">Possible Outcomes</h4>
+                  ${outcomesTabsHtml}
+                </div>
+                <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:12px;">
+                  <h4 style="margin:0 0 8px 0;color:var(--ui-gold)">🧬 PARTS CUSTOMIZER</h4>
+                  
+                  <div style="margin-bottom:8px">
+                    <span class="sub" style="font-size:11px">Scale: Head (${headScale}x)</span>
+                    <input type="range" id="scale-head" min="0.5" max="1.5" step="0.1" value="${headScale}" style="width:100%">
+                  </div>
+                  <div style="margin-bottom:8px">
+                    <span class="sub" style="font-size:11px">Scale: Tail (${tailScale}x)</span>
+                    <input type="range" id="scale-tail" min="0.5" max="1.5" step="0.1" value="${tailScale}" style="width:100%">
+                  </div>
+                  <div style="margin-bottom:12px">
+                    <span class="sub" style="font-size:11px">Scale: Wings (${wingScale}x)</span>
+                    <input type="range" id="scale-wings" min="0.5" max="1.5" step="0.1" value="${wingScale}" style="width:100%">
+                  </div>
+
+                  <h5 style="margin:0 0 4px 0;font-size:11px;color:#a0aabf">Color Bay (Primary / Secondary / Accent)</h5>
+                  <div style="margin-bottom:12px">${colorPaletteHtml}</div>
+
+                  <h5 style="margin:0 0 4px 0;font-size:11px;color:#a0aabf">Custom Appendages</h5>
+                  <div style="margin-bottom:6px"><span class="sub" style="font-size:11px;margin-right:6px">Tail:</span>${tailPartsHtml}</div>
+                  <div><span class="sub" style="font-size:11px;margin-right:6px">Wings:</span>${wingPartsHtml}</div>
+                </div>
+              </div>
+              <div style="display:flex;flex-direction:column;align-items:center;background:rgba(0,0,0,0.35);border:1px solid var(--ui-border);border-radius:8px;padding:16px;">
+                <h4 style="color:var(--ui-gold);text-transform:uppercase;font-size:13px;letter-spacing:1px;margin-bottom:8px">Fusion Preview (Rotating)</h4>
+                <div id="fusion-preview-canvas" style="width:100%;height:280px;position:relative;overflow:hidden;background:rgba(6,8,16,0.55);border-radius:6px;border:1px solid #2c3666"></div>
+                <div style="text-align:center;margin-top:10px;width:100%">
+                  <h3 style="margin:0;font-family:Georgia,serif;color:var(--ui-gold)">${SPECIES[out.speciesId].name}</h3>
+                  <div class="sub" style="font-size:12px;margin-top:4px">${out.desc}</div>
+                </div>
+              </div>
+            </div>
+            <div style="display:flex;gap:12px;justify-content:flex-end;margin-top:16px">
+              <button class="ui-btn" id="fusion-reset">Reset Parents</button>
+              <button class="ui-btn primary" id="fusion-engage" style="background:#5ad88a;border-color:#48b773;color:#0c1022;">ENGAGE FUSION GRID</button>
+            </div>
+          `;
+        }
+
+        const el = openScreen(`
+          <h3>🧬 Professor Alex's Guardian Fusion Chamber</h3>
+          <div class="sub" style="margin-bottom:12px">Fuse two Adept or level 10+ Guardians to unlock hybrid outcomes or color-swapped variants. Custom size, paint and parts.</div>
+          ${screenHtml}
+        `);
+
+        if (outs.length === 0) {
+          (el.querySelector('#select-a') as HTMLElement).onclick = () => openCandidatePicker('A');
+          (el.querySelector('#select-b') as HTMLElement).onclick = () => openCandidatePicker('B');
+          (el.querySelector('#fusion-close') as HTMLElement).onclick = () => {
+            closeMenu();
+            resolve();
+          };
+        } else {
+          const container = el.querySelector('#fusion-preview-canvas') as HTMLElement;
+          previewHandle = initGuardianPreview3D(container, outs[currentOutcomeIdx].speciesId, getCustomization());
+
+          el.querySelectorAll<HTMLElement>('[data-out-idx]').forEach(btn => {
+            btn.onclick = () => {
+              currentOutcomeIdx = parseInt(btn.dataset.outIdx!);
+              
+              const nextOut = outs[currentOutcomeIdx];
+              const def = SPECIES[nextOut.speciesId];
+              if (currentOutcomeIdx === 0) {
+                primaryCol = def.palette.primary;
+                secondaryCol = def.palette.secondary;
+                accentCol = def.palette.accent;
+              } else if (currentOutcomeIdx === 1) {
+                primaryCol = parentA!.species.palette.primary;
+                secondaryCol = parentB!.species.palette.secondary;
+                accentCol = parentB!.species.palette.accent;
+              } else if (currentOutcomeIdx === 2) {
+                primaryCol = parentB!.species.palette.primary;
+                secondaryCol = parentA!.species.palette.secondary;
+                accentCol = parentA!.species.palette.accent;
+              }
+
+              previewHandle?.dispose();
+              render();
+            };
+          });
+
+          const headSlider = el.querySelector('#scale-head') as HTMLInputElement;
+          headSlider.oninput = () => {
+            headScale = parseFloat(headSlider.value);
+            updatePreview();
+          };
+          const tailSlider = el.querySelector('#scale-tail') as HTMLInputElement;
+          tailSlider.oninput = () => {
+            tailScale = parseFloat(tailSlider.value);
+            updatePreview();
+          };
+          const wingSlider = el.querySelector('#scale-wings') as HTMLInputElement;
+          wingSlider.oninput = () => {
+            wingScale = parseFloat(wingSlider.value);
+            updatePreview();
+          };
+
+          el.querySelectorAll<HTMLElement>('[data-col-val]').forEach(sw => sw.onclick = () => {
+            const type = sw.dataset.colType!;
+            const val = parseInt(sw.dataset.colVal!);
+            if (type === 'primary') primaryCol = val;
+            else if (type === 'secondary') secondaryCol = val;
+            else if (type === 'accent') accentCol = val;
+            previewHandle?.dispose();
+            render();
+          });
+
+          el.querySelectorAll<HTMLElement>('[data-tail]').forEach(b => b.onclick = () => {
+            tailPart = b.dataset.tail!;
+            previewHandle?.dispose();
+            render();
+          });
+          el.querySelectorAll<HTMLElement>('[data-wings]').forEach(b => b.onclick = () => {
+            wingPart = b.dataset.wings!;
+            previewHandle?.dispose();
+            render();
+          });
+
+          (el.querySelector('#fusion-reset') as HTMLElement).onclick = () => {
+            parentA = null;
+            parentB = null;
+            previewHandle?.dispose();
+            render();
+          };
+
+          (el.querySelector('#fusion-engage') as HTMLElement).onclick = async () => {
+            const roll = Math.random();
+            let chosenOutcomeIdx = 0;
+            if (roll < 0.50) chosenOutcomeIdx = 0;
+            else if (roll < 0.75) chosenOutcomeIdx = 1;
+            else chosenOutcomeIdx = 2;
+
+            const finalOutcome = outs[chosenOutcomeIdx];
+
+            previewHandle?.dispose();
+            closeMenu();
+
+            const flash = document.createElement('div');
+            flash.style.cssText = `
+              position:fixed; top:0; left:0; width:100%; height:100%;
+              background:#fff; z-index:9999; opacity:1; transition: opacity 1.5s ease;
+            `;
+            document.body.appendChild(flash);
+            sfx('charge');
+            
+            p.party = p.party.filter(x => x.id !== parentA!.id && x.id !== parentB!.id);
+            p.reserve = p.reserve.filter(x => x.id !== parentA!.id && x.id !== parentB!.id);
+
+            const nextLvl = Math.max(1, Math.max(parentA!.level, parentB!.level) - 10);
+            const nickname = SPECIES[finalOutcome.speciesId].name;
+            const offspring = new Guardian(finalOutcome.speciesId, nextLvl, nickname);
+            offspring.customization = getCustomization();
+            offspring.hp = offspring.stats.hp;
+            offspring.sp = offspring.stats.sp;
+
+            p.addGuardian(offspring);
+
+            p.flags['unlocked_fusion_' + finalOutcome.speciesId] = true;
+            p.save();
+
+            setTimeout(() => {
+              flash.style.opacity = '0';
+              setTimeout(() => flash.remove(), 1500);
+
+              const congrats = document.createElement('div');
+              congrats.style.cssText = `
+                position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                background: rgba(8,10,20,0.95); z-index: 5000;
+                display: flex; flex-direction: column; justify-content: center; align-items: center;
+                color: #e5e9f0; font-family: 'Outfit', sans-serif; padding: 24px; box-sizing: border-box;
+              `;
+              congrats.innerHTML = `
+                <h1 style="color:var(--ui-gold);font-family:Georgia,serif;margin-bottom:8px;">🧬 FUSION SUCCESSFUL!</h1>
+                <div class="sub" style="margin-bottom:20px;">The genetic profiles of ${parentA!.nickname} and ${parentB!.nickname} have synthesized.</div>
+                <div id="congrats-canvas" style="width:300px;height:280px;background:rgba(6,8,16,0.55);border:1px solid #2c3666;border-radius:8px;"></div>
+                <h2 style="color:#ffffff;margin-top:16px;">${offspring.nickname} (Lv.${offspring.level})</h2>
+                <div style="margin-top:20px">
+                  <button class="ui-btn primary" id="congrats-ok">Accept matrix offspring</button>
+                </div>
+              `;
+              document.body.appendChild(congrats);
+
+              const congratsContainer = congrats.querySelector('#congrats-canvas') as HTMLElement;
+              const congratsPreview = initGuardianPreview3D(congratsContainer, offspring.speciesId, offspring.customization);
+
+              (congrats.querySelector('#congrats-ok') as HTMLElement).onclick = () => {
+                congratsPreview.dispose();
+                congrats.remove();
+                resolve();
+              };
+            }, 600);
+          };
+        }
+      };
+
+      render();
+    });
+    this.busy = false;
+    updateHUD(this.player, 'Haven City');
   }
 }
 
@@ -7592,6 +8237,107 @@ function initTamerPreview3D(
       while (tamerGroup.children.length > 0) {
         tamerGroup.remove(tamerGroup.children[0]);
       }
+      renderer.dispose();
+      canvas.remove();
+    }
+  };
+}
+
+/**
+ * Maps parent element pairs to one of the 15 ready-made fusion species IDs.
+ * Falls back to 'aetherion' if no match.
+ */
+export function findReadyMadeFusion(el1: Element[], el2: Element[]): string {
+  const all = new Set([...el1, ...el2]);
+  const has = (e: Element) => all.has(e);
+
+  if (has('Fire') && has('Electric')) return 'pyrostrike';
+  if (has('Water') && has('Ice')) return 'aquafrost';
+  if (has('Nature') && has('Rock')) return 'terragrow';
+  if (has('Electric') && has('Space')) return 'voltclysm';
+  if (has('Dark') && has('Space')) return 'umbrashade';
+  if (has('Fire') && has('Space')) return 'solgaleo';
+  if (has('Water') && has('Dark')) return 'tidedeep';
+  if (has('Nature') && has('Electric')) return 'thornspark';
+  if (has('Dark') && has('Nature')) return 'duskbloom';
+  if (has('Fire') && has('Rock')) return 'lavachain';
+  if (has('Electric') && has('Water')) return 'stormwave';
+  if (has('Ice') && has('Nature')) return 'glaciervine';
+  if (has('Dark') && has('Light')) return 'shadowlight';
+  
+  if (has('Space') && has('Aether')) return 'aethergale';
+
+  return 'aetherion';
+}
+
+/** Standardized helper setting up a Three.js scene, ambient/directional lights, WebGLRenderer, camera, loading the makeGuardian(speciesId, custom) rig, and auto-spinning the group, with a .dispose() interface for UI cleanup. */
+function initGuardianPreview3D(
+  container: HTMLElement,
+  speciesId: string,
+  custom?: GuardianCustomization,
+): { dispose: () => void } {
+  const width = container.clientWidth || 300;
+  const height = container.clientHeight || 280;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  canvas.style.width = '100%';
+  canvas.style.height = '100%';
+  container.appendChild(canvas);
+
+  const scene = new THREE.Scene();
+  scene.background = null;
+
+  const camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 20);
+  camera.position.set(0, 1.2, 3.2);
+  camera.lookAt(0, 0.5, 0);
+
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  renderer.setSize(width, height);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+  scene.add(new THREE.AmbientLight(0xffffff, 0.9));
+  const key = new THREE.DirectionalLight(0xfff0d0, 1.6);
+  key.position.set(2, 4, 3);
+  scene.add(key);
+  const rim = new THREE.DirectionalLight(0x5ab8e8, 0.8);
+  rim.position.set(-3, 2, -2);
+  scene.add(rim);
+
+  const lift = new THREE.Mesh(
+    new THREE.CylinderGeometry(1.2, 1.4, 0.1, 22),
+    new THREE.MeshStandardMaterial({ color: 0x2c3545, metalness: 0.6, roughness: 0.4 })
+  );
+  lift.position.y = -0.05;
+  scene.add(lift);
+
+  const rig = makeGuardian(speciesId, custom);
+  scene.add(rig.body);
+
+  let active = true;
+  let lastTime = performance.now();
+
+  function animate() {
+    if (!active) return;
+    requestAnimationFrame(animate);
+    const now = performance.now();
+    const dt = (now - lastTime) / 1000;
+    lastTime = now;
+
+    rig.body.rotation.y += dt * 0.5;
+    if (rig.animate) {
+      rig.animate(now / 1000, dt);
+    }
+    renderer.render(scene, camera);
+  }
+  requestAnimationFrame(animate);
+
+  return {
+    dispose: () => {
+      active = false;
+      scene.remove(rig.body);
+      disposeRig(rig);
       renderer.dispose();
       canvas.remove();
     }

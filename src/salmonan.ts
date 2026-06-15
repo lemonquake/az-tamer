@@ -1427,6 +1427,7 @@ export class NewSalmonan {
 
   run(): Promise<SalmonanResult> {
     this.buildScene();
+    this.player.savedLocation = { type: 'salmonan', spawnAt: this.spawnAt };
     updateTamerAppearance(this.tamer, this.player.equippedClothes);
     syncStoryQuests(this.player).forEach(n => toast(n, 'gold'));
     updateHUD(this.player, 'New Salmonan');

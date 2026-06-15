@@ -323,12 +323,12 @@ export async function executeCheatFlow(player: Player): Promise<void> {
       player.shards += 5000;
       player.inventory.set('aether_confit', (player.inventory.get('aether_confit') ?? 0) + 5);
 
-      player.save();
+      player.save(false);
       refreshHUD();
       toast('Cheat Activated: Lineup +10 Levels, +30 items, +5000 Shards, +5 Aether Confit!', 'gold');
     } else if (code.toLowerCase() === 'gold') {
       player.shards += 10000;
-      player.save();
+      player.save(false);
       refreshHUD();
       toast('Cheat Activated: +10,000 Shards!', 'gold');
     } else {
@@ -365,6 +365,7 @@ export function openOptionsMenu(player?: Player): Promise<void> {
     const muteBtn = $('opt-mute-btn');
     const mobileBtn = $('opt-mobile-btn');
     const perfBtn = $('opt-perf-btn');
+    const autosaveBtn = $('opt-autosave-btn');
     const cheatRow = $('opt-cheat-row');
     const cheatBtn = $('opt-cheat-btn');
     const closeBtn = $('opt-close-btn');
@@ -399,6 +400,13 @@ export function openOptionsMenu(player?: Player): Promise<void> {
       perfBtn.style.borderColor = isLow ? 'var(--ui-green)' : 'var(--ui-border)';
     };
     updatePerfBtnLabel();
+
+    const updateAutosaveBtnLabel = () => {
+      const active = localStorage.getItem('autosaveMode') !== 'false';
+      autosaveBtn.textContent = active ? 'Auto-Save: ON' : 'Auto-Save: OFF';
+      autosaveBtn.style.borderColor = active ? 'var(--ui-gold)' : 'var(--ui-border)';
+    };
+    updateAutosaveBtnLabel();
 
     if (activePlayer) {
       cheatRow.style.display = 'flex';
@@ -463,6 +471,12 @@ export function openOptionsMenu(player?: Player): Promise<void> {
       applyGraphicsSettings();
     };
 
+    autosaveBtn.onclick = () => {
+      const active = localStorage.getItem('autosaveMode') !== 'false';
+      localStorage.setItem('autosaveMode', active ? 'false' : 'true');
+      updateAutosaveBtnLabel();
+    };
+
     const close = () => {
       modal.style.display = 'none';
       musicSlider.oninput = null;
@@ -471,6 +485,7 @@ export function openOptionsMenu(player?: Player): Promise<void> {
       muteBtn.onclick = null;
       mobileBtn.onclick = null;
       perfBtn.onclick = null;
+      autosaveBtn.onclick = null;
       cheatBtn.onclick = null;
       closeBtn.onclick = null;
       optionsOpen = false;
@@ -545,7 +560,7 @@ export function openPanel(kind: PanelKind, player: Player, ctx: PanelCtx): Promi
     const wire = (el: HTMLElement) => {
       el.querySelectorAll<HTMLElement>('[data-tab]').forEach(b => b.onclick = () => { current = b.dataset.tab as PanelKind; render(); });
       const save = el.querySelector<HTMLElement>('#panel-save');
-      if (save) save.onclick = () => { player.save(); toast('Game saved.', 'gold'); };
+      if (save) save.onclick = () => { player.save(false); toast('Game saved.', 'gold'); };
       (el.querySelector('#panel-close') as HTMLElement).onclick = close;
     };
 
@@ -1377,7 +1392,7 @@ export function openPauseMenu(
       toast('🎓 New: replay any Field Manual chapter from this menu.', 'gold', 3600);
     }
     const save = el.querySelector<HTMLElement>('#hub-save');
-    if (save) save.onclick = () => { player.save(); toast('Game saved.', 'gold'); };
+    if (save) save.onclick = () => { player.save(false); toast('Game saved.', 'gold'); };
     
     const retreatBtn = el.querySelector<HTMLElement>('#hub-retreat');
     if (retreatBtn && opts.onRetreat) {

@@ -582,6 +582,7 @@ export class Overworld {
   /** Resolves with the chosen dungeon, 'agdao' for the island, or null to return to Haven City. */
   run(): Promise<OverworldDest> {
     this.buildScene();
+    this.player.savedLocation = { type: 'overworld', room: this.regionId };
     updateTamerAppearance(this.tamer, this.player.equippedClothes);
     // debug handle for automated testing
     (window as unknown as Record<string, unknown>).__ow = this;

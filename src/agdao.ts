@@ -1302,6 +1302,7 @@ export class AgdaoIsland {
 
   run(): Promise<AgdaoResult> {
     this.buildScene();
+    this.player.savedLocation = { type: 'agdao', spawnAt: this.spawnAt };
     updateTamerAppearance(this.tamer, this.player.equippedClothes);
     syncStoryQuests(this.player).forEach(n => toast(n, 'gold'));
     updateHUD(this.player, 'Agdao Island');

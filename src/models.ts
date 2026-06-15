@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { SPECIES, TYPE_COLORS, CRAWLER_PARTS, PAINT_JOBS, type Archetype, type CrawlerSlot, type PaintJob } from './data';
 import { BESPOKE, type BespokeBuild } from './bestiary';
+import type { GuardianCustomization } from './state';
 
 // ---------------- tween system ----------------
 type TweenFn = (t: number) => void;
@@ -273,6 +274,102 @@ export function stormPanelTexture(base: string, seam: string, seed = 5, repeat =
 /** Emissive twin of stormPanelTexture — only the conduit seams and nodes glow. */
 export function stormSeamEmissive(glow: string, seed = 5, repeat = 1): THREE.Texture {
   return canvasTex(256, (ctx, s) => drawStormPanels(ctx, s, seed, 'glow', '#000', '#000', glow), repeat);
+}
+
+/** Brushed steel wall paneling with dark seams and rivet details. */
+export function labWallTexture(repeat = 4): THREE.Texture {
+  return canvasTex(256, (ctx, s) => {
+    const rnd = mulberry(101);
+    ctx.fillStyle = '#4a505e'; ctx.fillRect(0, 0, s, s);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 200; i++) {
+      const x = rnd() * s;
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x + (rnd() * 4 - 2), s);
+      ctx.stroke();
+    }
+    ctx.strokeStyle = '#22252c'; ctx.lineWidth = 3;
+    ctx.strokeRect(0, 0, s, s);
+    ctx.beginPath();
+    ctx.moveTo(s / 2, 0); ctx.lineTo(s / 2, s);
+    ctx.moveTo(0, s / 2); ctx.lineTo(s, s / 2);
+    ctx.stroke();
+    ctx.fillStyle = '#22252c';
+    const drawRivet = (rx: number, ry: number) => {
+      ctx.beginPath();
+      ctx.arc(rx, ry, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.15)';
+      ctx.beginPath();
+      ctx.arc(rx - 1, ry - 1, 1, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#22252c';
+    };
+    for (const px of [12, s/2 - 12, s/2 + 12, s - 12]) {
+      for (const py of [12, s/2 - 12, s/2 + 12, s - 12]) {
+        drawRivet(px, py);
+      }
+    }
+  }, repeat);
+}
+
+/** Metallic laboratory floor with safety-striping. */
+export function labFloorTexture(repeat = 4): THREE.Texture {
+  return canvasTex(256, (ctx, s) => {
+    const rnd = mulberry(102);
+    ctx.fillStyle = '#2a2f3a'; ctx.fillRect(0, 0, s, s);
+    for (let i = 0; i < 40; i++) {
+      ctx.fillStyle = `rgba(255,255,255,${rnd() * 0.05})`;
+      ctx.fillRect(rnd() * s, rnd() * s, 40 + rnd() * 40, 40 + rnd() * 40);
+    }
+    ctx.strokeStyle = '#15171d'; ctx.lineWidth = 4;
+    ctx.strokeRect(0, 0, s, s);
+    ctx.save();
+    ctx.rect(0, s - 24, s, 24);
+    ctx.clip();
+    ctx.fillStyle = '#d9a11a';
+    ctx.fillRect(0, s - 24, s, 24);
+    ctx.strokeStyle = '#1c1f24';
+    ctx.lineWidth = 8;
+    for (let x = -20; x < s + 20; x += 20) {
+      ctx.beginPath();
+      ctx.moveTo(x, s - 25);
+      ctx.lineTo(x + 20, s + 1);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }, repeat);
+}
+
+/** High-tech computer terminal screen displaying grid and telemetry data. */
+export function computerScreenTexture(): THREE.Texture {
+  return canvasTex(256, (ctx, s) => {
+    const rnd = mulberry(103);
+    ctx.fillStyle = '#0a1012'; ctx.fillRect(0, 0, s, s);
+    ctx.strokeStyle = 'rgba(26, 180, 114, 0.15)';
+    ctx.lineWidth = 1;
+    for (let i = 20; i < s; i += 20) {
+      ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, s); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(s, i); ctx.stroke();
+    }
+    ctx.strokeStyle = '#1ab472'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let x = 0; x < s; x += 2) {
+      const y = s / 2 + Math.sin(x * 0.08) * 35 + Math.cos(x * 0.03) * 15;
+      if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(26, 180, 114, 0.7)';
+    ctx.font = 'bold 13px monospace';
+    ctx.fillText('SYS ACTIVE', 12, 22);
+    ctx.fillText('FUSION LOCK: 98.2%', 12, 38);
+    ctx.fillStyle = 'rgba(26, 180, 114, 0.4)';
+    for (let i = 0; i < 6; i++) {
+      ctx.fillRect(12, s - 50 + i * 8, 30 + rnd() * 60, 4);
+    }
+  });
 }
 
 /** Polished marble floor with veins — for grand interiors. */
@@ -802,11 +899,83 @@ function eye(color = 0x101018): THREE.Mesh {
   return new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 8), mat(color, { roughness: 0.2 }));
 }
 
-function buildArchetype(arch: Archetype, p: { primary: number; secondary: number; accent: number }, glow: number): THREE.Group {
+export function buildCustomPart(partId: string, color: number): THREE.Object3D {
+  const m = mat(color);
   const g = new THREE.Group();
-  const prim = mat(p.primary);
-  const sec = mat(p.secondary);
-  const acc = mat(p.accent, { emissive: glow, emissiveIntensity: 0.55, roughness: 0.3 });
+
+  if (partId === 'scorpion') {
+    let prev: THREE.Object3D = g;
+    for (let i = 0; i < 4; i++) {
+      const seg = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.25, 6), m);
+      seg.position.set(0, 0.12, -0.08);
+      seg.rotation.x = -0.3;
+      prev.add(seg);
+      prev = seg;
+    }
+    const sting = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.2, 5), mat(0xff3333, { emissive: 0xff0000, emissiveIntensity: 0.8 }));
+    sting.position.set(0, 0.2, 0);
+    sting.rotation.x = -Math.PI / 2;
+    prev.add(sting);
+  } else if (partId === 'leaf') {
+    const fan = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.6, 0.04), m);
+    fan.position.set(0, 0.3, 0);
+    g.add(fan);
+    const veinMat = mat(0xffffff, { roughness: 0.9 });
+    const vein = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.5, 0.05), veinMat);
+    vein.position.set(0, 0.3, 0);
+    g.add(vein);
+  } else if (partId === 'scythe') {
+    const staff = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.7, 6), m);
+    staff.position.set(0, 0.35, 0);
+    g.add(staff);
+    const blade = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.1, 0.02), mat(0xdddddd, { metalness: 0.9, roughness: 0.2 }));
+    blade.position.set(0.2, 0.7, 0);
+    blade.rotation.z = -0.4;
+    g.add(blade);
+  } else if (partId === 'feathered') {
+    const wing = new THREE.Group();
+    for (let i = 0; i < 3; i++) {
+      const f = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.08, 0.15), m);
+      f.position.set(0.2, -i * 0.1, 0);
+      f.rotation.z = 0.2 - i * 0.1;
+      wing.add(f);
+    }
+    g.add(wing);
+  } else if (partId === 'dragon') {
+    const wing = new THREE.Group();
+    const bone = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.03, 0.6, 6), m);
+    bone.rotation.z = Math.PI / 3;
+    bone.position.set(0.25, 0.15, 0);
+    wing.add(bone);
+    const membrane = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.3, 0.01), mat(color, { roughness: 0.9, transparent: true, opacity: 0.8 }));
+    membrane.position.set(0.25, 0.0, 0.02);
+    wing.add(membrane);
+    g.add(wing);
+  } else if (partId === 'cosmic') {
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.03, 8, 16), mat(color, { emissive: color, emissiveIntensity: 1.5 }));
+    ring.rotation.y = Math.PI / 4;
+    g.add(ring);
+  } else if (partId === 'spark') {
+    const bolt = new THREE.Group();
+    const s1 = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.06, 0.06), mat(color, { emissive: color, emissiveIntensity: 1.8 }));
+    s1.position.set(0.2, 0.1, 0);
+    s1.rotation.z = 0.4;
+    const s2 = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.06, 0.06), mat(color, { emissive: color, emissiveIntensity: 1.8 }));
+    s2.position.set(0.3, -0.1, 0);
+    s2.rotation.z = -0.8;
+    bolt.add(s1, s2);
+    g.add(bolt);
+  }
+
+  g.traverse(o => { if ((o as THREE.Mesh).isMesh) o.castShadow = true; });
+  return g;
+}
+
+function buildArchetype(arch: Archetype, p: { primary: number; secondary: number; accent: number }, glow: number, customColors?: { primary?: number; secondary?: number; accent?: number }): THREE.Group {
+  const g = new THREE.Group();
+  const prim = mat(customColors?.primary ?? p.primary);
+  const sec = mat(customColors?.secondary ?? p.secondary);
+  const acc = mat(customColors?.accent ?? p.accent, { emissive: glow, emissiveIntensity: 0.55, roughness: 0.3 });
 
   if (arch === 'beast') {
     const body = new THREE.Mesh(new THREE.SphereGeometry(0.42, 16, 12), prim);
@@ -935,13 +1104,79 @@ function buildArchetype(arch: Archetype, p: { primary: number; secondary: number
   return g;
 }
 
-export function makeGuardian(speciesId: string): GuardianRig {
+export function makeGuardian(speciesId: string, custom?: GuardianCustomization): GuardianRig {
   const def = SPECIES[speciesId];
   const glow = TYPE_COLORS[def.type];
   // hand-sculpted species come from the bestiary; the rest use archetypes
   const bespoke: BespokeBuild | undefined = BESPOKE[speciesId]?.();
-  const body = bespoke ? bespoke.body : buildArchetype(def.archetype, def.palette, glow);
+  const body = bespoke ? bespoke.body : buildArchetype(def.archetype, def.palette, glow, custom?.colors);
   body.scale.setScalar(def.scale);
+
+  // If colors are customized on a bespoke model, manually traverse and swap material colors
+  const colors = custom?.colors;
+  if (bespoke && colors) {
+    body.traverse(child => {
+      if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshStandardMaterial) {
+        const cVal = child.material.color.getHex();
+        if (cVal === def.palette.primary && colors.primary !== undefined) {
+          child.material = child.material.clone();
+          child.material.color.setHex(colors.primary);
+        } else if (cVal === def.palette.secondary && colors.secondary !== undefined) {
+          child.material = child.material.clone();
+          child.material.color.setHex(colors.secondary);
+        } else if (cVal === def.palette.accent && colors.accent !== undefined) {
+          child.material = child.material.clone();
+          child.material.color.setHex(colors.accent);
+        }
+      }
+    });
+  }
+
+  // Handle replaced parts
+  if (custom?.replacedParts) {
+    if (custom.replacedParts.tail) {
+      const oldTail = body.getObjectByName('tail');
+      if (oldTail) {
+        oldTail.visible = false;
+      }
+      const newTail = buildCustomPart(custom.replacedParts.tail, custom.colors?.accent ?? def.palette.accent);
+      newTail.name = 'custom_tail';
+      newTail.position.set(-0.45, 0.45, 0);
+      body.add(newTail);
+    }
+    if (custom.replacedParts.wings) {
+      const oldWing1 = body.getObjectByName('wing1');
+      const oldWing2 = body.getObjectByName('wing-1');
+      if (oldWing1) oldWing1.visible = false;
+      if (oldWing2) oldWing2.visible = false;
+
+      const newWing1 = buildCustomPart(custom.replacedParts.wings, custom.colors?.secondary ?? def.palette.secondary);
+      newWing1.name = 'custom_wing1';
+      newWing1.position.set(-0.05, 0.75, 0.3);
+      
+      const newWing2 = buildCustomPart(custom.replacedParts.wings, custom.colors?.secondary ?? def.palette.secondary);
+      newWing2.name = 'custom_wing-1';
+      newWing2.position.set(-0.05, 0.75, -0.3);
+      newWing2.scale.z = -1;
+
+      body.add(newWing1, newWing2);
+    }
+  }
+
+  // Handle parts scale
+  if (custom?.partsScale) {
+    const headObj = body.getObjectByName('head');
+    const tailObj = body.getObjectByName('tail') ?? body.getObjectByName('custom_tail');
+    const wing1Obj = body.getObjectByName('wing1') ?? body.getObjectByName('custom_wing1');
+    const wing2Obj = body.getObjectByName('wing-1') ?? body.getObjectByName('custom_wing-1');
+
+    if (custom.partsScale.head && headObj) headObj.scale.setScalar(custom.partsScale.head);
+    if (custom.partsScale.tail && tailObj) tailObj.scale.setScalar(custom.partsScale.tail);
+    if (custom.partsScale.wings) {
+      if (wing1Obj) wing1Obj.scale.setScalar(custom.partsScale.wings);
+      if (wing2Obj) wing2Obj.scale.setScalar(custom.partsScale.wings);
+    }
+  }
 
   // Aether-stage beings carry a radiant double-halo and orbit motes
   if (def.stage === 'Aether') {
@@ -1044,12 +1279,18 @@ export function makeGuardian(speciesId: string): GuardianRig {
   ring.position.y = 0.02;
   group.add(ring);
 
+  const headObj = body.getObjectByName('head') ?? undefined;
+  const tailObj = body.getObjectByName('custom_tail') ?? body.getObjectByName('tail') ?? undefined;
+  const wing1Obj = body.getObjectByName('custom_wing1') ?? body.getObjectByName('wing1');
+  const wing2Obj = body.getObjectByName('custom_wing-1') ?? body.getObjectByName('wing-1');
+  const wingsList = [wing1Obj, wing2Obj].filter(Boolean) as THREE.Object3D[];
+
   const rig: GuardianRig = {
     group, body,
-    parts: bespoke?.parts ?? {
-      head: body.getObjectByName('head') ?? undefined,
-      tail: body.getObjectByName('tail') ?? undefined,
-      wings: [body.getObjectByName('wing1'), body.getObjectByName('wing-1')].filter(Boolean) as THREE.Object3D[],
+    parts: {
+      head: headObj,
+      tail: tailObj,
+      wings: wingsList,
     },
     baseY: 0,
     phase: Math.random() * Math.PI * 2,
@@ -1129,7 +1370,20 @@ let clock = 0;
 export function updateRigs(dt: number): void {
   clock += dt;
   for (const r of rigs) {
-    if (r.animate) { r.animate(clock + r.phase, dt); continue; } // bestiary species
+    if (r.animate) {
+      r.animate(clock + r.phase, dt);
+      // If there are custom/replaced wings or tails on a bespoke model, animate them
+      const t = clock * 2.2 + r.phase;
+      if (r.parts.tail && r.parts.tail.name === 'custom_tail') {
+        r.parts.tail.rotation.x = Math.sin(t * 1.4) * 0.25;
+      }
+      r.parts.wings?.forEach((w, i) => {
+        if (w.name.startsWith('custom_')) {
+          w.rotation.x = Math.sin(t * 3 + i * Math.PI) * 0.5;
+        }
+      });
+      continue;
+    }
     const t = clock * 2.2 + r.phase;
     r.body.position.y = r.baseY + Math.sin(t) * 0.045;
     if (r.parts.tail) r.parts.tail.rotation.x = Math.sin(t * 1.4) * 0.25;

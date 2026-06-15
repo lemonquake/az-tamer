@@ -153,6 +153,7 @@ export class TerraCity {
   private intCamH = 5.6;
   private intCamD = 6.6;
   private exitSpot = new THREE.Vector3();
+  private currentVenueId: VenueId | null = null;
 
   private streetMarkers: MapMarker[] = [];
   private intMarkers: MapMarker[] = [];
@@ -692,6 +693,8 @@ export class TerraCity {
     this.camera.position.set(0, 6, this.intRoom.d / 2 + 4);
     this.mode = 'interior';
     toast(this.intName, 'gold');
+    this.currentVenueId = id;
+    this.player.savedLocation = { type: 'terra', room: id };
     this.busy = false;
   }
 
@@ -703,6 +706,8 @@ export class TerraCity {
     this.intRigs.forEach(disposeRig); this.intRigs = [];
     this.interiorScene = null;
     this.litScene = null;   // force the point-light budget to re-collect for the street
+    this.currentVenueId = null;
+    this.player.savedLocation = { type: 'terra' };
   }
 
   private buildVenue(id: VenueId): void {
@@ -1349,12 +1354,30 @@ export class TerraCity {
   // =================== run ===================
   async run(): Promise<void> {
     worldOrbit.reset();
-    this.buildStreet();
-    updateTamerAppearance(this.tamer, this.player.equippedClothes, this.player.appearance);
-    this.streetScene.add(this.tamer);
-    this.tamer.position.set(0, 0, 29);
-    this.tamer.rotation.y = Math.PI;          // face north, into the city
-    this.camera.position.set(0, 7.5, 38);
+    
+    const startVenue = (this as any).initialRoom as VenueId;
+    if (startVenue) {
+      this.buildStreet();
+      updateTamerAppearance(this.tamer, this.player.equippedClothes, this.player.appearance);
+      this.exitSpot.set(0, 0, 29);
+      this.buildVenue(startVenue);
+      this.currentVenueId = startVenue;
+      this.mode = 'interior';
+      this.interiorScene!.add(this.tamer);
+      this.tamer.position.set(0, 0, this.intRoom.d / 2 - 1.4);
+      this.tamer.rotation.y = Math.PI;
+      this.camera.position.set(0, 6, this.intRoom.d / 2 + 4);
+      this.player.savedLocation = { type: 'terra', room: startVenue };
+    } else {
+      this.buildStreet();
+      updateTamerAppearance(this.tamer, this.player.equippedClothes, this.player.appearance);
+      this.streetScene.add(this.tamer);
+      this.tamer.position.set(0, 0, 29);
+      this.tamer.rotation.y = Math.PI;          // face north, into the city
+      this.camera.position.set(0, 7.5, 38);
+      this.player.savedLocation = { type: 'terra' };
+    }
+
     updateHUD(this.player, 'Terra City');
     showHotkeys(true);
 

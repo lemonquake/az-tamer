@@ -359,7 +359,7 @@ export function openGuardianCard(subject: Guardian | string, player?: Player): P
     cardGroup.add(card);
 
     // the living model floats beside its card
-    const rig = makeGuardian(g.speciesId);
+    const rig = makeGuardian(g.speciesId, g.customization);
     rig.group.scale.setScalar(0.9);
     rig.group.position.set(2.1, -1.3, -0.3);
     scene.add(rig.group);

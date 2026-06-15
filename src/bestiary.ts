@@ -8327,4 +8327,213 @@ export const BESPOKE: Record<string, BespokeBuilder> = {
   firgara: buildFirgara,
   onthrofa: buildOnthrofa,
   vulfenix: buildVulfenix,
+  // 15 ready-made fusions
+  pyrostrike: buildPyrostrike,
+  aquafrost: buildAquafrost,
+  terragrow: buildTerragrow,
+  voltclysm: buildVoltclysm,
+  umbrashade: buildUmbrashade,
+  solgaleo: buildSolgaleo,
+  tidedeep: buildTidedeep,
+  thornspark: buildThornspark,
+  duskbloom: buildDuskbloom,
+  aethergale: buildAethergale,
+  lavachain: buildLavachain,
+  stormwave: buildStormwave,
+  glaciervine: buildGlaciervine,
+  shadowlight: buildShadowlight,
+  aetherion: buildAetherion,
+  // 6 extra-evolutions
+  pyromount: buildPyromount,
+  puddlecrest: buildPuddlecrest,
+  sproutshell: buildSproutshell,
+  zapwing: buildZapwing,
+  wispserpent: buildWispserpent,
+  shadeclaw: buildShadeclaw,
 };
+
+// ---------------- procedural bespoke helpers for fusions & extra-evolutions ----------------
+function buildProceduralArchetype(arch: string, p: { primary: number; secondary: number; accent: number }, glow: number): THREE.Group {
+  const g = new THREE.Group();
+  const prim = std({ color: p.primary });
+  const sec = std({ color: p.secondary });
+  const acc = std({ color: p.accent, emissive: glow, emissiveIntensity: 0.55, roughness: 0.3 });
+
+  const makeLocalEye = () => {
+    return new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 8), std({ color: 0x101018, roughness: 0.2 }));
+  };
+
+  if (arch === 'beast') {
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.42, 16, 12), prim);
+    body.scale.set(1.25, 0.95, 0.9); body.position.y = 0.55; g.add(body);
+    const head = new THREE.Group(); head.position.set(0.45, 0.85, 0);
+    const skull = new THREE.Mesh(new THREE.SphereGeometry(0.3, 14, 10), sec); head.add(skull);
+    const snout = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.3, 8), prim);
+    snout.rotation.z = -Math.PI / 2; snout.position.set(0.3, -0.05, 0); head.add(snout);
+    const e1 = makeLocalEye(), e2 = makeLocalEye(); e1.position.set(0.2, 0.1, 0.16); e2.position.set(0.2, 0.1, -0.16); head.add(e1, e2);
+    const ear1 = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.26, 6), acc);
+    const ear2 = ear1.clone(); ear1.position.set(-0.05, 0.3, 0.14); ear2.position.set(-0.05, 0.3, -0.14); head.add(ear1, ear2);
+    head.name = 'head'; g.add(head);
+    for (const [x, z] of [[0.28, 0.22], [0.28, -0.22], [-0.28, 0.22], [-0.28, -0.22]]) {
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 0.4, 8), sec);
+      leg.position.set(x, 0.2, z); g.add(leg);
+    }
+    const tail = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.5, 8), acc);
+    tail.position.set(-0.6, 0.7, 0); tail.rotation.z = Math.PI / 3.4; tail.name = 'tail'; g.add(tail);
+  } else if (arch === 'serpent') {
+    let y = 0.25, x = 0, r = 0.34;
+    for (let i = 0; i < 5; i++) {
+      const seg = new THREE.Mesh(new THREE.SphereGeometry(r, 14, 10), i % 2 ? sec : prim);
+      seg.position.set(x, y, 0); g.add(seg);
+      y += r * 1.15; x -= 0.1; r *= 0.88;
+    }
+    const head = new THREE.Group(); head.position.set(x + 0.12, y + 0.05, 0);
+    const skull = new THREE.Mesh(new THREE.SphereGeometry(0.26, 14, 10), prim);
+    skull.scale.set(1.3, 0.9, 1); head.add(skull);
+    const e1 = makeLocalEye(), e2 = makeLocalEye();
+    e1.position.set(0.18, 0.06, 0.14); e2.position.set(0.18, 0.06, -0.14); head.add(e1, e2);
+    const crest = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.35, 6), acc);
+    crest.position.set(-0.1, 0.25, 0); crest.rotation.z = Math.PI / 7; head.add(crest);
+    head.name = 'head'; g.add(head);
+    for (let i = 0; i < 3; i++) {
+      const fin = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.3, 5), acc);
+      fin.position.set(-0.35, 0.4 + i * 0.35, 0); fin.rotation.z = Math.PI / 2.4; g.add(fin);
+    }
+  } else if (arch === 'avian') {
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.38, 16, 12), prim);
+    body.scale.set(1, 1.15, 0.85); body.position.y = 0.75; g.add(body);
+    const head = new THREE.Group(); head.position.set(0.18, 1.25, 0);
+    const skull = new THREE.Mesh(new THREE.SphereGeometry(0.24, 14, 10), sec); head.add(skull);
+    const beak = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.28, 6), acc);
+    beak.rotation.z = -Math.PI / 2; beak.position.set(0.26, -0.02, 0); head.add(beak);
+    const e1 = makeLocalEye(), e2 = makeLocalEye(); e1.position.set(0.14, 0.08, 0.14); e2.position.set(0.14, 0.08, -0.14); head.add(e1, e2);
+    head.name = 'head'; g.add(head);
+    const mkWing = (side: 1 | -1) => {
+      const w = new THREE.Group();
+      const feather = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.06, 0.26), sec);
+      feather.position.set(0, 0, side * 0.3);
+      const tip = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.3, 5), acc);
+      tip.rotation.x = side * Math.PI / 2; tip.position.set(0, 0, side * 0.6);
+      w.add(feather, tip);
+      w.position.set(-0.05, 0.85, side * 0.3); w.name = `wing${side}`;
+      return w;
+    };
+    g.add(mkWing(1), mkWing(-1));
+    for (const z of [0.12, -0.12]) {
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 0.45, 6), acc);
+      leg.position.set(0, 0.25, z); g.add(leg);
+    }
+    const tail = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.45, 6), prim);
+    tail.position.set(-0.45, 0.7, 0); tail.rotation.z = Math.PI / 2.6; tail.name = 'tail'; g.add(tail);
+  } else if (arch === 'brute') {
+    const torso = new THREE.Mesh(new THREE.SphereGeometry(0.5, 16, 12), prim);
+    torso.scale.set(1, 1.2, 0.85); torso.position.y = 0.85; g.add(torso);
+    const head = new THREE.Group(); head.position.set(0.1, 1.5, 0);
+    const skull = new THREE.Mesh(new THREE.SphereGeometry(0.26, 14, 10), sec); head.add(skull);
+    const e1 = makeLocalEye(), e2 = makeLocalEye();
+    e1.position.set(0.18, 0.04, 0.12); e2.position.set(0.18, 0.04, -0.12); head.add(e1, e2);
+    const horn1 = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.3, 6), acc);
+    const horn2 = horn1.clone();
+    horn1.position.set(-0.02, 0.26, 0.12); horn2.position.set(-0.02, 0.26, -0.12); head.add(horn1, horn2);
+    head.name = 'head'; g.add(head);
+    for (const side of [1, -1]) {
+      const shoulder = new THREE.Mesh(new THREE.SphereGeometry(0.18, 10, 8), acc);
+      shoulder.position.set(0, 1.25, side * 0.5); g.add(shoulder);
+      const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.14, 0.6, 8), sec);
+      arm.position.set(0.05, 0.9, side * 0.58); arm.rotation.x = side * 0.18; g.add(arm);
+      const fist = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 8), prim);
+      fist.position.set(0.08, 0.55, side * 0.62); g.add(fist);
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.16, 0.5, 8), sec);
+      leg.position.set(0, 0.25, side * 0.22); g.add(leg);
+    }
+  } else if (arch === 'sprite') {
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.36, 16, 12), prim);
+    body.position.y = 0.55; body.name = 'head'; g.add(body);
+    const e1 = makeLocalEye(), e2 = makeLocalEye();
+    e1.scale.setScalar(1.4); e2.scale.setScalar(1.4);
+    e1.position.set(0.26, 0.62, 0.13); e2.position.set(0.26, 0.62, -0.13); g.add(e1, e2);
+    const p1 = makeLocalEye(), p2 = makeLocalEye();
+    p1.scale.setScalar(0.7); p2.scale.setScalar(0.7);
+    p1.position.set(0.32, 0.62, 0.13); p2.position.set(0.32, 0.62, -0.13); g.add(p1, p2);
+    const halo = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.035, 8, 24), acc);
+    halo.rotation.x = Math.PI / 2; halo.position.y = 0.55; halo.name = 'tail'; g.add(halo);
+    for (let i = 0; i < 3; i++) {
+      const orbMesh = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 8), acc);
+      const a = (i / 3) * Math.PI * 2;
+      orbMesh.position.set(Math.cos(a) * 0.42, 0.55, Math.sin(a) * 0.42); g.add(orbMesh);
+    }
+    const tuft = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.25, 6), sec);
+    tuft.position.set(0, 0.92, 0); g.add(tuft);
+  } else { // shell
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(0.45, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2), sec);
+    dome.position.y = 0.35; g.add(dome);
+    const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.5, 0.12, 16), prim);
+    rim.position.y = 0.32; g.add(rim);
+    const head = new THREE.Group(); head.position.set(0.42, 0.42, 0);
+    const skull = new THREE.Mesh(new THREE.SphereGeometry(0.18, 12, 10), prim); head.add(skull);
+    const e1 = makeLocalEye(), e2 = makeLocalEye();
+    e1.position.set(0.12, 0.05, 0.09); e2.position.set(0.12, 0.05, -0.09); head.add(e1, e2);
+    head.name = 'head'; g.add(head);
+    for (let i = 0; i < 5; i++) {
+      const spikeMesh = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.2, 5), acc);
+      const a = (i / 5) * Math.PI * 2;
+      spikeMesh.position.set(Math.cos(a) * 0.3, 0.62, Math.sin(a) * 0.3);
+      spikeMesh.rotation.set(Math.sin(a) * 0.5, 0, -Math.cos(a) * 0.5);
+      g.add(spikeMesh);
+    }
+    for (const [x, z] of [[0.25, 0.3], [0.25, -0.3], [-0.25, 0.3], [-0.25, -0.3]]) {
+      const foot = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 6), prim);
+      foot.position.set(x, 0.1, z); g.add(foot);
+    }
+  }
+  g.traverse(o => { if ((o as THREE.Mesh).isMesh) o.castShadow = true; });
+  return g;
+}
+
+function makeProceduralBespoke(arch: string, palette: { primary: number; secondary: number; accent: number }, glowColor: number): BespokeBuild {
+  const g = buildProceduralArchetype(arch, palette, glowColor);
+  const animate = (t: number, dt: number) => {
+    const head = g.getObjectByName('head');
+    const tail = g.getObjectByName('tail');
+    if (head) {
+      head.position.y = 0.85 + Math.sin(t * 2) * 0.015;
+    }
+    if (tail) {
+      tail.rotation.z = Math.sin(t * 3.2) * 0.08;
+    }
+  };
+  return {
+    body: g,
+    parts: {
+      head: g.getObjectByName('head') ?? undefined,
+      tail: g.getObjectByName('tail') ?? undefined,
+      wings: [g.getObjectByName('wing1'), g.getObjectByName('wing-1')].filter(Boolean) as THREE.Object3D[],
+    },
+    animate
+  };
+}
+
+// 15 fusions
+function buildPyrostrike(): BespokeBuild { return makeProceduralBespoke('beast', { primary: 0xe84a2a, secondary: 0xf2d23a, accent: 0xffffff }, 0xf2d23a); }
+function buildAquafrost(): BespokeBuild { return makeProceduralBespoke('serpent', { primary: 0x3a9df2, secondary: 0x9adff2, accent: 0xffffff }, 0x9adff2); }
+function buildTerragrow(): BespokeBuild { return makeProceduralBespoke('brute', { primary: 0x4ec45e, secondary: 0xb0865a, accent: 0xffffff }, 0xb0865a); }
+function buildVoltclysm(): BespokeBuild { return makeProceduralBespoke('avian', { primary: 0xf2d23a, secondary: 0x7adfd0, accent: 0xffffff }, 0x7adfd0); }
+function buildUmbrashade(): BespokeBuild { return makeProceduralBespoke('brute', { primary: 0x9a5af2, secondary: 0x7a8af2, accent: 0x101018 }, 0x7a8af2); }
+function buildSolgaleo(): BespokeBuild { return makeProceduralBespoke('beast', { primary: 0xff8c00, secondary: 0x7a8af2, accent: 0xffffff }, 0x7a8af2); }
+function buildTidedeep(): BespokeBuild { return makeProceduralBespoke('serpent', { primary: 0x2a5d9e, secondary: 0x9a5af2, accent: 0x101018 }, 0x9a5af2); }
+function buildThornspark(): BespokeBuild { return makeProceduralBespoke('sprite', { primary: 0x4ec45e, secondary: 0xf2d23a, accent: 0xffffff }, 0xf2d23a); }
+function buildDuskbloom(): BespokeBuild { return makeProceduralBespoke('sprite', { primary: 0x9a5af2, secondary: 0x4ec45e, accent: 0x101018 }, 0x4ec45e); }
+function buildAethergale(): BespokeBuild { return makeProceduralBespoke('avian', { primary: 0x7a8af2, secondary: 0xff9ad2, accent: 0xffffff }, 0xff9ad2); }
+function buildLavachain(): BespokeBuild { return makeProceduralBespoke('brute', { primary: 0xf2603a, secondary: 0xb0865a, accent: 0xffffff }, 0xb0865a); }
+function buildStormwave(): BespokeBuild { return makeProceduralBespoke('serpent', { primary: 0xf2d23a, secondary: 0x3a9df2, accent: 0xffffff }, 0x3a9df2); }
+function buildGlaciervine(): BespokeBuild { return makeProceduralBespoke('brute', { primary: 0x9adff2, secondary: 0x4ec45e, accent: 0xffffff }, 0x4ec45e); }
+function buildShadowlight(): BespokeBuild { return makeProceduralBespoke('beast', { primary: 0x9a5af2, secondary: 0xf2e8b8, accent: 0xffffff }, 0xf2e8b8); }
+function buildAetherion(): BespokeBuild { return makeProceduralBespoke('beast', { primary: 0x7a8af2, secondary: 0xff9ad2, accent: 0xffffff }, 0xff9ad2); }
+
+// 6 extra-evolutions
+function buildPyromount(): BespokeBuild { return makeProceduralBespoke('beast', { primary: 0xd9542e, secondary: 0xb0865a, accent: 0xfff0c8 }, 0xb0865a); }
+function buildPuddlecrest(): BespokeBuild { return makeProceduralBespoke('sprite', { primary: 0x3a8dd9, secondary: 0xf2e8b8, accent: 0xd8f2ff }, 0xf2e8b8); }
+function buildSproutshell(): BespokeBuild { return makeProceduralBespoke('shell', { primary: 0x4ea84e, secondary: 0xb0865a, accent: 0xffffff }, 0xb0865a); }
+function buildZapwing(): BespokeBuild { return makeProceduralBespoke('avian', { primary: 0xf2d23a, secondary: 0x7adfd0, accent: 0xffffff }, 0x7adfd0); }
+function buildWispserpent(): BespokeBuild { return makeProceduralBespoke('serpent', { primary: 0x7adfd0, secondary: 0x9a5af2, accent: 0xffffff }, 0x9a5af2); }
+function buildShadeclaw(): BespokeBuild { return makeProceduralBespoke('brute', { primary: 0x9a5af2, secondary: 0xf2d23a, accent: 0x101018 }, 0xf2d23a); }
