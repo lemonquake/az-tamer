@@ -1,7 +1,8 @@
 {
   "name": "az-tamer",
   "version": "0.1.0",
-  "description": "AZ Tamer - a monster-taming dungeon RPG by Aljay Leodones",
+  "description": "AZ Tamer - a monster-taming dungeon RPG by lemonquake",
+  "author": "lemonquake",
   "type": "module",
   "scripts": {
     "dev": "vite",

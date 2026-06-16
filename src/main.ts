@@ -1,6 +1,6 @@
 // ============================================================
 // AZ Tamer — entry point & story orchestrator
-// by Aljay Leodones
+// by lemonquake
 // ============================================================
 import * as THREE from 'three';
 import { DUNGEONS, HOUSES, type DungeonDef, expForLevel } from './data';

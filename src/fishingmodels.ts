@@ -6,7 +6,7 @@
 //   • an advanced stylized water shader (fresnel sky-reflection,
 //     sun/moon glint, animated sparkle, shoreline foam, waves)
 //   • splash & ripple particle systems
-// by Aljay Leodones
+// by lemonquake
 // ============================================================
 import * as THREE from 'three';
 import { tween, Ease } from './models';

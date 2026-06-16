@@ -6,7 +6,7 @@
 //
 // A self-contained View (scene/camera/update) like Battle. Town
 // hands control here and gets it back when the player quits.
-// by Aljay Leodones
+// by lemonquake
 // ============================================================
 import * as THREE from 'three';
 import { Player } from './state';

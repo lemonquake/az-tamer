@@ -129,7 +129,7 @@ export function choose(speaker: string, text: string, options: string[]): Promis
 }
 
 // ---------------- name input ----------------
-export function askName(title: string, placeholder = ''): Promise<string> {
+export function askName(title: string, placeholder = '', cancelable = false): Promise<string> {
   return new Promise(resolve => {
     dialogueBusy = true;
     const modal = $('name-modal');
@@ -138,17 +138,53 @@ export function askName(title: string, placeholder = ''): Promise<string> {
     input.value = placeholder;
     modal.style.display = 'flex';
     setTimeout(() => input.focus(), 50);
+
+    const cleanup = () => {
+      $('name-confirm').onclick = null;
+      input.onkeydown = null;
+      window.removeEventListener('keydown', onWindowKey);
+      dialogueBusy = false;
+    };
+
     const confirm = () => {
       const v = input.value.trim();
       if (!v) return;
       modal.style.display = 'none';
-      $('name-confirm').onclick = null;
-      input.onkeydown = null;
-      dialogueBusy = false;
+      cleanup();
       resolve(v.slice(0, 12));
     };
+
+    const cancel = () => {
+      modal.style.display = 'none';
+      cleanup();
+      resolve('');
+    };
+
+    const onWindowKey = (e: KeyboardEvent) => {
+      if (cancelable && e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        cancel();
+      }
+    };
+
     $('name-confirm').onclick = confirm;
-    input.onkeydown = e => { if (e.key === 'Enter') confirm(); e.stopPropagation(); };
+
+    input.onkeydown = e => {
+      if (e.key === 'Enter') {
+        confirm();
+      } else if (cancelable && e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        cancel();
+      } else {
+        e.stopPropagation();
+      }
+    };
+
+    if (cancelable) {
+      window.addEventListener('keydown', onWindowKey, true);
+    }
   });
 }
 
@@ -282,7 +318,7 @@ export function applyGraphicsSettings(): void {
 
 export async function executeCheatFlow(player: Player): Promise<void> {
   try {
-    const code = await askName('Enter Cheat Code');
+    const code = await askName('Enter Cheat Code', '', true);
     if (!code) return;
     if (code.toLowerCase() === 'lemonquake') {
       // Apply cheat: Lineup (current party) receives 10 levels

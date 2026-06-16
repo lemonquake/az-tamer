@@ -134,7 +134,7 @@ export class Cinematic {
       ctx.fillText('“Trust is trained, never forced.”', 256, 155);
       ctx.font = 'italic 20px Georgia, serif';
       ctx.fillStyle = '#c8b282'; // Gold color to match the border and feel premium
-      ctx.fillText('— Aljay Leodones', 256, 195);
+      ctx.fillText('— lemonquake', 256, 195);
     }
     const crestTex = new THREE.CanvasTexture(crest);
     crestTex.colorSpace = THREE.SRGBColorSpace;

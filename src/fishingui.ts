@@ -6,7 +6,7 @@
 //     the Kitchen (cook fish → battle items), the Encyclopedia,
 //     the living Leaderboard, the Hall of Fame, Titles/Records
 //     and Fishing Quests
-// by Aljay Leodones
+// by lemonquake
 // ============================================================
 import * as THREE from 'three';
 import { Player } from './state';

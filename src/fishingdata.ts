@@ -4,7 +4,7 @@
 //
 // Pure data + logic only (no THREE, no DOM) so it can be pulled
 // into the scene, the UI and the save layer without import cycles.
-// by Aljay Leodones
+// by lemonquake
 // ============================================================
 
 // ---------------- rarities ----------------
