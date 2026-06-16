@@ -1108,7 +1108,7 @@ export class DungeonRun {
           }
         }
       }).then(() => {
-        if (this.finished === null) {
+        if (this.finished !== null) {
           return;
         }
         updateHUD(this.ctx.player, this.def.name, { floor: this.floorNum });
