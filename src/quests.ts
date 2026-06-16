@@ -371,6 +371,14 @@ const SIDE_QUESTS: QuestDef[] = [
     check: p => p.capturesMade >= 1,
     reward: { shards: 200, items: [['berry', 2]] },
   }),
+  M({
+    id: 'side_fishing', kind: 'side',
+    title: "The Angler's Path", giver: 'Old Bait Pete', location: "Anglers' Wharf, Haven City",
+    brief: 'Old Bait Pete is looking for fresh blood at the Great Pond. "Expeditions are well and good, but the real mystery lies under the ripples. Grab a rod, cast a line, and let\'s see what you can pull from the deep!"',
+    objective: 'Catch 1 fish of any size',
+    check: p => p.fishing.totalCaught >= 1,
+    reward: { shards: 150, items: [['soda', 1]] },
+  }),
 ];
 
 // ---------------- registry & state helpers ----------------
@@ -390,6 +398,7 @@ for (const q of MAIN_QUESTS) {
 }
 DERIVED_PROGRESS['side_chef'] = p => [Math.min(3, p.itemCount('berry')), 3];
 DERIVED_PROGRESS['side_niko'] = p => [Math.min(1, p.capturesMade), 1];
+DERIVED_PROGRESS['side_fishing'] = p => [Math.min(1, p.fishing.totalCaught), 1];
 
 /** Numeric progress toward a quest's objective, if it can be counted. */
 export function questProgress(p: Player, id: string): [number, number] | null {

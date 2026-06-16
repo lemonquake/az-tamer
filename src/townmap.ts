@@ -79,6 +79,10 @@ function decorateQuestMarkers(p: Player, markers: MapMarker[], title: string): M
           if (s === 'active' || s === 'ready') activeQuestIds.push(id);
         }
       }
+      if (label.includes('anglers') || label.includes('wharf') || label.includes('pete') || label.includes('pond')) {
+        const sFish = questState(p, 'side_fishing');
+        if (sFish === 'active' || sFish === 'ready') activeQuestIds.push('side_fishing');
+      }
     }
     
     // Agdao Island

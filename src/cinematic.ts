@@ -15,7 +15,7 @@ import {
 } from './models';
 import { HOUSES, SPECIES } from './data';
 
-export type CineKind = 'academy' | 'camp' | 'library' | 'bluff' | 'fountain' | 'porch' | 'pledge';
+export type CineKind = 'academy' | 'camp' | 'library' | 'bluff' | 'fountain' | 'porch' | 'pledge' | 'pond';
 
 interface Shot {
   pos: THREE.Vector3;
@@ -41,6 +41,7 @@ export class Cinematic {
     else if (kind === 'fountain') this.buildFountain();
     else if (kind === 'porch') this.buildPorch();
     else if (kind === 'pledge') this.buildPledge(extraId!);
+    else if (kind === 'pond') this.buildPond();
     const first = Object.values(this.shots)[0];
     this.goal = first;
     this.camera.position.copy(first.pos);
@@ -521,6 +522,48 @@ export class Cinematic {
       azrin: { pos: new THREE.Vector3(-0.2, 1.4, -0.6), look: new THREE.Vector3(-1.4, 1.15, -1.2), facings: [[azrin, azrinToHero]] },
       azrael: { pos: new THREE.Vector3(-1.2, 1.4, -0.8), look: new THREE.Vector3(-2.5, 1.15, -1.8), facings: [[azrael, azraelToHero]] },
       hero: { pos: new THREE.Vector3(-1.8, 1.4, -2.2), look: new THREE.Vector3(0.8, 1.2, -1.6), facings: [[hero, heroToAzrin]] },
+    };
+  }
+
+  // ================= Haven Great Pond backdrop =================
+  private buildPond(): void {
+    const s = this.scene;
+    s.background = skyGradient('#7da2d8', '#cfdcf0');
+    s.add(new THREE.AmbientLight(0xffffff, 0.7));
+    const sun = new THREE.DirectionalLight(0xfffaed, 0.65);
+    sun.position.set(10, 15, 8);
+    s.add(sun);
+
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(24, 24),
+      new THREE.MeshStandardMaterial({ map: groundTexture('#5a7a36', '#3e5e24', 8), roughness: 0.95 }));
+    floor.rotation.x = -Math.PI / 2;
+    floor.receiveShadow = true;
+    s.add(floor);
+
+    // pond water plane
+    const water = new THREE.Mesh(new THREE.PlaneGeometry(16, 16),
+      new THREE.MeshStandardMaterial({ color: 0x3a8ad9, transparent: true, opacity: 0.8, roughness: 0.1 }));
+    water.rotation.x = -Math.PI / 2;
+    water.position.set(-4, 0.02, -4);
+    s.add(water);
+
+    // wooden pier/dock
+    const pier = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.35, 6.0),
+      new THREE.MeshStandardMaterial({ map: plankTexture('#6a5236', 1), roughness: 0.8 }));
+    pier.position.set(2.4, 0.175, -1.0);
+    s.add(pier);
+
+    // Pete, Hero
+    const pete = this.person({ top: 0x4a7a6a, hair: 0xc8c8d0, cap: 0xd9a14a, hairstyle: 'classic' }, 2.4, -2.5, 0);
+    const hero = this.person({ top: 0x2a5ad8, bottom: 0x32384e, cap: 0xd84a3a }, 2.4, 0.8, Math.PI);
+
+    const heroToPete = Math.atan2(pete.position.x - hero.position.x, pete.position.z - hero.position.z);
+    const peteToHero = Math.atan2(hero.position.x - pete.position.x, hero.position.z - pete.position.z);
+
+    this.shots = {
+      wide: { pos: new THREE.Vector3(6.5, 2.2, 3.2), look: new THREE.Vector3(2.4, 1.1, -1.5), facings: [[hero, heroToPete], [pete, peteToHero]] },
+      pete: { pos: new THREE.Vector3(1.2, 1.4, -1.5), look: new THREE.Vector3(2.4, 1.15, -2.5), facings: [[pete, peteToHero]] },
+      hero: { pos: new THREE.Vector3(1.2, 1.4, -0.2), look: new THREE.Vector3(2.4, 1.2, 0.8), facings: [[hero, heroToPete]] },
     };
   }
 

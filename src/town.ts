@@ -23,7 +23,7 @@ import {
   say, conversation, choose, askName, toast, updateHUD, showInteractHint, showHotkeys,
   isDialogueOpen, isMenuOpen, openPauseMenu, openPanel, openScreen, closeMenu, type PanelKind,
 } from './ui';
-import { mainChain, questState, acceptQuest, completeQuest, syncStoryQuests } from './quests';
+import { mainChain, questState, acceptQuest, completeQuest, syncStoryQuests, QUESTS } from './quests';
 import { GUILD_LORE } from './guilds';
 import { guildJoinCeremony } from './university';
 import { drawAreaMap, hideAreaMap, type MapMarker } from './townmap';
@@ -796,7 +796,29 @@ export class Town {
       this.streetInteractables.push({
         pos: new THREE.Vector3(x, 0, z), radius: 1.7,
         label: `Press <b>E</b> — chat with ${name}`,
-        handler: async () => { await say(name, lines[Math.floor(Math.random() * lines.length)]); },
+        handler: async () => {
+          if (name === 'Old Bait Pete') {
+            const st = questState(this.player, 'side_fishing');
+            if (st !== 'locked' && st !== 'available') {
+              this.busy = true;
+              await this.questTalk('side_fishing', 'Old Bait Pete', {
+                offer: [
+                  ['Old Bait Pete', 'Hello there, youngster! Welcome to the Great Pond.'],
+                  ['Old Bait Pete', 'Expeditions are well and good, but the real mystery lies under the ripples. Grab a rod, cast a line, and let\'s see what you can pull from the deep!']
+                ],
+                accepted: 'Grab a rod, cast your line at the Pond Dock or River Bend. Let\'s see if you can catch at least one fish!',
+                ready: [
+                  ['Old Bait Pete', 'Aha! You did it! That\'s a fine catch indeed.'],
+                  ['Old Bait Pete', 'There\'s nothing quite like the thrill of a tug on the line, is there? Keep practicing, cook your catch at my counter, and you\'ll be a master angler in no time!']
+                ],
+                done: 'Keep fishing! The Great Pond has many secrets to offer, and Captain Finwick is always looking for new challengers on the notice board.'
+              });
+              this.busy = false;
+              return;
+            }
+          }
+          await say(name, lines[Math.floor(Math.random() * lines.length)]);
+        },
       });
     };
     angler({ top: 0x4a7a6a, hair: 0xc8c8d0, cap: 0xd9a14a, hairstyle: 'classic' }, cx + 5.6, cz + 4.0, Math.PI, 'Old Bait Pete', [
@@ -6193,6 +6215,66 @@ export class Town {
     }
   }
 
+  private async questTalk(questId: string, giver: string, lines: {
+    offer: [string, string][];     // first meeting / offer
+    accepted: string;              // reminder while active
+    ready: [string, string][];     // turn-in celebration
+    done: string;                  // after completion
+  }): Promise<void> {
+    const p = this.player;
+    const q = QUESTS[questId];
+    const st = questState(p, questId);
+    if (st === 'done') { await say(giver, lines.done); return; }
+    if (st === 'available' || st === 'locked') {
+      await conversation(lines.offer);
+      const pick = await choose(giver, `${q.objective} — will you help?`, ['Accept the quest', 'Maybe later']);
+      if (pick === 0) {
+        acceptQuest(p, questId);
+        toast(`Side quest started: ${q.title}`, 'gold');
+        p.save();
+        if (questState(p, questId) === 'ready') await this.questTalk(questId, giver, lines);
+      }
+      return;
+    }
+    if (st === 'active' && questId === 'side_fishing' && !p.flags['seen_fishing_intro']) {
+      await runCinematicScene('pond', async cine => {
+        cine.shot('wide');
+        await say('Old Bait Pete', 'Hello there, youngster! Welcome to the Great Pond.');
+        cine.shot('pete');
+        await say('Old Bait Pete', 'Expeditions are well and good, but the real mystery lies under the ripples.');
+        await say('Old Bait Pete', 'Grab a rod, cast a line, and let\'s see what you can pull from the deep! The tug on the line... there is no feeling like it.');
+        cine.shot('hero');
+        await say('Hero', 'Sounds like a plan. Where do I start?');
+        cine.shot('pete');
+        await say('Old Bait Pete', 'Take this beginner rod and cast right off the Pond Dock or up the River Bend. Come back when you\'ve landed your first catch!');
+      });
+      p.flags['seen_fishing_intro'] = true;
+      p.save();
+      return;
+    }
+    if (st === 'ready') {
+      if (questId === 'side_fishing') {
+        await runCinematicScene('pond', async cine => {
+          cine.shot('pete');
+          await say('Old Bait Pete', 'Aha! You did it! That\'s a fine catch indeed for a beginner.');
+          cine.shot('hero');
+          await say('Hero', 'It was quite a fight!');
+          cine.shot('pete');
+          await say('Old Bait Pete', 'There\'s nothing quite like the thrill of a tug on the line, is there? You\'ve got the spark, kid.');
+          await say('Old Bait Pete', 'Keep practicing, cook your catch at my counter, and you\'ll be a master angler in no time!');
+        });
+      } else {
+        await conversation(lines.ready);
+      }
+      const summary = completeQuest(p, questId);
+      toast(`Quest complete: ${q.title}!`, 'gold');
+      if (summary) toast(`Received ${summary}`, 'gold');
+      updateHUD(p, 'Haven City');
+      return;
+    }
+    await say(giver, lines.accepted);
+  }
+
   /** The master drives the guild's main quest chain: turn-ins, new orders, reminders. */
   private async masterQuestFlow(h: HouseDef): Promise<void> {
     const p = this.player;
@@ -6219,6 +6301,16 @@ export class Town {
       toast(`Main quest complete: ${next.title}!`, 'gold');
       if (summary) toast(`Received ${summary}`, 'gold');
       updateHUD(p, 'Haven City');
+
+      if (next.id.endsWith('_m1')) {
+        await conversation([
+          [h.master, `By the way, ${p.tamerName}. If you want to relax between expeditions and test your reflexes, head down to the Great Pond on the west side of Haven City.`],
+          [h.master, `Old Bait Pete at the Anglers' Wharf is always looking for new tamers to try out the local fishing spots. They say it's quite the catch — and a great way to feed your Guardians. Go check it out!`],
+        ]);
+        acceptQuest(p, 'side_fishing');
+        toast(`Side quest started: The Angler's Path`, 'gold');
+      }
+
       // the chain continues immediately
       const after = chain.find(q => p.quests[q.id] !== 'done');
       if (after) {
@@ -6580,23 +6672,31 @@ export class Town {
     const q = this.player.quests;
     const f = this.player.flags;
     const active = (id: string) => q[id] === 'active';
+    const activeOrReady = (id: string) => q[id] === 'active' || questState(this.player, id) === 'ready';
+
+    const targets: { key: string; x: number; z: number; color: number }[] = [];
+    if (activeOrReady('side_fishing')) {
+      targets.push({ key: 'wharf', x: -20, z: 34.5, color: 0xf2c14e });
+    }
+
     if (!this.player.houseId) {
       // unpledged: the shuttle back to the Officers' Hall, and the Houses' terrace
       return [
         { key: 'shuttle', x: -23.4, z: 0, color: 0x4fe0ff },
         { key: 'terrace', x: 0, z: -21, color: 0xf2c14e },
+        ...targets
       ];
     }
     if (active('story_historian') && !f['met_historian']) {
-      return [{ key: 'shuttle', x: -23.4, z: 0, color: 0x4fe0ff }];
+      return [{ key: 'shuttle', x: -23.4, z: 0, color: 0x4fe0ff }, ...targets];
     }
     if (active('story_daughters') && !f['met_daughters']) {
-      return [{ key: 'fountain', x: 0, z: 2.6, color: 0xf2884e }];
+      return [{ key: 'fountain', x: 0, z: 2.6, color: 0xf2884e }, ...targets];
     }
     if (active('story_roads') || active('story_amber') || active('story_agdao') || active('story_cradle') || active('story_echoes')) {
-      return [{ key: 'gate', x: 45, z: 0, color: 0x5a7bd8 }];
+      return [{ key: 'gate', x: 45, z: 0, color: 0x5a7bd8 }, ...targets];
     }
-    return [];
+    return targets;
   }
 
   private syncGuidance(): void {
