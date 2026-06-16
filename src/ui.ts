@@ -376,6 +376,10 @@ export async function executeCheatFlow(player: Player): Promise<void> {
   try {
     const code = await askName('Enter Cheat Code', '', true);
     if (!code) return;
+    if (code.toLowerCase() === 'bugde') {
+      await openMasterDebugMenu(player);
+      return;
+    }
     if (code.toLowerCase() === 'lemonquake') {
       // Apply cheat: Lineup (current party) receives 10 levels
       player.party.forEach(g => {
@@ -441,7 +445,8 @@ export function showInteractHint(text: string | null): void {
 // ---------------- screens ----------------
 let menuOpen = false;
 let optionsOpen = false;
-export const isMenuOpen = () => menuOpen || optionsOpen;
+let debugMenuOpen = false;
+export const isMenuOpen = () => menuOpen || optionsOpen || debugMenuOpen;
 export const isOptionsOpen = () => optionsOpen;
 
 export function openOptionsMenu(player?: Player): Promise<void> {
@@ -596,6 +601,307 @@ export function openOptionsMenu(player?: Player): Promise<void> {
     };
 
     closeBtn.onclick = close;
+    window.addEventListener('keydown', onKey, true);
+  });
+}
+
+export function openMasterDebugMenu(player: Player): Promise<void> {
+  return new Promise(resolve => {
+    debugMenuOpen = true;
+    
+    const modal = $('debug-modal');
+    const closeBtn = $('db-close-btn');
+    const closeBtn2 = $('db-close-btn2');
+    const shardsVal = $('db-shards-val');
+    
+    // Populate species options
+    const allSpecies = Object.keys(SPECIES).map(id => ({ id, name: SPECIES[id].name }));
+    allSpecies.sort((a, b) => a.name.localeCompare(b.name));
+
+    for (let i = 0; i < 3; i++) {
+      const select = $<HTMLSelectElement>(`db-slot-${i}-species`);
+      // Keep only -- Empty -- and append species
+      select.innerHTML = '<option value="empty">-- Empty --</option>';
+      allSpecies.forEach(sp => {
+        const opt = document.createElement('option');
+        opt.value = sp.id;
+        opt.textContent = sp.name;
+        select.appendChild(opt);
+      });
+    }
+
+    const updateSlotsDisplay = () => {
+      shardsVal.textContent = player.shards.toLocaleString();
+
+      for (let i = 0; i < 3; i++) {
+        const info = $(`db-slot-${i}-info`);
+        const select = $<HTMLSelectElement>(`db-slot-${i}-species`);
+        const lvlInput = $<HTMLInputElement>(`db-slot-${i}-lvl`);
+
+        const guardian = player.party[i];
+        if (guardian) {
+          info.textContent = `${guardian.nickname} (Lv. ${guardian.level})`;
+          info.style.color = 'var(--ui-gold)';
+          select.value = guardian.speciesId;
+          lvlInput.value = String(guardian.level);
+          lvlInput.disabled = false;
+        } else {
+          info.textContent = 'Empty';
+          info.style.color = 'var(--ui-dim)';
+          select.value = 'empty';
+          lvlInput.value = '10';
+          lvlInput.disabled = true;
+        }
+      }
+    };
+
+    updateSlotsDisplay();
+
+    // 1. Dropdown species changes
+    for (let i = 0; i < 3; i++) {
+      const select = $<HTMLSelectElement>(`db-slot-${i}-species`);
+      select.onchange = () => {
+        const val = select.value;
+        if (val === 'empty') {
+          if (player.party.length <= 1) {
+            toast('Cannot remove last Guardian! Party must have >= 1 members.', 'red');
+            updateSlotsDisplay();
+            return;
+          }
+          player.party.splice(i, 1);
+        } else {
+          const targetLvl = parseInt($<HTMLInputElement>(`db-slot-${i}-lvl`).value, 10) || 10;
+          if (i < player.party.length) {
+            const curLvl = player.party[i].level;
+            player.party[i] = new Guardian(val, curLvl);
+          } else {
+            player.party.push(new Guardian(val, targetLvl));
+          }
+        }
+        player.save(false);
+        refreshHUD();
+        updateSlotsDisplay();
+      };
+    }
+
+    // 2. Level increments and inputs
+    const changeLvl = (idx: number, delta: number) => {
+      const g = player.party[idx];
+      if (!g) return;
+      const newLvl = Math.max(1, Math.min(99, g.level + delta));
+      
+      g.level = newLvl;
+      g.exp = expForLevel(newLvl);
+      g.techPoints = Math.floor(g.level / 5);
+      g.learnedTechs = g.species.techs
+        .filter(t => t.level <= g.level)
+        .map(t => t.tech)
+        .slice(-5);
+        
+      g.hp = g.stats.hp;
+      g.sp = g.stats.sp;
+
+      player.save(false);
+      refreshHUD();
+      updateSlotsDisplay();
+    };
+
+    const setLvlDirect = (idx: number, val: number) => {
+      const g = player.party[idx];
+      if (!g) return;
+      const newLvl = Math.max(1, Math.min(99, val));
+      
+      g.level = newLvl;
+      g.exp = expForLevel(newLvl);
+      g.techPoints = Math.floor(g.level / 5);
+      g.learnedTechs = g.species.techs
+        .filter(t => t.level <= g.level)
+        .map(t => t.tech)
+        .slice(-5);
+        
+      g.hp = g.stats.hp;
+      g.sp = g.stats.sp;
+
+      player.save(false);
+      refreshHUD();
+      updateSlotsDisplay();
+    };
+
+    for (let i = 0; i < 3; i++) {
+      $(`db-slot-${i}-lvl-1`).onclick = () => changeLvl(i, 1);
+      $(`db-slot-${i}-lvl-10`).onclick = () => changeLvl(i, 10);
+      $<HTMLInputElement>(`db-slot-${i}-lvl`).onchange = () => {
+        const val = parseInt($<HTMLInputElement>(`db-slot-${i}-lvl`).value, 10) || 10;
+        setLvlDirect(i, val);
+      };
+    }
+
+    // 3. Shards Gold adjustments
+    const addGold = (amount: number) => {
+      player.shards += amount;
+      player.save(false);
+      refreshHUD();
+      updateSlotsDisplay();
+      toast(`Added ${amount.toLocaleString()} Shards!`, 'gold');
+    };
+    $('db-gold-1k').onclick = () => addGold(1000);
+    $('db-gold-5k').onclick = () => addGold(5000);
+    $('db-gold-10k').onclick = () => addGold(10000);
+    $('db-gold-50k').onclick = () => addGold(50000);
+
+    // 4. All Items x10
+    $('db-items-all').onclick = () => {
+      for (const itemId of Object.keys(ITEMS)) {
+        player.addItem(itemId, 10);
+      }
+      player.save(false);
+      refreshHUD();
+      toast('Added 10 of all items to inventory!', 'gold');
+    };
+
+    // 5. Warp/Teleportation
+    $('db-warp-btn').onclick = () => {
+      const destType = $<HTMLSelectElement>('db-warp-select').value;
+      player.savedLocation = { type: destType as any };
+      player.save(false);
+      toast('Saving and reloading to teleport...', 'gold');
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
+    };
+
+    // 6. Cinematics play
+    $('db-cine-play').onclick = async () => {
+      const cineKind = $<HTMLSelectElement>('db-cine-select').value;
+      modal.style.display = 'none';
+      debugMenuOpen = false;
+      window.removeEventListener('keydown', onKey, true);
+      
+      const runner = (window as any).__runCinematicScene;
+      if (runner) {
+        toast(`Playing Cinematic: ${cineKind}`, 'gold');
+        await runner(cineKind, async (cine: any) => {
+          const shotNames = Object.keys(cine.shots || {});
+          if (shotNames.length > 0) {
+            await say('Director', `Playing cinematic backdrop: "${cineKind}". Use the choices below to change camera angles or exit.`);
+            let done = false;
+            while (!done) {
+              const choices = [...shotNames, 'Exit Cinematic'];
+              const chosenIdx = await choose('Director', 'Select Camera Shot', choices);
+              if (chosenIdx === choices.length - 1) {
+                done = true;
+              } else {
+                const shotName = shotNames[chosenIdx];
+                cine.shot(shotName);
+              }
+            }
+          } else {
+            await say('Director', `Playing cinematic: "${cineKind}". Press enter to exit.`);
+          }
+        });
+      } else {
+        toast('Error: Cinematic runner not found.', 'red');
+      }
+      
+      debugMenuOpen = true;
+      modal.style.display = 'flex';
+      window.addEventListener('keydown', onKey, true);
+    };
+
+    // 7. Fishing play
+    $('db-fish-play').onclick = async () => {
+      const spotKind = $<HTMLSelectElement>('db-fish-select').value;
+      modal.style.display = 'none';
+      debugMenuOpen = false;
+      window.removeEventListener('keydown', onKey, true);
+      
+      const runner = (window as any).__runFishing;
+      if (runner) {
+        toast(`Starting Fishing Game at spot: ${spotKind}`, 'gold');
+        const spotInfo = {
+          spot: spotKind as any,
+          location: spotKind === 'pond' ? 'Pond Dock' : spotKind === 'river' ? 'River Dock' : 'Mossdeep Vault',
+          zoneTitle: 'DEBUG FISHING'
+        };
+        await runner(spotInfo);
+      } else {
+        toast('Error: Fishing runner not found.', 'red');
+      }
+      
+      debugMenuOpen = true;
+      modal.style.display = 'flex';
+      window.addEventListener('keydown', onKey, true);
+    };
+
+    // 8. Quick Cheats / Toggles
+    $('db-heal-all').onclick = () => {
+      player.healAll();
+      player.save(false);
+      refreshHUD();
+      updateSlotsDisplay();
+      toast('Healed all Guardians in party and reserve!', 'gold');
+    };
+
+    $('db-techs-all').onclick = () => {
+      player.party.forEach(g => {
+        g.species.techs.forEach(t => {
+          if (!g.learnedTechs.includes(t.tech)) {
+            g.learnedTechs.push(t.tech);
+          }
+        });
+      });
+      player.save(false);
+      toast('Unlocked all species techniques for active party!', 'gold');
+    };
+
+    $('db-cap-99').onclick = () => {
+      player.party.forEach(g => {
+        g.levelCap = 99;
+      });
+      player.save(false);
+      toast('Set level cap to 99 for active party!', 'gold');
+    };
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        close();
+      }
+    };
+
+    const close = () => {
+      window.removeEventListener('keydown', onKey, true);
+      modal.style.display = 'none';
+      
+      // Clean up event handlers
+      closeBtn.onclick = null;
+      closeBtn2.onclick = null;
+      for (let i = 0; i < 3; i++) {
+        $(`db-slot-${i}-species`).onchange = null;
+        $(`db-slot-${i}-lvl-1`).onclick = null;
+        $(`db-slot-${i}-lvl-10`).onclick = null;
+        $(`db-slot-${i}-lvl`).onchange = null;
+      }
+      $('db-gold-1k').onclick = null;
+      $('db-gold-5k').onclick = null;
+      $('db-gold-10k').onclick = null;
+      $('db-gold-50k').onclick = null;
+      $('db-items-all').onclick = null;
+      $('db-cine-play').onclick = null;
+      $('db-fish-play').onclick = null;
+      $('db-warp-btn').onclick = null;
+      $('db-heal-all').onclick = null;
+      $('db-techs-all').onclick = null;
+      $('db-cap-99').onclick = null;
+      
+      debugMenuOpen = false;
+      resolve();
+    };
+
+    modal.style.display = 'flex';
+    closeBtn.onclick = close;
+    closeBtn2.onclick = close;
     window.addEventListener('keydown', onKey, true);
   });
 }

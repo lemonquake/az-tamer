@@ -43,10 +43,10 @@ function highlightOn(id: string, side: TutStep['pointer']): void {
   // positioned ancestors form stacking contexts (e.g. #battle-ui) — lift them too
   let anc = el.parentElement;
   while (anc && anc.id !== 'app' && anc !== document.body) {
-    if (getComputedStyle(anc).position !== 'static') raise(anc, '85', false);
+    if (getComputedStyle(anc).position !== 'static') raise(anc, '99901', false);
     anc = anc.parentElement;
   }
-  raise(el, '86', true);             // above the blur veil (84)
+  raise(el, '99902', true);             // above the blur veil (99900)
 
   const r = el.getBoundingClientRect();
   const p = document.createElement('div');
@@ -85,25 +85,32 @@ export const isTutorialOpen = () => tutActive && !tutWaiting;
  */
 export async function runTutorial(kicker: string, steps: TutStep[]): Promise<void> {
   tutActive = true;
+  const app = document.getElementById('app')!;
+
   const overlay = document.createElement('div');
   overlay.id = 'tut-overlay';
-  overlay.innerHTML = `
-    <div id="tut-box" class="panel">
-      <div id="tut-kicker">✦ ${kicker} ✦</div>
-      <div id="tut-speaker"></div>
-      <div id="tut-text"></div>
-      <div id="tut-actions">
-        <button class="ui-btn primary" id="tut-next">Continue ▸</button>
-      </div>
-    </div>
-    <div id="tut-hint" class="panel"></div>`;
-  document.getElementById('app')!.appendChild(overlay);
+  app.appendChild(overlay);
 
-  const box = overlay.querySelector<HTMLElement>('#tut-box')!;
-  const speakerEl = overlay.querySelector<HTMLElement>('#tut-speaker')!;
-  const textEl = overlay.querySelector<HTMLElement>('#tut-text')!;
-  const nextBtn = overlay.querySelector<HTMLButtonElement>('#tut-next')!;
-  const hintEl = overlay.querySelector<HTMLElement>('#tut-hint')!;
+  const box = document.createElement('div');
+  box.id = 'tut-box';
+  box.className = 'panel';
+  box.innerHTML = `
+    <div id="tut-kicker">✦ ${kicker} ✦</div>
+    <div id="tut-speaker"></div>
+    <div id="tut-text"></div>
+    <div id="tut-actions">
+      <button class="ui-btn primary" id="tut-next">Continue ▸</button>
+    </div>`;
+  app.appendChild(box);
+
+  const hintEl = document.createElement('div');
+  hintEl.id = 'tut-hint';
+  hintEl.className = 'panel';
+  app.appendChild(hintEl);
+
+  const speakerEl = box.querySelector<HTMLElement>('#tut-speaker')!;
+  const textEl = box.querySelector<HTMLElement>('#tut-text')!;
+  const nextBtn = box.querySelector<HTMLButtonElement>('#tut-next')!;
 
   const typewrite = (text: string) => new Promise<void>(done => {
     // type the plain glyphs, then land the styled markup in one piece
@@ -185,6 +192,8 @@ export async function runTutorial(kicker: string, steps: TutStep[]): Promise<voi
 
   highlightOff();
   overlay.remove();
+  box.remove();
+  hintEl.remove();
   tutActive = false;
   sfx('fanfare');
 }

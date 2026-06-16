@@ -101,6 +101,48 @@ export class Guardian {
     const mult = this.isStarter ? 2.025 : 1.0;
     const calc = (k: StatKey) => Math.floor((s.base[k] + s.growth[k] * l + this.bonus[k]) * mult);
     const baseStats = { hp: calc('hp'), sp: calc('sp'), atk: calc('atk'), def: calc('def'), spd: calc('spd'), wis: calc('wis') };
+    
+    // Evolution stage multipliers:
+    // Evolving once (Adept), twice (Elite), three times (Apex), four times (Legendary/Aether)
+    let hpAtkDefWisMult = 1.0;
+    let otherMult = 1.0;
+    
+    if (s.stage === 'Adept') {
+      hpAtkDefWisMult = 1.15;
+      otherMult = 1.1;
+    } else if (s.stage === 'Elite') {
+      hpAtkDefWisMult = 1.45; // Significantly stronger HP/Atk/Def/Wis for twice-evolved
+      otherMult = 1.25;
+    } else if (s.stage === 'Apex') {
+      hpAtkDefWisMult = 1.85;
+      otherMult = 1.45;
+    } else if (s.stage === 'Legendary') {
+      hpAtkDefWisMult = 2.4;
+      otherMult = 1.7;
+    } else if (s.stage === 'Aether') {
+      hpAtkDefWisMult = 2.7;
+      otherMult = 1.9;
+    }
+    
+    baseStats.hp = Math.floor(baseStats.hp * hpAtkDefWisMult);
+    baseStats.atk = Math.floor(baseStats.atk * hpAtkDefWisMult);
+    baseStats.def = Math.floor(baseStats.def * hpAtkDefWisMult);
+    baseStats.wis = Math.floor(baseStats.wis * hpAtkDefWisMult);
+    
+    baseStats.sp = Math.floor(baseStats.sp * otherMult);
+    baseStats.spd = Math.floor(baseStats.spd * otherMult);
+    
+    // Legendary Guardians of the Big Three (Aljay, Greggy, Onnel):
+    const isBig3Legend = [
+      'firgara', 'onthrofa', 'vulfenix', // Aljay's
+      'raijura', 'voltherion', 'fulgrath', // Greggy's
+      'verdalune', 'gaiathorn', 'nyxroot'  // Onnel's
+    ].includes(this.speciesId);
+    if (isBig3Legend) {
+      baseStats.hp = Math.floor(baseStats.hp * 1.5); // Extra 50% HP
+      baseStats.atk = Math.floor(baseStats.atk * 1.5); // Extra 50% Attack
+      baseStats.def = Math.floor(baseStats.def * 1.5); // Extra 50% Defense
+    }
 
     // Apply Guild Perk stat boost if element matches active guild element
     if (Player.activeInstance && Player.activeInstance.houseId) {

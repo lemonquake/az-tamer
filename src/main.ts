@@ -113,6 +113,8 @@ requestAnimationFrame(frame);
 // ---------------- battle bridge ----------------
 let player: Player;
 (window as any).__getActivePlayer = () => player;
+(window as any).__runCinematicScene = runCinematicScene;
+(window as any).__runFishing = runFishing;
 
 async function runBattle(specs: { speciesId: string; level: number }[], opts: BattleOptions): Promise<BattleResult> {
   const prev = activeView;

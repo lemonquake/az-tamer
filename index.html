@@ -871,20 +871,22 @@
 
     /* ---------- the Field Manual (mandatory tutorials) ---------- */
     #tut-overlay {
-      position: absolute; inset: 0; z-index: 84;
+      position: absolute; inset: 0; z-index: 99900;
       background: rgba(5, 7, 16, 0.55); backdrop-filter: blur(5px);
       display: flex; align-items: center; justify-content: center;
       animation: gcardIn 0.35s;
     }
     #tut-overlay.waiting { background: transparent; backdrop-filter: none; pointer-events: none; }
-    #tut-overlay.waiting #tut-box { display: none; }
+    #tut-overlay.waiting ~ #tut-box { display: none; }
     #tut-box {
+      position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+      z-index: 99910;
       width: min(680px, 92vw); border-color: var(--ui-gold);
       box-shadow: 0 0 0 2px rgba(0,0,0,0.55), 0 10px 40px rgba(0,0,0,0.7), 0 0 26px rgba(242,193,78,0.18);
       transition: transform 0.3s cubic-bezier(0.2, 0.9, 0.3, 1.05);
     }
-    #tut-box.low { transform: translateY(24vh); }
-    #tut-box.high { transform: translateY(-24vh); }
+    #tut-box.low { transform: translate(-50%, -50%) translateY(24vh); }
+    #tut-box.high { transform: translate(-50%, -50%) translateY(-24vh); }
     #tut-kicker { color: var(--ui-gold); letter-spacing: 3px; font-size: 12px; font-weight: 800; margin-bottom: 8px; }
     #tut-speaker {
       display: inline-block; background: var(--ui-gold); color: #0c1022; font-weight: 700;
@@ -895,6 +897,7 @@
     #tut-actions { display: flex; justify-content: flex-end; margin-top: 10px; min-height: 36px; }
     #tut-hint {
       position: absolute; left: 50%; bottom: 64px; transform: translateX(-50%);
+      z-index: 99910;
       display: none; border-color: var(--ui-gold); color: var(--ui-gold);
       font-weight: 700; font-size: 15px; padding: 8px 22px; border-radius: 22px;
       pointer-events: none; animation: badgePulse 1.4s infinite; white-space: nowrap;
@@ -908,7 +911,7 @@
       50% { box-shadow: 0 0 30px rgba(242,193,78,0.95); }
     }
     .tut-pointer {
-      position: fixed; z-index: 87; font-size: 40px; pointer-events: none;
+      position: fixed; z-index: 99912; font-size: 40px; pointer-events: none;
       filter: drop-shadow(0 3px 8px rgba(0,0,0,0.8));
       animation: tutBobV 0.75s ease-in-out infinite;
     }
@@ -1774,6 +1777,141 @@
         
         <div style="display:flex; justify-content:flex-end; margin-top:8px">
           <button class="ui-btn primary" id="opt-close-btn" style="padding: 8px 20px">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Master Debug Menu Modal -->
+    <div id="debug-modal" class="screen">
+      <div class="panel" style="width: 600px; max-height: 90vh; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; position: relative">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--ui-border); padding-bottom: 8px">
+          <h3 style="margin: 0; color: var(--ui-gold); font-size: 16px">🛠️ MASTER DEBUG MENU</h3>
+          <button class="ui-btn" id="db-close-btn" style="min-width: 32px; padding: 4px 8px; font-weight: bold">X</button>
+        </div>
+
+        <!-- Section: Party Management -->
+        <div style="border: 1px solid rgba(242,193,78,0.2); padding: 10px; border-radius: 8px; background: rgba(0,0,0,0.2)">
+          <div style="color: var(--ui-gold); font-size: 13px; font-weight: bold; margin-bottom: 8px; letter-spacing: 0.5px; text-transform: uppercase">👥 Party Management</div>
+          <div style="display: flex; flex-direction: column; gap: 8px">
+            <!-- Slot 0 -->
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; border-bottom: 1px dashed rgba(255,255,255,0.08); padding-bottom: 8px">
+              <span style="font-weight: bold; font-size: 13px; width: 45px">Slot 1:</span>
+              <span id="db-slot-0-info" style="font-size: 13px; width: 140px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap">Empty</span>
+              <select id="db-slot-0-species" style="flex: 1; background: #11162e; border: 1px solid var(--ui-border); color: #fff; border-radius: 4px; padding: 3px; font-size: 12px; max-width: 140px">
+                <option value="empty">-- Empty --</option>
+              </select>
+              <div style="display: flex; align-items: center; gap: 4px">
+                <input type="number" id="db-slot-0-lvl" min="1" max="99" value="10" style="width: 42px; background: #11162e; border: 1px solid var(--ui-border); color: var(--ui-gold); border-radius: 4px; text-align: center; padding: 3px; font-size: 12px" />
+                <button class="ui-btn" id="db-slot-0-lvl-1" style="padding: 3px 6px; font-size: 11px; min-width: auto">+1</button>
+                <button class="ui-btn" id="db-slot-0-lvl-10" style="padding: 3px 6px; font-size: 11px; min-width: auto">+10</button>
+              </div>
+            </div>
+            <!-- Slot 1 -->
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; border-bottom: 1px dashed rgba(255,255,255,0.08); padding-bottom: 8px">
+              <span style="font-weight: bold; font-size: 13px; width: 45px">Slot 2:</span>
+              <span id="db-slot-1-info" style="font-size: 13px; width: 140px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap">Empty</span>
+              <select id="db-slot-1-species" style="flex: 1; background: #11162e; border: 1px solid var(--ui-border); color: #fff; border-radius: 4px; padding: 3px; font-size: 12px; max-width: 140px">
+                <option value="empty">-- Empty --</option>
+              </select>
+              <div style="display: flex; align-items: center; gap: 4px">
+                <input type="number" id="db-slot-1-lvl" min="1" max="99" value="10" style="width: 42px; background: #11162e; border: 1px solid var(--ui-border); color: var(--ui-gold); border-radius: 4px; text-align: center; padding: 3px; font-size: 12px" />
+                <button class="ui-btn" id="db-slot-1-lvl-1" style="padding: 3px 6px; font-size: 11px; min-width: auto">+1</button>
+                <button class="ui-btn" id="db-slot-1-lvl-10" style="padding: 3px 6px; font-size: 11px; min-width: auto">+10</button>
+              </div>
+            </div>
+            <!-- Slot 2 -->
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px">
+              <span style="font-weight: bold; font-size: 13px; width: 45px">Slot 3:</span>
+              <span id="db-slot-2-info" style="font-size: 13px; width: 140px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap">Empty</span>
+              <select id="db-slot-2-species" style="flex: 1; background: #11162e; border: 1px solid var(--ui-border); color: #fff; border-radius: 4px; padding: 3px; font-size: 12px; max-width: 140px">
+                <option value="empty">-- Empty --</option>
+              </select>
+              <div style="display: flex; align-items: center; gap: 4px">
+                <input type="number" id="db-slot-2-lvl" min="1" max="99" value="10" style="width: 42px; background: #11162e; border: 1px solid var(--ui-border); color: var(--ui-gold); border-radius: 4px; text-align: center; padding: 3px; font-size: 12px" />
+                <button class="ui-btn" id="db-slot-2-lvl-1" style="padding: 3px 6px; font-size: 11px; min-width: auto">+1</button>
+                <button class="ui-btn" id="db-slot-2-lvl-10" style="padding: 3px 6px; font-size: 11px; min-width: auto">+10</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section: Player Stats & Currency -->
+        <div style="border: 1px solid rgba(242,193,78,0.2); padding: 10px; border-radius: 8px; background: rgba(0,0,0,0.2)">
+          <div style="color: var(--ui-gold); font-size: 13px; font-weight: bold; margin-bottom: 8px; letter-spacing: 0.5px; text-transform: uppercase">💰 Player Stats & Currency</div>
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap">
+            <div style="font-size: 13px">Gold: <span id="db-shards-val" style="color:var(--ui-gold); font-weight:bold">0</span> Shards</div>
+            <div style="display: flex; gap: 4px">
+              <button class="ui-btn" id="db-gold-1k" style="padding: 4px 8px; font-size: 12px; min-width: auto">+1k</button>
+              <button class="ui-btn" id="db-gold-5k" style="padding: 4px 8px; font-size: 12px; min-width: auto">+5k</button>
+              <button class="ui-btn" id="db-gold-10k" style="padding: 4px 8px; font-size: 12px; min-width: auto">+10k</button>
+              <button class="ui-btn" id="db-gold-50k" style="padding: 4px 8px; font-size: 12px; min-width: auto">+50k</button>
+            </div>
+            <button class="ui-btn primary" id="db-items-all" style="padding: 4px 10px; font-size: 12px">All Items x10</button>
+          </div>
+        </div>
+
+        <!-- Section: Cinematics & Minigames -->
+        <div style="border: 1px solid rgba(242,193,78,0.2); padding: 10px; border-radius: 8px; background: rgba(0,0,0,0.2)">
+          <div style="color: var(--ui-gold); font-size: 13px; font-weight: bold; margin-bottom: 8px; letter-spacing: 0.5px; text-transform: uppercase">🎬 Cinematics & Minigames</div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px">
+            <div style="display: flex; flex-direction: column; gap: 4px">
+              <span style="font-size: 11px; color: var(--ui-dim)">Select Cinematic</span>
+              <div style="display: flex; gap: 4px">
+                <select id="db-cine-select" style="flex: 1; background: #11162e; border: 1px solid var(--ui-border); color: #fff; border-radius: 4px; padding: 4px; font-size: 12px">
+                  <option value="academy">Academy registration hall</option>
+                  <option value="camp">Night recovery camp</option>
+                  <option value="library">Library archive</option>
+                  <option value="bluff">Whispering Bluff</option>
+                  <option value="fountain">Haven fountain</option>
+                  <option value="porch">Tamer porch</option>
+                  <option value="pledge">Altar of Pledge</option>
+                  <option value="pond">Great Pond</option>
+                </select>
+                <button class="ui-btn primary" id="db-cine-play" style="padding: 4px 10px; font-size: 12px">Play</button>
+              </div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 4px">
+              <span style="font-size: 11px; color: var(--ui-dim)">Select Fishing Spot</span>
+              <div style="display: flex; gap: 4px">
+                <select id="db-fish-select" style="flex: 1; background: #11162e; border: 1px solid var(--ui-border); color: #fff; border-radius: 4px; padding: 4px; font-size: 12px">
+                  <option value="pond">Pond Dock (Great Pond)</option>
+                  <option value="river">River Dock (Haven River)</option>
+                  <option value="secret">Secret Spot (Mossdeep Vault)</option>
+                </select>
+                <button class="ui-btn primary" id="db-fish-play" style="padding: 4px 10px; font-size: 12px">Fish</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section: World Teleportation -->
+        <div style="border: 1px solid rgba(242,193,78,0.2); padding: 10px; border-radius: 8px; background: rgba(0,0,0,0.2)">
+          <div style="color: var(--ui-gold); font-size: 13px; font-weight: bold; margin-bottom: 8px; letter-spacing: 0.5px; text-transform: uppercase">📍 Teleportation Warp</div>
+          <div style="display: flex; align-items: center; gap: 8px">
+            <select id="db-warp-select" style="flex: 1; background: #11162e; border: 1px solid var(--ui-border); color: #fff; border-radius: 4px; padding: 4px; font-size: 12px">
+              <option value="town">Haven City (Town)</option>
+              <option value="university">Tamer Academy / University</option>
+              <option value="terra">Terra City</option>
+              <option value="agdao">Agdao Island</option>
+              <option value="salmonan">New Salmonan</option>
+              <option value="overworld">Overworld Map</option>
+            </select>
+            <button class="ui-btn" id="db-warp-btn" style="padding: 4px 12px; font-size: 12px; white-space: nowrap">Warp (Reloads Game)</button>
+          </div>
+        </div>
+
+        <!-- Section: Quick Toggles / Debug Tools -->
+        <div style="border: 1px solid rgba(242,193,78,0.2); padding: 10px; border-radius: 8px; background: rgba(0,0,0,0.2)">
+          <div style="color: var(--ui-gold); font-size: 13px; font-weight: bold; margin-bottom: 8px; letter-spacing: 0.5px; text-transform: uppercase">⚡ Quick Cheats & Utilities</div>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap">
+            <button class="ui-btn" id="db-heal-all" style="flex: 1; padding: 6px 10px; font-size: 12px; text-align: center">Heal All Guardians</button>
+            <button class="ui-btn" id="db-techs-all" style="flex: 1; padding: 6px 10px; font-size: 12px; text-align: center">Unlock All Techniques</button>
+            <button class="ui-btn" id="db-cap-99" style="flex: 1; padding: 6px 10px; font-size: 12px; text-align: center">Max Lv99 Cap</button>
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; margin-top: 4px; border-top: 1px solid var(--ui-border); padding-top: 8px">
+          <button class="ui-btn primary" id="db-close-btn2" style="padding: 8px 24px">Done</button>
         </div>
       </div>
     </div>
