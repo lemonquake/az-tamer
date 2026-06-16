@@ -68,9 +68,9 @@ const renderer = makeRenderer(canvas);
 export let activeView: View | null = null;
 export const setView = (v: View | null) => { activeView = v; };
 
-export async function runCinematicScene(kind: CineKind, flow: (cine: Cinematic) => Promise<void>): Promise<void> {
+export async function runCinematicScene(kind: CineKind, flow: (cine: Cinematic) => Promise<void>, extraId?: string): Promise<void> {
   const prev = activeView;
-  const cine = new Cinematic(kind);
+  const cine = new Cinematic(kind, extraId);
   await fadeOut();
   setView(cine.view);
   await fadeIn();
@@ -78,6 +78,7 @@ export async function runCinematicScene(kind: CineKind, flow: (cine: Cinematic) 
     await flow(cine);
   } finally {
     await fadeOut();
+    cine.dispose();
     setView(prev);
     await fadeIn();
   }

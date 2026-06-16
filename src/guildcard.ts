@@ -544,7 +544,17 @@ export function openGuildPerksPanel(player: Player, houseColor: string, onClose?
       </div>
     `;
 
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        window.removeEventListener('keydown', onKey);
+        overlay.remove();
+        onClose?.();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+
     (overlay.querySelector('#gperks-back') as HTMLElement).onclick = () => {
+      window.removeEventListener('keydown', onKey);
       overlay.remove();
       onClose?.();
     };

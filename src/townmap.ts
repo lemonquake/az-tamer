@@ -16,6 +16,7 @@ export interface MapMarker {
   kind: 'building' | 'poi' | 'npc' | 'door';
   quest?: boolean;
   questKinds?: ('story' | 'main' | 'side')[];
+  highlight?: boolean;
 }
 
 export interface AreaMapOpts {
@@ -139,11 +140,48 @@ function decorateQuestMarkers(p: Player, markers: MapMarker[], title: string): M
       }
     }
     
+    let highlight = mk.highlight;
+    if (t.includes('haven')) {
+      const sRoads = questState(p, 'story_roads');
+      if (sRoads === 'active' && label.includes('gate')) {
+        highlight = true;
+      }
+      const sHist = questState(p, 'story_historian');
+      if (sHist === 'active' && label.includes('skyport')) {
+        highlight = true;
+      }
+      const sAmber = questState(p, 'story_amber');
+      if (sAmber === 'active' || sAmber === 'ready') {
+        const hasAmber = p.itemCount('storm_amber') >= 1;
+        if (!hasAmber && label.includes('gate')) {
+          highlight = true;
+        } else if (hasAmber && label.includes('skyport')) {
+          highlight = true;
+        }
+      }
+      const sAgdao = questState(p, 'story_agdao');
+      if (sAgdao === 'active' && label.includes('gate')) {
+        highlight = true;
+      }
+      const sDaughters = questState(p, 'story_daughters');
+      if (sDaughters === 'active' && (label.includes('azrin') || label.includes('azrael'))) {
+        highlight = true;
+      }
+    } else if (t.includes('skyport') || t.includes('aetherline')) {
+      const sHist = questState(p, 'story_historian');
+      const sAmber = questState(p, 'story_amber');
+      const hasAmber = p.itemCount('storm_amber') >= 1;
+      const needsUniversity = (sHist === 'active') || (sAmber === 'active' && hasAmber) || (sAmber === 'ready');
+      if (needsUniversity && (label.includes('pod') || label.includes('transport'))) {
+        highlight = true;
+      }
+    }
+    
     if (activeQuestIds.length > 0) {
       const questKinds = activeQuestIds.map(id => QUESTS[id]?.kind).filter(Boolean) as ('story' | 'main' | 'side')[];
-      return { ...mk, quest: true, questKinds };
+      return { ...mk, quest: true, questKinds, highlight };
     }
-    return mk;
+    return { ...mk, highlight };
   });
 }
 
@@ -196,7 +234,25 @@ export function drawAreaMap(cv: HTMLCanvasElement, o: AreaMapOpts): void {
   for (const mk of finalMarkers) {
     const x = tx(mk.x), y = tz(mk.z);
     c.fillStyle = mk.color;
-    
+
+    if (mk.highlight) {
+      const time = Date.now() * 0.005;
+      const pulse = 0.5 + 0.5 * Math.sin(time * 6);
+      const radius = 8 + pulse * 4.5;
+      c.save();
+      c.beginPath();
+      c.arc(x, y, radius, 0, Math.PI * 2);
+      c.fillStyle = `rgba(242, 193, 78, ${0.12 + 0.22 * (1 - pulse)})`;
+      c.fill();
+      
+      c.beginPath();
+      c.arc(x, y, 7.5, 0, Math.PI * 2);
+      c.strokeStyle = '#f2c14e';
+      c.lineWidth = 1.6;
+      c.stroke();
+      c.restore();
+    }
+
     if (mk.quest) {
       const kinds = mk.questKinds && mk.questKinds.length > 0 ? mk.questKinds : [];
       if (kinds.length === 0) {

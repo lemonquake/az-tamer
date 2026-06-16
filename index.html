@@ -101,6 +101,53 @@
       font-size: 13px; color: var(--ui-dim); pointer-events: none;
     }
     #hotkeys b { color: var(--ui-gold); }
+    #hotkeys span.hk-j.flash-new {
+      background: rgba(232, 90, 106, 0.25);
+      border: 1.5px solid var(--ui-red) !important;
+      box-shadow: 0 0 12px rgba(232, 90, 106, 0.6);
+      animation: journalFlashNew 1.2s infinite alternate;
+      border-radius: 12px;
+      padding: 2px 8px;
+      margin: -2px 0;
+      color: #fff !important;
+    }
+    #hotkeys span.hk-j.flash-new b {
+      color: var(--ui-red) !important;
+      text-shadow: 0 0 4px rgba(232, 90, 106, 0.5);
+    }
+    #hotkeys span.hk-j.active-subtle {
+      border: 1.5px solid var(--ui-gold) !important;
+      box-shadow: 0 0 8px rgba(242, 193, 78, 0.4);
+      background: rgba(242, 193, 78, 0.12);
+      border-radius: 12px;
+      padding: 2px 8px;
+      margin: -2px 0;
+      color: var(--ui-text) !important;
+      animation: journalActiveSubtle 3s infinite ease-in-out;
+    }
+    #hotkeys span.hk-j.active-subtle b {
+      color: var(--ui-gold) !important;
+    }
+    @keyframes journalFlashNew {
+      0% {
+        box-shadow: 0 0 4px rgba(232, 90, 106, 0.3);
+        background: rgba(232, 90, 106, 0.1);
+      }
+      100% {
+        box-shadow: 0 0 16px rgba(232, 90, 106, 0.9);
+        background: rgba(232, 90, 106, 0.45);
+      }
+    }
+    @keyframes journalActiveSubtle {
+      0%, 100% {
+        box-shadow: 0 0 4px rgba(242, 193, 78, 0.2);
+        background: rgba(242, 193, 78, 0.05);
+      }
+      50% {
+        box-shadow: 0 0 10px rgba(242, 193, 78, 0.55);
+        background: rgba(242, 193, 78, 0.18);
+      }
+    }
     .panel-tabs { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
     .panel-tabs .tab { flex: 1; text-align: center; font-size: 14px; padding: 7px 8px; }
     .hub-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }

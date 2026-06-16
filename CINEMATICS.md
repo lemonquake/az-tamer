@@ -99,6 +99,17 @@ graph TD
   * `hale`: Low-angle, authoritative shot focusing on Instructor Hale's jacket and stern face.
 * **Directorial Action**: Hale points to the terminal; the hero steps forward; the holo-orb pulses green light across the hero's face.
 
+#### Cinematic 1B: The Guild Pledge Ceremony
+* **Quest Trigger**: Pledging to a Grand House in the University Officers' Hall.
+* **Scene Backdrop**: `pledge` (Element-Themed Sanctuary)
+* **Atmosphere**: The chamber dynamically shifts: the sky gradient and tiled floor grout reflect the elements (Fire/Blaze red, Tide/Water blue, Nature/Verdant green, Volt/Electric yellow, Umbra/Dark purple). A grand pedestal altar stands flanked by four massive marble pillars, with a glowing elemental halo projecting light-energy and floating motes/particles rising upward.
+* **Key Shots**:
+  * `wide`: Displays the entire sanctuary, highlighting the pillars and participants.
+  * `officiant`: Focused mid-angle on the House Master delivering the pledge creed.
+  * `altar`: Zoomed close-up highlighting the newborn starter Guardian hovering above the pedestal.
+  * `hero`: Mid-angle focusing on the player as they receive their new partner and Guild card.
+* **Directorial Action**: The Officiant commands the player to kneel; the elemental altar flares with energy as the player names the newborn starter Guardian; the Guardian rises, floating gently in the aura beam; the camera glides to the hero as they hold up their glowing Effigy & Sigil card.
+
 #### Cinematic 2: Chapter I — Hale's Radio Directive
 * **Quest Trigger**: After clearing Trial Caverns.
 * **Scene Backdrop**: `camp` (Trial Entrance)

@@ -11,10 +11,11 @@ import * as THREE from 'three';
 import {
   makeTamer, makeVoxelHuman, updateVoxelHuman, setVoxelSeated, makeCrawler,
   tileTexture, wallpaperTexture, groundTexture, plankTexture, skyGradient,
-  carpetTexture, bookshelfTexture,
+  carpetTexture, bookshelfTexture, makeGuardian, disposeRig
 } from './models';
+import { HOUSES, SPECIES } from './data';
 
-export type CineKind = 'academy' | 'camp' | 'library' | 'bluff' | 'fountain' | 'porch';
+export type CineKind = 'academy' | 'camp' | 'library' | 'bluff' | 'fountain' | 'porch' | 'pledge';
 
 interface Shot {
   pos: THREE.Vector3;
@@ -29,15 +30,17 @@ export class Cinematic {
   private goal: Shot;
   private lookCur = new THREE.Vector3();
   private people: THREE.Group[] = [];
+  private rigs: any[] = [];
   private t = 0;
 
-  constructor(kind: CineKind) {
+  constructor(kind: CineKind, extraId?: string) {
     if (kind === 'academy') this.buildAcademy();
     else if (kind === 'camp') this.buildCamp();
     else if (kind === 'library') this.buildLibrary();
     else if (kind === 'bluff') this.buildBluff();
     else if (kind === 'fountain') this.buildFountain();
     else if (kind === 'porch') this.buildPorch();
+    else if (kind === 'pledge') this.buildPledge(extraId!);
     const first = Object.values(this.shots)[0];
     this.goal = first;
     this.camera.position.copy(first.pos);
@@ -88,6 +91,32 @@ export class Cinematic {
         (o as THREE.PointLight).intensity = 16 + Math.sin(now * 0.011) * 4 + Math.sin(now * 0.037) * 2;
       }
     });
+
+    // Animate custom elemental particles
+    const particles = this.scene.getObjectByName('particles') as THREE.Points;
+    if (particles) {
+      const pos = particles.geometry.attributes.position;
+      const arr = pos.array as Float32Array;
+      for (let i = 1; i < arr.length; i += 3) {
+        arr[i] += dt * 0.45; // float up
+        if (arr[i] > 3.0) {
+          arr[i] = 0.5; // reset to pedestal level
+          arr[i - 1] = (Math.random() - 0.5) * 1.5; // randomize X again
+          arr[i + 1] = -4.5 + (Math.random() - 0.5) * 1.5; // randomize Z again
+        }
+      }
+      pos.needsUpdate = true;
+    }
+
+    // Gentle floating hover on the altar for the starter Guardian rigs
+    this.rigs.forEach(rig => {
+      rig.group.position.y = 0.85 + Math.sin(now * 0.0025) * 0.08;
+    });
+  }
+
+  dispose(): void {
+    this.rigs.forEach(r => disposeRig(r));
+    this.rigs = [];
   }
 
   private person(opts: Parameters<typeof makeVoxelHuman>[0], x: number, z: number, rotY: number, seated = false, seatY = 0.42): THREE.Group {
@@ -540,6 +569,157 @@ export class Cinematic {
       wide: { pos: new THREE.Vector3(2.8, 1.8, -0.6), look: new THREE.Vector3(-1.5, 1.0, -3.8), facings: [[hero, heroToIvan], [ivan, ivanToHero]] },
       ivan: { pos: new THREE.Vector3(-1.1, 1.3, -2.8), look: new THREE.Vector3(-2.2, 0.95, -3.8), facings: [[ivan, ivanToHero]] },
       hero: { pos: new THREE.Vector3(-2.8, 1.4, -4.2), look: new THREE.Vector3(-0.6, 1.25, -2.6), facings: [[hero, heroToIvan]] },
+    };
+  }
+
+  // ================= Guild Pledge Ceremony =================
+  private buildPledge(houseId: string): void {
+    const s = this.scene;
+    const house = HOUSES.find(h => h.id === houseId) || HOUSES[0];
+    const colorHex = parseInt(house.color.slice(1), 16);
+    
+    // Sky gradient matching the guild's element
+    s.background = skyGradient('#080a14', house.color);
+    
+    // Ambient light with elements' hues
+    s.add(new THREE.AmbientLight(0xffffff, 0.45));
+    
+    // Directional light casting shadows
+    const key = new THREE.DirectionalLight(0xffffff, 1.2);
+    key.position.set(5, 12, 6);
+    key.castShadow = true;
+    s.add(key);
+
+    // Floor tiles custom to the Guild's color
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(30, 30),
+      new THREE.MeshStandardMaterial({ map: tileTexture('#121520', house.color, 12), roughness: 0.4 }));
+    floor.rotation.x = -Math.PI / 2;
+    floor.receiveShadow = true;
+    s.add(floor);
+
+    // 4 Grand Marble Pillars framing the altar
+    const pillarMat = new THREE.MeshStandardMaterial({ color: 0xdddddd, roughness: 0.2, metalness: 0.1 });
+    const pillarBaseMat = new THREE.MeshStandardMaterial({ color: colorHex, roughness: 0.4 });
+    const pillars = [
+      [-3.5, -4], [3.5, -4],
+      [-3.5, -7.5], [3.5, -7.5]
+    ];
+    pillars.forEach(([px, pz]) => {
+      const pGroup = new THREE.Group();
+      // base
+      const baseMesh = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.4, 1.2), pillarBaseMat);
+      baseMesh.position.y = 0.2;
+      baseMesh.castShadow = true;
+      baseMesh.receiveShadow = true;
+      pGroup.add(baseMesh);
+      // shaft
+      const shaftMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 6, 12), pillarMat);
+      shaftMesh.position.y = 3.4;
+      shaftMesh.castShadow = true;
+      shaftMesh.receiveShadow = true;
+      pGroup.add(shaftMesh);
+      
+      pGroup.position.set(px, 0, pz);
+      s.add(pGroup);
+    });
+
+    // Central marble pedestal altar
+    const altarGroup = new THREE.Group();
+    const altarBase = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.9, 0.15, 16), pillarBaseMat);
+    altarBase.position.y = 0.075;
+    altarBase.castShadow = true;
+    altarBase.receiveShadow = true;
+    const altarTop = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.6, 16), pillarMat);
+    altarTop.position.y = 0.45;
+    altarTop.castShadow = true;
+    altarTop.receiveShadow = true;
+    altarGroup.add(altarBase, altarTop);
+    altarGroup.position.set(0, 0, -4.5);
+    s.add(altarGroup);
+
+    // Dynamic glowing elemental halo / sphere above the altar
+    const haloColor = colorHex;
+    const halo = new THREE.Mesh(new THREE.IcosahedronGeometry(0.3, 1),
+      new THREE.MeshStandardMaterial({ color: haloColor, emissive: haloColor, emissiveIntensity: 1.5, transparent: true, opacity: 0.7, wireframe: true }));
+    halo.position.set(0, 1.45, -4.5);
+    halo.name = 'fx-orb';
+    halo.userData.baseY = 1.45;
+    s.add(halo);
+
+    const auraLight = new THREE.PointLight(haloColor, 20, 10);
+    auraLight.position.set(0, 1.45, -4.5);
+    s.add(auraLight);
+
+    // Floating particles (motes) rising from altar matching element
+    const particleCount = 45;
+    const particleGeo = new THREE.BufferGeometry();
+    const particlePositions = new Float32Array(particleCount * 3);
+    for (let i = 0; i < particleCount * 3; i += 3) {
+      particlePositions[i] = (Math.random() - 0.5) * 1.5; // X
+      particlePositions[i + 1] = 0.5 + Math.random() * 2.0; // Y
+      particlePositions[i + 2] = -4.5 + (Math.random() - 0.5) * 1.5; // Z
+    }
+    particleGeo.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+    const particleMat = new THREE.PointsMaterial({ color: haloColor, size: 0.12, transparent: true, opacity: 0.8 });
+    const particlePoints = new THREE.Points(particleGeo, particleMat);
+    particlePoints.name = 'particles';
+    s.add(particlePoints);
+
+    // The Officiant NPC
+    const offX = -1.4;
+    const offZ = -4.0;
+    // Player coordinates
+    const heroX = 1.4;
+    const heroZ = -4.0;
+
+    const officiant = this.person({
+      top: colorHex,
+      hair: 0x5a5a6a,
+      bottom: 0x222222,
+      cap: null
+    }, offX, offZ, 1.3);
+
+    const hero = this.person({
+      top: 0x2a5ad8,
+      bottom: 0x32384e,
+      cap: 0xd84a3a
+    }, heroX, heroZ, -1.3);
+
+    // Mutual facings
+    const heroToOff = Math.atan2(officiant.position.x - hero.position.x, officiant.position.z - hero.position.z);
+    const offToHero = Math.atan2(hero.position.x - officiant.position.x, hero.position.z - officiant.position.z);
+
+    // Spawn the actual 3D model of the starter Guardian on the pedestal!
+    const starterSpeciesId = house.starter;
+    const guardianRig = makeGuardian(starterSpeciesId);
+    guardianRig.group.position.set(0, 0.85, -4.5);
+    const guardToHero = Math.atan2(hero.position.x - guardianRig.group.position.x, hero.position.z - guardianRig.group.position.z);
+    guardianRig.group.rotation.y = guardToHero;
+    s.add(guardianRig.group);
+    this.rigs.push(guardianRig);
+
+    // Set up camera shots
+    this.shots = {
+      wide: {
+        pos: new THREE.Vector3(0, 2.0, -1.0),
+        look: new THREE.Vector3(0, 1.1, -4.5),
+        facings: [[hero, heroToOff], [officiant, offToHero]]
+      },
+      officiant: {
+        pos: new THREE.Vector3(0.8, 1.4, -2.4),
+        look: new THREE.Vector3(offX, 1.25, offZ),
+        facings: [[hero, heroToOff], [officiant, offToHero]]
+      },
+      altar: {
+        pos: new THREE.Vector3(0, 1.5, -2.6),
+        look: new THREE.Vector3(0, 1.0, -4.5),
+        facings: [[hero, heroToOff], [officiant, offToHero]]
+      },
+      hero: {
+        pos: new THREE.Vector3(-0.8, 1.4, -2.4),
+        look: new THREE.Vector3(heroX, 1.25, heroZ),
+        facings: [[hero, heroToOff], [officiant, offToHero]]
+      }
     };
   }
 }

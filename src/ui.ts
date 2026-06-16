@@ -7,7 +7,7 @@ import { ITEMS, CRAWLER_PARTS, CRAWLER_SLOTS, CRAWLER_SLOT_INFO, TYPE_CSS, STAT_
 import { Player, Guardian, ParentSnapshot } from './state';
 import { makeGuardian, disposeRig, makeCrawler, disposeCrawler } from './models';
 import { GUILD_LORE, avatarURL, guildIconURL, rankFor, questsDoneCount } from './guilds';
-import { journalEntries, questProgress, type QuestDef, type QuestState } from './quests';
+import { journalEntries, questProgress, questState, type QuestDef, type QuestState } from './quests';
 import { openGuildCard } from './guildcard';
 import { openGuardianCard } from './guardiancard';
 import { RANKS, rankIndexFor, rankBadgeHTML, rankLadderHTML } from './ranks';
@@ -112,11 +112,29 @@ export function choose(speaker: string, text: string, options: string[]): Promis
     const wrap = $('dialogue-choices');
     wrap.innerHTML = '';
     wrap.style.display = 'flex';
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (document.activeElement instanceof HTMLInputElement) return;
+        e.preventDefault();
+        e.stopPropagation();
+        cleanup();
+        wrap.style.display = 'none';
+        $('dialogue-box').style.display = 'none';
+        dialogueBusy = false;
+        resolve(options.length - 1);
+      }
+    };
+    const cleanup = () => {
+      window.removeEventListener('keydown', onKey, true);
+    };
+
     options.forEach((opt, idx) => {
       const b = document.createElement('button');
       b.className = 'choice-btn';
       b.textContent = opt;
       b.onclick = () => {
+        cleanup();
         wrap.style.display = 'none';
         $('dialogue-box').style.display = 'none';
         dialogueBusy = false;
@@ -124,6 +142,7 @@ export function choose(speaker: string, text: string, options: string[]): Promis
       };
       wrap.appendChild(b);
     });
+    window.addEventListener('keydown', onKey, true);
     (wrap.firstChild as HTMLElement)?.focus();
   });
 }
@@ -264,15 +283,52 @@ export function updateHUD(player: Player, zone: string, extra?: { floor?: number
 }
 export function hideHUD(): void { $('hud').style.display = 'none'; showHotkeys(false); }
 
+let lastHotkeysParams: { on: boolean; dungeon: boolean; regions: boolean } = { on: false, dungeon: false, regions: false };
+
+export function refreshHotkeys(): void {
+  showHotkeys(lastHotkeysParams.on, lastHotkeysParams.dungeon, lastHotkeysParams.regions);
+}
+
 export function showHotkeys(on: boolean, dungeon = false, regions = false): void {
+  lastHotkeysParams = { on, dungeon, regions };
   const el = $('hotkeys');
   el.style.display = on ? 'flex' : 'none';
+
+  const player = getActivePlayer();
+  let hasNewMainQuest = false;
+  let hasStillActiveMainQuest = false;
+  
+  if (player) {
+    const { story, main } = journalEntries(player);
+    for (const [q, st] of [...story, ...main]) {
+      if (st === 'active' || st === 'ready') {
+        if (!player.flags['seen_quest_' + q.id]) {
+          hasNewMainQuest = true;
+        } else {
+          hasStillActiveMainQuest = true;
+        }
+      }
+    }
+  }
+
   el.innerHTML = [
     '<b>P</b> Tamer', '<b>I</b> Items', '<b>G</b> Guardians', '<b>C</b> Crawler', '<b>J</b> Journal', '<b>V</b> Evolutions',
     ...(dungeon ? ['<b>M</b> Map'] : []),
     ...(regions ? ['<b>T</b> Regions'] : []),
     '<b>N</b> Sound', '<b>Esc</b> Menu',
-  ].map(s => `<span>${s}</span>`).join('');
+  ].map(s => {
+    const match = s.match(/<b>(.*?)<\/b>\s*(.*)/);
+    const key = match ? match[1].toLowerCase() : '';
+    let cls = `hk-btn hk-${key}`;
+    if (key === 'j') {
+      if (hasNewMainQuest) {
+        cls += ' flash-new';
+      } else if (hasStillActiveMainQuest) {
+        cls += ' active-subtle';
+      }
+    }
+    return `<span class="${cls}">${s}</span>`;
+  }).join('');
 
   el.style.pointerEvents = 'auto';
   el.querySelectorAll('span').forEach(span => {
@@ -444,14 +500,24 @@ export function openOptionsMenu(player?: Player): Promise<void> {
     };
     updateAutosaveBtnLabel();
 
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        close();
+      }
+    };
+
     if (activePlayer) {
       cheatRow.style.display = 'flex';
       cheatBtn.onclick = async () => {
         modal.style.display = 'none';
         optionsOpen = false;
+        window.removeEventListener('keydown', onKey, true);
         await executeCheatFlow(activePlayer);
         optionsOpen = true;
         modal.style.display = 'flex';
+        window.addEventListener('keydown', onKey, true);
       };
     } else {
       cheatRow.style.display = 'none';
@@ -514,6 +580,7 @@ export function openOptionsMenu(player?: Player): Promise<void> {
     };
 
     const close = () => {
+      window.removeEventListener('keydown', onKey, true);
       modal.style.display = 'none';
       musicSlider.oninput = null;
       soundSlider.oninput = null;
@@ -529,6 +596,7 @@ export function openOptionsMenu(player?: Player): Promise<void> {
     };
 
     closeBtn.onclick = close;
+    window.addEventListener('keydown', onKey, true);
   });
 }
 
@@ -568,6 +636,7 @@ export function openPanel(kind: PanelKind, player: Player, ctx: PanelCtx): Promi
     const close = () => {
       closeMenu();
       window.removeEventListener('keydown', onKey);
+      refreshHotkeys();
       resolve();
     };
     const onKey = (e: KeyboardEvent) => {
@@ -608,7 +677,26 @@ export function openPanel(kind: PanelKind, player: Player, ctx: PanelCtx): Promi
       }
     };
 
+    const markQuestsAsSeen = () => {
+      if (current === 'quests') {
+        const { story, main } = journalEntries(player);
+        let changed = false;
+        for (const [q, st] of [...story, ...main]) {
+          if (st === 'active' || st === 'ready') {
+            if (!player.flags['seen_quest_' + q.id]) {
+              player.flags['seen_quest_' + q.id] = true;
+              changed = true;
+            }
+          }
+        }
+        if (changed) {
+          player.save();
+        }
+      }
+    };
+
     const render = () => {
+      markQuestsAsSeen();
       const el = openScreen(shell(renderPanelBody(current, player, render, ctx)));
       wire(el);
       wirePanelBody(current, el, player, render, ctx);

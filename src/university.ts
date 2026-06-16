@@ -65,46 +65,61 @@ export interface UniversityCtx {
 export async function guildJoinCeremony(p: Player, h: HouseDef, officiant: string): Promise<boolean> {
   const lore = GUILD_LORE[h.id];
   const starter = SPECIES[h.starter];
+  
   const pick = await choose(officiant,
     `Will you pledge yourself to ${h.name}, ${lore.epithet}? This oath is for life.`,
     [`I pledge to ${h.name}!`, 'I need more time']);
   if (pick !== 0) return false;
 
-  p.houseId = h.id;
-  p.flags['joined_house'] = true;
-  p.cardNo = makeCardNo(h.id);
+  let success = false;
 
-  const g = new Guardian(h.starter, 6);
-  g.isStarter = true;
-  g.levelCap = 16;
-  const name = await askName(`Name your ${starter.name}`, starter.name);
-  g.nickname = name;
-  g.healFull();
-  p.addGuardian(g);
-  p.shards += 200;
-  p.addItem('tonic', 3); p.addItem('berry', 3); p.addItem('cell', 2);
+  await runCinematicScene('pledge', async (cine) => {
+    cine.shot('wide');
 
-  await conversation([
-    [officiant, `Then kneel, graduate — and rise as a Tamer of ${h.name}!`],
-    [officiant, `This is ${name}, a newborn ${starter.name}. ${starter.desc}`],
-    [officiant, `And this… is yours now. ${lore.effigyName}. ${lore.effigyDesc}`],
-    [officiant, `Your ${lore.cardName} is bound to it — your name, your deeds, your rank. Carry it always. You may view it any time from your Tamer Data (P), or right now.`],
-  ]);
-  toast(`${name} joined your party!`, 'gold');
-  toast(`Received ${lore.effigyName}!`, 'gold');
+    p.houseId = h.id;
+    p.flags['joined_house'] = true;
+    p.cardNo = makeCardNo(h.id);
 
-  // first main quest of the chain begins immediately
-  const first = mainChain(h.id)[0];
-  if (first) {
-    acceptQuest(p, first.id);
-    toast(`Main quest started: ${first.title}`, 'gold');
-  }
-  p.save();
+    const g = new Guardian(h.starter, 6);
+    g.isStarter = true;
+    g.levelCap = 16;
 
-  const view = await choose(officiant, `Would you like to behold your ${lore.cardName}?`, ['Show me the Sigil!', 'Later']);
-  if (view === 0) await openGuildCard(p);
-  await say(officiant, `${lore.creedLong} — Welcome home, ${p.tamerName}. Seek your house master in Haven City; your first orders await: "${first?.title}".`);
-  return true;
+    cine.shot('officiant');
+    await say(officiant, `Then kneel, graduate — and rise as a Tamer of ${h.name}!`);
+
+    cine.shot('altar');
+    const name = await askName(`Name your ${starter.name}`, starter.name);
+    g.nickname = name;
+    g.healFull();
+    p.addGuardian(g);
+    p.shards += 200;
+    p.addItem('tonic', 3); p.addItem('berry', 3); p.addItem('cell', 2);
+
+    await say(officiant, `This is ${name}, a newborn ${starter.name}. ${starter.desc}`);
+
+    cine.shot('hero');
+    await say(officiant, `And this… is yours now. ${lore.effigyName}. ${lore.effigyDesc}`);
+    await say(officiant, `Your ${lore.cardName} is bound to it — your name, your deeds, your rank. Carry it always. You may view it any time from your Tamer Data (P), or right now.`);
+
+    toast(`${name} joined your party!`, 'gold');
+    toast(`Received ${lore.effigyName}!`, 'gold');
+
+    const first = mainChain(h.id)[0];
+    if (first) {
+      acceptQuest(p, first.id);
+      toast(`Main quest started: ${first.title}`, 'gold');
+    }
+    p.save();
+
+    const view = await choose(officiant, `Would you like to behold your ${lore.cardName}?`, ['Show me the Sigil!', 'Later']);
+    if (view === 0) await openGuildCard(p);
+
+    cine.shot('wide');
+    await say(officiant, `${lore.creedLong} — Welcome home, ${p.tamerName}. Seek your house master in Haven City; your first orders await: "${first?.title}".`);
+    success = true;
+  }, h.id);
+
+  return success;
 }
 
 // ---------------- ambient lobby chatter ----------------
@@ -2244,13 +2259,48 @@ export class University {
       .map(i => {
         const lbl = stripLabel(i.label);
         const door = !!i.isDoor;
+        let highlight = false;
+        const lower = lbl.toLowerCase();
+
+        if (this.current === 'lobby') {
+          if (!this.player.houseId) {
+            if (lower.includes('officers')) highlight = true;
+          } else if (!this.player.flags['university_done']) {
+            if (lower.includes('exit') || lower.includes('grand doors')) highlight = true;
+          } else if (questState(this.player, 'story_historian') === 'active') {
+            if (lower.includes('library')) highlight = true;
+          } else if (questState(this.player, 'story_amber') === 'active' && this.player.itemCount('storm_amber') >= 1) {
+            if (lower.includes('library')) highlight = true;
+          }
+        } else if (this.current === 'officers') {
+          if (!this.player.houseId) {
+            if (lower.includes('officer')) highlight = true;
+          } else {
+            if (lower.includes('back to the lobby')) highlight = true;
+          }
+        } else if (this.current === 'library') {
+          if (questState(this.player, 'story_historian') === 'active') {
+            if (lower.includes('veyl')) highlight = true;
+          } else if (questState(this.player, 'story_amber') === 'active' && this.player.itemCount('storm_amber') >= 1) {
+            if (lower.includes('veyl')) highlight = true;
+          } else {
+            if (lower.includes('back to the lobby')) highlight = true;
+          }
+        } else {
+          if (lower.includes('back to the lobby')) {
+            // Highlights exit in other rooms if they finished or just need to return
+            highlight = false;
+          }
+        }
+
         return {
           x: i.pos.x, z: i.pos.z, label: lbl,
           color: door ? '#e8d9a8' : '#5ab8e8',
           kind: door ? 'door' as const : 'poi' as const,
+          highlight,
         };
       })
-      .filter(m => m.kind === 'door' || (m.label && (
+      .filter(m => m.kind === 'door' || m.highlight || (m.label && (
         m.label.toLowerCase().includes('niko') ||
         m.label.toLowerCase().includes('tomas') ||
         m.label.toLowerCase().includes('marlo') ||
