@@ -9,7 +9,7 @@
 import * as THREE from 'three';
 import {
   TECHS, ITEMS, TYPE_CSS, TYPE_COLORS, TYPE_ELEMENT, expForLevel,
-  elementsOf, elementMult, ELEMENT_ICONS, type Technique, type GType, type Element,
+  elementsOf, elementMult, ELEMENT_ICONS, type Technique, type GType, type Element, getSpeciesPassive, type TechStatusEffect as ActiveStatus
 } from './data';
 import { sfx, playMusic } from './audio';
 import { Guardian, Player } from './state';
@@ -80,6 +80,7 @@ interface Unit {
   favor: number;      // hidden per-enemy gift taste multiplier
   wild: boolean;
   cardEl?: HTMLElement;
+  statuses: ActiveStatus[];
 }
 
 /** A replayable player order — what a Guardian did, so Auto-Action can redo it. */
@@ -572,6 +573,7 @@ export class Battle {
       mods: { atk: 1, def: 1, spd: 1 },
       bond: 0, favor: 0.8 + Math.random() * 0.6,
       wild: side === 'enemy' && !!this.opts.wild,
+      statuses: [],
     };
     if (g.fainted) { rig.group.visible = false; }
     else {
@@ -579,6 +581,13 @@ export class Battle {
       const color = TYPE_COLORS[g.species.type];
       this.fx.ring(rig.group.position, color, { maxR: 1.2, life: 0.5 });
       this.fx.glow(rig.group.position.clone().setY(0.8), color, { scale: 1.4, life: 0.45 });
+
+      // Apply start-of-battle passives
+      if (getSpeciesPassive(g.species).name === 'Lightning Reflexes') {
+        u.mods.spd = Math.min(1.8, u.mods.spd + 0.3);
+        this.pushLog('⚡', `<b>${g.nickname}</b>'s Lightning Reflexes granted speed boost!`);
+        this.fx.spiral(rig.group.position.clone(), 0xf2d23a, { up: true, dur: 0.8 });
+      }
     }
     return u;
   }
@@ -604,6 +613,18 @@ export class Battle {
     if (this.timeline.length > 80) this.timeline.shift();
   }
 
+  private getStatusMultiplier(unit: Unit, effect: 'atk' | 'def' | 'spd' | 'wis'): number {
+    let mult = 1.0;
+    if (unit.statuses) {
+      for (const s of unit.statuses) {
+        if (s.effect === effect) {
+          mult += s.value;
+        }
+      }
+    }
+    return Math.max(0.1, mult);
+  }
+
   /** Chance this wild enemy joins after victory, given its current bond. */
   private captureChance(e: Unit): number {
     if (!e.wild) return 0;
@@ -626,9 +647,18 @@ export class Battle {
         ? `<div class="minibar bond" title="Bond — chance this Guardian joins you after victory"><div style="width:${Math.round(chance * 100)}%"></div></div>
            <div class="bond-label">💜 Bond ${u.bond} · <b>${Math.round(chance * 100)}%</b> join chance</div>`
         : '';
+      const statusesHtml = u.statuses && u.statuses.length > 0
+        ? `<div class="unit-statuses">
+            ${u.statuses.map(st => `
+              <span class="status-badge ${st.type}" title="${st.desc}">
+                ${st.icon} ${st.duration}t
+              </span>
+            `).join('')}
+          </div>`
+        : '';
       el.innerHTML = `<div class="nm"><span style="color:${TYPE_CSS[u.g.species.type]}">${side}${u.g.nickname}</span><span><span style="font-size:11px" title="${elementsOf(u.g).join(' · ')}">${els}</span> Lv${u.g.level}</span></div>
         <div class="minibar hp"><div style="width:${Math.max(0, (u.g.hp / s.hp)) * 100}%"></div></div>
-        <div class="minibar sp"><div style="width:${Math.max(0, (u.g.sp / s.sp)) * 100}%"></div></div>${bondRow}`;
+        <div class="minibar sp"><div style="width:${Math.max(0, (u.g.sp / s.sp)) * 100}%"></div></div>${statusesHtml}${bondRow}`;
       u.cardEl = el;
       wrap.appendChild(el);
     };
@@ -930,8 +960,13 @@ export class Battle {
    */
   private computeDamage(att: Unit, def: Unit, tech: Technique): { dmg: number; eff: number; crit: boolean } {
     const as = att.g.stats, ds = def.g.stats;
-    const atkStat = (tech.kind === 'phys' ? as.atk : as.wis) * att.mods.atk;
-    const defStat = (tech.kind === 'phys' ? ds.def : (ds.def + ds.wis) / 2) * def.mods.def;
+    const atkStatusMult = this.getStatusMultiplier(att, 'atk');
+    const defStatusMult = this.getStatusMultiplier(def, 'def');
+    const wisStatusMult = this.getStatusMultiplier(att, 'wis');
+    const wisDefStatusMult = this.getStatusMultiplier(def, 'wis');
+
+    const atkStat = (tech.kind === 'phys' ? as.atk * atkStatusMult : as.wis * wisStatusMult) * att.mods.atk;
+    const defStat = (tech.kind === 'phys' ? ds.def * defStatusMult : (ds.def * defStatusMult + ds.wis * wisDefStatusMult) / 2) * def.mods.def;
     // element effectiveness: attack element vs every defender element
     const attEl = TYPE_ELEMENT[tech.type];
     const eff = elementMult(attEl, elementsOf(def.g));
@@ -943,6 +978,16 @@ export class Battle {
     pct *= 1.5; // increase all damage output by 50%
     if (crit) pct *= 1.5;
     if (def.guarding) pct *= 0.45;
+
+    // Apply Blind debuff (reduces damage output by 20%)
+    if (att.statuses && att.statuses.some(st => st.effect === 'blind')) {
+      pct *= 0.8;
+    }
+
+    // Apply Sky Sovereign passive (increases Gale move damage by 20%)
+    if (tech.type === 'Gale' && getSpeciesPassive(att.g.species).name === 'Sky Sovereign') {
+      pct *= 1.2;
+    }
 
     // Apply Player Guild Perks / Battle Synergies
     const perks = Player.activeInstance?.guildPerks;
@@ -1016,7 +1061,11 @@ export class Battle {
     if (tech.effect === 'heal') {
       const tgt = target ?? att;
       await this.castWindup(att, color);
-      const amount = Math.floor(tech.power + att.g.stats.wis * 0.6);
+      let amount = Math.floor(tech.power + att.g.stats.wis * 0.6);
+      if (getSpeciesPassive(att.g.species).name === 'Torrential Surge') {
+        amount = Math.floor(amount * 1.30);
+        this.log(`💧 <b>${att.g.nickname}</b>'s Torrential Surge boosted healing by 30%!`);
+      }
       tgt.g.hp = Math.min(tgt.g.stats.hp, tgt.g.hp + amount);
       sfx('heal');
       this.fx.spiral(tgt.rig.group.position.clone(), 0x5ad88a, { up: true, dur: 0.9 });
@@ -1029,32 +1078,49 @@ export class Battle {
       await wait(500);
       return;
     }
-    if (tech.effect === 'buffAtk' || tech.effect === 'buffDef') {
+    if (tech.effect === 'buffAtk' || tech.effect === 'buffDef' || tech.effect === 'buffSpd') {
       await this.castWindup(att, color);
       sfx('buff');
+      let statName = '';
       if (tech.effect === 'buffAtk') {
         att.mods.atk = Math.min(1.8, att.mods.atk + 0.3);
         this.fx.spiral(att.rig.group.position.clone(), 0xff8a4a, { up: true, dur: 0.8 });
         this.fx.ring(att.rig.group.position, 0xff8a4a, { maxR: 1.4 });
-      } else {
+        statName = 'Attack';
+      } else if (tech.effect === 'buffDef') {
         att.mods.def = Math.min(1.8, att.mods.def + 0.3);
         this.fx.spiral(att.rig.group.position.clone(), 0x5ab8e8, { up: true, dur: 0.8 });
         this.fx.ring(att.rig.group.position, 0x5ab8e8, { maxR: 1.4, y: 1.0, tube: 0.04 });
+        statName = 'Defense';
+      } else if (tech.effect === 'buffSpd') {
+        att.mods.spd = Math.min(1.8, att.mods.spd + 0.3);
+        this.fx.spiral(att.rig.group.position.clone(), 0xf2d23a, { up: true, dur: 0.8 });
+        this.fx.ring(att.rig.group.position, 0xf2d23a, { maxR: 1.4 });
+        statName = 'Speed';
       }
       if (att.side === 'player') this.stat(att.g.id).assists += 1;
-      this.pushLog('🔼', `<b>${who}</b> used ${tech.name} — ${tech.effect === 'buffAtk' ? 'Attack' : 'Defense'} rose.`);
-      this.log(`${who}'s ${tech.effect === 'buffAtk' ? 'Attack' : 'Defense'} rose!`);
+      this.pushLog('🔼', `<b>${who}</b> used ${tech.name} — ${statName} rose.`);
+      this.log(`${who}'s ${statName} rose!`);
       await wait(600);
       return;
     }
-    if (tech.effect === 'debuffDef' || tech.effect === 'debuffSpd') {
+    if (tech.effect === 'debuffDef' || tech.effect === 'debuffSpd' || tech.effect === 'debuffAtk') {
       await this.castWindup(att, color);
       const foes = this.alive(att.side === 'player' ? 'enemy' : 'player');
       sfx('debuff');
       let dealt = 0;
+      let statName = '';
       for (const f of foes) {
-        if (tech.effect === 'debuffDef') f.mods.def = Math.max(0.5, f.mods.def - 0.2);
-        else f.mods.spd = Math.max(0.5, f.mods.spd - 0.2);
+        if (tech.effect === 'debuffDef') {
+          f.mods.def = Math.max(0.5, f.mods.def - 0.2);
+          statName = 'Defense';
+        } else if (tech.effect === 'debuffSpd') {
+          f.mods.spd = Math.max(0.5, f.mods.spd - 0.2);
+          statName = 'Speed';
+        } else if (tech.effect === 'debuffAtk') {
+          f.mods.atk = Math.max(0.5, f.mods.atk - 0.2);
+          statName = 'Attack';
+        }
         this.fx.spiral(f.rig.group.position.clone(), 0x9a5af2, { up: false, dur: 0.7 });
         this.fx.flashMaterials(f.rig.body, 0x9a5af2, 0.25);
         if (tech.power > 0) {
@@ -1064,10 +1130,11 @@ export class Battle {
           dealt += dmg;
           this.elementalImpact(f, tech.type, false);
           await this.hitReact(f, dmg, eff, crit, att.rig.group.position);
+          await this.afterHitEffects(att, f, dmg);
         }
       }
-      this.pushLog('🔽', `<b>${who}</b> used ${tech.name} — foes' ${tech.effect === 'debuffDef' ? 'Defense' : 'Speed'} fell${dealt ? ` (${dealt} dmg)` : ''}.`);
-      this.log(`The foes' ${tech.effect === 'debuffDef' ? 'Defense' : 'Speed'} fell!`);
+      this.pushLog('🔽', `<b>${who}</b> used ${tech.name} — foes' ${statName} fell${dealt ? ` (${dealt} dmg)` : ''}.`);
+      this.log(`The foes' ${statName} fell!`);
       this.renderCards();
       await this.cleanupKOs();
       await wait(500);
@@ -1093,6 +1160,7 @@ export class Battle {
       if (tech.effect === 'drain') this.drainFX(att, tgt, dmg);
       this.log(`<b>${who}</b> uses <b>${tech.name}</b>!${this.effText(eff, crit)}`);
       await this.hitReact(tgt, dmg, eff, crit, att.rig.group.position);
+      await this.afterHitEffects(att, tgt, dmg);
       await this.meleeReturn(att, home);
     } else {
       if (targets.length === 1) this.faceTo(att, targets[0].rig.group.position);
@@ -1112,14 +1180,97 @@ export class Battle {
         if (tech.effect === 'drain') this.drainFX(att, tgt, dmg);
         this.log(`<b>${who}</b> uses <b>${tech.name}</b>!${this.effText(eff, crit)}`);
         await this.hitReact(tgt, dmg, eff, crit, att.rig.group.position);
+        await this.afterHitEffects(att, tgt, dmg);
         if (targets.length > 1) await wait(80);
       }
       this.faceHome(att);
     }
+
+    // Apply status effect from the technique if any
+    await this.applyTechStatus(att, tech, targets);
+
     this.pushLog(tech.kind === 'phys' ? '⚔️' : '✦', `<b>${who}</b> used ${tech.name} — ${totalDmg} dmg${targets.length > 1 ? ` to ${targets.length} foes` : ''}.`);
     this.renderCards();
     await this.cleanupKOs();
     await wait(420);
+  }
+
+  private async afterHitEffects(att: Unit, tgt: Unit, dmg: number): Promise<void> {
+    if (tgt.g.fainted) return;
+    
+    // Physical Reflect
+    if (tgt.statuses && tgt.statuses.some(s => s.effect === 'reflect')) {
+      const refl = tgt.statuses.find(s => s.effect === 'reflect')!;
+      const reflDmg = Math.floor(dmg * refl.value);
+      att.g.hp = Math.max(0, att.g.hp - reflDmg);
+      this.log(`💥 <b>${tgt.g.nickname}</b>'s ${refl.name} reflected ${reflDmg} damage to <b>${att.g.nickname}</b>!`);
+      sfx('hit');
+      this.fx.glow(this.chest(att), 0xe83a5a, { scale: 1.0, life: 0.3 });
+      makeFloatingDamageText(this.scene, att.rig.group.position.clone().setY(2), `${reflDmg}`, '#e83a5a');
+      await wait(300);
+    }
+    
+    // Solar Flare passive
+    if (getSpeciesPassive(att.g.species).name === 'Solar Flare' && Math.random() < 0.25) {
+      const meltStatus: ActiveStatus = {
+        id: 'melted', name: 'Melted', type: 'debuff', duration: 2, effect: 'def', value: -0.2, icon: '🌋', desc: 'Defense melted by solar heat.'
+      };
+      if (!tgt.statuses) tgt.statuses = [];
+      tgt.statuses = tgt.statuses.filter(st => st.id !== 'melted');
+      tgt.statuses.push(meltStatus);
+      this.log(`🔥 <b>${att.g.nickname}</b>'s Solar Flare melted <b>${tgt.g.nickname}</b>'s Defense!`);
+      sfx('debuff');
+      this.fx.spiral(tgt.rig.group.position.clone(), 0xff6600, { up: false, dur: 0.6 });
+      await wait(250);
+    }
+    
+    // Void Embrace passive
+    if (getSpeciesPassive(att.g.species).name === 'Void Embrace') {
+      const drainVal = Math.floor(dmg * 0.15);
+      if (drainVal > 0) {
+        att.g.hp = Math.min(att.g.stats.hp, att.g.hp + drainVal);
+        this.log(`🧛 <b>${att.g.nickname}</b>'s Void Embrace drained ${drainVal} HP!`);
+        this.fx.projectile(this.chest(tgt), this.chest(att), 0x9a5af2, { size: 0.12, dur: 0.45, arc: 1.3 })
+          .then(() => {
+            this.fx.glow(this.chest(att), 0x5ad88a, { scale: 1.2, life: 0.35 });
+            makeFloatingDamageText(this.scene, att.rig.group.position.clone().setY(2), `+${drainVal}`, '#5ad88a');
+          });
+        await wait(250);
+      }
+    }
+  }
+
+  private async applyTechStatus(att: Unit, tech: Technique, targets: Unit[]): Promise<void> {
+    if (!tech.statusEffect) return;
+    const chance = tech.statusChance ?? 1.0;
+    if (Math.random() < chance) {
+      const targetsToApply = tech.target === 'all'
+        ? this.alive(att.side === 'player' ? 'enemy' : 'player')
+        : tech.target === 'self' || tech.target === 'ally'
+          ? [targets[0] ?? att]
+          : targets;
+          
+      for (const tgt of targetsToApply) {
+        if (tgt.g.fainted) continue;
+        
+        // Poison immunity check
+        if (tech.statusEffect.id === 'poison' && getSpeciesPassive(tgt.g.species).name.includes('Venom')) {
+          this.log(`🛡️ <b>${tgt.g.nickname}</b>'s Venom passive makes it immune to poison!`);
+          continue;
+        }
+        
+        if (!tgt.statuses) tgt.statuses = [];
+        tgt.statuses = tgt.statuses.filter(s => s.id !== tech.statusEffect!.id);
+        tgt.statuses.push({ ...tech.statusEffect });
+        
+        this.log(`✨ <b>${tgt.g.nickname}</b> received status: <b>${tech.statusEffect.name}</b> (${tech.statusEffect.duration}t)!`);
+        
+        const color = tech.statusEffect.type === 'buff' ? 0x5ad88a : 0xe83a5a;
+        this.fx.flashMaterials(tgt.rig.body, color, 0.25);
+      }
+      this.renderCards();
+      await wait(300);
+    }
   }
 
   /** Stolen life streams back to the attacker as crimson motes. */
@@ -1168,6 +1319,81 @@ export class Battle {
         await this.koAnim(u);
       }
     }
+  }
+
+  private async processEndOfRoundTicks(): Promise<void> {
+    // 1. Process "Verdant Growth" passives first (heal 8% max HP at start/end of round)
+    for (const u of this.units) {
+      if (u.g.fainted) continue;
+      if (getSpeciesPassive(u.g.species).name === 'Verdant Growth') {
+        const heal = Math.floor(u.g.stats.hp * 0.08);
+        if (heal > 0 && u.g.hp < u.g.stats.hp) {
+          u.g.hp = Math.min(u.g.stats.hp, u.g.hp + heal);
+          this.log(`🌿 <b>${u.g.nickname}</b>'s Verdant Growth restores ${heal} HP!`);
+          sfx('heal');
+          this.fx.glow(this.chest(u), 0x8af2b0, { scale: 1.2, life: 0.4 });
+          makeFloatingDamageText(this.scene, u.rig.group.position.clone().setY(2), `+${heal}`, '#5ad88a');
+          this.renderCards();
+          await wait(400);
+        }
+      }
+    }
+
+    // 2. Process active status ticks (duration countdown, DoT, HoT, Doom)
+    for (const u of this.units) {
+      if (u.g.fainted) continue;
+      if (!u.statuses || u.statuses.length === 0) continue;
+
+      const nextStatuses: ActiveStatus[] = [];
+      for (const s of u.statuses) {
+        s.duration--;
+
+        if (s.effect === 'dot') {
+          const dotDmg = Math.floor(u.g.stats.hp * s.value);
+          u.g.hp = Math.max(0, u.g.hp - dotDmg);
+          this.log(`💢 <b>${u.g.nickname}</b> takes ${dotDmg} damage from ${s.name}!`);
+          sfx('hit');
+          const color = s.id === 'poison' ? 0x5ad88a : 0xff6600;
+          this.fx.flashMaterials(u.rig.body, color, 0.25);
+          makeFloatingDamageText(this.scene, u.rig.group.position.clone().setY(2), `${dotDmg}`, s.id === 'poison' ? '#5ad88a' : '#ff6600');
+          this.renderCards();
+          await wait(450);
+        }
+        else if (s.effect === 'hot') {
+          const hotHeal = Math.floor(u.g.stats.hp * s.value);
+          if (hotHeal > 0 && u.g.hp < u.g.stats.hp) {
+            u.g.hp = Math.min(u.g.stats.hp, u.g.hp + hotHeal);
+            this.log(`💚 <b>${u.g.nickname}</b> heals ${hotHeal} HP from ${s.name}!`);
+            sfx('heal');
+            this.fx.glow(this.chest(u), 0x8af2b0, { scale: 1.2, life: 0.4 });
+            makeFloatingDamageText(this.scene, u.rig.group.position.clone().setY(2), `+${hotHeal}`, '#5ad88a');
+            this.renderCards();
+            await wait(450);
+          }
+        }
+        else if (s.effect === 'doom' && s.duration <= 0) {
+          const doomDmg = Math.floor(u.g.stats.hp * s.value);
+          u.g.hp = Math.max(0, u.g.hp - doomDmg);
+          this.log(`💀 <b>${u.g.nickname}</b>'s doom clock expired! Takes ${doomDmg} doom damage!`);
+          sfx('hit');
+          this.fx.pillar(u.rig.group.position, 0x9a5af2, { height: 6, radius: 0.7, life: 1.1 });
+          makeFloatingDamageText(this.scene, u.rig.group.position.clone().setY(2), `${doomDmg}`, '#9a5af2');
+          this.renderCards();
+          await wait(600);
+        }
+
+        if (s.duration > 0) {
+          nextStatuses.push(s);
+        } else {
+          this.log(`✨ <b>${u.g.nickname}</b>'s ${s.name} expired.`);
+          await wait(200);
+        }
+      }
+      u.statuses = nextStatuses;
+    }
+
+    await this.cleanupKOs();
+    this.renderCards();
   }
 
   // ---------- player turn ----------
@@ -2018,12 +2244,26 @@ export class Battle {
       this.units.forEach(u => { u.guarding = false; });
       const queue = [...this.units]
         .filter(u => !u.g.fainted)
-        .sort((a, b) => b.g.stats.spd * b.mods.spd * (0.9 + Math.random() * 0.2) -
-                        a.g.stats.spd * a.mods.spd * (0.9 + Math.random() * 0.2));
+        .sort((a, b) => {
+          const spdB = b.g.stats.spd * b.mods.spd * this.getStatusMultiplier(b, 'spd');
+          const spdA = a.g.stats.spd * a.mods.spd * this.getStatusMultiplier(a, 'spd');
+          return spdB * (0.9 + Math.random() * 0.2) - spdA * (0.9 + Math.random() * 0.2);
+        });
 
       for (const u of queue) {
         if (u.g.fainted) continue;
         if (!this.alive('enemy').length || !this.alive('player').length) break;
+
+        // Check Stun / Paralyze / skip turn
+        if (u.statuses && u.statuses.some(s => s.effect === 'stun' || (s.effect === 'paralyze' && Math.random() < 0.25))) {
+          const skipStatus = u.statuses.find(s => s.effect === 'stun' || s.effect === 'paralyze')!;
+          this.log(`⚡ <b>${u.g.nickname}</b> is ${skipStatus.name === 'Paralyzed' ? 'paralyzed' : 'stunned'} and cannot move!`);
+          sfx('zap');
+          this.fx.bolt(this.chest(u).add(new THREE.Vector3(0, 2, 0)), this.chest(u), 0xf2d23a);
+          await wait(800);
+          continue;
+        }
+
         this.highlight(u);
         if (u.side === 'player') {
           const r = await this.playerTurn(u);
@@ -2036,6 +2276,9 @@ export class Battle {
       }
       stunned = false;
       this.highlight(null);
+
+      // Process end of round status effects and passives
+      await this.processEndOfRoundTicks();
 
       if (!this.alive('enemy').length) result = 'win';
       else if (!this.alive('player').length) result = 'lose';

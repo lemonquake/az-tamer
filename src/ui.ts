@@ -3,7 +3,7 @@
 // toasts, name input
 // ============================================================
 import * as THREE from 'three';
-import { ITEMS, CRAWLER_PARTS, CRAWLER_SLOTS, CRAWLER_SLOT_INFO, TYPE_CSS, STAT_NAMES, HOUSES, DUNGEONS, expForLevel, SPECIES, TECHS, elementChipsHTML, type StatKey, type CrawlerSlot } from './data';
+import { ITEMS, CRAWLER_PARTS, CRAWLER_SLOTS, CRAWLER_SLOT_INFO, TYPE_CSS, STAT_NAMES, HOUSES, DUNGEONS, expForLevel, SPECIES, TECHS, elementChipsHTML, type StatKey, type CrawlerSlot, getSpeciesPassive } from './data';
 import { Player, Guardian } from './state';
 import { makeGuardian, disposeRig, makeCrawler, disposeCrawler } from './models';
 import { GUILD_LORE, avatarURL, guildIconURL, rankFor, questsDoneCount } from './guilds';
@@ -1159,6 +1159,7 @@ function showGuardianDetail(g: Guardian, back: () => void): void {
       <span class="sub">${t.kind === 'phys' ? 'Physical' : 'Art'} · Pow ${t.power} · ${t.spCost} SP</span>
       <div class="sub">${t.desc}</div></div></div>`).join('');
   const evo = g.species.evolvesTo;
+  const passive = getSpeciesPassive(g.species);
   
   openScreen(`
     <h3>${g.nickname} — ${g.species.name} ${typeTag(g)} ${elementChipsHTML(g.speciesId)}</h3>
@@ -1171,6 +1172,7 @@ function showGuardianDetail(g: Guardian, back: () => void): void {
         <div class="sub" style="margin-top:6px">EXP: ${g.exp} / ${expForLevel(g.level + 1)} (${g.expToNext} to next)</div>
         <div class="sub">Technique Points: <b class="goldcol">${g.techPoints}</b></div>
         ${evo ? `<div class="sub">Evolves to <b>${SPECIES[evo.species]?.name ?? evo.species}</b> at Lv${evo.level}</div>` : '<div class="sub">Final form.</div>'}
+        <div class="sub" style="margin-top:8px;border-top:1px dashed var(--ui-border);padding-top:8px">Passive: <b class="goldcol">${passive.name}</b> — <i>${passive.desc}</i></div>
       </div>
       <div>
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">

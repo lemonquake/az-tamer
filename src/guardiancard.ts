@@ -7,7 +7,7 @@
 import * as THREE from 'three';
 import {
   SPECIES, TECHS, TYPE_CSS, TYPE_COLORS, STAT_NAMES, expForLevel,
-  elementsOf, ELEMENT_CSS, ELEMENT_ICONS, type SpeciesDef, type StatKey,
+  elementsOf, ELEMENT_CSS, ELEMENT_ICONS, type SpeciesDef, type StatKey, getSpeciesPassive,
 } from './data';
 import { Guardian, type Player } from './state';
 import { makeGuardian, disposeRig } from './models';
@@ -219,17 +219,26 @@ function cardBack(g: Guardian, owned: boolean): HTMLCanvasElement {
   ctx.textAlign = 'left';
   ctx.fillStyle = '#f4e8c8'; ctx.font = 'bold 23px Georgia, serif';
   ctx.fillText('TECHNIQUES', 80, 172);
-  sp.techs.slice(0, 7).forEach((t, i) => {
+  sp.techs.slice(0, 5).forEach((t, i) => {
     const tech = TECHS[t.tech];
     if (!tech) return;
-    const y = 208 + i * 52;
+    const y = 208 + i * 50;
     const known = owned ? g.learnedTechs.includes(t.tech) : g.level >= t.level;
     ctx.fillStyle = TYPE_CSS[tech.type];
     ctx.font = 'bold 21px Georgia, serif';
     ctx.fillText(`${known ? '◆' : '◇'} ${tech.name}`, 96, y);
     ctx.fillStyle = '#8b93b8'; ctx.font = '17px Georgia, serif';
-    ctx.fillText(`Lv${t.level} · ${tech.kind === 'phys' ? 'Physical' : 'Art'} · Pow ${tech.power} · ${tech.spCost} SP`, 96, y + 22);
+    ctx.fillText(`Lv${t.level} · ${tech.kind === 'phys' ? 'Physical' : 'Art'} · Pow ${tech.power} · ${tech.spCost} SP`, 96, y + 20);
   });
+
+  // passive skill
+  ctx.fillStyle = '#f4e8c8'; ctx.font = 'bold 23px Georgia, serif';
+  ctx.fillText('PASSIVE SKILL', 80, 470);
+  const passive = getSpeciesPassive(sp);
+  ctx.fillStyle = '#ffd700'; ctx.font = 'bold 21px Georgia, serif';
+  ctx.fillText(passive.name, 96, 502);
+  ctx.fillStyle = '#aab0c8'; ctx.font = 'italic 18px Georgia, serif';
+  ctx.fillText(passive.desc, 96, 528);
 
   // evolution line
   const yEvo = 608;

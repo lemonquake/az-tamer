@@ -2,7 +2,7 @@
 // AZ Tamer — runtime state: Guardian instances, Crawler, player
 // ============================================================
 import {
-  SPECIES, TECHS, ITEMS, CRAWLER_PARTS, expForLevel,
+  SPECIES, TECHS, ITEMS, CRAWLER_PARTS, expForLevel, getSpeciesPassive,
   type SpeciesDef, type Stats, type StatKey, type Technique, type CrawlerPart,
   HOUSES, TYPE_ELEMENT, elementsOf, type Element,
 } from './data';
@@ -95,6 +95,24 @@ export class Guardian {
         }
       }
     }
+
+    // Apply procedural/archetype passive stat changes
+    const passive = getSpeciesPassive(s);
+    if (passive.name.includes('Instinct')) {
+      baseStats.atk = Math.floor(baseStats.atk * 1.10); // Beast: +10% Attack
+    } else if (passive.name.includes('Venom')) {
+      baseStats.wis = Math.floor(baseStats.wis * 1.10); // Serpent: +10% Wisdom
+    } else if (passive.name.includes('Swiftness')) {
+      baseStats.spd = Math.floor(baseStats.spd * 1.10); // Avian: +10% Speed
+    } else if (passive.name.includes('Might')) {
+      baseStats.atk = Math.floor(baseStats.atk * 1.10); // Brute: +10% Attack & HP
+      baseStats.hp = Math.floor(baseStats.hp * 1.10);
+    } else if (passive.name.includes('Aura')) {
+      baseStats.wis = Math.floor(baseStats.wis * 1.15); // Sprite: +15% Wisdom
+    } else if (passive.name.includes('Guard')) {
+      baseStats.def = Math.floor(baseStats.def * 1.15); // Shell: +15% Defense
+    }
+
     return baseStats;
   }
 

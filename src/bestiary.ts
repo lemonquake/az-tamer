@@ -8226,8 +8226,1992 @@ function buildZerathuul(): BespokeBuild {
   return { body: g, parts: { head, tail: rift }, animate };
 }
 
+// ===== NEW BLAZE BUILDERS =====
+function buildPyropup(): BespokeBuild {
+  const g = buildProceduralArchetype('beast', { primary: 0x221111, secondary: 0xc83232, accent: 0xff8a3a }, 0xff8a3a);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const flame = makeFlame(0.22, 0.07);
+  flame.position.set(0, 0.45, 0);
+  tail.add(flame);
+  const lt = new THREE.PointLight(0xff8a3a, 1.2, 2.5);
+  flame.add(lt);
+  const animate = (t: number) => {
+    head.position.y = 0.85 + Math.sin(t * 2.5) * 0.02;
+    head.rotation.y = Math.sin(t * 0.8) * 0.1;
+    tail.rotation.z = Math.sin(t * 3.5) * 0.15;
+    flame.scale.setScalar(1.0 + Math.sin(t * 10) * 0.12);
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+function buildPyrohound(): BespokeBuild {
+  const g = buildProceduralArchetype('beast', { primary: 0x110808, secondary: 0xa82222, accent: 0xff6a1e }, 0xff6a1e);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const flame1 = makeFlame(0.3, 0.08); flame1.position.set(0, 0.45, 0.08);
+  const flame2 = makeFlame(0.3, 0.08); flame2.position.set(0, 0.45, -0.08);
+  tail.add(flame1, flame2);
+  const collar = new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.05, 8, 16), new THREE.MeshStandardMaterial({ color: 0xff6a1e, emissive: 0xff3a00, emissiveIntensity: 1.2 }));
+  collar.position.set(0.2, 0.75, 0); collar.rotation.y = Math.PI / 2;
+  g.add(collar);
+  const animate = (t: number) => {
+    head.position.y = 0.85 + Math.sin(t * 2.2) * 0.02;
+    head.rotation.y = Math.sin(t * 0.7) * 0.08;
+    tail.rotation.z = Math.sin(t * 3.0) * 0.18;
+    flame1.scale.setScalar(1.0 + Math.sin(t * 11) * 0.15);
+    flame2.scale.setScalar(1.0 + Math.sin(t * 9 + 1) * 0.15);
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+function buildCindawing(): BespokeBuild {
+  const g = buildProceduralArchetype('avian', { primary: 0xd9542e, secondary: 0xf2a13a, accent: 0xfff0c8 }, 0xffa05a);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const halo = new THREE.Mesh(new THREE.TorusGeometry(0.18, 0.02, 6, 20), new THREE.MeshBasicMaterial({ color: 0xfff0c8, blending: THREE.AdditiveBlending }));
+  halo.position.set(0, 0.35, 0); halo.rotation.x = Math.PI / 2;
+  head.add(halo);
+  const animate = (t: number) => {
+    head.position.y = 1.25 + Math.sin(t * 3) * 0.03;
+    tail.rotation.z = Math.sin(t * 2.5) * 0.12;
+    const w1 = g.getObjectByName('wing1'), w2 = g.getObjectByName('wing-1');
+    if (w1) w1.rotation.x = Math.sin(t * 6) * 0.4;
+    if (w2) w2.rotation.x = -Math.sin(t * 6) * 0.4;
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+function buildCindafalcon(): BespokeBuild {
+  const g = buildProceduralArchetype('avian', { primary: 0xc4401e, secondary: 0xf2803a, accent: 0xffd28a }, 0xffa05a);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const flare = makeFlame(0.4, 0.12, 0xffd28a, 0xf2803a);
+  flare.position.set(-0.25, 0.3, 0); flare.rotation.z = Math.PI / 3;
+  tail.add(flare);
+  const animate = (t: number) => {
+    head.position.y = 1.25 + Math.sin(t * 2.8) * 0.035;
+    tail.rotation.z = Math.sin(t * 2.2) * 0.15;
+    const w1 = g.getObjectByName('wing1'), w2 = g.getObjectByName('wing-1');
+    if (w1) w1.rotation.x = Math.sin(t * 5) * 0.5;
+    if (w2) w2.rotation.x = -Math.sin(t * 5) * 0.5;
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+function buildMagmatot(): BespokeBuild {
+  const g = buildProceduralArchetype('shell', { primary: 0x3a241c, secondary: 0xb0865a, accent: 0xffb44e }, 0xff7a2a);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const glowNode = orb(new THREE.MeshStandardMaterial({ color: 0xffb44e, emissive: 0xff5a1e, emissiveIntensity: 1.5 }), 0.08, 0, 0.48, 0);
+  g.add(glowNode);
+  const animate = (t: number) => {
+    head.position.y = 0.42 + Math.sin(t * 1.8) * 0.012;
+    glowNode.scale.setScalar(1.0 + Math.sin(t * 4) * 0.08);
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+function buildMagmatort(): BespokeBuild {
+  const g = buildProceduralArchetype('shell', { primary: 0x2e1a14, secondary: 0x8a6442, accent: 0xff7a2a }, 0xff5a1e);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const volc = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.22, 0.32, 8), new THREE.MeshStandardMaterial({ color: 0x2e1a14, roughness: 0.9 }));
+  volc.position.set(-0.1, 0.55, 0);
+  const lava = makeFlame(0.2, 0.08);
+  lava.position.set(0, 0.16, 0); volc.add(lava);
+  g.add(volc);
+  const animate = (t: number) => {
+    head.position.y = 0.42 + Math.sin(t * 1.5) * 0.015;
+    lava.scale.setScalar(1.0 + Math.sin(t * 12) * 0.2);
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+// ===== NEW TIDE BUILDERS =====
+function buildBubbledrag(): BespokeBuild {
+  const g = buildProceduralArchetype('serpent', { primary: 0x3a8dd9, secondary: 0x6ec4f2, accent: 0xd8f2ff }, 0x3a8dd9);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const bubble = orb(new THREE.MeshStandardMaterial({ color: 0xd8f2ff, transparent: true, opacity: 0.5, roughness: 0.1 }), 0.12, 0.1, 0.35, 0);
+  head.add(bubble);
+  const animate = (t: number) => {
+    head.position.y = 0.85 + Math.sin(t * 2.4) * 0.025;
+    tail.rotation.z = Math.sin(t * 3.0) * 0.15;
+    bubble.position.y = 0.35 + Math.sin(t * 5) * 0.06;
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+function buildPearlwyrm(): BespokeBuild {
+  const g = buildProceduralArchetype('serpent', { primary: 0x2a6dc4, secondary: 0x5ab8e8, accent: 0xc8ecff }, 0x5ab8e8);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const pearlMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.1, metalness: 0.9 });
+  const p1 = orb(pearlMat, 0.05, 0.05, 0.32, 0.06);
+  const p2 = orb(pearlMat, 0.05, 0.05, 0.32, -0.06);
+  head.add(p1, p2);
+  const animate = (t: number) => {
+    head.position.y = 0.85 + Math.sin(t * 2.1) * 0.03;
+    tail.rotation.z = Math.sin(t * 2.8) * 0.18;
+    p1.position.y = 0.32 + Math.sin(t * 4) * 0.02;
+    p2.position.y = 0.32 + Math.sin(t * 4 + 1.5) * 0.02;
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+function buildMistpaw(): BespokeBuild {
+  const g = buildProceduralArchetype('beast', { primary: 0x6a9ac4, secondary: 0xa8d0e8, accent: 0xe8f4ff }, 0x9adff2);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const crystal = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.22, 5), new THREE.MeshStandardMaterial({ color: 0x9adff2, transparent: true, opacity: 0.8 }));
+  crystal.position.set(-0.15, 0.28, 0); crystal.rotation.z = -Math.PI / 4;
+  head.add(crystal);
+  const animate = (t: number) => {
+    head.position.y = 0.85 + Math.sin(t * 2.6) * 0.02;
+    tail.rotation.z = Math.sin(t * 3.3) * 0.12;
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+function buildFrostlynx(): BespokeBuild {
+  const g = buildProceduralArchetype('beast', { primary: 0x4a7aa8, secondary: 0x8ac0e8, accent: 0xc0e0ff }, 0xaccfe2);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const crys1 = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.35, 6), new THREE.MeshStandardMaterial({ color: 0xaccfe2, emissive: 0xaccfe2, emissiveIntensity: 0.3 }));
+  crys1.position.set(-0.2, 0.85, 0.2); crys1.rotation.x = Math.PI / 6;
+  const crys2 = crys1.clone(); crys2.position.z = -0.2; crys2.rotation.x = -Math.PI / 6;
+  g.add(crys1, crys2);
+  const animate = (t: number) => {
+    head.position.y = 0.85 + Math.sin(t * 2.3) * 0.022;
+    tail.rotation.z = Math.sin(t * 2.9) * 0.15;
+    crys1.rotation.y = crys2.rotation.y = t * 0.5;
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+function buildCoralbud(): BespokeBuild {
+  const g = buildProceduralArchetype('shell', { primary: 0xe8838a, secondary: 0x6ec4f2, accent: 0xfff0e0 }, 0xe8838a);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const coral = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.22, 6), new THREE.MeshStandardMaterial({ color: 0xe8838a, roughness: 0.9 }));
+  coral.position.set(0, 0.55, 0);
+  g.add(coral);
+  const animate = (t: number) => {
+    head.position.y = 0.42 + Math.sin(t * 1.7) * 0.012;
+    coral.rotation.y = Math.sin(t * 2.5) * 0.15;
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+function buildReefguard(): BespokeBuild {
+  const g = buildProceduralArchetype('shell', { primary: 0xc86a78, secondary: 0x3a9df2, accent: 0xc8ecff }, 0xc86a78);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const spike1 = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.28, 5), new THREE.MeshStandardMaterial({ color: 0xc86a78, emissive: 0xc86a78, emissiveIntensity: 0.4 }));
+  spike1.position.set(0.18, 0.58, 0.18);
+  const spike2 = spike1.clone(); spike2.position.z = -0.18;
+  g.add(spike1, spike2);
+  const animate = (t: number) => {
+    head.position.y = 0.42 + Math.sin(t * 1.4) * 0.016;
+    spike1.position.y = 0.58 + Math.sin(t * 3.2) * 0.02;
+    spike2.position.y = 0.58 + Math.cos(t * 3.2) * 0.02;
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+// ===== NEW VERDANT BUILDERS =====
+function buildSeedsqrl(): BespokeBuild {
+  const g = buildProceduralArchetype('beast', { primary: 0x6a9a3a, secondary: 0xa8d95a, accent: 0xf2d23a }, 0xa8d95a);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const leaf = new THREE.Mesh(new THREE.PlaneGeometry(0.24, 0.42), new THREE.MeshStandardMaterial({ color: 0x6a9a3a, side: THREE.DoubleSide }));
+  leaf.position.set(0, 0.42, 0); leaf.rotation.y = Math.PI / 2;
+  tail.add(leaf);
+  const animate = (t: number) => {
+    head.position.y = 0.85 + Math.sin(t * 2.6) * 0.02;
+    tail.rotation.z = Math.sin(t * 3.5) * 0.12;
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+function buildVoltcanopy(): BespokeBuild {
+  const g = buildProceduralArchetype('beast', { primary: 0x4a7a2e, secondary: 0x8ac45a, accent: 0xd9c42a }, 0xd9c42a);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const bolt = boltGroup(new THREE.MeshBasicMaterial({ color: 0xd9c42a }), 0, 0.72, 0.1, 0, 0.95, 0.22, 3, 0.01);
+  g.add(bolt);
+  const animate = (t: number) => {
+    head.position.y = 0.85 + Math.sin(t * 2.3) * 0.022;
+    tail.rotation.z = Math.sin(t * 3.1) * 0.15;
+    bolt.visible = gate(t, 1.2, 4) > 0.35;
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+function buildSporepix(): BespokeBuild {
+  const g = buildProceduralArchetype('sprite', { primary: 0xc46a8a, secondary: 0xe8d0a8, accent: 0x8ad95a }, 0x8ad95a);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const spore = orb(new THREE.MeshStandardMaterial({ color: 0x8ad95a, emissive: 0x8ad95a, emissiveIntensity: 1.2 }), 0.05, 0, 0.95, 0);
+  g.add(spore);
+  const animate = (t: number) => {
+    head.position.y = 0.55 + Math.sin(t * 2.0) * 0.03;
+    spore.position.y = 0.95 + Math.sin(t * 4.5) * 0.06;
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+function buildFungoking(): BespokeBuild {
+  const g = buildProceduralArchetype('sprite', { primary: 0xa84a6a, secondary: 0xd9b88a, accent: 0x5aa84e }, 0x5aa84e);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const cap = new THREE.Mesh(new THREE.ConeGeometry(0.35, 0.25, 8), new THREE.MeshStandardMaterial({ color: 0xa84a6a, roughness: 0.85 }));
+  cap.position.set(0, 0.95, 0);
+  g.add(cap);
+  const animate = (t: number) => {
+    head.position.y = 0.55 + Math.sin(t * 1.8) * 0.035;
+    cap.rotation.y = t * 0.4;
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+function buildRootlet(): BespokeBuild {
+  const g = buildProceduralArchetype('brute', { primary: 0x8a7a5a, secondary: 0xb0a080, accent: 0x6ec45e }, 0x6ec45e);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const shield = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.04, 8), new THREE.MeshStandardMaterial({ color: 0xb0a080, roughness: 0.9 }));
+  shield.position.set(0.18, 0.9, 0.62); shield.rotation.z = Math.PI / 2;
+  g.add(shield);
+  const animate = (t: number) => {
+    head.position.y = 1.5 + Math.sin(t * 2.2) * 0.025;
+    shield.rotation.y = Math.sin(t * 1.5) * 0.12;
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+function buildGrovewarden(): BespokeBuild {
+  const g = buildProceduralArchetype('brute', { primary: 0x6a5a3a, secondary: 0x908060, accent: 0x4ec45e }, 0x4ec45e);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const stone1 = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), new THREE.MeshStandardMaterial({ color: 0x908060, roughness: 0.95 }));
+  stone1.position.set(0.08, 1.35, 0.55);
+  const stone2 = stone1.clone(); stone2.position.z = -0.55;
+  g.add(stone1, stone2);
+  const animate = (t: number) => {
+    head.position.y = 1.5 + Math.sin(t * 2.0) * 0.03;
+    stone1.rotation.y = t * 0.6;
+    stone2.rotation.y = -t * 0.6;
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+// ===== NEW VOLT BUILDERS =====
+function buildJoltmous(): BespokeBuild {
+  const g = buildProceduralArchetype('beast', { primary: 0xf2e06e, secondary: 0xffffff, accent: 0x6ec4f2 }, 0x6ec4f2);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const bolt = boltGroup(new THREE.MeshBasicMaterial({ color: 0x6ec4f2 }), -0.15, 0.45, 0, -0.4, 0.65, 0, 2, 0.008);
+  tail.add(bolt);
+  const animate = (t: number) => {
+    head.position.y = 0.85 + Math.sin(t * 2.8) * 0.02;
+    tail.rotation.z = Math.sin(t * 3.8) * 0.15;
+    bolt.visible = gate(t, 0.9, 4) > 0.35;
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+function buildGalvanix(): BespokeBuild {
+  const g = buildProceduralArchetype('beast', { primary: 0xd9c43a, secondary: 0x4a4a5a, accent: 0x5ab8e8 }, 0x5ab8e8);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.03, 6, 16), new THREE.MeshStandardMaterial({ color: 0x5ab8e8, emissive: 0x3a9df2, emissiveIntensity: 1.4 }));
+  ring.position.set(0, 0.58, 0); ring.rotation.x = Math.PI / 2;
+  g.add(ring);
+  const animate = (t: number) => {
+    head.position.y = 0.85 + Math.sin(t * 2.5) * 0.022;
+    tail.rotation.z = Math.sin(t * 3.2) * 0.18;
+    ring.scale.setScalar(1.0 + Math.sin(t * 9) * 0.1);
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+function buildSparkeef(): BespokeBuild {
+  const g = buildProceduralArchetype('serpent', { primary: 0xe8d05a, secondary: 0xfff0a8, accent: 0x3a9df2 }, 0x3a9df2);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const spark = boltGroup(new THREE.MeshBasicMaterial({ color: 0x3a9df2 }), 0, 0.42, 0, 0.15, 0.65, 0.1, 2, 0.008);
+  g.add(spark);
+  const animate = (t: number) => {
+    head.position.y = 0.85 + Math.sin(t * 2.6) * 0.025;
+    tail.rotation.z = Math.sin(t * 3.4) * 0.15;
+    spark.visible = gate(t, 1.1, 3) > 0.4;
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+function buildTesladrag(): BespokeBuild {
+  const g = buildProceduralArchetype('serpent', { primary: 0xc4ae2a, secondary: 0xe8cc3a, accent: 0x2a7dd9 }, 0x2a7dd9);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const ring1 = new THREE.Mesh(new THREE.TorusGeometry(0.24, 0.035, 6, 16), new THREE.MeshStandardMaterial({ color: 0x2a7dd9, emissive: 0x2a7dd9, emissiveIntensity: 1.2 }));
+  const ring2 = ring1.clone();
+  ring1.position.set(-0.1, 0.55, 0); ring2.position.set(-0.25, 0.85, 0);
+  ring1.rotation.y = ring2.rotation.y = Math.PI / 2;
+  g.add(ring1, ring2);
+  const animate = (t: number) => {
+    head.position.y = 0.85 + Math.sin(t * 2.2) * 0.03;
+    tail.rotation.z = Math.sin(t * 2.9) * 0.18;
+    ring1.scale.setScalar(1.0 + Math.sin(t * 8) * 0.12);
+    ring2.scale.setScalar(1.0 + Math.cos(t * 8) * 0.12);
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+function buildStormchick(): BespokeBuild {
+  const g = buildProceduralArchetype('avian', { primary: 0xffd700, secondary: 0xffffff, accent: 0x4b0082 }, 0xffd700);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const spike1 = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.18, 5), new THREE.MeshStandardMaterial({ color: 0xffd700, emissive: 0xffd700, emissiveIntensity: 0.6 }));
+  spike1.position.set(0, 0.32, 0);
+  head.add(spike1);
+  const animate = (t: number) => {
+    head.position.y = 1.25 + Math.sin(t * 3.1) * 0.03;
+    tail.rotation.z = Math.sin(t * 2.6) * 0.12;
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+function buildVoltwing(): BespokeBuild {
+  const g = buildProceduralArchetype('avian', { primary: 0xe8c42a, secondary: 0xe8ecff, accent: 0x4169e1 }, 0x4169e1);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const b1 = boltGroup(new THREE.MeshBasicMaterial({ color: 0x4169e1 }), 0, 0.85, 0.3, 0.2, 1.2, 0.6, 3, 0.012);
+  const b2 = boltGroup(new THREE.MeshBasicMaterial({ color: 0x4169e1 }), 0, 0.85, -0.3, 0.2, 1.2, -0.6, 3, 0.012);
+  g.add(b1, b2);
+  const animate = (t: number) => {
+    head.position.y = 1.25 + Math.sin(t * 2.8) * 0.035;
+    tail.rotation.z = Math.sin(t * 2.3) * 0.15;
+    b1.visible = b2.visible = gate(t, 1.3, 4) > 0.3;
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+// ===== NEW GALE BUILDERS =====
+function buildNebulet(): BespokeBuild {
+  const g = buildProceduralArchetype('beast', { primary: 0x5ac4b8, secondary: 0xa8e8e0, accent: 0xff9ad2 }, 0xff9ad2);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const dust = orb(new THREE.MeshBasicMaterial({ color: 0xff9ad2, transparent: true, opacity: 0.3, blending: THREE.AdditiveBlending }), 0.28, 0, 0.55, 0);
+  g.add(dust);
+  const animate = (t: number) => {
+    head.position.y = 0.85 + Math.sin(t * 2.4) * 0.02;
+    tail.rotation.z = Math.sin(t * 3.3) * 0.12;
+    dust.scale.setScalar(1.0 + Math.sin(t * 3) * 0.15);
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+function buildAstralpaw(): BespokeBuild {
+  const g = buildProceduralArchetype('beast', { primary: 0x3aa89a, secondary: 0x7adfd0, accent: 0xff9ad2 }, 0xff9ad2);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const star = orb(new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xff9ad2, emissiveIntensity: 1.5 }), 0.06, 0, 1.35, 0);
+  g.add(star);
+  const animate = (t: number) => {
+    head.position.y = 0.85 + Math.sin(t * 2.2) * 0.022;
+    tail.rotation.z = Math.sin(t * 3.0) * 0.15;
+    star.position.y = 1.35 + Math.sin(t * 6) * 0.08;
+    star.rotation.y = t * 1.5;
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+function buildGalewyrm(): BespokeBuild {
+  const g = buildProceduralArchetype('serpent', { primary: 0x8ad0c8, secondary: 0xc8f0e8, accent: 0x9adff2 }, 0x9adff2);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const crystal = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.2, 5), new THREE.MeshStandardMaterial({ color: 0x9adff2, transparent: true, opacity: 0.85 }));
+  crystal.position.set(-0.15, 0.32, 0); crystal.rotation.z = Math.PI / 4;
+  head.add(crystal);
+  const animate = (t: number) => {
+    head.position.y = 0.85 + Math.sin(t * 2.5) * 0.025;
+    tail.rotation.z = Math.sin(t * 3.2) * 0.15;
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+function buildTempestwyrm(): BespokeBuild {
+  const g = buildProceduralArchetype('serpent', { primary: 0x5acfc0, secondary: 0xaccfe2, accent: 0x3a8dd9 }, 0x3a8dd9);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const crys = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.28, 5), new THREE.MeshStandardMaterial({ color: 0x3a8dd9, emissive: 0x3a8dd9, emissiveIntensity: 0.8 }));
+  crys.position.set(0, 0.72, 0);
+  g.add(crys);
+  const animate = (t: number) => {
+    head.position.y = 0.85 + Math.sin(t * 2.1) * 0.03;
+    tail.rotation.z = Math.sin(t * 2.7) * 0.18;
+    crys.position.set(Math.cos(t * 4.5) * 0.42, 0.72 + Math.sin(t * 2) * 0.05, Math.sin(t * 4.5) * 0.42);
+    crys.rotation.y = t * 1.5;
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+function buildCosmolet(): BespokeBuild {
+  const g = buildProceduralArchetype('sprite', { primary: 0xd8e8f2, secondary: 0xf2f8ff, accent: 0xff9ad2 }, 0xff9ad2);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.28, 0.02, 6, 20), new THREE.MeshStandardMaterial({ color: 0xff9ad2 }));
+  ring.position.set(0, 0.55, 0); ring.rotation.x = Math.PI / 2.3;
+  g.add(ring);
+  const animate = (t: number) => {
+    head.position.y = 0.55 + Math.sin(t * 1.9) * 0.03;
+    ring.rotation.z = t * 0.8;
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+// stargaze builder definition
+function buildStargazer(): BespokeBuild {
+  const g = buildProceduralArchetype('sprite', { primary: 0xb8d0e8, secondary: 0xffffff, accent: 0xff9ad2 }, 0xff9ad2);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const ring1 = new THREE.Mesh(new THREE.TorusGeometry(0.35, 0.025, 6, 24), new THREE.MeshStandardMaterial({ color: 0xff9ad2 }));
+  const ring2 = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.018, 6, 24), new THREE.MeshStandardMaterial({ color: 0xff9ad2 }));
+  ring1.position.set(0, 0.55, 0); ring1.rotation.x = Math.PI / 2.2;
+  ring2.position.set(0, 0.55, 0); ring2.rotation.x = Math.PI / 1.85;
+  g.add(ring1, ring2);
+  const animate = (t: number) => {
+    head.position.y = 0.55 + Math.sin(t * 1.7) * 0.035;
+    ring1.rotation.z = t * 0.6;
+    ring2.rotation.z = -t * 0.9;
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+// ===== NEW UMBRA BUILDERS =====
+function buildVoidkit(): BespokeBuild {
+  const g = buildProceduralArchetype('beast', { primary: 0x5a3a8a, secondary: 0x9a5af2, accent: 0xf25aa8 }, 0x9a5af2);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const animate = (t: number) => {
+    head.position.y = 0.85 + Math.sin(t * 2.5) * 0.02;
+    tail.rotation.z = Math.sin(t * 3.4) * 0.12;
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+function buildNebularix(): BespokeBuild {
+  const g = buildProceduralArchetype('beast', { primary: 0x3a1a6a, secondary: 0x7a3ad0, accent: 0xd94a8a }, 0xd94a8a);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const rift = new THREE.Mesh(new THREE.TorusGeometry(0.18, 0.04, 6, 16), new THREE.MeshStandardMaterial({ color: 0xd94a8a, emissive: 0x9a5af2, emissiveIntensity: 1.5 }));
+  rift.position.set(0, 0.45, 0); rift.rotation.y = Math.PI / 2;
+  tail.add(rift);
+  const animate = (t: number) => {
+    head.position.y = 0.85 + Math.sin(t * 2.3) * 0.022;
+    tail.rotation.z = Math.sin(t * 3.1) * 0.15;
+    rift.scale.set(0.8 + Math.sin(t * 5) * 0.15, 1.2, 1);
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+function buildVampbat(): BespokeBuild {
+  const g = buildProceduralArchetype('avian', { primary: 0x3a2a5a, secondary: 0x6a4a9a, accent: 0xe85a9a }, 0xe85a9a);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const animate = (t: number) => {
+    head.position.y = 1.25 + Math.sin(t * 2.9) * 0.03;
+    tail.rotation.z = Math.sin(t * 2.4) * 0.12;
+    const w1 = g.getObjectByName('wing1'), w2 = g.getObjectByName('wing-1');
+    if (w1) w1.rotation.x = Math.sin(t * 5.5) * 0.45;
+    if (w2) w2.rotation.x = -Math.sin(t * 5.5) * 0.45;
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+function buildNosferatus(): BespokeBuild {
+  const g = buildProceduralArchetype('avian', { primary: 0x221442, secondary: 0x5a3a8a, accent: 0xff00ff }, 0xff00ff);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const bolt = boltGroup(new THREE.MeshBasicMaterial({ color: 0xff00ff }), 0, 0.85, 0.35, 0.1, 1.2, 0.65, 2, 0.01);
+  g.add(bolt);
+  const animate = (t: number) => {
+    head.position.y = 1.25 + Math.sin(t * 2.6) * 0.035;
+    tail.rotation.z = Math.sin(t * 2.1) * 0.15;
+    const w1 = g.getObjectByName('wing1'), w2 = g.getObjectByName('wing-1');
+    if (w1) w1.rotation.x = Math.sin(t * 4.8) * 0.55;
+    if (w2) w2.rotation.x = -Math.sin(t * 4.8) * 0.55;
+    bolt.visible = gate(t, 1.5, 3) > 0.45;
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+function buildGravemini(): BespokeBuild {
+  const g = buildProceduralArchetype('brute', { primary: 0x44405a, secondary: 0x6a648a, accent: 0xc4b46a }, 0xc4b46a);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const mark = orb(new THREE.MeshStandardMaterial({ color: 0xc4b46a, emissive: 0xc4b46a, emissiveIntensity: 1.0 }), 0.05, 0.1, 1.35, 0);
+  head.add(mark);
+  const animate = (t: number) => {
+    head.position.y = 1.5 + Math.sin(t * 2.1) * 0.025;
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+function buildGravemonolith(): BespokeBuild {
+  const g = buildProceduralArchetype('brute', { primary: 0x2e2a3a, secondary: 0x565070, accent: 0x9a5af2 }, 0x9a5af2);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const slab = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.42, 0.22), new THREE.MeshStandardMaterial({ color: 0x2e2a3a, roughness: 0.95 }));
+  slab.position.set(-0.28, 0.85, 0); slab.rotation.y = Math.PI / 4;
+  g.add(slab);
+  const animate = (t: number) => {
+    head.position.y = 1.5 + Math.sin(t * 1.9) * 0.03;
+    slab.position.y = 0.85 + Math.sin(t * 2.2) * 0.04;
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+// ================= NEW BLAZE BUILDERS =================
+function buildFlamesal(): BespokeBuild {
+  const g = buildProceduralArchetype('serpent', { primary: 0xe65c00, secondary: 0xffcc00, accent: 0x333333 }, 0xffaa00);
+  const head = g.getObjectByName('head')!;
+  const f = makeFlame(0.24, 0.08, 0xffea88, 0xff5500);
+  f.position.set(0.1, 0.25, 0);
+  head.add(f);
+  const animate = (t: number) => {
+    head.position.y = 0.85 + Math.sin(t * 2.5) * 0.02;
+    f.scale.setScalar(1.0 + Math.sin(t * 8) * 0.15);
+  };
+  return { body: g, parts: { head }, animate };
+}
+
+function buildEmberskink(): BespokeBuild {
+  const g = buildProceduralArchetype('serpent', { primary: 0xff3300, secondary: 0xff9900, accent: 0x555555 }, 0xffaa00);
+  const head = g.getObjectByName('head')!;
+  const f = makeFlame(0.35, 0.12, 0xffea88, 0xff5500);
+  f.position.set(0.12, 0.3, 0);
+  head.add(f);
+  const ember = orb(new THREE.MeshBasicMaterial({ color: 0xffaa00 }), 0.05, -0.4, 0.8, 0);
+  g.add(ember);
+  const animate = (t: number) => {
+    head.position.y = 0.85 + Math.sin(t * 2.3) * 0.025;
+    f.scale.setScalar(1.0 + Math.sin(t * 9) * 0.15);
+    ember.position.y = 0.8 + Math.sin(t * 4.5) * 0.08;
+  };
+  return { body: g, parts: { head }, animate };
+}
+
+function buildLavaserpent(): BespokeBuild {
+  const g = buildProceduralArchetype('serpent', { primary: 0xcc2200, secondary: 0xff6600, accent: 0x222222 }, 0xff5500);
+  const head = g.getObjectByName('head')!;
+  const spikes: THREE.Object3D[] = [];
+  for (let i = 0; i < 3; i++) {
+    const s = spike(std({ color: 0xff6600, emissive: 0xff3300, emissiveIntensity: 1.0 }), -0.2 * i, 0.4 + i * 0.3, 0, -0.2 * i, 0.6 + i * 0.3, 0, 0.06);
+    g.add(s);
+    spikes.push(s);
+  }
+  const animate = (t: number) => {
+    head.position.y = 0.85 + Math.sin(t * 2.1) * 0.028;
+    spikes.forEach((s, idx) => {
+      s.position.y = Math.sin(t * 3 + idx) * 0.03;
+    });
+  };
+  return { body: g, parts: { head }, animate };
+}
+
+function buildMagmadrak(): BespokeBuild {
+  const g = buildProceduralArchetype('serpent', { primary: 0x880000, secondary: 0xff3300, accent: 0x111111 }, 0xff2200);
+  const head = g.getObjectByName('head')!;
+  const f = makeFlame(0.55, 0.18, 0xffea88, 0xff2200);
+  f.position.set(0.15, 0.45, 0);
+  head.add(f);
+  const wing1 = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.5, 5), std({ color: 0x111111 }));
+  wing1.position.set(-0.2, 0.8, 0.25); wing1.rotation.set(Math.PI / 4, 0, Math.PI / 6);
+  const wing2 = wing1.clone();
+  wing2.position.set(-0.2, 0.8, -0.25); wing2.rotation.set(-Math.PI / 4, 0, Math.PI / 6);
+  g.add(wing1, wing2);
+  const animate = (t: number) => {
+    head.position.y = 0.85 + Math.sin(t * 1.9) * 0.03;
+    f.scale.setScalar(1.0 + Math.sin(t * 10) * 0.2);
+    wing1.rotation.z = Math.PI / 6 + Math.sin(t * 2.5) * 0.1;
+    wing2.rotation.z = Math.PI / 6 + Math.sin(t * 2.5) * 0.1;
+  };
+  return { body: g, parts: { head, wings: [wing1, wing2] }, animate };
+}
+
+function buildCoalbug(): BespokeBuild {
+  const g = buildProceduralArchetype('shell', { primary: 0x111111, secondary: 0x333333, accent: 0xff3300 }, 0xff3300);
+  const head = g.getObjectByName('head')!;
+  const horn = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.2, 6), std({ color: 0xff3300, emissive: 0xff3300, emissiveIntensity: 1.2 }));
+  horn.position.set(0.15, 0.15, 0); horn.rotation.z = -Math.PI / 3;
+  head.add(horn);
+  const animate = (t: number) => {
+    head.position.y = 0.42 + Math.sin(t * 2.8) * 0.015;
+  };
+  return { body: g, parts: { head }, animate };
+}
+
+function buildCinderscarab(): BespokeBuild {
+  const g = buildProceduralArchetype('shell', { primary: 0x1a1a1a, secondary: 0x444444, accent: 0xff5500 }, 0xff5500);
+  const head = g.getObjectByName('head')!;
+  const horn = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.3, 6), std({ color: 0xff5500, emissive: 0xff5500, emissiveIntensity: 1.4 }));
+  horn.position.set(0.18, 0.18, 0); horn.rotation.z = -Math.PI / 3;
+  head.add(horn);
+  const f = makeFlame(0.18, 0.06, 0xffea88, 0xff5500);
+  f.position.set(-0.2, 0.45, 0);
+  g.add(f);
+  const animate = (t: number) => {
+    head.position.y = 0.42 + Math.sin(t * 2.6) * 0.02;
+    f.scale.setScalar(1.0 + Math.sin(t * 8) * 0.15);
+  };
+  return { body: g, parts: { head }, animate };
+}
+
+function buildPyroshell(): BespokeBuild {
+  const g = buildProceduralArchetype('shell', { primary: 0x222222, secondary: 0x555555, accent: 0xff7700 }, 0xff7700);
+  const head = g.getObjectByName('head')!;
+  const horn = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.36, 6), std({ color: 0xff7700, emissive: 0xff7700, emissiveIntensity: 1.5 }));
+  horn.position.set(0.2, 0.2, 0); horn.rotation.z = -Math.PI / 3;
+  head.add(horn);
+  const embers: THREE.Mesh[] = [];
+  for (let i = 0; i < 3; i++) {
+    const emb = orb(new THREE.MeshBasicMaterial({ color: 0xff7700 }), 0.04, 0, 0.6, 0);
+    g.add(emb);
+    embers.push(emb);
+  }
+  const animate = (t: number) => {
+    head.position.y = 0.42 + Math.sin(t * 2.4) * 0.022;
+    embers.forEach((emb, i) => {
+      const a = t * 2.0 + (i * Math.PI * 2 / 3);
+      emb.position.set(Math.cos(a) * 0.5, 0.6 + Math.sin(t * 4 + i) * 0.05, Math.sin(a) * 0.5);
+    });
+  };
+  return { body: g, parts: { head }, animate };
+}
+
+function buildCoalossus(): BespokeBuild {
+  const g = buildProceduralArchetype('brute', { primary: 0x1a1515, secondary: 0x3d3030, accent: 0xff2200 }, 0xff2200);
+  const head = g.getObjectByName('head')!;
+  const furnace = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.35, 0.35), std({ color: 0x3d3030, emissive: 0xff2200, emissiveIntensity: 1.8 }));
+  furnace.position.set(-0.1, 1.1, 0);
+  g.add(furnace);
+  const animate = (t: number) => {
+    head.position.y = 1.5 + Math.sin(t * 1.8) * 0.025;
+    furnace.position.y = 1.1 + Math.sin(t * 2.2) * 0.03;
+    furnace.rotation.y = t * 0.5;
+  };
+  return { body: g, parts: { head }, animate };
+}
+
+function buildFlarefly(): BespokeBuild {
+  const g = buildProceduralArchetype('sprite', { primary: 0xffaa00, secondary: 0xffdd44, accent: 0xffffff }, 0xffeedd);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail') ?? undefined;
+  const w1 = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.25, 4), std({ color: 0xffaa00, transparent: true, opacity: 0.8 }));
+  const w2 = w1.clone();
+  w1.position.set(-0.15, 0.65, 0.15); w1.rotation.set(Math.PI / 4, 0, Math.PI / 4);
+  w2.position.set(-0.15, 0.65, -0.15); w2.rotation.set(-Math.PI / 4, 0, Math.PI / 4);
+  g.add(w1, w2);
+  const animate = (t: number) => {
+    head.position.y = 0.55 + Math.sin(t * 3.2) * 0.03;
+    if (tail) tail.rotation.z = t * 3;
+    w1.rotation.z = Math.PI / 4 + Math.sin(t * 20) * 0.25;
+    w2.rotation.z = Math.PI / 4 + Math.sin(t * 20) * 0.25;
+  };
+  return { body: g, parts: { head, tail, wings: [w1, w2] }, animate };
+}
+
+function buildSparkwing(): BespokeBuild {
+  const g = buildProceduralArchetype('sprite', { primary: 0xff8800, secondary: 0xffcc33, accent: 0xffea88 }, 0xffea88);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail') ?? undefined;
+  const halo = new THREE.Mesh(new THREE.TorusGeometry(0.25, 0.02, 6, 18), std({ color: 0xffea88, emissive: 0xffea88, emissiveIntensity: 1.4 }));
+  halo.position.set(0, 0.95, 0); halo.rotation.x = Math.PI / 2;
+  g.add(halo);
+  const w1 = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.38, 4), std({ color: 0xff8800, transparent: true, opacity: 0.85 }));
+  const w2 = w1.clone(), w3 = w1.clone(), w4 = w1.clone();
+  w1.position.set(-0.2, 0.68, 0.18); w1.rotation.set(Math.PI / 4, 0, Math.PI / 3);
+  w2.position.set(-0.2, 0.68, -0.18); w2.rotation.set(-Math.PI / 4, 0, Math.PI / 3);
+  w3.position.set(-0.25, 0.48, 0.12); w3.rotation.set(Math.PI / 4, 0, Math.PI / 2);
+  w4.position.set(-0.25, 0.48, -0.12); w4.rotation.set(-Math.PI / 4, 0, Math.PI / 2);
+  g.add(w1, w2, w3, w4);
+  const animate = (t: number) => {
+    head.position.y = 0.55 + Math.sin(t * 3.0) * 0.035;
+    if (tail) tail.rotation.z = t * 2.5;
+    halo.position.y = 0.95 + Math.sin(t * 4) * 0.04;
+    w1.rotation.z = Math.PI / 3 + Math.sin(t * 22) * 0.22;
+    w2.rotation.z = Math.PI / 3 + Math.sin(t * 22) * 0.22;
+    w3.rotation.z = Math.PI / 2 + Math.sin(t * 22 + 1) * 0.2;
+    w4.rotation.z = Math.PI / 2 + Math.sin(t * 22 + 1) * 0.2;
+  };
+  return { body: g, parts: { head, tail, wings: [w1, w2, w3, w4] }, animate };
+}
+
+function buildLumiprix(): BespokeBuild {
+  const g = buildProceduralArchetype('sprite', { primary: 0xffaa44, secondary: 0xffe088, accent: 0xffffff }, 0xffffff);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail') ?? undefined;
+  const halo = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.025, 6, 20), std({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 1.5 }));
+  halo.position.set(0, 1.05, 0); halo.rotation.x = Math.PI / 2;
+  g.add(halo);
+  const fireflies: THREE.Mesh[] = [];
+  for (let i = 0; i < 3; i++) {
+    const f = orb(new THREE.MeshBasicMaterial({ color: 0xffe088 }), 0.035, 0, 0.6, 0);
+    g.add(f);
+    fireflies.push(f);
+  }
+  const animate = (t: number) => {
+    head.position.y = 0.55 + Math.sin(t * 2.8) * 0.04;
+    if (tail) tail.rotation.z = t * 2;
+    halo.position.y = 1.05 + Math.sin(t * 3.5) * 0.05;
+    fireflies.forEach((f, idx) => {
+      const a = t * 2.5 + (idx * Math.PI * 2 / 3);
+      f.position.set(Math.cos(a) * 0.45, 0.6 + Math.sin(t * 5 + idx) * 0.08, Math.sin(a) * 0.45);
+    });
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+function buildAurorafire(): BespokeBuild {
+  const g = buildProceduralArchetype('sprite', { primary: 0xff3366, secondary: 0xffaa33, accent: 0xffffff }, 0xffffff);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail') ?? undefined;
+  const halo = new THREE.Mesh(new THREE.TorusGeometry(0.36, 0.03, 8, 24), std({ color: 0xffffff, emissive: 0xffeedd, emissiveIntensity: 1.6 }));
+  halo.position.set(0, 1.15, 0); halo.rotation.x = Math.PI / 2;
+  g.add(halo);
+  const wing1 = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.1, 0.02), new THREE.MeshBasicMaterial({ color: 0xff3366, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.8 }));
+  wing1.position.set(-0.25, 0.75, 0.2); wing1.rotation.set(Math.PI / 4, 0, Math.PI / 4);
+  const wing2 = wing1.clone();
+  wing2.position.set(-0.25, 0.75, -0.2); wing2.rotation.set(-Math.PI / 4, 0, Math.PI / 4);
+  const wing3 = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.08, 0.02), new THREE.MeshBasicMaterial({ color: 0xffaa33, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.8 }));
+  wing3.position.set(-0.3, 0.55, 0.15); wing3.rotation.set(Math.PI / 4, 0, Math.PI / 3);
+  const wing4 = wing3.clone();
+  wing4.position.set(-0.3, 0.55, -0.15); wing4.rotation.set(-Math.PI / 4, 0, Math.PI / 3);
+  g.add(wing1, wing2, wing3, wing4);
+  const animate = (t: number) => {
+    head.position.y = 0.55 + Math.sin(t * 2.5) * 0.045;
+    if (tail) tail.rotation.z = t * 1.8;
+    halo.position.y = 1.15 + Math.sin(t * 3) * 0.06;
+    const wingSweep = Math.sin(t * 4) * 0.15;
+    wing1.rotation.z = Math.PI / 4 + wingSweep;
+    wing2.rotation.z = Math.PI / 4 + wingSweep;
+    wing3.rotation.z = Math.PI / 3 + wingSweep * 0.8;
+    wing4.rotation.z = Math.PI / 3 + wingSweep * 0.8;
+  };
+  return { body: g, parts: { head, tail, wings: [wing1, wing2, wing3, wing4] }, animate };
+}
+
+// ================= NEW TIDE BUILDERS =================
+function buildWavepup(): BespokeBuild {
+  const g = buildProceduralArchetype('beast', { primary: 0x4a90e2, secondary: 0xffffff, accent: 0xb8e986 }, 0x4a90e2);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const ear1 = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.22, 6), std({ color: 0x4a90e2 }));
+  ear1.position.set(0.1, 0.12, 0.18); ear1.rotation.set(Math.PI / 4, 0, -Math.PI / 4);
+  const ear2 = ear1.clone();
+  ear2.position.set(0.1, 0.12, -0.18); ear2.rotation.set(-Math.PI / 4, 0, -Math.PI / 4);
+  head.add(ear1, ear2);
+  const animate = (t: number) => {
+    head.position.y = 0.85 + Math.sin(t * 2.6) * 0.02;
+    tail.rotation.z = Math.sin(t * 4) * 0.2;
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+function buildTidehound(): BespokeBuild {
+  const g = buildProceduralArchetype('beast', { primary: 0x357ebd, secondary: 0xe0f7fa, accent: 0x80deea }, 0x80deea);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const bubble1 = orb(new THREE.MeshStandardMaterial({ color: 0x80deea, transparent: true, opacity: 0.6 }), 0.05, -0.2, 0.7, 0.2);
+  const bubble2 = orb(new THREE.MeshStandardMaterial({ color: 0x80deea, transparent: true, opacity: 0.6 }), 0.04, -0.4, 0.8, -0.2);
+  g.add(bubble1, bubble2);
+  const animate = (t: number) => {
+    head.position.y = 0.85 + Math.sin(t * 2.4) * 0.022;
+    tail.rotation.z = Math.sin(t * 3.6) * 0.22;
+    bubble1.position.y = 0.7 + Math.sin(t * 5) * 0.1;
+    bubble2.position.y = 0.8 + Math.sin(t * 4.2 + 1) * 0.1;
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+function buildOceanclysm(): BespokeBuild {
+  const g = buildProceduralArchetype('beast', { primary: 0x1d5a91, secondary: 0xb2ebf2, accent: 0x00acc1 }, 0x00acc1);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const ridge1 = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.3, 5), std({ color: 0x00acc1 }));
+  ridge1.position.set(-0.1, 0.95, 0); ridge1.rotation.z = Math.PI / 6;
+  const ridge2 = ridge1.clone(); ridge2.position.set(-0.35, 0.85, 0);
+  g.add(ridge1, ridge2);
+  const animate = (t: number) => {
+    head.position.y = 0.85 + Math.sin(t * 2.2) * 0.025;
+    tail.rotation.z = Math.sin(t * 3.2) * 0.25;
+    ridge1.rotation.z = Math.PI / 6 + Math.sin(t * 2) * 0.08;
+    ridge2.rotation.z = Math.PI / 6 + Math.sin(t * 2 + 0.5) * 0.08;
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+function buildAbysshound(): BespokeBuild {
+  const g = buildProceduralArchetype('beast', { primary: 0x0b1d33, secondary: 0x006064, accent: 0x00e5ff }, 0x00e5ff);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.3, 6), std({ color: 0x006064 }));
+  pole.position.set(0.15, 0.35, 0); pole.rotation.z = -Math.PI / 4;
+  const light = orb(new THREE.MeshStandardMaterial({ color: 0x00e5ff, emissive: 0x00e5ff, emissiveIntensity: 1.8 }), 0.06, 0.15, 0.52, 0);
+  head.add(pole, light);
+  const animate = (t: number) => {
+    head.position.y = 0.85 + Math.sin(t * 2.0) * 0.03;
+    tail.rotation.z = Math.sin(t * 2.8) * 0.28;
+    light.scale.setScalar(1.0 + Math.sin(t * 8) * 0.2);
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+function buildJellymote(): BespokeBuild {
+  const g = buildProceduralArchetype('sprite', { primary: 0x00bcd4, secondary: 0x80deea, accent: 0xffffff }, 0x00bcd4);
+  const head = g.getObjectByName('head')!;
+  const t1 = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.4, 6), std({ color: 0x80deea, transparent: true, opacity: 0.7 }));
+  t1.position.set(-0.1, 0.2, 0.1);
+  const t2 = t1.clone(); t2.position.set(-0.1, 0.2, -0.1);
+  const t3 = t1.clone(); t3.position.set(0.1, 0.2, 0);
+  g.add(t1, t2, t3);
+  const animate = (t: number) => {
+    head.position.y = 0.55 + Math.sin(t * 2.8) * 0.03;
+    t1.rotation.z = Math.sin(t * 4 + 0) * 0.15;
+    t2.rotation.z = Math.sin(t * 4 + 1) * 0.15;
+    t3.rotation.x = Math.sin(t * 4 + 2) * 0.15;
+  };
+  return { body: g, parts: { head }, animate };
+}
+
+function buildAquajelly(): BespokeBuild {
+  const g = buildProceduralArchetype('sprite', { primary: 0x00acc1, secondary: 0xb2ebf2, accent: 0x00e5ff }, 0x00e5ff);
+  const head = g.getObjectByName('head')!;
+  const t1 = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.6, 6), std({ color: 0xb2ebf2, transparent: true, opacity: 0.75 }));
+  t1.position.set(-0.15, 0.15, 0.15);
+  const t2 = t1.clone(); t2.position.set(-0.15, 0.15, -0.15);
+  const t3 = t1.clone(); t3.position.set(0.15, 0.15, 0.15);
+  const t4 = t1.clone(); t4.position.set(0.15, 0.15, -0.15);
+  g.add(t1, t2, t3, t4);
+  const arc = boltGroup(new THREE.MeshBasicMaterial({ color: 0x00e5ff }), 0, 0.45, 0, 0, 0.1, 0, 2, 0.006);
+  g.add(arc);
+  const animate = (t: number) => {
+    head.position.y = 0.55 + Math.sin(t * 2.6) * 0.035;
+    t1.rotation.z = Math.sin(t * 3.8) * 0.18;
+    t2.rotation.z = Math.sin(t * 3.8 + 1) * 0.18;
+    t3.rotation.x = Math.sin(t * 3.8 + 2) * 0.18;
+    t4.rotation.x = Math.sin(t * 3.8 + 3) * 0.18;
+    arc.visible = gate(t, 1.0, 3) > 0.4;
+  };
+  return { body: g, parts: { head }, animate };
+}
+
+function buildVoltmedusa(): BespokeBuild {
+  const g = buildProceduralArchetype('sprite', { primary: 0x00838f, secondary: 0xe0f7fa, accent: 0xffeb3b }, 0xffeb3b);
+  const head = g.getObjectByName('head')!;
+  const t1 = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.8, 6), std({ color: 0xe0f7fa, transparent: true, opacity: 0.8 }));
+  t1.position.set(-0.2, 0.05, 0.2);
+  const t2 = t1.clone(); t2.position.set(-0.2, 0.05, -0.2);
+  const t3 = t1.clone(); t3.position.set(0.2, 0.05, 0.2);
+  const t4 = t1.clone(); t4.position.set(0.2, 0.05, -0.2);
+  g.add(t1, t2, t3, t4);
+  const arc1 = boltGroup(new THREE.MeshBasicMaterial({ color: 0xffeb3b }), -0.15, 0.5, 0, -0.3, 0.0, 0, 2, 0.008);
+  const arc2 = boltGroup(new THREE.MeshBasicMaterial({ color: 0x00e5ff }), 0.15, 0.5, 0, 0.3, 0.0, 0, 2, 0.008);
+  g.add(arc1, arc2);
+  const animate = (t: number) => {
+    head.position.y = 0.55 + Math.sin(t * 2.4) * 0.04;
+    t1.rotation.z = Math.sin(t * 3.5) * 0.2;
+    t2.rotation.z = Math.sin(t * 3.5 + 1) * 0.2;
+    t3.rotation.x = Math.sin(t * 3.5 + 2) * 0.2;
+    t4.rotation.x = Math.sin(t * 3.5 + 3) * 0.2;
+    arc1.visible = gate(t, 1.2, 4) > 0.45;
+    arc2.visible = gate(t + 0.6, 1.2, 4) > 0.45;
+  };
+  return { body: g, parts: { head }, animate };
+}
+
+function buildAbysssiren(): BespokeBuild {
+  const g = buildProceduralArchetype('sprite', { primary: 0x1a237e, secondary: 0x00bcd4, accent: 0xe040fb }, 0xe040fb);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail') ?? undefined;
+  const halo = new THREE.Mesh(new THREE.TorusGeometry(0.35, 0.03, 8, 24), std({ color: 0xe040fb, emissive: 0xe040fb, emissiveIntensity: 1.5 }));
+  halo.position.set(0, 1.05, 0); halo.rotation.x = Math.PI / 2;
+  g.add(halo);
+  const t1 = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.1, 8), std({ color: 0x00bcd4, transparent: true, opacity: 0.85 }));
+  t1.position.set(-0.25, -0.1, 0.25);
+  const t2 = t1.clone(); t2.position.set(-0.25, -0.1, -0.25);
+  const t3 = t1.clone(); t3.position.set(0.25, -0.1, 0.25);
+  const t4 = t1.clone(); t4.position.set(0.25, -0.1, -0.25);
+  g.add(t1, t2, t3, t4);
+  const arc = boltGroup(new THREE.MeshBasicMaterial({ color: 0xe040fb }), 0, 0.6, 0, 0, -0.2, 0, 3, 0.01);
+  g.add(arc);
+  const animate = (t: number) => {
+    head.position.y = 0.55 + Math.sin(t * 2.2) * 0.045;
+    if (tail) tail.rotation.z = t * 1.5;
+    halo.position.y = 1.05 + Math.sin(t * 3) * 0.05;
+    t1.rotation.z = Math.sin(t * 3.2) * 0.22;
+    t2.rotation.z = Math.sin(t * 3.2 + 1) * 0.22;
+    t3.rotation.x = Math.sin(t * 3.2 + 2) * 0.22;
+    t4.rotation.x = Math.sin(t * 3.2 + 3) * 0.22;
+    arc.visible = gate(t, 1.0, 4) > 0.4;
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+function buildSeaturt(): BespokeBuild {
+  const g = buildProceduralArchetype('shell', { primary: 0x4caf50, secondary: 0x8d6e63, accent: 0xa5d6a7 }, 0xa5d6a7);
+  const head = g.getObjectByName('head')!;
+  const spike1 = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.18, 5), std({ color: 0x8d6e63 }));
+  spike1.position.set(-0.15, 0.6, 0.15); spike1.rotation.set(0.2, 0, -0.2);
+  const spike2 = spike1.clone();
+  spike2.position.set(-0.15, 0.6, -0.15); spike2.rotation.set(-0.2, 0, -0.2);
+  const spike3 = spike1.clone();
+  spike3.position.set(-0.35, 0.5, 0); spike3.rotation.set(0, 0, -0.4);
+  g.add(spike1, spike2, spike3);
+  const animate = (t: number) => {
+    head.position.y = 0.42 + Math.sin(t * 2.2) * 0.015;
+  };
+  return { body: g, parts: { head }, animate };
+}
+
+function buildReefscale(): BespokeBuild {
+  const g = buildProceduralArchetype('shell', { primary: 0x2e7d32, secondary: 0xd7ccc8, accent: 0xff4081 }, 0xff4081);
+  const head = g.getObjectByName('head')!;
+  const coral1 = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.25, 5), std({ color: 0xff4081, emissive: 0xff4081, emissiveIntensity: 0.6 }));
+  coral1.position.set(-0.15, 0.65, 0.15); coral1.rotation.set(0.3, 0, -0.2);
+  const coral2 = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.22, 5), std({ color: 0x00e5ff, emissive: 0x00e5ff, emissiveIntensity: 0.6 }));
+  coral2.position.set(-0.15, 0.65, -0.15); coral2.rotation.set(-0.3, 0, -0.2);
+  const coral3 = coral1.clone();
+  coral3.position.set(-0.38, 0.55, 0); coral3.rotation.set(0, 0, -0.4);
+  g.add(coral1, coral2, coral3);
+  const animate = (t: number) => {
+    head.position.y = 0.42 + Math.sin(t * 2.0) * 0.018;
+    coral1.rotation.z = -0.2 + Math.sin(t * 2) * 0.05;
+    coral2.rotation.z = -0.2 + Math.cos(t * 2) * 0.05;
+  };
+  return { body: g, parts: { head }, animate };
+}
+
+function buildPearlshield(): BespokeBuild {
+  const g = buildProceduralArchetype('shell', { primary: 0x1b5e20, secondary: 0xe0f2f1, accent: 0xffffff }, 0xffffff);
+  const head = g.getObjectByName('head')!;
+  const pearl = orb(std({ color: 0xffffff, emissive: 0xe0f2f1, emissiveIntensity: 0.8, roughness: 0.05, metalness: 0.1 }), 0.16, -0.12, 0.72, 0);
+  g.add(pearl);
+  const animate = (t: number) => {
+    head.position.y = 0.42 + Math.sin(t * 1.8) * 0.02;
+    pearl.position.y = 0.72 + Math.sin(t * 3) * 0.02;
+  };
+  return { body: g, parts: { head }, animate };
+}
+
+function buildOceantitan(): BespokeBuild {
+  const g = buildProceduralArchetype('shell', { primary: 0x0d5330, secondary: 0x4e342e, accent: 0x80cb99 }, 0x80cb99);
+  const head = g.getObjectByName('head')!;
+  const reef1 = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.35, 0.12), std({ color: 0x2e7d32 }));
+  reef1.position.set(-0.1, 0.72, 0.2); reef1.rotation.set(0.2, 0.1, -0.1);
+  const reef2 = reef1.clone();
+  reef2.position.set(-0.1, 0.72, -0.2); reef2.rotation.set(-0.2, -0.1, -0.1);
+  const reef3 = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.45, 5), std({ color: 0x00acc1, emissive: 0x00acc1, emissiveIntensity: 0.4 }));
+  reef3.position.set(-0.4, 0.65, 0); reef3.rotation.set(0, 0, -0.3);
+  g.add(reef1, reef2, reef3);
+  g.scale.setScalar(1.28);
+  const animate = (t: number) => {
+    head.position.y = 0.42 + Math.sin(t * 1.5) * 0.025;
+    reef1.rotation.z = -0.1 + Math.sin(t * 1.6) * 0.04;
+    reef2.rotation.z = -0.1 + Math.cos(t * 1.6) * 0.04;
+  };
+  return { body: g, parts: { head }, animate };
+}
+
+// ================= NEW VERDANT BUILDERS =================
+function buildLeaffawn(): BespokeBuild {
+  const g = buildProceduralArchetype('beast', { primary: 0x8d6e63, secondary: 0xa5d6a7, accent: 0xffffff }, 0xa5d6a7);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const leaf1 = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.18, 0.08), std({ color: 0xa5d6a7 }));
+  leaf1.position.set(-0.05, 0.32, 0.16); leaf1.rotation.set(Math.PI / 4, 0, -Math.PI / 6);
+  const leaf2 = leaf1.clone();
+  leaf2.position.set(-0.05, 0.32, -0.16); leaf2.rotation.set(-Math.PI / 4, 0, -Math.PI / 6);
+  head.add(leaf1, leaf2);
+  const animate = (t: number) => {
+    head.position.y = 0.85 + Math.sin(t * 2.5) * 0.02;
+    tail.rotation.z = Math.sin(t * 3.5) * 0.15;
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+// Helper to avoid duplicate name conflicts
+function buildSylvadeer(): BespokeBuild {
+  const g = buildProceduralArchetype('beast', { primary: 0x6d4c41, secondary: 0x81c784, accent: 0xffecb3 }, 0xffecb3);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const horn1 = bone(std({ color: 0x6d4c41 }), -0.05, 0.3, 0.14, -0.15, 0.58, 0.25, 0.035, 0.02, 6);
+  const horn2 = bone(std({ color: 0x6d4c41 }), -0.05, 0.3, -0.14, -0.15, 0.58, -0.25, 0.035, 0.02, 6);
+  head.add(horn1, horn2);
+  const animate = (t: number) => {
+    head.position.y = 0.85 + Math.sin(t * 2.3) * 0.022;
+    tail.rotation.z = Math.sin(t * 3.2) * 0.18;
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+function buildThornstag(): BespokeBuild {
+  const g = buildProceduralArchetype('beast', { primary: 0x4e342e, secondary: 0x4caf50, accent: 0xe8f5e9 }, 0xe8f5e9);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const horn1 = bone(std({ color: 0x4e342e }), -0.05, 0.3, 0.14, -0.2, 0.72, 0.32, 0.045, 0.02, 6);
+  const horn2 = bone(std({ color: 0x4e342e }), -0.05, 0.3, -0.14, -0.2, 0.72, -0.32, 0.045, 0.02, 6);
+  const sp1 = spike(std({ color: 0x4caf50 }), -0.1, 0.5, 0.22, -0.05, 0.65, 0.35, 0.02);
+  const sp2 = spike(std({ color: 0x4caf50 }), -0.1, 0.5, -0.22, -0.05, 0.65, -0.35, 0.02);
+  head.add(horn1, horn2, sp1, sp2);
+  const animate = (t: number) => {
+    head.position.y = 0.85 + Math.sin(t * 2.1) * 0.025;
+    tail.rotation.z = Math.sin(t * 2.8) * 0.22;
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+function buildSolarstag(): BespokeBuild {
+  const g = buildProceduralArchetype('beast', { primary: 0x3e2723, secondary: 0x2e7d32, accent: 0xffd54f }, 0xffd54f);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const horn1 = bone(std({ color: 0xffd54f, emissive: 0xffb300, emissiveIntensity: 0.6 }), -0.05, 0.3, 0.14, -0.25, 0.85, 0.42, 0.05, 0.025, 6);
+  const horn2 = bone(std({ color: 0xffd54f, emissive: 0xffb300, emissiveIntensity: 0.6 }), -0.05, 0.3, -0.14, -0.25, 0.85, -0.42, 0.05, 0.025, 6);
+  const sp1 = spike(std({ color: 0xffd54f, emissive: 0xffb300, emissiveIntensity: 0.8 }), -0.12, 0.55, 0.28, -0.02, 0.78, 0.48, 0.025);
+  const sp2 = spike(std({ color: 0xffd54f, emissive: 0xffb300, emissiveIntensity: 0.8 }), -0.12, 0.55, -0.28, -0.02, 0.78, -0.48, 0.025);
+  head.add(horn1, horn2, sp1, sp2);
+  const sun = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.02, 6, 18), std({ color: 0xffd54f, emissive: 0xffd54f, emissiveIntensity: 1.4 }));
+  sun.position.set(-0.15, 0.78, 0); sun.rotation.y = Math.PI / 2;
+  head.add(sun);
+  const animate = (t: number) => {
+    head.position.y = 0.85 + Math.sin(t * 1.9) * 0.028;
+    tail.rotation.z = Math.sin(t * 2.5) * 0.25;
+    sun.rotation.x = t * 1.5;
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+function buildSnapsprout(): BespokeBuild {
+  const g = buildProceduralArchetype('serpent', { primary: 0x4caf50, secondary: 0x81c784, accent: 0xe91e63 }, 0xe91e63);
+  const head = g.getObjectByName('head')!;
+  const bud = orb(std({ color: 0xe91e63, emissive: 0xe91e63, emissiveIntensity: 0.7 }), 0.12, 0, 0.45, 0);
+  head.add(bud);
+  const animate = (t: number) => {
+    head.position.y = 0.85 + Math.sin(t * 2.4) * 0.022;
+    bud.scale.setScalar(1.0 + Math.sin(t * 6) * 0.12);
+  };
+  return { body: g, parts: { head }, animate };
+}
+
+function buildSnaporchid(): BespokeBuild {
+  const g = buildProceduralArchetype('serpent', { primary: 0x388e3c, secondary: 0xc8e6c9, accent: 0xab47bc }, 0xab47bc);
+  const head = g.getObjectByName('head')!;
+  const petals: THREE.Mesh[] = [];
+  for (let i = 0; i < 4; i++) {
+    const pet = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.22, 5), std({ color: 0xab47bc, emissive: 0xab47bc, emissiveIntensity: 0.4 }));
+    const a = (i / 4) * Math.PI * 2;
+    pet.position.set(Math.cos(a) * 0.15, 0.1, Math.sin(a) * 0.15);
+    pet.rotation.set(Math.sin(a) * 0.8, a, -Math.cos(a) * 0.8);
+    head.add(pet);
+    petals.push(pet);
+  }
+  const animate = (t: number) => {
+    head.position.y = 0.85 + Math.sin(t * 2.2) * 0.025;
+    petals.forEach((pet, i) => {
+      pet.scale.setScalar(1.0 + Math.sin(t * 4 + i) * 0.08);
+    });
+  };
+  return { body: g, parts: { head }, animate };
+}
+
+function buildBrambleviper(): BespokeBuild {
+  const g = buildProceduralArchetype('serpent', { primary: 0x1b5e20, secondary: 0xa5d6a7, accent: 0xab47bc }, 0xab47bc);
+  const head = g.getObjectByName('head')!;
+  const spikes: THREE.Mesh[] = [];
+  for (let i = 0; i < 4; i++) {
+    const sp = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.18, 4), std({ color: 0x1b5e20 }));
+    sp.position.set(-0.35, 0.4 + i * 0.35, 0.12); sp.rotation.z = Math.PI / 3;
+    const spCl = sp.clone(); spCl.position.z = -0.12;
+    g.add(sp, spCl);
+    spikes.push(sp, spCl);
+  }
+  const fang1 = new THREE.Mesh(new THREE.ConeGeometry(0.02, 0.12, 4), std({ color: 0xab47bc, emissive: 0xab47bc, emissiveIntensity: 0.8 }));
+  fang1.position.set(0.18, -0.12, 0.08); fang1.rotation.z = -Math.PI / 6;
+  const fang2 = fang1.clone(); fang2.position.z = -0.08;
+  head.add(fang1, fang2);
+  const animate = (t: number) => {
+    head.position.y = 0.85 + Math.sin(t * 2.0) * 0.028;
+    spikes.forEach((sp, idx) => {
+      sp.rotation.z = Math.PI / 3 + Math.sin(t * 2.5 + idx) * 0.06;
+    });
+  };
+  return { body: g, parts: { head }, animate };
+}
+
+function buildRotwyrm(): BespokeBuild {
+  const g = buildProceduralArchetype('serpent', { primary: 0x3e2723, secondary: 0x2e7d32, accent: 0x4a148c }, 0x4a148c);
+  const head = g.getObjectByName('head')!;
+  const fungus1 = orb(std({ color: 0x4a148c, emissive: 0x4a148c, emissiveIntensity: 0.5 }), 0.08, -0.2, 0.6, 0);
+  const fungus2 = orb(std({ color: 0x4a148c, emissive: 0x4a148c, emissiveIntensity: 0.5 }), 0.06, -0.4, 0.9, 0);
+  g.add(fungus1, fungus2);
+  const spores: THREE.Mesh[] = [];
+  for (let i = 0; i < 4; i++) {
+    const sp = orb(new THREE.MeshBasicMaterial({ color: 0xab47bc, transparent: true, opacity: 0.8 }), 0.035, 0, 0.5, 0);
+    g.add(sp);
+    spores.push(sp);
+  }
+  const animate = (t: number) => {
+    head.position.y = 0.85 + Math.sin(t * 1.8) * 0.03;
+    spores.forEach((sp, idx) => {
+      const a = t * 1.8 + idx;
+      sp.position.set(-0.3 + Math.cos(a) * 0.35, 0.7 + Math.sin(t * 3 + idx) * 0.12, Math.sin(a) * 0.35);
+    });
+  };
+  return { body: g, parts: { head }, animate };
+}
+
+function buildBarkchick(): BespokeBuild {
+  const g = buildProceduralArchetype('avian', { primary: 0x8d6e63, secondary: 0xc8e6c9, accent: 0x81c784 }, 0x81c784);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const plate1 = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.35, 0.05), std({ color: 0x8d6e63 }));
+  plate1.position.set(-0.1, 0.75, 0.35); plate1.rotation.y = Math.PI / 12;
+  const plate2 = plate1.clone();
+  plate2.position.set(-0.1, 0.75, -0.35); plate2.rotation.y = -Math.PI / 12;
+  g.add(plate1, plate2);
+  const animate = (t: number) => {
+    head.position.y = 1.25 + Math.sin(t * 2.8) * 0.025;
+    if (tail) tail.rotation.z = Math.sin(t * 3.8) * 0.15;
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+function buildSylvawing(): BespokeBuild {
+  const g = buildProceduralArchetype('avian', { primary: 0x6d4c41, secondary: 0x4caf50, accent: 0xa5d6a7 }, 0xa5d6a7);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const w1 = g.getObjectByName('wing1')!;
+  const w2 = g.getObjectByName('wing-1')!;
+  const leaf1 = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.02, 0.15), std({ color: 0xa5d6a7 }));
+  leaf1.position.set(0.1, 0, 0.4); leaf1.rotation.y = Math.PI / 6;
+  const leaf2 = leaf1.clone();
+  leaf2.position.set(0.1, 0, -0.4); leaf2.rotation.y = -Math.PI / 6;
+  w1.add(leaf1);
+  w2.add(leaf2);
+  const animate = (t: number) => {
+    head.position.y = 1.25 + Math.sin(t * 2.5) * 0.028;
+    if (tail) tail.rotation.z = Math.sin(t * 3.4) * 0.18;
+    w1.rotation.z = Math.sin(t * 6) * 0.25;
+    w2.rotation.z = -Math.sin(t * 6) * 0.25;
+  };
+  return { body: g, parts: { head, tail, wings: [w1, w2] }, animate };
+}
+
+function buildForestglide(): BespokeBuild {
+  const g = buildProceduralArchetype('avian', { primary: 0x5d4037, secondary: 0xe67e22, accent: 0xf1c40f }, 0xf1c40f);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const w1 = g.getObjectByName('wing1')!;
+  const w2 = g.getObjectByName('wing-1')!;
+  const leafSp = orb(new THREE.MeshBasicMaterial({ color: 0xe67e22, transparent: true, opacity: 0.8 }), 0.04, -0.3, 0.8, 0.2);
+  const leafSp2 = orb(new THREE.MeshBasicMaterial({ color: 0xf1c40f, transparent: true, opacity: 0.8 }), 0.045, -0.3, 0.8, -0.2);
+  g.add(leafSp, leafSp2);
+  const animate = (t: number) => {
+    head.position.y = 1.25 + Math.sin(t * 2.3) * 0.03;
+    if (tail) tail.rotation.z = Math.sin(t * 3.0) * 0.22;
+    w1.rotation.z = Math.sin(t * 7) * 0.28;
+    w2.rotation.z = -Math.sin(t * 7) * 0.28;
+    leafSp.position.y = 0.8 + Math.sin(t * 4) * 0.12;
+    leafSp2.position.y = 0.85 + Math.cos(t * 4.5) * 0.12;
+  };
+  return { body: g, parts: { head, tail, wings: [w1, w2] }, animate };
+}
+
+function buildCanopyhawk(): BespokeBuild {
+  const g = buildProceduralArchetype('avian', { primary: 0x3e2723, secondary: 0x1b5e20, accent: 0x81c784 }, 0x81c784);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const w1 = g.getObjectByName('wing1')!;
+  const w2 = g.getObjectByName('wing-1')!;
+  const leaves1: THREE.Mesh[] = [];
+  const leaves2: THREE.Mesh[] = [];
+  for (let i = 0; i < 3; i++) {
+    const l1 = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.04, 0.25), std({ color: 0x1b5e20 }));
+    l1.position.set(-0.1 * i, 0, 0.4 + i * 0.2);
+    w1.add(l1);
+    leaves1.push(l1);
+    const l2 = l1.clone();
+    l2.position.set(-0.1 * i, 0, -0.4 - i * 0.2);
+    w2.add(l2);
+    leaves2.push(l2);
+  }
+  g.scale.setScalar(1.25);
+  const animate = (t: number) => {
+    head.position.y = 1.25 + Math.sin(t * 2.0) * 0.035;
+    if (tail) tail.rotation.z = Math.sin(t * 2.6) * 0.28;
+    w1.rotation.z = Math.sin(t * 5) * 0.32;
+    w2.rotation.z = -Math.sin(t * 5) * 0.32;
+  };
+  return { body: g, parts: { head, tail, wings: [w1, w2] }, animate };
+}
+
+// ================= NEW VOLT BUILDERS =================
+function buildShocklamb(): BespokeBuild {
+  const g = buildProceduralArchetype('beast', { primary: 0xffffff, secondary: 0xffeb3b, accent: 0xe0f7fa }, 0xffeb3b);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const puff1 = orb(std({ color: 0xffffff, roughness: 0.9 }), 0.18, -0.2, 0.8, 0.25);
+  const puff2 = orb(std({ color: 0xffffff, roughness: 0.9 }), 0.18, -0.2, 0.8, -0.25);
+  g.add(puff1, puff2);
+  const animate = (t: number) => {
+    head.position.y = 0.85 + Math.sin(t * 2.8) * 0.02;
+    tail.rotation.z = Math.sin(t * 4) * 0.15;
+    puff1.scale.setScalar(1.0 + Math.sin(t * 5) * 0.05);
+    puff2.scale.setScalar(1.0 + Math.sin(t * 5 + 1) * 0.05);
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+function buildVoltram(): BespokeBuild {
+  const g = buildProceduralArchetype('beast', { primary: 0xeeeeee, secondary: 0xd7ccc8, accent: 0xffb300 }, 0xffb300);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const horn1 = new THREE.Mesh(new THREE.TorusGeometry(0.12, 0.035, 6, 12, Math.PI * 1.5), std({ color: 0xd7ccc8, metalness: 0.8, roughness: 0.2 }));
+  horn1.position.set(-0.02, 0.28, 0.18); horn1.rotation.set(0, 0, Math.PI / 4);
+  const horn2 = horn1.clone();
+  horn2.position.set(-0.02, 0.28, -0.18); horn2.rotation.set(0, 0, Math.PI / 4);
+  head.add(horn1, horn2);
+  const animate = (t: number) => {
+    head.position.y = 0.85 + Math.sin(t * 2.6) * 0.022;
+    tail.rotation.z = Math.sin(t * 3.6) * 0.18;
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+function buildStormhorn(): BespokeBuild {
+  const g = buildProceduralArchetype('beast', { primary: 0xdddddd, secondary: 0x8d6e63, accent: 0xffd54f }, 0xffd54f);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const horn1 = bone(std({ color: 0xffd54f, emissive: 0xffb300, emissiveIntensity: 0.8 }), -0.05, 0.3, 0.14, -0.18, 0.62, 0.28, 0.04, 0.02, 6);
+  const horn2 = bone(std({ color: 0xffd54f, emissive: 0xffb300, emissiveIntensity: 0.8 }), -0.05, 0.3, -0.14, -0.18, 0.62, -0.28, 0.04, 0.02, 6);
+  head.add(horn1, horn2);
+  const arc = boltGroup(new THREE.MeshBasicMaterial({ color: 0xffd54f }), -0.15, 0.58, 0.2, -0.2, 0.8, 0, 3, 0.008);
+  head.add(arc);
+  const animate = (t: number) => {
+    head.position.y = 0.85 + Math.sin(t * 2.4) * 0.025;
+    tail.rotation.z = Math.sin(t * 3.2) * 0.22;
+    arc.visible = gate(t, 0.8, 4) > 0.4;
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+function buildFulguram(): BespokeBuild {
+  const g = buildProceduralArchetype('beast', { primary: 0xaaaaaa, secondary: 0xffd54f, accent: 0x00bcd4 }, 0x00bcd4);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const cloud1 = orb(std({ color: 0xaaaaaa, transparent: true, opacity: 0.75, roughness: 0.9 }), 0.22, -0.25, 0.9, 0.32);
+  const cloud2 = orb(std({ color: 0xaaaaaa, transparent: true, opacity: 0.75, roughness: 0.9 }), 0.22, -0.25, 0.9, -0.32);
+  g.add(cloud1, cloud2);
+  const arc = boltGroup(new THREE.MeshBasicMaterial({ color: 0x00e5ff }), -0.25, 0.9, 0.32, -0.25, 0.6, 0.32, 2, 0.008);
+  const arc2 = boltGroup(new THREE.MeshBasicMaterial({ color: 0xffeb3b }), -0.25, 0.9, -0.32, -0.25, 0.6, -0.32, 2, 0.008);
+  g.add(arc, arc2);
+  const animate = (t: number) => {
+    head.position.y = 0.85 + Math.sin(t * 2.2) * 0.028;
+    tail.rotation.z = Math.sin(t * 2.8) * 0.25;
+    cloud1.position.y = 0.9 + Math.sin(t * 3) * 0.06;
+    cloud2.position.y = 0.9 + Math.cos(t * 3) * 0.06;
+    arc.visible = gate(t, 1.0, 3) > 0.4;
+    arc2.visible = gate(t + 0.5, 1.0, 3) > 0.4;
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+function buildSparksparrow(): BespokeBuild {
+  const g = buildProceduralArchetype('avian', { primary: 0xffeb3b, secondary: 0xfff59d, accent: 0x00e5ff }, 0x00e5ff);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const spark = new THREE.Mesh(new THREE.ConeGeometry(0.02, 0.15, 4), std({ color: 0x00e5ff, emissive: 0x00e5ff, emissiveIntensity: 1.2 }));
+  spark.position.set(-0.05, 0.26, 0); spark.rotation.z = -Math.PI / 4;
+  head.add(spark);
+  const animate = (t: number) => {
+    head.position.y = 1.25 + Math.sin(t * 2.8) * 0.022;
+    if (tail) tail.rotation.z = Math.sin(t * 3.8) * 0.15;
+    spark.scale.setScalar(1.0 + Math.sin(t * 12) * 0.15);
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+function buildTeslafacon(): BespokeBuild {
+  const g = buildProceduralArchetype('avian', { primary: 0xf57f17, secondary: 0xfff59d, accent: 0x00e5ff }, 0x00e5ff);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const w1 = g.getObjectByName('wing1')!;
+  const w2 = g.getObjectByName('wing-1')!;
+  const ant1 = bone(std({ color: 0xf57f17, metalness: 0.8 }), 0.0, 0.24, 0.08, 0.05, 0.45, 0.14, 0.015, 0.01, 5);
+  const ant2 = bone(std({ color: 0xf57f17, metalness: 0.8 }), 0.0, 0.24, -0.08, 0.05, 0.45, -0.14, 0.015, 0.01, 5);
+  head.add(ant1, ant2);
+  const animate = (t: number) => {
+    head.position.y = 1.25 + Math.sin(t * 2.6) * 0.025;
+    if (tail) tail.rotation.z = Math.sin(t * 3.4) * 0.18;
+    w1.rotation.z = Math.sin(t * 6.5) * 0.26;
+    w2.rotation.z = -Math.sin(t * 6.5) * 0.26;
+  };
+  return { body: g, parts: { head, tail, wings: [w1, w2] }, animate };
+}
+
+function buildGalvanicstrike(): BespokeBuild {
+  const g = buildProceduralArchetype('avian', { primary: 0xe65100, secondary: 0xffeb3b, accent: 0x00bcd4 }, 0x00bcd4);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const w1 = g.getObjectByName('wing1')!;
+  const w2 = g.getObjectByName('wing-1')!;
+  const arc1 = boltGroup(new THREE.MeshBasicMaterial({ color: 0x00e5ff }), 0, 0, 0.3, 0, 0, 0.7, 2, 0.008);
+  const arc2 = boltGroup(new THREE.MeshBasicMaterial({ color: 0x00e5ff }), 0, 0, -0.3, 0, 0, -0.7, 2, 0.008);
+  w1.add(arc1);
+  w2.add(arc2);
+  const animate = (t: number) => {
+    head.position.y = 1.25 + Math.sin(t * 2.4) * 0.028;
+    if (tail) tail.rotation.z = Math.sin(t * 3.0) * 0.22;
+    w1.rotation.z = Math.sin(t * 7.5) * 0.3;
+    w2.rotation.z = -Math.sin(t * 7.5) * 0.3;
+    arc1.visible = gate(t, 0.8, 3) > 0.4;
+    arc2.visible = gate(t, 0.8, 3) > 0.4;
+  };
+  return { body: g, parts: { head, tail, wings: [w1, w2] }, animate };
+}
+
+function buildStormapex(): BespokeBuild {
+  const g = buildProceduralArchetype('avian', { primary: 0xffeb3b, secondary: 0x00e5ff, accent: 0xffffff }, 0xffffff);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const w1 = g.getObjectByName('wing1')!;
+  const w2 = g.getObjectByName('wing-1')!;
+  const lWing1 = new THREE.Group();
+  const seg1 = bone(new THREE.MeshBasicMaterial({ color: 0xffffff }), 0, 0, 0.2, 0.1, 0.15, 0.5, 0.025, 0.02, 5);
+  const seg2 = bone(new THREE.MeshBasicMaterial({ color: 0xffffff }), 0.1, 0.15, 0.5, 0.05, 0.05, 0.85, 0.02, 0.015, 5);
+  lWing1.add(seg1, seg2);
+  const lWing2 = new THREE.Group();
+  const seg3 = bone(new THREE.MeshBasicMaterial({ color: 0xffffff }), 0, 0, -0.2, 0.1, 0.15, -0.5, 0.025, 0.02, 5);
+  const seg4 = bone(new THREE.MeshBasicMaterial({ color: 0xffffff }), 0.1, 0.15, -0.5, 0.05, 0.05, -0.85, 0.02, 0.015, 5);
+  lWing2.add(seg3, seg4);
+  w1.add(lWing1);
+  w2.add(lWing2);
+  g.scale.setScalar(1.22);
+  const animate = (t: number) => {
+    head.position.y = 1.25 + Math.sin(t * 2.2) * 0.03;
+    if (tail) tail.rotation.z = Math.sin(t * 2.6) * 0.25;
+    w1.rotation.z = Math.sin(t * 8.5) * 0.35;
+    w2.rotation.z = -Math.sin(t * 8.5) * 0.35;
+  };
+  return { body: g, parts: { head, tail, wings: [w1, w2] }, animate };
+}
+
+function buildVoltcrab(): BespokeBuild {
+  const g = buildProceduralArchetype('shell', { primary: 0xfff59d, secondary: 0x8d6e63, accent: 0xffd54f }, 0xffd54f);
+  const head = g.getObjectByName('head')!;
+  const claw1 = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.06, 0.18, 6), std({ color: 0xffd54f }));
+  claw1.position.set(0.35, 0.25, 0.28); claw1.rotation.set(0.3, 0.2, Math.PI / 4);
+  const claw2 = claw1.clone();
+  claw2.position.set(0.35, 0.25, -0.28); claw2.rotation.set(-0.3, -0.2, Math.PI / 4);
+  g.add(claw1, claw2);
+  const animate = (t: number) => {
+    head.position.y = 0.42 + Math.sin(t * 2.5) * 0.015;
+    claw1.rotation.y = 0.2 + Math.sin(t * 3.5) * 0.08;
+    claw2.rotation.y = -0.2 - Math.sin(t * 3.5) * 0.08;
+  };
+  return { body: g, parts: { head }, animate };
+}
+
+function buildStaticclaw(): BespokeBuild {
+  const g = buildProceduralArchetype('shell', { primary: 0xffeb3b, secondary: 0x795548, accent: 0x00e5ff }, 0x00e5ff);
+  const head = g.getObjectByName('head')!;
+  const claw1 = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.08, 0.24, 6), std({ color: 0xffeb3b, emissive: 0x00e5ff, emissiveIntensity: 0.5 }));
+  claw1.position.set(0.38, 0.25, 0.32); claw1.rotation.set(0.3, 0.2, Math.PI / 4);
+  const claw2 = claw1.clone();
+  claw2.position.set(0.38, 0.25, -0.32); claw2.rotation.set(-0.3, -0.2, Math.PI / 4);
+  g.add(claw1, claw2);
+  const animate = (t: number) => {
+    head.position.y = 0.42 + Math.sin(t * 2.3) * 0.018;
+    claw1.rotation.y = 0.2 + Math.sin(t * 3.2) * 0.1;
+    claw2.rotation.y = -0.2 - Math.sin(t * 3.2) * 0.1;
+  };
+  return { body: g, parts: { head }, animate };
+}
+
+function buildTeslashell(): BespokeBuild {
+  const g = buildProceduralArchetype('shell', { primary: 0xffd54f, secondary: 0x5d4037, accent: 0x00e5ff }, 0x00e5ff);
+  const head = g.getObjectByName('head')!;
+  const claw1 = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.09, 0.28, 6), std({ color: 0xffd54f, emissive: 0x00e5ff, emissiveIntensity: 0.6 }));
+  claw1.position.set(0.42, 0.25, 0.36); claw1.rotation.set(0.3, 0.2, Math.PI / 4);
+  const claw2 = claw1.clone();
+  claw2.position.set(0.42, 0.25, -0.36); claw2.rotation.set(-0.3, -0.2, Math.PI / 4);
+  g.add(claw1, claw2);
+  const coil = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.035, 6, 16), std({ color: 0x00e5ff, metalness: 0.8, emissive: 0x00e5ff, emissiveIntensity: 1.0 }));
+  coil.position.set(-0.15, 0.68, 0); coil.rotation.y = Math.PI / 2;
+  g.add(coil);
+  const animate = (t: number) => {
+    head.position.y = 0.42 + Math.sin(t * 2.1) * 0.02;
+    claw1.rotation.y = 0.2 + Math.sin(t * 3.0) * 0.12;
+    claw2.rotation.y = -0.2 - Math.sin(t * 3.0) * 0.12;
+    coil.rotation.x = t * 2;
+  };
+  return { body: g, parts: { head }, animate };
+}
+
+function buildStormgoliath(): BespokeBuild {
+  const g = buildProceduralArchetype('shell', { primary: 0xffc107, secondary: 0x3e2723, accent: 0x00e5ff }, 0x00e5ff);
+  const head = g.getObjectByName('head')!;
+  const claw1 = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.13, 0.36, 8), std({ color: 0xffc107, emissive: 0x00e5ff, emissiveIntensity: 0.8 }));
+  claw1.position.set(0.48, 0.3, 0.42); claw1.rotation.set(0.3, 0.2, Math.PI / 4);
+  const claw2 = claw1.clone();
+  claw2.position.set(0.48, 0.3, -0.42); claw2.rotation.set(-0.3, -0.2, Math.PI / 4);
+  g.add(claw1, claw2);
+  const arc = boltGroup(new THREE.MeshBasicMaterial({ color: 0x00e5ff }), -0.1, 0.72, 0, 0.4, 0.4, 0.4, 3, 0.012);
+  g.add(arc);
+  g.scale.setScalar(1.26);
+  const animate = (t: number) => {
+    head.position.y = 0.42 + Math.sin(t * 1.8) * 0.025;
+    claw1.rotation.y = 0.2 + Math.sin(t * 2.5) * 0.15;
+    claw2.rotation.y = -0.2 - Math.sin(t * 2.5) * 0.15;
+    arc.visible = gate(t, 0.9, 4) > 0.45;
+  };
+  return { body: g, parts: { head }, animate };
+}
+
+// ================= NEW GALE BUILDERS =================
+function buildSpacepup(): BespokeBuild {
+  const g = buildProceduralArchetype('beast', { primary: 0x5c6bc0, secondary: 0x9fa8da, accent: 0xff80ab }, 0xff80ab);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const star = orb(new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xff80ab, emissiveIntensity: 1.5 }), 0.05, -0.85, 0.82, 0);
+  g.add(star);
+  const animate = (t: number) => {
+    head.position.y = 0.85 + Math.sin(t * 2.6) * 0.02;
+    tail.rotation.z = Math.sin(t * 3.6) * 0.18;
+    star.position.y = 0.82 + Math.sin(t * 6) * 0.05;
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+function buildCosmichound(): BespokeBuild {
+  const g = buildProceduralArchetype('beast', { primary: 0x3f51b5, secondary: 0xc5cae9, accent: 0xff4081 }, 0xff4081);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const starPaws: THREE.Mesh[] = [];
+  for (const [x, z] of [[0.28, 0.22], [0.28, -0.22], [-0.28, 0.22], [-0.28, -0.22]]) {
+    const paw = orb(new THREE.MeshBasicMaterial({ color: 0xff4081, transparent: true, opacity: 0.6 }), 0.08, x, 0.06, z);
+    g.add(paw);
+    starPaws.push(paw);
+  }
+  const animate = (t: number) => {
+    head.position.y = 0.85 + Math.sin(t * 2.4) * 0.022;
+    tail.rotation.z = Math.sin(t * 3.2) * 0.22;
+    starPaws.forEach((paw, idx) => {
+      paw.scale.setScalar(1.0 + Math.sin(t * 5 + idx) * 0.12);
+    });
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+function buildStellarwolf(): BespokeBuild {
+  const g = buildProceduralArchetype('beast', { primary: 0x283593, secondary: 0xffffff, accent: 0x00e5ff }, 0x00e5ff);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.02, 6, 20), std({ color: 0x00e5ff, emissive: 0x00e5ff, emissiveIntensity: 1.2 }));
+  ring.position.set(0, 0.55, 0); ring.rotation.x = Math.PI / 2;
+  g.add(ring);
+  const animate = (t: number) => {
+    head.position.y = 0.85 + Math.sin(t * 2.2) * 0.025;
+    tail.rotation.z = Math.sin(t * 2.8) * 0.25;
+    ring.rotation.z = t * 1.2;
+    ring.position.y = 0.55 + Math.sin(t * 2.5) * 0.06;
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+function buildNebulamort(): BespokeBuild {
+  const g = buildProceduralArchetype('beast', { primary: 0x1a237e, secondary: 0x9c27b0, accent: 0x00e5ff }, 0x00e5ff);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const cloud1 = orb(new THREE.MeshBasicMaterial({ color: 0x9c27b0, transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending }), 0.28, -0.2, 0.8, 0.22);
+  const cloud2 = orb(new THREE.MeshBasicMaterial({ color: 0x00e5ff, transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending }), 0.28, -0.2, 0.8, -0.22);
+  g.add(cloud1, cloud2);
+  g.scale.setScalar(1.24);
+  const animate = (t: number) => {
+    head.position.y = 0.85 + Math.sin(t * 2.0) * 0.03;
+    tail.rotation.z = Math.sin(t * 2.4) * 0.3;
+    cloud1.scale.setScalar(1.0 + Math.sin(t * 2.8) * 0.15);
+    cloud2.scale.setScalar(1.0 + Math.cos(t * 2.8) * 0.15);
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+function buildStarowlet(): BespokeBuild {
+  const g = buildProceduralArchetype('avian', { primary: 0x7986cb, secondary: 0xe8eaf6, accent: 0xffeb3b }, 0xffeb3b);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const crown = orb(std({ color: 0xffeb3b, emissive: 0xffeb3b, emissiveIntensity: 1.2 }), 0.04, 0, 0.28, 0);
+  head.add(crown);
+  const animate = (t: number) => {
+    head.position.y = 1.25 + Math.sin(t * 2.6) * 0.02;
+    if (tail) tail.rotation.z = Math.sin(t * 3.6) * 0.15;
+    crown.position.y = 0.28 + Math.sin(t * 5) * 0.03;
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+function buildAstralowl(): BespokeBuild {
+  const g = buildProceduralArchetype('avian', { primary: 0x3f51b5, secondary: 0xc5cae9, accent: 0x00e5ff }, 0x00e5ff);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const w1 = g.getObjectByName('wing1')!;
+  const w2 = g.getObjectByName('wing-1')!;
+  const star1 = orb(new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x00e5ff, emissiveIntensity: 1.5 }), 0.04, 0.1, 0, 0.5);
+  const star2 = orb(new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x00e5ff, emissiveIntensity: 1.5 }), 0.04, 0.1, 0, -0.5);
+  w1.add(star1);
+  w2.add(star2);
+  const animate = (t: number) => {
+    head.position.y = 1.25 + Math.sin(t * 2.4) * 0.025;
+    if (tail) tail.rotation.z = Math.sin(t * 3.2) * 0.18;
+    w1.rotation.z = Math.sin(t * 6) * 0.24;
+    w2.rotation.z = -Math.sin(t * 6) * 0.24;
+    star1.scale.setScalar(1.0 + Math.sin(t * 8) * 0.2);
+    star2.scale.setScalar(1.0 + Math.sin(t * 8 + 1) * 0.2);
+  };
+  return { body: g, parts: { head, tail, wings: [w1, w2] }, animate };
+}
+
+function buildCosmoswing(): BespokeBuild {
+  const g = buildProceduralArchetype('avian', { primary: 0x1a237e, secondary: 0xe8eaf6, accent: 0xffffff }, 0xffffff);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const w1 = g.getObjectByName('wing1')!;
+  const w2 = g.getObjectByName('wing-1')!;
+  const tip1 = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.45, 5), new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x00e5ff, emissiveIntensity: 1.8 }));
+  tip1.rotation.x = Math.PI / 2; tip1.position.set(0, 0, 0.8);
+  const tip2 = tip1.clone(); tip2.rotation.x = -Math.PI / 2; tip2.position.z = -0.8;
+  w1.add(tip1);
+  w2.add(tip2);
+  const animate = (t: number) => {
+    head.position.y = 1.25 + Math.sin(t * 2.2) * 0.028;
+    if (tail) tail.rotation.z = Math.sin(t * 2.8) * 0.22;
+    w1.rotation.z = Math.sin(t * 6.5) * 0.28;
+    w2.rotation.z = -Math.sin(t * 6.5) * 0.28;
+  };
+  return { body: g, parts: { head, tail, wings: [w1, w2] }, animate };
+}
+
+function buildGalaxia(): BespokeBuild {
+  const g = buildProceduralArchetype('avian', { primary: 0x0d1b2a, secondary: 0x9c27b0, accent: 0x00f5ff }, 0x00f5ff);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const w1 = g.getObjectByName('wing1')!;
+  const w2 = g.getObjectByName('wing-1')!;
+  const gal1 = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.02, 4, 16), std({ color: 0x00f5ff, emissive: 0x00f5ff, emissiveIntensity: 1.5 }));
+  gal1.position.set(0, 0, 0.65); gal1.rotation.x = Math.PI / 2;
+  const gal2 = gal1.clone(); gal2.position.z = -0.65;
+  w1.add(gal1);
+  w2.add(gal2);
+  g.scale.setScalar(1.25);
+  const animate = (t: number) => {
+    head.position.y = 1.25 + Math.sin(t * 1.9) * 0.032;
+    if (tail) tail.rotation.z = Math.sin(t * 2.4) * 0.26;
+    w1.rotation.z = Math.sin(t * 5) * 0.32;
+    w2.rotation.z = -Math.sin(t * 5) * 0.32;
+    gal1.rotation.z = t * 2.5;
+    gal2.rotation.z = -t * 2.5;
+  };
+  return { body: g, parts: { head, tail, wings: [w1, w2] }, animate };
+}
+
+function buildNebwyrm(): BespokeBuild {
+  const g = buildProceduralArchetype('serpent', { primary: 0x4a148c, secondary: 0x7c4dff, accent: 0x00e5ff }, 0x00e5ff);
+  const head = g.getObjectByName('head')!;
+  const sphere = orb(new THREE.MeshBasicMaterial({ color: 0x7c4dff, transparent: true, opacity: 0.6 }), 0.05, -0.4, 0.5, 0.1);
+  g.add(sphere);
+  const animate = (t: number) => {
+    head.position.y = 0.85 + Math.sin(t * 2.4) * 0.02;
+    sphere.position.y = 0.5 + Math.sin(t * 4) * 0.08;
+  };
+  return { body: g, parts: { head }, animate };
+}
+
+function buildVoidwyrm(): BespokeBuild {
+  const g = buildProceduralArchetype('serpent', { primary: 0x311b92, secondary: 0xb388ff, accent: 0xe040fb }, 0xe040fb);
+  const head = g.getObjectByName('head')!;
+  const rift = new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.02, 4, 14), std({ color: 0xe040fb, emissive: 0xe040fb, emissiveIntensity: 1.0 }));
+  rift.position.set(-0.2, 0.6, 0); rift.rotation.y = Math.PI / 2;
+  g.add(rift);
+  const animate = (t: number) => {
+    head.position.y = 0.85 + Math.sin(t * 2.2) * 0.022;
+    rift.rotation.x = t * 1.5;
+    rift.position.y = 0.6 + Math.sin(t * 3) * 0.05;
+  };
+  return { body: g, parts: { head }, animate };
+}
+
+function buildRiftserpent(): BespokeBuild {
+  const g = buildProceduralArchetype('serpent', { primary: 0x1a0c42, secondary: 0x7c4dff, accent: 0x00e5ff }, 0x00e5ff);
+  const head = g.getObjectByName('head')!;
+  const box = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.12), std({ color: 0x1a0c42, emissive: 0x00e5ff, emissiveIntensity: 1.2 }));
+  box.position.set(-0.3, 0.8, 0);
+  g.add(box);
+  const animate = (t: number) => {
+    head.position.y = 0.85 + Math.sin(t * 2.0) * 0.025;
+    box.rotation.set(t * 1.2, t * 0.8, 0);
+    box.position.y = 0.8 + Math.sin(t * 3.5) * 0.08;
+  };
+  return { body: g, parts: { head }, animate };
+}
+
+function buildCosmoclysm(): BespokeBuild {
+  const g = buildProceduralArchetype('serpent', { primary: 0x0a0026, secondary: 0x9c27b0, accent: 0xffeb3b }, 0xffeb3b);
+  const head = g.getObjectByName('head')!;
+  const planets: THREE.Mesh[] = [];
+  for (let i = 0; i < 3; i++) {
+    const colors = [0xff4081, 0x00e5ff, 0xffeb3b];
+    const p = orb(std({ color: colors[i], emissive: colors[i], emissiveIntensity: 0.8 }), 0.045, 0, 0.8, 0);
+    g.add(p);
+    planets.push(p);
+  }
+  g.scale.setScalar(1.22);
+  const animate = (t: number) => {
+    head.position.y = 0.85 + Math.sin(t * 1.8) * 0.03;
+    planets.forEach((p, idx) => {
+      const a = t * 1.8 + (idx * Math.PI * 2 / 3);
+      p.position.set(-0.25 + Math.cos(a) * 0.42, 0.8 + Math.sin(t * 3.2 + idx) * 0.08, Math.sin(a) * 0.42);
+    });
+  };
+  return { body: g, parts: { head }, animate };
+}
+
+// ================= NEW UMBRA BUILDERS =================
+function buildGloomwing(): BespokeBuild {
+  const g = buildProceduralArchetype('avian', { primary: 0x212121, secondary: 0x424242, accent: 0xba68c8 }, 0xba68c8);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const w1 = g.getObjectByName('wing1')!;
+  const w2 = g.getObjectByName('wing-1')!;
+  const animate = (t: number) => {
+    head.position.y = 1.25 + Math.sin(t * 2.8) * 0.022;
+    if (tail) tail.rotation.z = Math.sin(t * 3.8) * 0.15;
+    w1.rotation.z = Math.sin(t * 8) * 0.25;
+    w2.rotation.z = -Math.sin(t * 8) * 0.25;
+  };
+  return { body: g, parts: { head, tail, wings: [w1, w2] }, animate };
+}
+
+function buildShadowwing(): BespokeBuild {
+  const g = buildProceduralArchetype('avian', { primary: 0x111111, secondary: 0x303030, accent: 0x8e24aa }, 0x8e24aa);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const w1 = g.getObjectByName('wing1')!;
+  const w2 = g.getObjectByName('wing-1')!;
+  const spark1 = orb(new THREE.MeshBasicMaterial({ color: 0x8e24aa }), 0.035, 0, 0, 0.6);
+  const spark2 = orb(new THREE.MeshBasicMaterial({ color: 0x8e24aa }), 0.035, 0, 0, -0.6);
+  w1.add(spark1);
+  w2.add(spark2);
+  const animate = (t: number) => {
+    head.position.y = 1.25 + Math.sin(t * 2.6) * 0.025;
+    if (tail) tail.rotation.z = Math.sin(t * 3.4) * 0.18;
+    w1.rotation.z = Math.sin(t * 7.5) * 0.28;
+    w2.rotation.z = -Math.sin(t * 7.5) * 0.28;
+    spark1.scale.setScalar(1.0 + Math.sin(t * 14) * 0.2);
+    spark2.scale.setScalar(1.0 + Math.sin(t * 14) * 0.2);
+  };
+  return { body: g, parts: { head, tail, wings: [w1, w2] }, animate };
+}
+
+function buildVoidgoyle(): BespokeBuild {
+  const g = buildProceduralArchetype('avian', { primary: 0x0d0d0d, secondary: 0x222222, accent: 0xe040fb }, 0xe040fb);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const w1 = g.getObjectByName('wing1')!;
+  const w2 = g.getObjectByName('wing-1')!;
+  const horn1 = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.2, 5), std({ color: 0x0d0d0d }));
+  horn1.position.set(-0.05, 0.22, 0.1); horn1.rotation.set(0.2, 0, Math.PI / 4);
+  const horn2 = horn1.clone();
+  horn2.position.set(-0.05, 0.22, -0.1); horn2.rotation.set(-0.2, 0, Math.PI / 4);
+  head.add(horn1, horn2);
+  const animate = (t: number) => {
+    head.position.y = 1.25 + Math.sin(t * 2.3) * 0.028;
+    if (tail) tail.rotation.z = Math.sin(t * 3.0) * 0.22;
+    w1.rotation.z = Math.sin(t * 6.5) * 0.3;
+    w2.rotation.z = -Math.sin(t * 6.5) * 0.3;
+  };
+  return { body: g, parts: { head, tail, wings: [w1, w2] }, animate };
+}
+
+function buildApocalypsebat(): BespokeBuild {
+  const g = buildProceduralArchetype('avian', { primary: 0x050505, secondary: 0x111111, accent: 0x6a1b9a }, 0x6a1b9a);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const w1 = g.getObjectByName('wing1')!;
+  const w2 = g.getObjectByName('wing-1')!;
+  const border1 = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.02, 0.35), new THREE.MeshBasicMaterial({ color: 0x6a1b9a }));
+  border1.position.set(0, 0, 0.45);
+  const border2 = border1.clone(); border2.position.z = -0.45;
+  w1.add(border1);
+  w2.add(border2);
+  g.scale.setScalar(1.24);
+  const animate = (t: number) => {
+    head.position.y = 1.25 + Math.sin(t * 2.0) * 0.032;
+    if (tail) tail.rotation.z = Math.sin(t * 2.5) * 0.28;
+    w1.rotation.z = Math.sin(t * 5.5) * 0.35;
+    w2.rotation.z = -Math.sin(t * 5.5) * 0.35;
+  };
+  return { body: g, parts: { head, tail, wings: [w1, w2] }, animate };
+}
+
+function buildDuskkitty(): BespokeBuild {
+  const g = buildProceduralArchetype('beast', { primary: 0x212121, secondary: 0x616161, accent: 0xe040fb }, 0xe040fb);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const animate = (t: number) => {
+    head.position.y = 0.85 + Math.sin(t * 2.8) * 0.018;
+    tail.rotation.z = Math.sin(t * 3.8) * 0.15;
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+function buildUmbraknell(): BespokeBuild {
+  const g = buildProceduralArchetype('beast', { primary: 0x111111, secondary: 0x424242, accent: 0x80deea }, 0x80deea);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const icyFeets: THREE.Mesh[] = [];
+  for (const [x, z] of [[0.28, 0.22], [0.28, -0.22], [-0.28, 0.22], [-0.28, -0.22]]) {
+    const claw = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.08, 4), std({ color: 0x80deea, emissive: 0x80deea, emissiveIntensity: 0.6 }));
+    claw.position.set(x, 0.05, z); claw.rotation.z = Math.PI;
+    g.add(claw);
+    icyFeets.push(claw);
+  }
+  const animate = (t: number) => {
+    head.position.y = 0.85 + Math.sin(t * 2.5) * 0.02;
+    tail.rotation.z = Math.sin(t * 3.2) * 0.18;
+    icyFeets.forEach((c, idx) => {
+      c.scale.setScalar(1.0 + Math.sin(t * 6 + idx) * 0.1);
+    });
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+function buildShadowstalker(): BespokeBuild {
+  const g = buildProceduralArchetype('beast', { primary: 0x0d0d0d, secondary: 0x212121, accent: 0x00e5ff }, 0x00e5ff);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const spikes: THREE.Mesh[] = [];
+  for (let i = 0; i < 3; i++) {
+    const sp = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.18, 4), std({ color: 0x00e5ff, emissive: 0x00e5ff, emissiveIntensity: 0.8 }));
+    sp.position.set(-0.15 - i * 0.15, 0.8, 0); sp.rotation.z = Math.PI / 6;
+    g.add(sp);
+    spikes.push(sp);
+  }
+  const animate = (t: number) => {
+    head.position.y = 0.85 + Math.sin(t * 2.2) * 0.022;
+    tail.rotation.z = Math.sin(t * 2.8) * 0.22;
+    spikes.forEach((sp, idx) => {
+      sp.position.y = 0.8 + Math.sin(t * 3 + idx) * 0.02;
+    });
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+function buildVoidreaper(): BespokeBuild {
+  const g = buildProceduralArchetype('beast', { primary: 0x050505, secondary: 0x0d0d0d, accent: 0xe040fb }, 0xe040fb);
+  const head = g.getObjectByName('head')!;
+  const tail = g.getObjectByName('tail')!;
+  const claw1 = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.25, 4), std({ color: 0xe040fb, emissive: 0xe040fb, emissiveIntensity: 1.0 }));
+  claw1.position.set(0.48, 0.2, 0.28); claw1.rotation.set(0.2, 0, -Math.PI / 4);
+  const claw2 = claw1.clone();
+  claw2.position.set(0.48, 0.2, -0.28); claw2.rotation.set(-0.2, 0, -Math.PI / 4);
+  g.add(claw1, claw2);
+  g.scale.setScalar(1.25);
+  const animate = (t: number) => {
+    head.position.y = 0.85 + Math.sin(t * 1.8) * 0.028;
+    tail.rotation.z = Math.sin(t * 2.4) * 0.26;
+    claw1.position.y = 0.2 + Math.sin(t * 4.5) * 0.04;
+    claw2.position.y = 0.2 + Math.cos(t * 4.5) * 0.04;
+  };
+  return { body: g, parts: { head, tail }, animate };
+}
+
+function buildCrypttot(): BespokeBuild {
+  const g = buildProceduralArchetype('brute', { primary: 0x616161, secondary: 0x757575, accent: 0x9e9e9e }, 0x9e9e9e);
+  const head = g.getObjectByName('head')!;
+  const animate = (t: number) => {
+    head.position.y = 1.5 + Math.sin(t * 2.0) * 0.015;
+  };
+  return { body: g, parts: { head }, animate };
+}
+
+function buildTombgolem(): BespokeBuild {
+  const g = buildProceduralArchetype('brute', { primary: 0x424242, secondary: 0x616161, accent: 0xba68c8 }, 0xba68c8);
+  const head = g.getObjectByName('head')!;
+  const slab = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.45, 0.25), std({ color: 0x424242, roughness: 0.95 }));
+  slab.position.set(-0.25, 0.95, 0); slab.rotation.y = Math.PI / 4;
+  g.add(slab);
+  const animate = (t: number) => {
+    head.position.y = 1.5 + Math.sin(t * 1.8) * 0.02;
+    slab.position.y = 0.95 + Math.sin(t * 2.2) * 0.03;
+  };
+  return { body: g, parts: { head }, animate };
+}
+
+function buildCairnwarden(): BespokeBuild {
+  const g = buildProceduralArchetype('brute', { primary: 0x212121, secondary: 0x424242, accent: 0x9c27b0 }, 0x9c27b0);
+  const head = g.getObjectByName('head')!;
+  const slab1 = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.3, 0.18), std({ color: 0x212121, roughness: 0.95 }));
+  const slab2 = slab1.clone();
+  slab1.position.set(-0.35, 1.05, 0.25); slab1.rotation.set(0.1, 0.2, 0.1);
+  slab2.position.set(-0.35, 1.05, -0.25); slab2.rotation.set(-0.1, -0.2, 0.1);
+  g.add(slab1, slab2);
+  const animate = (t: number) => {
+    head.position.y = 1.5 + Math.sin(t * 1.6) * 0.024;
+    slab1.position.y = 1.05 + Math.sin(t * 2.6) * 0.05;
+    slab2.position.y = 1.05 + Math.cos(t * 2.6) * 0.05;
+  };
+  return { body: g, parts: { head }, animate };
+}
+
+function buildObeliskarch(): BespokeBuild {
+  const g = buildProceduralArchetype('brute', { primary: 0x0d0d0d, secondary: 0x212121, accent: 0xd500f9 }, 0xd500f9);
+  const head = g.getObjectByName('head')!;
+  const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.72, 0.25), std({ color: 0x0d0d0d, emissive: 0xd500f9, emissiveIntensity: 0.6 }));
+  pillar.position.set(0, 0.95, 0);
+  g.add(pillar);
+  g.scale.setScalar(1.24);
+  const animate = (t: number) => {
+    head.position.y = 1.5 + Math.sin(t * 1.4) * 0.028;
+    pillar.position.y = 0.95 + Math.sin(t * 2) * 0.02;
+  };
+  return { body: g, parts: { head }, animate };
+}
+
 // ---------------- registry ----------------
 export const BESPOKE: Record<string, BespokeBuilder> = {
+  // Blaze
+  pyropup: buildPyropup,
+  pyrohound: buildPyrohound,
+  cindawing: buildCindawing,
+  cindafalcon: buildCindafalcon,
+  magmatot: buildMagmatot,
+  magmatort: buildMagmatort,
+  flamesal: buildFlamesal,
+  emberskink: buildEmberskink,
+  lavaserpent: buildLavaserpent,
+  magmadrak: buildMagmadrak,
+  coalbug: buildCoalbug,
+  cinderscarab: buildCinderscarab,
+  pyroshell: buildPyroshell,
+  coalossus: buildCoalossus,
+  flarefly: buildFlarefly,
+  sparkwing: buildSparkwing,
+  lumiprix: buildLumiprix,
+  aurorafire: buildAurorafire,
+
+  // Tide
+  bubbledrag: buildBubbledrag,
+  pearlwyrm: buildPearlwyrm,
+  mistpaw: buildMistpaw,
+  frostlynx: buildFrostlynx,
+  coralbud: buildCoralbud,
+  reefguard: buildReefguard,
+  wavepup: buildWavepup,
+  tidehound: buildTidehound,
+  oceanclysm: buildOceanclysm,
+  abysshound: buildAbysshound,
+  jellymote: buildJellymote,
+  aquajelly: buildAquajelly,
+  voltmedusa: buildVoltmedusa,
+  abysssiren: buildAbysssiren,
+  seaturt: buildSeaturt,
+  reefscale: buildReefscale,
+  pearlshield: buildPearlshield,
+  oceantitan: buildOceantitan,
+
+  // Verdant
+  seedsqrl: buildSeedsqrl,
+  voltcanopy: buildVoltcanopy,
+  sporepix: buildSporepix,
+  fungoking: buildFungoking,
+  rootlet: buildRootlet,
+  grovewarden: buildGrovewarden,
+  leaffawn: buildLeaffawn,
+  sylvadeer: buildSylvadeer,
+  thornstag: buildThornstag,
+  solarstag: buildSolarstag,
+  snapsprout: buildSnapsprout,
+  snaporchid: buildSnaporchid,
+  brambleviper: buildBrambleviper,
+  rotwyrm: buildRotwyrm,
+  barkchick: buildBarkchick,
+  sylvawing: buildSylvawing,
+  forestglide: buildForestglide,
+  canopyhawk: buildCanopyhawk,
+
+  // Volt
+  joltmous: buildJoltmous,
+  galvanix: buildGalvanix,
+  sparkeef: buildSparkeef,
+  tesladrag: buildTesladrag,
+  stormchick: buildStormchick,
+  voltwing: buildVoltwing,
+  shocklamb: buildShocklamb,
+  voltram: buildVoltram,
+  stormhorn: buildStormhorn,
+  fulguram: buildFulguram,
+  sparksparrow: buildSparksparrow,
+  teslafacon: buildTeslafacon,
+  galvanicstrike: buildGalvanicstrike,
+  stormapex: buildStormapex,
+  voltcrab: buildVoltcrab,
+  staticclaw: buildStaticclaw,
+  teslashell: buildTeslashell,
+  stormgoliath: buildStormgoliath,
+
+  // Gale
+  nebulet: buildNebulet,
+  astralpaw: buildAstralpaw,
+  galewyrm: buildGalewyrm,
+  tempestwyrm: buildTempestwyrm,
+  cosmolet: buildCosmolet,
+  stargazer: buildStargazer,
+  spacepup: buildSpacepup,
+  cosmichound: buildCosmichound,
+  stellarwolf: buildStellarwolf,
+  nebulamort: buildNebulamort,
+  starowlet: buildStarowlet,
+  astralowl: buildAstralowl,
+  cosmoswing: buildCosmoswing,
+  galaxia: buildGalaxia,
+  nebwyrm: buildNebwyrm,
+  voidwyrm: buildVoidwyrm,
+  riftserpent: buildRiftserpent,
+  cosmoclysm: buildCosmoclysm,
+
+  // Umbra
+  voidkit: buildVoidkit,
+  nebularix: buildNebularix,
+  vampbat: buildVampbat,
+  nosferatus: buildNosferatus,
+  gravemini: buildGravemini,
+  gravemonolith: buildGravemonolith,
+  gloomwing: buildGloomwing,
+  shadowwing: buildShadowwing,
+  voidgoyle: buildVoidgoyle,
+  apocalypsebat: buildApocalypsebat,
+  duskkitty: buildDuskkitty,
+  umbraknell: buildUmbraknell,
+  shadowstalker: buildShadowstalker,
+  voidreaper: buildVoidreaper,
+  crypttot: buildCrypttot,
+  tombgolem: buildTombgolem,
+  cairnwarden: buildCairnwarden,
+  obeliskarch: buildObeliskarch,
+
+
   cindcub: buildCindcub,
   pyrofang: buildPyrofang,
   blazemaw: buildBlazemaw,
