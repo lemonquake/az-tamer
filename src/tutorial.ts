@@ -6,7 +6,7 @@
 // the overlay steps aside and waits until the player does it.
 // ============================================================
 import { Player } from './state';
-import { isMenuOpen, choose } from './ui';
+import { isMenuOpen, choose, openPanel } from './ui';
 import { sfx } from './audio';
 import { worldOrbit } from './camorbit';
 
@@ -425,14 +425,110 @@ export async function runBattleTutorial(player: Player, replay = false): Promise
 // Replay — every chapter of the Field Manual can be revisited
 // from the field menu (Esc), watch-only (no drills).
 // ============================================================
+let runningGuardianTut = false;
+
+export async function runGuardianTutorial(player: Player, replay = false): Promise<void> {
+  if (runningGuardianTut) return;
+  if (!replay && player.flags['tut_guardian_ui']) return;
+
+  runningGuardianTut = true;
+  const panelGrid = document.getElementById('guardians-panel-grid');
+  let openedPanel = false;
+
+  if (!panelGrid) {
+    openPanel('guardians', player, { canSave: false });
+    openedPanel = true;
+    // Wait a brief moment for the DOM to render
+    await new Promise(r => setTimeout(r, 100));
+  }
+
+  const H = 'Instructor Hale';
+
+  try {
+    await runTutorial('FIELD MANUAL · IV — GUARDIAN REGISTRY', [
+      {
+        speaker: H,
+        text: `Welcome to the Guardian registry, Graduate! Managing your battle partners is key to survival in the dungeon depths. Let's review the core mechanics of your team roster.`,
+        highlight: 'guardians-panel-grid',
+        pointer: 'top'
+      },
+      {
+        speaker: H,
+        text: `Left side: your active <b>Party</b>. You can carry up to <b>3 Guardians</b> into battle. Right side: your <b>Reserve</b>. Use the <b>Bench</b> and <b>To Party</b> buttons to modify your lineup. Always maintain element diversity!`,
+        highlight: 'guardians-panel-grid',
+        pointer: 'top'
+      },
+      {
+        speaker: H,
+        text: `Every Guardian gains experience and levels up, but cannot exceed their **Level Cap** (max level 50 by default). You'll need to satisfy specific evolution conditions to raise their forms and potential.`,
+        highlight: 'guardians-panel-grid',
+        pointer: 'top'
+      },
+      {
+        speaker: H,
+        text: `Now, let's talk about power! Each Guardian can now learn and equip up to **5 active Techniques**! In the past, the registry restricted you to 4, but we've upgraded the slots to allow deeper combos.`,
+      },
+      {
+        speaker: H,
+        text: `Every 5 levels, your Guardian gains a **Technique Point (TP)**. Click <b>Info</b> then <b>Manage Techniques</b> to spend them. Learning a technique costs 1 TP. But here's the best part: you can **Unlearn** active moves at any time to get a full 1 TP refund!`,
+      },
+      {
+        speaker: H,
+        text: `Any forgotten or unlearned moves are sent straight to your **Tech Box (Unlocked Moves)**. They are never lost, and you can re-learn them whenever you choose, making experimentation completely free!`,
+      },
+      {
+        speaker: H,
+        text: `Always respect the elemental matchups:
+        <br>🔥 **Blaze** melts 🌿 **Verdant**.
+        <br>🌿 **Verdant** drains 💧 **Tide**.
+        <br>💧 **Tide** douses 🔥 **Blaze**.
+        <br>⚡ **Volt** shocks both 💧 **Tide** and 🌀 **Gale**.
+        <br>🌀 **Gale** slices 🌿 **Verdant**.
+        <br>🌑 **Umbra** devours ⚡ **Volt**.
+        <br>Hit weaknesses for **Devastating** double damage!`,
+      },
+      {
+        speaker: H,
+        text: `Finally, utilize status effects to outmaneuver threats:
+        <br>❄️ **Frozen**: Stuns the target but grants +30% Defense. Strike them with a <b>Physical</b> move to **Shatter** the ice for +40% extra damage!
+        <br>💤 **Slumber**: Puts target to sleep. The next waking direct attack deals +50% damage.
+        <br>🛡️ **Shield**: Absorbs flat damage. Striking a <b>Void Shield</b> instantly **curses** the attacker!
+        <br>👿 **Cursed**: Target takes damage over time, takes **double DoT damage**, and **cannot heal** at all!
+        <br>💢 **Berserk**: Grants +50% Attack, but forces basic strikes on random targets.
+        <br>🧪 **Corrosion**: Shreds HP and permanently reduces Defense by 15% every turn.`,
+      },
+      {
+        speaker: H,
+        text: `That covers the registry guidelines. Click <b>Info</b> on any Guardian, open the management screen, and configure your dream team. Good luck out there, Graduate!`,
+      }
+    ]);
+
+    if (!replay) {
+      player.flags['tut_guardian_ui'] = true;
+      player.save();
+    }
+  } finally {
+    runningGuardianTut = false;
+    if (openedPanel) {
+      document.getElementById('panel-close')?.click();
+    }
+  }
+}
+
+// ============================================================
+// Replay — every chapter of the Field Manual can be revisited
+// from the field menu (Esc), watch-only (no drills).
+// ============================================================
 export async function openTutorialReplayMenu(player: Player): Promise<void> {
   const pick = await choose('Field Manual', 'Replay which chapter? Hale insists the material never goes stale.', [
     '📗 Manual I — Graduate Orientation',
     '📘 Manual II — Haven City',
     '📕 Manual III — Battle Doctrine',
+    '📙 Manual IV — Guardian Management',
     'Close',
   ]);
   if (pick === 0) await runBasicsTutorial(player, () => ({ x: 0, z: 0 }), true);
   else if (pick === 1) await runCityTutorial(player, true);
   else if (pick === 2) await runBattleTutorial(player, true);
+  else if (pick === 3) await runGuardianTutorial(player, true);
 }

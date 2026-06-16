@@ -5,7 +5,7 @@
 // ============================================================
 import * as THREE from 'three';
 import { HOUSES, DUNGEONS, ITEMS, SHOP_STOCK, GEM_STOCK, CRAWLER_PARTS, SPECIES, ELEMENTS, ELEMENT_ICONS, elementsOf, type DungeonDef, type HouseDef, type Element } from './data';
-import { Player, Guardian, type GuardianCustomization } from './state';
+import { Player, Guardian, type GuardianCustomization, type ParentSnapshot } from './state';
 import {
   makeTamer, makeVoxelHuman, updateVoxelHuman, updateTamerFX, setVoxelSeated, makeGuardian, disposeRig, makeCrawler, disposeCrawler,
   makeTree, makeStreetLamp, makeCustomCreature, mulberry, tween,
@@ -7767,6 +7767,11 @@ export class Town {
           `;
         } else {
           const out = outs[currentOutcomeIdx];
+          const capBonus = Math.floor((parentA!.level - parentB!.level) / 2);
+          const predictedCap = Math.max(1, Math.min(99, parentA!.levelCap + capBonus));
+          const bonusText = capBonus >= 0 ? `+${capBonus}` : `${capBonus}`;
+          const epBonus = Math.floor(parentB!.evolutionPoints * 0.25);
+          const predictedEp = Math.floor(1 + parentA!.evolutionPoints + epBonus);
           
           const outcomesTabsHtml = outs.map((o, idx) => {
             const isSel = idx === currentOutcomeIdx ? 'primary' : '';
@@ -7828,10 +7833,10 @@ export class Town {
                     <span class="sub" style="font-size:11px">Scale: Wings (${wingScale}x)</span>
                     <input type="range" id="scale-wings" min="0.5" max="1.5" step="0.1" value="${wingScale}" style="width:100%">
                   </div>
-
+ 
                   <h5 style="margin:0 0 4px 0;font-size:11px;color:#a0aabf">Color Bay (Primary / Secondary / Accent)</h5>
                   <div style="margin-bottom:12px">${colorPaletteHtml}</div>
-
+ 
                   <h5 style="margin:0 0 4px 0;font-size:11px;color:#a0aabf">Custom Appendages</h5>
                   <div style="margin-bottom:6px"><span class="sub" style="font-size:11px;margin-right:6px">Tail:</span>${tailPartsHtml}</div>
                   <div><span class="sub" style="font-size:11px;margin-right:6px">Wings:</span>${wingPartsHtml}</div>
@@ -7843,6 +7848,15 @@ export class Town {
                 <div style="text-align:center;margin-top:10px;width:100%">
                   <h3 style="margin:0;font-family:Georgia,serif;color:var(--ui-gold)">${SPECIES[out.speciesId].name}</h3>
                   <div class="sub" style="font-size:12px;margin-top:4px">${out.desc}</div>
+                  <div style="margin-top:10px;padding:8px;background:rgba(242,210,58,0.06);border:1px solid rgba(242,210,58,0.35);border-radius:6px;text-align:center;">
+                    <span style="font-size:11px;color:var(--ui-gold);font-weight:bold;text-transform:uppercase;letter-spacing:0.5px;">Offspring Forecast</span>
+                    <div style="font-size:13px;margin-top:3px;color:#fff;font-weight:bold;">
+                      Level Cap: ${predictedCap} <span class="sub" style="font-size:11.5px;font-weight:normal;">(Parent A Cap ${parentA!.levelCap} ${bonusText})</span>
+                    </div>
+                    <div style="font-size:13px;margin-top:3px;color:#fff;font-weight:bold;">
+                      Evolution Points: ${predictedEp} <span class="sub" style="font-size:11.5px;font-weight:normal;">(1 + Parent A ${parentA!.evolutionPoints} + ${epBonus} Parent B)</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -7966,6 +7980,27 @@ export class Town {
             const speciesName = SPECIES[finalOutcome.speciesId].name;
             const nickname = window.prompt(`Give a name to your new ${speciesName}!`, speciesName) || speciesName;
             const offspring = new Guardian(finalOutcome.speciesId, nextLvl, nickname);
+            const capBonus = Math.floor((parentA!.level - parentB!.level) / 2);
+            offspring.levelCap = Math.max(1, Math.min(99, parentA!.levelCap + capBonus));
+            
+            // Parents snaps
+            const makeSnap = (g: Guardian): ParentSnapshot => {
+              return {
+                speciesId: g.speciesId,
+                nickname: g.nickname,
+                level: g.level,
+                parents: g.parents ? JSON.parse(JSON.stringify(g.parents)) : undefined
+              };
+            };
+            offspring.parents = {
+              parentA: makeSnap(parentA!),
+              parentB: makeSnap(parentB!)
+            };
+
+            // Evolution Points
+            const epBonus = Math.floor(parentB!.evolutionPoints * 0.25);
+            offspring.evolutionPoints = Math.floor(1 + parentA!.evolutionPoints + epBonus);
+            
             offspring.customization = getCustomization();
             
             const pAStats = parentA!.stats;
@@ -8072,9 +8107,10 @@ export class Town {
                   </style>
                   <canvas id="particles-canvas" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:4999;"></canvas>
                   <div class="special-title">🌟 DEITY-CLASS FUSION 🌟</div>
-                  <h1 style="color:#ffffff;font-family:Georgia,serif;margin:0 0 8px 0;font-size:32px;">${offspring.nickname}</h1>
+                  <h1 style="color:#ffffff;font-family:Georgia,serif;margin:0 0 8px 0;font-size:32px;">${offspring.nickname} (Max Lv.${offspring.levelCap})</h1>
                   <div class="sub" style="margin-bottom:16px;font-size:16px;">
                     Unbelievable! The offspring has synthesized <b>${offspring.elements.length} Elements</b>!
+                    <br>Evolution Points: <b class="goldcol">${offspring.evolutionPoints}</b>
                   </div>
                   <div style="display:flex;gap:10px;margin-bottom:24px;justify-content:center;">
                     ${elChips}
@@ -8094,7 +8130,8 @@ export class Town {
                   <h1 style="color:var(--ui-gold);font-family:Georgia,serif;margin-bottom:8px;">🧬 FUSION SUCCESSFUL!</h1>
                   <div class="sub" style="margin-bottom:20px;">The genetic profiles of ${parentA!.nickname} and ${parentB!.nickname} have synthesized.</div>
                   <div id="congrats-canvas" style="width:300px;height:280px;background:rgba(6,8,16,0.55);border:1px solid #2c3666;border-radius:8px;"></div>
-                  <h2 style="color:#ffffff;margin-top:16px;">${offspring.nickname} (Lv.${offspring.level})</h2>
+                  <h2 style="color:#ffffff;margin-top:16px;">${offspring.nickname} (Lv.${offspring.level} · Max Lv.${offspring.levelCap})</h2>
+                  <div class="sub" style="margin-bottom:12px;">Evolution Points: <b class="goldcol">${offspring.evolutionPoints}</b></div>
                   <div style="margin-top:20px">
                     <button class="ui-btn primary" id="congrats-ok">Accept matrix offspring</button>
                   </div>

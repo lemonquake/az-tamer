@@ -19,6 +19,13 @@ export interface GuardianCustomization {
   replacedParts?: { tail?: string; wings?: string };
 }
 
+export interface ParentSnapshot {
+  speciesId: string;
+  nickname: string;
+  level: number;
+  parents?: { parentA: ParentSnapshot; parentB: ParentSnapshot };
+}
+
 export interface GuardianSave {
   id: string; speciesId: string; nickname: string;
   level: number; exp: number; bonus: Stats;
@@ -29,6 +36,8 @@ export interface GuardianSave {
   isStarter?: boolean;
   customization?: GuardianCustomization;
   elements?: Element[];
+  parents?: { parentA: ParentSnapshot; parentB: ParentSnapshot };
+  evolutionPoints?: number;
 }
 
 export class Guardian {
@@ -47,6 +56,8 @@ export class Guardian {
   isStarter = false;
   customization?: GuardianCustomization;
   elements: Element[];
+  parents?: { parentA: ParentSnapshot; parentB: ParentSnapshot };
+  evolutionPoints = 0;
 
   constructor(speciesId: string, level = 1, nickname?: string) {
     this.id = uid();
@@ -57,11 +68,24 @@ export class Guardian {
     this.bonus = { hp: 0, sp: 0, atk: 0, def: 0, spd: 0, wis: 0 };
     this.elements = [...elementsOf(speciesId)];
     
+    // Set level cap based on species stage
+    if (this.species.stage === 'Novice') {
+      this.levelCap = 12 + Math.floor(Math.random() * 5); // 12-16
+    } else if (this.species.stage === 'Adept') {
+      this.levelCap = 27;
+    } else if (this.species.stage === 'Elite') {
+      this.levelCap = 40;
+    } else if (this.species.stage === 'Apex') {
+      this.levelCap = 60;
+    } else {
+      this.levelCap = 99;
+    }
+    
     // Default starting techniques
     this.learnedTechs = this.species.techs
       .filter(t => t.level <= this.level)
       .map(t => t.tech)
-      .slice(-4);
+      .slice(-5);
     
     this.techPoints = Math.floor(this.level / 5);
 
@@ -121,7 +145,7 @@ export class Guardian {
       this.learnedTechs = this.species.techs
         .filter(t => t.level <= this.level)
         .map(t => t.tech)
-        .slice(-4);
+        .slice(-5);
     }
     return this.learnedTechs.map(id => TECHS[id]).filter(Boolean);
   }
@@ -173,11 +197,11 @@ export class Guardian {
 
     // Dynamically increase level cap based on new evolution stage
     if (this.species.stage === 'Adept') {
-      this.levelCap = Math.max(this.levelCap, 24);
+      this.levelCap = Math.max(this.levelCap, 27);
     } else if (this.species.stage === 'Elite') {
-      this.levelCap = Math.max(this.levelCap, 32);
+      this.levelCap = Math.max(this.levelCap, 40);
     } else if (this.species.stage === 'Apex') {
-      this.levelCap = Math.max(this.levelCap, this.species.evolvesTo ? 50 : 99);
+      this.levelCap = Math.max(this.levelCap, 60);
     } else if (this.species.stage === 'Legendary' || this.species.stage === 'Aether') {
       this.levelCap = Math.max(this.levelCap, 99);
     }
@@ -200,11 +224,11 @@ export class Guardian {
     if (!keepNick) this.nickname = this.species.name;
 
     if (this.species.stage === 'Adept') {
-      this.levelCap = Math.max(this.levelCap, 24);
+      this.levelCap = Math.max(this.levelCap, 27);
     } else if (this.species.stage === 'Elite') {
-      this.levelCap = Math.max(this.levelCap, 32);
+      this.levelCap = Math.max(this.levelCap, 40);
     } else if (this.species.stage === 'Apex') {
-      this.levelCap = Math.max(this.levelCap, 50);
+      this.levelCap = Math.max(this.levelCap, 60);
     } else if (this.species.stage === 'Legendary' || this.species.stage === 'Aether') {
       this.levelCap = Math.max(this.levelCap, 99);
     }
@@ -231,6 +255,8 @@ export class Guardian {
       isStarter: this.isStarter || undefined,
       customization: this.customization ? JSON.parse(JSON.stringify(this.customization)) : undefined,
       elements: [...this.elements],
+      parents: this.parents ? JSON.parse(JSON.stringify(this.parents)) : undefined,
+      evolutionPoints: this.evolutionPoints,
     };
   }
 
@@ -244,6 +270,8 @@ export class Guardian {
     g.isStarter = !!s.isStarter;
     g.customization = s.customization ? JSON.parse(JSON.stringify(s.customization)) : undefined;
     g.elements = s.elements ? [...s.elements] : [...elementsOf(s.speciesId)];
+    g.parents = s.parents ? JSON.parse(JSON.stringify(s.parents)) : undefined;
+    g.evolutionPoints = s.evolutionPoints ?? 0;
     return g;
   }
 }

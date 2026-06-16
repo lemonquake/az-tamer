@@ -184,9 +184,128 @@
     .bond-label { font-size: 10.5px; color: #f28ac4; margin-top: 2px; letter-spacing: 0.3px; }
     .bond-label b { color: #ffd8ec; }
     .unit-statuses { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 5px; pointer-events: all; }
-    .status-badge { font-size: 10px; font-weight: bold; padding: 1px 4px; border-radius: 4px; display: inline-flex; align-items: center; gap: 2px; text-shadow: 0 1px 1px rgba(0,0,0,0.5); }
+    .status-badge {
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 2px 6px;
+      border-radius: 6px;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
+      transition: all 0.2s ease;
+      cursor: help;
+    }
+    .status-badge:hover {
+      transform: scale(1.08);
+      box-shadow: 0 3px 6px rgba(0,0,0,0.35);
+    }
     .status-badge.buff { background: rgba(90, 216, 138, 0.18); border: 1px solid #5ad88a; color: #a2f5bf; }
     .status-badge.debuff { background: rgba(232, 58, 90, 0.18); border: 1px solid #e83a5a; color: #ff94a6; }
+
+    /* Elements & Effects custom themes */
+    /* Fire / Burn / Singed */
+    .status-badge.status-burn, .status-badge.status-singed, .status-badge.status-corroded {
+      background: linear-gradient(135deg, rgba(232, 58, 20, 0.35), rgba(242, 114, 12, 0.45));
+      border: 1px solid #ff5d3b;
+      color: #ffcc99;
+      animation: status-flicker 1.5s ease-in-out infinite alternate;
+    }
+    /* Frozen / Chill */
+    .status-badge.status-frozen, .status-badge.status-chill {
+      background: linear-gradient(135deg, rgba(20, 150, 220, 0.35), rgba(90, 210, 244, 0.45));
+      border: 1px solid #7be8ff;
+      color: #e3faff;
+      animation: status-pulse 2s infinite ease-in-out;
+    }
+    /* Poison */
+    .status-badge.status-poison {
+      background: linear-gradient(135deg, rgba(120, 30, 180, 0.35), rgba(180, 50, 240, 0.45));
+      border: 1px solid #c078ff;
+      color: #f1e0ff;
+      animation: status-pulse 1.8s infinite ease-in-out;
+    }
+    /* Slumber (Sleep) */
+    .status-badge.status-slumber {
+      background: linear-gradient(135deg, rgba(30, 40, 90, 0.45), rgba(60, 80, 160, 0.55));
+      border: 1px solid #7c9aff;
+      color: #d1dcff;
+      animation: status-pulse 2.5s infinite ease-in-out;
+    }
+    /* Curse / Dark Shield */
+    .status-badge.status-curse, .status-badge.status-void_shield {
+      background: linear-gradient(135deg, rgba(140, 0, 100, 0.4), rgba(70, 0, 100, 0.5));
+      border: 1px solid #df45ff;
+      color: #f7d8ff;
+      animation: status-flicker 2s ease-in-out infinite alternate;
+    }
+    /* Paralyze / Spark */
+    .status-badge.status-paralyze, .status-badge.status-charge, .status-badge.status-static_field {
+      background: linear-gradient(135deg, rgba(230, 180, 0, 0.35), rgba(255, 230, 60, 0.45));
+      border: 1px solid #ffdf43;
+      color: #fffae0;
+      animation: status-jitter 0.4s infinite alternate;
+    }
+    /* Provoked */
+    .status-badge.status-provoked {
+      background: linear-gradient(135deg, rgba(200, 10, 10, 0.4), rgba(240, 50, 50, 0.5));
+      border: 1px solid #ff5e5e;
+      color: #ffe0e0;
+      animation: status-jitter 0.6s infinite alternate;
+    }
+    /* Berserk */
+    .status-badge.status-berserk {
+      background: linear-gradient(135deg, rgba(220, 0, 0, 0.55), rgba(160, 0, 0, 0.65));
+      border: 1px solid #ff3b3b;
+      color: #ffffff;
+      box-shadow: 0 0 8px rgba(255, 0, 0, 0.4);
+      animation: status-shake 0.3s infinite;
+    }
+    /* Haste */
+    .status-badge.status-haste {
+      background: linear-gradient(135deg, rgba(20, 180, 140, 0.35), rgba(40, 220, 180, 0.45));
+      border: 1px solid #4df2cc;
+      color: #e0fff8;
+      animation: status-pulse 1.3s infinite ease-in-out;
+    }
+    /* Regen / Leaf Armor */
+    .status-badge.status-regen, .status-badge.status-bramble_armor {
+      background: linear-gradient(135deg, rgba(40, 160, 80, 0.35), rgba(80, 210, 110, 0.45));
+      border: 1px solid #66f59a;
+      color: #e1ffe8;
+      animation: status-pulse 2.2s infinite ease-in-out;
+    }
+    /* Shields / Barriers */
+    .status-badge.status-ocean_shield, .status-badge.status-fire_armor, .status-badge.status-wind_shield {
+      background: linear-gradient(135deg, rgba(60, 120, 200, 0.35), rgba(100, 160, 240, 0.45));
+      border: 1px solid #8cc5ff;
+      color: #e5f2ff;
+      animation: status-pulse 2s infinite ease-in-out;
+    }
+
+    /* Animations */
+    @keyframes status-pulse {
+      0%, 100% { opacity: 0.9; transform: scale(1); }
+      50% { opacity: 1; transform: scale(1.04); }
+    }
+    @keyframes status-flicker {
+      0%, 100% { filter: brightness(1); }
+      50% { filter: brightness(1.2); }
+    }
+    @keyframes status-jitter {
+      0% { transform: translate(0, 0) scale(1); }
+      100% { transform: translate(0.5px, 0.5px) scale(1.02); }
+    }
+    @keyframes status-shake {
+      0%, 100% { transform: translate(0, 0) rotate(0deg); }
+      20% { transform: translate(-0.5px, 0.5px) rotate(-1deg); }
+      40% { transform: translate(0.5px, -0.5px) rotate(1deg); }
+      60% { transform: translate(-0.5px, -0.5px) rotate(-0.5deg); }
+      80% { transform: translate(0.5px, 0.5px) rotate(0.5deg); }
+    }
 
     /* ---------- auto-action indicator ---------- */
     #battle-auto {
@@ -749,6 +868,65 @@
     .tut-pointer.h { animation: tutBobH 0.75s ease-in-out infinite; }
     @keyframes tutBobV { 0%,100% { transform: translateY(0);} 50% { transform: translateY(9px);} }
     @keyframes tutBobH { 0%,100% { transform: translateX(0);} 50% { transform: translateX(9px);} }
+
+    /* ---------- pedigree family tree chart ---------- */
+    .pedigree-container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      background: rgba(4,6,14,0.45);
+      border: 1px solid var(--ui-border);
+      border-radius: 12px;
+      padding: 18px 24px;
+      margin-top: 12px;
+      overflow-x: auto;
+      position: relative;
+    }
+    .pedigree-column {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-around;
+      height: 250px;
+      flex: 1;
+      gap: 12px;
+    }
+    .pedigree-card {
+      background: rgba(26,32,64,0.7);
+      border: 1px solid #2c3666;
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 12px;
+      text-align: center;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+      position: relative;
+      transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+    }
+    .pedigree-card:hover {
+      transform: translateY(-2px);
+      border-color: var(--ui-gold);
+      box-shadow: 0 6px 14px rgba(0,0,0,0.45);
+    }
+    .pedigree-card.empty {
+      background: rgba(26,32,64,0.35);
+      border: 1px dashed #2c3666;
+      opacity: 0.55;
+    }
+    .pedigree-card.offspring-node {
+      border-color: var(--ui-gold);
+      background: rgba(242,193,78,0.1);
+      box-shadow: 0 0 15px rgba(242,193,78,0.25);
+    }
+    .pedigree-title {
+      font-weight: bold;
+      font-size: 13.5px;
+      margin-top: 2px;
+    }
+    .pedigree-sub {
+      color: var(--ui-dim);
+      font-size: 10px;
+      margin-top: 2px;
+    }
 
     /* ---------- NPC identity popup ---------- */
     .npc-popup {

@@ -273,10 +273,12 @@ export interface TechStatusEffect {
   name: string;
   type: 'buff' | 'debuff';
   duration: number;
-  effect: 'atk' | 'def' | 'spd' | 'wis' | 'dot' | 'hot' | 'stun' | 'reflect' | 'drain' | 'paralyze' | 'blind' | 'doom';
+  effect: 'atk' | 'def' | 'spd' | 'wis' | 'dot' | 'hot' | 'stun' | 'reflect' | 'drain' | 'paralyze' | 'blind' | 'doom' | 'freeze' | 'sleep' | 'provoke' | 'curse' | 'shield' | 'berserk' | 'corrosion';
   value: number;
   icon: string;
   desc: string;
+  shieldHp?: number;
+  provokedBy?: any; // Unit reference in battle.ts, typed as any to avoid circular dependency
 }
 
 export interface Technique {
@@ -294,7 +296,7 @@ const T_status = (
   id: string, name: string, type: GType, kind: TechKind, power: number, spCost: number,
   effect: TechEffect, target: TechTarget, desc: string,
   statusId: string, statusName: string, statusType: 'buff' | 'debuff', duration: number,
-  statusEff: 'atk' | 'def' | 'spd' | 'wis' | 'dot' | 'hot' | 'stun' | 'reflect' | 'drain' | 'paralyze' | 'blind' | 'doom',
+  statusEff: TechStatusEffect['effect'],
   statusVal: number, statusIcon: string, statusDesc: string, chance = 1.0
 ): Technique => ({
   id, name, type, kind, power, spCost, effect, target, desc,
@@ -342,7 +344,8 @@ export const TECHS: Record<string, Technique> = Object.fromEntries([
   // Umbra
   T('shade_nip', 'Shade Nip', 'Umbra', 'phys', 22, 4, 'damage', 'one', 'A bite from a living shadow.'),
   T('gloom_ray', 'Gloom Ray', 'Umbra', 'art', 38, 8, 'damage', 'one', 'A ray of condensed darkness.'),
-  T('dread_howl', 'Dread Howl', 'Umbra', 'art', 12, 10, 'debuffDef', 'all', 'A howl that withers resolve, lowering Defense.'),
+  T_status('dread_howl', 'Dread Howl', 'Umbra', 'art', 12, 10, 'debuffDef', 'all', 'A terrifying howl that lowers defense and provokes all foes.',
+    'provoked', 'Provoked', 'debuff', 2, 'provoke', 0.0, '💢', 'Forced to target the caller.', 0.8),
   T('void_fang', 'Void Fang', 'Umbra', 'phys', 60, 16, 'damage', 'one', 'Fangs that devour light.'),
   T('eclipse_requiem', 'Eclipse Requiem', 'Umbra', 'art', 70, 26, 'damage', 'all', 'A requiem sung at the death of light.'),
   T('umbral_drain', 'Umbral Drain', 'Umbra', 'art', 34, 14, 'drain', 'one', 'Siphons vitality through shadow.'),
@@ -358,24 +361,24 @@ export const TECHS: Record<string, Technique> = Object.fromEntries([
   T('dawn_rebirth', 'Dawn Rebirth', 'Blaze', 'art', 80, 30, 'heal', 'all', 'A sunrise sung backwards — allies are mended by the memory of morning.'),
 
   // Blaze status moves
-  T_status('magma_spit', 'Magma Spit', 'Blaze', 'art', 20, 5, 'damage', 'one', 'Spits superheated magma that singes the target.',
-    'singed', 'Singed', 'debuff', 3, 'dot', 0.05, '🌋', 'Taking minor damage and reduced defense.', 0.8),
+  T_status('magma_spit', 'Magma Spit', 'Blaze', 'art', 20, 5, 'damage', 'one', 'Spits superheated magma that corrodes armor.',
+    'corroded', 'Corroded', 'debuff', 3, 'corrosion', 0.06, '🌋', 'Taking acid damage and losing 15% defense per turn.', 0.8),
   T_status('pyro_shield', 'Pyro Shield', 'Blaze', 'art', 0, 8, 'buffDef', 'self', 'Surrounds the caster in a shield of flame.',
-    'fire_armor', 'Fire Armor', 'buff', 3, 'def', 0.3, '🔥', 'Defense increased by 30%.'),
+    'fire_armor', 'Fire Armor', 'buff', 3, 'shield', 0.20, '🔥', 'Barrier: absorbs damage and grants +20% defense.', 1.0),
   T_status('blazing_claw', 'Blazing Claw', 'Blaze', 'phys', 35, 6, 'damage', 'one', 'Lashes out with burning claws, leaving a burn.',
     'burn', 'Burned', 'debuff', 3, 'dot', 0.08, '🔥', 'Taking fire damage over time.', 0.7),
   T_status('heat_wave', 'Heat Wave', 'Blaze', 'art', 30, 12, 'damage', 'all', 'Releases a wave of heat that singes all enemies.',
     'singed', 'Singed', 'debuff', 2, 'dot', 0.04, '🌋', 'Taking minor damage and reduced defense.', 0.6),
   T_status('combustion', 'Combustion', 'Blaze', 'art', 50, 10, 'damage', 'one', 'A sudden explosion that causes severe burns.',
     'burn', 'Burned', 'debuff', 3, 'dot', 0.08, '🔥', 'Taking fire damage over time.', 0.8),
-  T_status('sun_channel', 'Sun Channel', 'Blaze', 'art', 0, 10, 'buffAtk', 'self', 'Channels solar energy, boosting attack but reducing defense.',
-    'overheat', 'Overheated', 'buff', 3, 'atk', 0.25, '☀️', 'Attack increased, defense reduced.', 1.0),
+  T_status('sun_channel', 'Sun Channel', 'Blaze', 'art', 0, 10, 'buffAtk', 'self', 'Channels solar energy, entering a Berserk rage with +50% Attack!',
+    'berserk', 'Berserk', 'buff', 2, 'berserk', 0.5, '😡', 'Attack +50%, but out of control: strikes random targets.', 1.0),
   T_status('flame_charge', 'Flame Charge', 'Blaze', 'phys', 45, 12, 'damage', 'one', 'A blazing tackle that boosts the user\'s speed.',
     'haste', 'Haste', 'buff', 3, 'spd', 0.3, '🌀', 'Speed increased by 30%.', 1.0),
   T_status('eruption_strike', 'Eruption Strike', 'Blaze', 'phys', 65, 16, 'damage', 'one', 'A heavy hit wreathed in lava that burns.',
     'burn', 'Burned', 'debuff', 3, 'dot', 0.08, '🔥', 'Taking fire damage over time.', 0.9),
-  T_status('solar_burst', 'Solar Burst', 'Blaze', 'art', 55, 20, 'damage', 'all', 'A solar flash that melts defense.',
-    'singed', 'Singed', 'debuff', 3, 'dot', 0.05, '🌋', 'Taking minor damage and reduced defense.', 0.8),
+  T_status('solar_burst', 'Solar Burst', 'Blaze', 'art', 55, 20, 'damage', 'all', 'A solar flash that corrodes defense.',
+    'corroded', 'Corroded', 'debuff', 3, 'corrosion', 0.05, '🌋', 'Taking acid damage and losing 15% defense per turn.', 0.8),
   T_status('supernova', 'Supernova', 'Blaze', 'art', 90, 28, 'damage', 'all', 'A catastrophic explosion that burns all targets but singes the caster.',
     'burn', 'Burned', 'debuff', 4, 'dot', 0.08, '🔥', 'Taking fire damage over time.', 1.0),
 
@@ -387,15 +390,15 @@ export const TECHS: Record<string, Technique> = Object.fromEntries([
   T_status('dew_drop', 'Dew Drop', 'Tide', 'art', 0, 8, 'heal', 'ally', 'Restores health and grants regeneration.',
     'regen', 'Regen', 'buff', 3, 'hot', 0.08, '🌿', 'Restoring health over time.', 1.0),
   T_status('ocean_sanctuary', 'Ocean Sanctuary', 'Tide', 'art', 0, 12, 'buffDef', 'self', 'Shields the caster in deep ocean water.',
-    'ocean_shield', 'Ocean Shield', 'buff', 3, 'def', 0.3, '🛡️', 'Defense increased by 30%.', 1.0),
+    'ocean_shield', 'Ocean Shield', 'buff', 3, 'shield', 0.3, '🫧', 'Barrier: absorbs damage and grants +20% defense.', 1.0),
   T_status('bubble_burst', 'Bubble Burst', 'Tide', 'art', 40, 10, 'damage', 'one', 'An exploding bubble that soaks the target.',
     'soaked', 'Soaked', 'debuff', 3, 'atk', -0.15, '💧', 'Attack reduced by 15%.', 0.8),
   T_status('frost_bite', 'Frost Bite', 'Tide', 'phys', 52, 12, 'damage', 'one', 'A freezing bite that chills the target.',
     'chill', 'Chilled', 'debuff', 3, 'spd', -0.2, '❄️', 'Speed reduced by 20%.', 0.8),
   T_status('tidal_wave_tech', 'Tidal Wave', 'Tide', 'art', 48, 18, 'damage', 'all', 'A giant wave that soaks all enemies.',
     'soaked', 'Soaked', 'debuff', 3, 'atk', -0.15, '💧', 'Attack reduced by 15%.', 0.8),
-  T_status('ice_spear', 'Ice Spear', 'Tide', 'art', 68, 16, 'damage', 'one', 'A piercing spear of ice that chills.',
-    'chill', 'Chilled', 'debuff', 3, 'spd', -0.2, '❄️', 'Speed reduced by 20%.', 0.9),
+  T_status('ice_spear', 'Ice Spear', 'Tide', 'art', 68, 16, 'damage', 'one', 'A piercing spear of ice that freezes.',
+    'frozen', 'Frozen', 'debuff', 2, 'freeze', 0.0, '❄️', 'Frozen solid. Physical hits shatter for +40% damage.', 0.4),
   T_status('aquatic_mend', 'Aquatic Mend', 'Tide', 'art', 40, 16, 'heal', 'all', 'Healing waters that grant regeneration to all allies.',
     'regen', 'Regen', 'buff', 3, 'hot', 0.06, '🌿', 'Restoring health over time.', 1.0),
   T_status('abyssal_drown', 'Abyssal Drown', 'Tide', 'art', 95, 30, 'damage', 'one', 'Drags the target into the deep, chilling them.',
@@ -404,8 +407,8 @@ export const TECHS: Record<string, Technique> = Object.fromEntries([
   // Verdant status moves
   T_status('vine_grip', 'Vine Grip', 'Verdant', 'phys', 20, 5, 'damage', 'one', 'Constricts the target in vine, reducing speed.',
     'entangled', 'Entangled', 'debuff', 3, 'spd', -0.15, '🕸️', 'Speed reduced by 15%.', 0.8),
-  T_status('spore_puff', 'Spore Puff', 'Verdant', 'art', 15, 6, 'damage', 'one', 'Releases toxic spores that poison the target.',
-    'poison', 'Poisoned', 'debuff', 4, 'dot', 0.06, '☠️', 'Taking poison damage over time.', 0.8),
+  T_status('spore_puff', 'Spore Puff', 'Verdant', 'art', 15, 6, 'damage', 'one', 'Releases sleep-inducing spores.',
+    'slumber', 'Slumber', 'debuff', 2, 'sleep', 0.0, '💤', 'Asleep. Cannot act. Wakes up on hit for +50% damage.', 0.7),
   T_status('root_mend', 'Root Mend', 'Verdant', 'art', 0, 8, 'heal', 'self', 'Deep roots heal and grant regeneration.',
     'regen', 'Regen', 'buff', 3, 'hot', 0.08, '🌿', 'Restoring health over time.', 1.0),
   T_status('leaf_shield', 'Leaf Shield', 'Verdant', 'art', 0, 10, 'buffDef', 'self', 'Creates a defensive coat of thorns that reflects physical hits.',
@@ -469,23 +472,23 @@ export const TECHS: Record<string, Technique> = Object.fromEntries([
 
   // Umbra status moves
   T_status('shadow_scratch', 'Shadow Scratch', 'Umbra', 'phys', 20, 5, 'damage', 'one', 'Scratches the foe with shadow claws, cursing them.',
-    'curse', 'Cursed', 'debuff', 3, 'dot', 0.05, '🔮', 'Taking damage over time and reduced wisdom.', 0.8),
+    'curse', 'Cursed', 'debuff', 3, 'curse', 0.05, '🔮', 'Cursed: cannot heal and takes +100% DoT damage.', 0.8),
   T_status('soul_drain_tech', 'Soul Drain', 'Umbra', 'art', 22, 8, 'damage', 'one', 'Siphons life-essence to grant life drain.',
     'siphon', 'Siphoning', 'buff', 3, 'drain', 0.2, '🧛', 'Recovering 20% of damage dealt.', 1.0),
   T_status('nightmare_fog', 'Nightmare Fog', 'Umbra', 'art', 0, 10, 'debuffAtk', 'all', 'Enshrouds enemies in nightmare fog, cursing them.',
-    'curse', 'Cursed', 'debuff', 3, 'dot', 0.04, '🔮', 'Taking damage over time and reduced wisdom.', 0.8),
+    'curse', 'Cursed', 'debuff', 3, 'curse', 0.04, '🔮', 'Cursed: cannot heal and takes +100% DoT damage.', 0.8),
   T_status('dark_barrier', 'Dark Barrier', 'Umbra', 'art', 0, 12, 'buffDef', 'self', 'Encases the caster in shadows.',
-    'void_shield', 'Void Shield', 'buff', 3, 'def', 0.3, '🔮', 'Defense increased by 30%.', 1.0),
+    'void_shield', 'Void Shield', 'buff', 3, 'shield', 0.25, '🔮', 'Barrier: absorbs damage, grants +20% defense, and curses attackers.', 1.0),
   T_status('shadow_strike_tech', 'Shadow Strike', 'Umbra', 'phys', 42, 10, 'damage', 'one', 'A swift shadow attack that curses the target.',
-    'curse', 'Cursed', 'debuff', 3, 'dot', 0.05, '🔮', 'Taking damage over time and reduced wisdom.', 0.8),
+    'curse', 'Cursed', 'debuff', 3, 'curse', 0.05, '🔮', 'Cursed: cannot heal and takes +100% DoT damage.', 0.8),
   T_status('vampiric_bite_tech', 'Vampiric Bite', 'Umbra', 'phys', 50, 14, 'damage', 'one', 'A draining bite that grants life drain.',
     'siphon', 'Siphoning', 'buff', 3, 'drain', 0.25, '🧛', 'Recovering 25% of damage dealt.', 1.0),
   T_status('abyssal_void_tech', 'Abyssal Void', 'Umbra', 'art', 35, 18, 'damage', 'all', 'An abyssal blast that curses all enemies.',
-    'curse', 'Cursed', 'debuff', 3, 'dot', 0.04, '🔮', 'Taking damage over time and reduced wisdom.', 0.7),
+    'curse', 'Cursed', 'debuff', 3, 'curse', 0.04, '🔮', 'Cursed: cannot heal and takes +100% DoT damage.', 0.7),
   T_status('doom_gaze', 'Doom Gaze', 'Umbra', 'art', 0, 20, 'debuffDef', 'one', 'Marks the target with doom, causing massive damage in 3 turns.',
     'doom', 'Doomed', 'debuff', 4, 'doom', 0.4, '💀', 'Will take 40% of max HP as damage.', 1.0),
   T_status('eclipse_blast_tech', 'Eclipse Blast', 'Umbra', 'art', 70, 22, 'damage', 'one', 'A blast of dark energy that curses the target.',
-    'curse', 'Cursed', 'debuff', 3, 'dot', 0.05, '🔮', 'Taking damage over time and reduced wisdom.', 0.9),
+    'curse', 'Cursed', 'debuff', 3, 'curse', 0.05, '🔮', 'Cursed: cannot heal and takes +100% DoT damage.', 0.9),
   T_status('apocalypse_tech', 'Apocalypse', 'Umbra', 'art', 95, 32, 'damage', 'all', 'Brings about the end, marking all foes with doom.',
     'doom', 'Doomed', 'debuff', 4, 'doom', 0.3, '💀', 'Will take 30% of max HP as damage.', 1.0),
 ].map(t => [t.id, t]));

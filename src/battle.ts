@@ -9,7 +9,7 @@
 import * as THREE from 'three';
 import {
   TECHS, ITEMS, TYPE_CSS, TYPE_COLORS, TYPE_ELEMENT, expForLevel,
-  elementsOf, elementMult, ELEMENT_ICONS, type Technique, type GType, type Element, getSpeciesPassive, type TechStatusEffect as ActiveStatus
+  elementsOf, elementMult, ELEMENT_ICONS, type Technique, type GType, type Element, getSpeciesPassive, type TechStatusEffect as ActiveStatus, type TechKind
 } from './data';
 import { sfx, playMusic } from './audio';
 import { Guardian, Player } from './state';
@@ -166,6 +166,7 @@ export class Battle {
   private camDist = 9.2;
   private baseFov = 50;
   private envTick: ((dt: number) => void)[] = [];
+  private statusFxTimer = 0;
 
   // --- battle report + auto-action state ---
   private timeline: { icon: string; html: string }[] = [];
@@ -185,6 +186,47 @@ export class Battle {
     this.camT += dt;
     this.fx.update(dt);
     for (const f of this.envTick) f(dt);
+
+    this.statusFxTimer += dt;
+    if (this.statusFxTimer > 0.25) {
+      this.statusFxTimer = 0;
+      for (const u of this.units) {
+        if (u.g.fainted || !u.statuses || u.statuses.length === 0) continue;
+        const pos = u.rig.group.position.clone();
+        for (const s of u.statuses) {
+          if (s.effect === 'dot' || s.id === 'burn' || s.id === 'singed') {
+            const col = s.id === 'poison' ? 0x8833cc : 0xff5500;
+            this.fx.burst(pos.clone().setY(0.1 + Math.random() * 0.8), col, { count: 1, speed: 0.4, up: 0.6, spread: 0.1, size: 0.08, life: 0.5 });
+          } else if (s.effect === 'freeze' || s.id === 'chill') {
+            this.fx.burst(pos.clone().setY(0.1 + Math.random() * 0.8), 0x88eeff, { count: 1, speed: 0.2, up: 0.3, spread: 0.1, size: 0.08, life: 0.6 });
+          } else if (s.effect === 'sleep') {
+            this.fx.burst(pos.clone().setY(0.5 + Math.random() * 0.8), 0x3366ff, { count: 1, speed: 0.1, up: 0.4, spread: 0.15, size: 0.07, life: 0.8 });
+          } else if (s.effect === 'paralyze' || s.effect === 'stun') {
+            if (Math.random() < 0.35) {
+              const from = pos.clone().add(new THREE.Vector3((Math.random() - 0.5) * 0.6, 0.8, (Math.random() - 0.5) * 0.6));
+              const to = pos.clone().add(new THREE.Vector3((Math.random() - 0.5) * 0.6, 0.1, (Math.random() - 0.5) * 0.6));
+              this.fx.bolt(from, to, 0xffea55, { life: 0.1, jitter: 0.1, segments: 2 });
+            }
+          } else if (s.effect === 'shield') {
+            if (Math.random() < 0.5) {
+              const color = s.id === 'void_shield' ? 0xcc33ff : 0x5ad88a;
+              this.fx.ring(pos, color, { maxR: 1.0, life: 0.6, y: 0.1 + Math.random() * 0.8, tube: 0.015 });
+            }
+          } else if (s.effect === 'berserk') {
+            this.fx.burst(pos.clone().setY(0.1 + Math.random() * 0.9), 0xff0000, { count: 1, speed: 0.5, up: 0.8, spread: 0.1, size: 0.09, life: 0.4 });
+          } else if (s.effect === 'curse') {
+            this.fx.burst(pos.clone().setY(0.1 + Math.random() * 0.9), 0x9900ee, { count: 1, speed: 0.3, up: 0.5, spread: 0.15, size: 0.08, life: 0.5 });
+          } else if (s.effect === 'corrosion') {
+            this.fx.burst(pos.clone().setY(0.1 + Math.random() * 0.8), 0xffaa00, { count: 1, speed: 0.2, up: 0.4, spread: 0.1, size: 0.08, life: 0.5 });
+          } else if (s.type === 'buff') {
+            this.fx.burst(pos.clone().setY(0.1 + Math.random() * 0.8), 0x5ad88a, { count: 1, speed: 0.3, up: 0.7, spread: 0.1, size: 0.07, life: 0.5 });
+          } else if (s.type === 'debuff') {
+            this.fx.burst(pos.clone().setY(0.8 + Math.random() * 0.4), 0xe83a5a, { count: 1, speed: 0.2, up: -0.4, spread: 0.1, size: 0.07, life: 0.5 });
+          }
+        }
+      }
+    }
+
     // gentle camera drift + impact shake (position AND aim — feels punchier)
     const sh = this.fx.shakeOffset;
     this.camera.position.set(
@@ -620,6 +662,15 @@ export class Battle {
         if (s.effect === effect) {
           mult += s.value;
         }
+        if (s.effect === 'freeze' && effect === 'def') {
+          mult += 0.30; // Frozen grants +30% Defense
+        }
+        if (s.effect === 'shield' && effect === 'def') {
+          mult += 0.20; // Active shield grants +20% Defense
+        }
+        if (s.effect === 'berserk' && effect === 'atk') {
+          mult += s.value; // Berserk grants Attack boost (usually +50%)
+        }
       }
     }
     return Math.max(0.1, mult);
@@ -649,11 +700,14 @@ export class Battle {
         : '';
       const statusesHtml = u.statuses && u.statuses.length > 0
         ? `<div class="unit-statuses">
-            ${u.statuses.map(st => `
-              <span class="status-badge ${st.type}" title="${st.desc}">
-                ${st.icon} ${st.duration}t
-              </span>
-            `).join('')}
+            ${u.statuses.map(st => {
+              const shieldText = (st.effect === 'shield' && st.shieldHp !== undefined) ? ` (${st.shieldHp} HP)` : '';
+              return `
+                <span class="status-badge ${st.type} status-${st.id}" title="${st.desc}">
+                  ${st.icon} ${st.duration}t${shieldText}
+                </span>
+              `;
+            }).join('')}
           </div>`
         : '';
       el.innerHTML = `<div class="nm"><span style="color:${TYPE_CSS[u.g.species.type]}">${side}${u.g.nickname}</span><span><span style="font-size:11px" title="${elementsOf(u.g).join(' · ')}">${els}</span> Lv${u.g.level}</span></div>
@@ -951,6 +1005,60 @@ export class Battle {
     u.rig.group.position.y = 0;
   }
 
+  private async inflictDamage(tgt: Unit, rawDmg: number, source: 'strike' | 'tech' | 'reflect' | 'dot' | 'doom' | 'corrosion' | 'curse', techKind?: TechKind): Promise<number> {
+    let finalDmg = rawDmg;
+
+    // 1. Waking up a sleeping unit
+    if (tgt.statuses && tgt.statuses.some(s => s.effect === 'sleep')) {
+      if (source === 'strike' || source === 'tech') {
+        finalDmg = Math.floor(finalDmg * 1.5);
+        tgt.statuses = tgt.statuses.filter(s => s.effect !== 'sleep');
+        this.log(`💤 <b>${tgt.g.nickname}</b> was woken up by the hit! Takes +50% damage!`);
+        this.fx.glow(this.chest(tgt), 0xffffff, { scale: 1.5, life: 0.4 });
+      }
+    }
+
+    // 2. Shattering a frozen unit with physical damage
+    if (tgt.statuses && tgt.statuses.some(s => s.effect === 'freeze')) {
+      if (source === 'strike' || (source === 'tech' && techKind === 'phys')) {
+        finalDmg = Math.floor(finalDmg * 1.4);
+        tgt.statuses = tgt.statuses.filter(s => s.effect !== 'freeze');
+        this.log(`❄️ <b>${tgt.g.nickname}</b>'s ice shell shattered! Takes +40% damage!`);
+        sfx('ko');
+        this.fx.spikes(tgt.rig.group.position, 0x8ae2ff, { count: 8, height: 1.2, life: 0.5, radius: 0.6 });
+      }
+    }
+
+    // 3. Shield / Barrier absorption
+    if (finalDmg > 0 && tgt.statuses && tgt.statuses.some(s => s.effect === 'shield')) {
+      const shield = tgt.statuses.find(s => s.effect === 'shield')!;
+      if (shield.shieldHp !== undefined && shield.shieldHp > 0) {
+        if (finalDmg >= shield.shieldHp) {
+          finalDmg -= shield.shieldHp;
+          shield.shieldHp = 0;
+          tgt.statuses = tgt.statuses.filter(s => s.id !== shield.id);
+          this.log(`🛡️ <b>${tgt.g.nickname}</b>'s ${shield.name} barrier was destroyed!`);
+          this.fx.glow(this.chest(tgt), 0xffffff, { scale: 1.4, life: 0.35 });
+          sfx('hit');
+        } else {
+          shield.shieldHp -= finalDmg;
+          this.log(`🛡️ <b>${tgt.g.nickname}</b>'s ${shield.name} barrier absorbed ${finalDmg} damage! [${shield.shieldHp} HP left]`);
+          this.fx.glow(this.chest(tgt), 0x5ad88a, { scale: 1.1, life: 0.25 });
+          sfx('guard');
+          finalDmg = 0;
+        }
+        this.renderCards();
+      }
+    }
+
+    // Apply the final damage
+    if (finalDmg > 0) {
+      tgt.g.hp = Math.max(0, tgt.g.hp - finalDmg);
+    }
+
+    return finalDmg;
+  }
+
   // ---------- damage ----------
   /**
    * HP-proportional damage model. A neutral hit with a starter technique
@@ -1066,12 +1174,22 @@ export class Battle {
         amount = Math.floor(amount * 1.30);
         this.log(`💧 <b>${att.g.nickname}</b>'s Torrential Surge boosted healing by 30%!`);
       }
+      const isTargetCursed = tgt.statuses && tgt.statuses.some(st => st.effect === 'curse');
+      if (isTargetCursed) {
+        amount = 0;
+        this.log(`🔮 <b>${tgt.g.nickname}</b> is Cursed and cannot heal!`);
+      }
       tgt.g.hp = Math.min(tgt.g.stats.hp, tgt.g.hp + amount);
-      sfx('heal');
-      this.fx.spiral(tgt.rig.group.position.clone(), 0x5ad88a, { up: true, dur: 0.9 });
-      this.fx.glow(this.chest(tgt), 0x8af2b0, { scale: 1.6, life: 0.5 });
-      this.fx.burst(this.chest(tgt).setY(2.3), 0x8af2b0, { count: 16, speed: 1.1, gravity: -2, life: 0.9, size: 0.11 });
-      makeFloatingDamageText(this.scene, tgt.rig.group.position.clone().setY(2), `+${amount}`, '#5ad88a', 1.15);
+      sfx(isTargetCursed ? 'debuff' : 'heal');
+      if (isTargetCursed) {
+        makeFloatingDamageText(this.scene, tgt.rig.group.position.clone().setY(2.2), 'Heal Blocked!', '#df45ff');
+        this.fx.glow(this.chest(tgt), 0x9900ee, { scale: 1.2, life: 0.4 });
+      } else {
+        this.fx.spiral(tgt.rig.group.position.clone(), 0x5ad88a, { up: true, dur: 0.9 });
+        this.fx.glow(this.chest(tgt), 0x8af2b0, { scale: 1.6, life: 0.5 });
+        this.fx.burst(this.chest(tgt).setY(2.3), 0x8af2b0, { count: 16, speed: 1.1, gravity: -2, life: 0.9, size: 0.11 });
+        makeFloatingDamageText(this.scene, tgt.rig.group.position.clone().setY(2), `+${amount}`, '#5ad88a', 1.15);
+      }
       if (att.side === 'player') this.stat(att.g.id).assists += 1;
       this.pushLog('💚', `<b>${who}</b> used ${tech.name} — restored ${amount} HP to ${tgt.g.nickname}.`);
       this.renderCards();
@@ -1125,12 +1243,12 @@ export class Battle {
         this.fx.flashMaterials(f.rig.body, 0x9a5af2, 0.25);
         if (tech.power > 0) {
           const { dmg, eff, crit } = this.computeDamage(att, f, tech);
-          f.g.hp = Math.max(0, f.g.hp - dmg);
-          this.recordHit(att, f, dmg);
-          dealt += dmg;
+          const finalDmg = await this.inflictDamage(f, dmg, 'tech', tech.kind);
+          this.recordHit(att, f, finalDmg);
+          dealt += finalDmg;
           this.elementalImpact(f, tech.type, false);
-          await this.hitReact(f, dmg, eff, crit, att.rig.group.position);
-          await this.afterHitEffects(att, f, dmg);
+          await this.hitReact(f, finalDmg, eff, crit, att.rig.group.position);
+          await this.afterHitEffects(att, f, finalDmg);
         }
       }
       this.pushLog('🔽', `<b>${who}</b> used ${tech.name} — foes' ${statName} fell${dealt ? ` (${dealt} dmg)` : ''}.`);
@@ -1153,14 +1271,14 @@ export class Battle {
       const home = att.rig.group.position.clone();
       await this.meleeRush(att, tgt, color);
       const { dmg, eff, crit } = this.computeDamage(att, tgt, tech);
-      tgt.g.hp = Math.max(0, tgt.g.hp - dmg);
-      this.recordHit(att, tgt, dmg);
-      totalDmg += dmg;
+      const finalDmg = await this.inflictDamage(tgt, dmg, 'tech', tech.kind);
+      this.recordHit(att, tgt, finalDmg);
+      totalDmg += finalDmg;
       this.elementalImpact(tgt, tech.type, big || crit);
-      if (tech.effect === 'drain') this.drainFX(att, tgt, dmg);
+      if (tech.effect === 'drain') this.drainFX(att, tgt, finalDmg);
       this.log(`<b>${who}</b> uses <b>${tech.name}</b>!${this.effText(eff, crit)}`);
-      await this.hitReact(tgt, dmg, eff, crit, att.rig.group.position);
-      await this.afterHitEffects(att, tgt, dmg);
+      await this.hitReact(tgt, finalDmg, eff, crit, att.rig.group.position);
+      await this.afterHitEffects(att, tgt, finalDmg);
       await this.meleeReturn(att, home);
     } else {
       if (targets.length === 1) this.faceTo(att, targets[0].rig.group.position);
@@ -1173,14 +1291,14 @@ export class Battle {
       for (const tgt of targets) {
         if (tgt.g.fainted) continue;
         const { dmg, eff, crit } = this.computeDamage(att, tgt, tech);
-        tgt.g.hp = Math.max(0, tgt.g.hp - dmg);
-        this.recordHit(att, tgt, dmg);
-        totalDmg += dmg;
+        const finalDmg = await this.inflictDamage(tgt, dmg, 'tech', tech.kind);
+        this.recordHit(att, tgt, finalDmg);
+        totalDmg += finalDmg;
         this.elementalImpact(tgt, tech.type, big || crit);
-        if (tech.effect === 'drain') this.drainFX(att, tgt, dmg);
+        if (tech.effect === 'drain') this.drainFX(att, tgt, finalDmg);
         this.log(`<b>${who}</b> uses <b>${tech.name}</b>!${this.effText(eff, crit)}`);
-        await this.hitReact(tgt, dmg, eff, crit, att.rig.group.position);
-        await this.afterHitEffects(att, tgt, dmg);
+        await this.hitReact(tgt, finalDmg, eff, crit, att.rig.group.position);
+        await this.afterHitEffects(att, tgt, finalDmg);
         if (targets.length > 1) await wait(80);
       }
       this.faceHome(att);
@@ -1198,15 +1316,29 @@ export class Battle {
   private async afterHitEffects(att: Unit, tgt: Unit, dmg: number): Promise<void> {
     if (tgt.g.fainted) return;
     
+    // Void Shield counter-curse
+    if (tgt.statuses && tgt.statuses.some(s => s.id === 'void_shield') && !att.g.fainted) {
+      const curseStatus: ActiveStatus = {
+        id: 'curse', name: 'Cursed', type: 'debuff', duration: 3, effect: 'curse', value: 0.05, icon: '🔮', desc: 'Cursed by shadow barrier: cannot heal and takes +100% DoT damage.'
+      };
+      if (!att.statuses) att.statuses = [];
+      att.statuses = att.statuses.filter(st => st.id !== 'curse');
+      att.statuses.push(curseStatus);
+      this.log(`🔮 <b>${att.g.nickname}</b> was cursed by <b>${tgt.g.nickname}</b>'s Void Shield!`);
+      makeFloatingDamageText(this.scene, att.rig.group.position.clone().setY(2.2), 'Cursed!', '#df45ff');
+      sfx('dark');
+      await wait(300);
+    }
+    
     // Physical Reflect
     if (tgt.statuses && tgt.statuses.some(s => s.effect === 'reflect')) {
       const refl = tgt.statuses.find(s => s.effect === 'reflect')!;
       const reflDmg = Math.floor(dmg * refl.value);
-      att.g.hp = Math.max(0, att.g.hp - reflDmg);
-      this.log(`💥 <b>${tgt.g.nickname}</b>'s ${refl.name} reflected ${reflDmg} damage to <b>${att.g.nickname}</b>!`);
+      const finalReflDmg = await this.inflictDamage(att, reflDmg, 'reflect');
+      this.log(`💥 <b>${tgt.g.nickname}</b>'s ${refl.name} reflected ${finalReflDmg} damage to <b>${att.g.nickname}</b>!`);
       sfx('hit');
       this.fx.glow(this.chest(att), 0xe83a5a, { scale: 1.0, life: 0.3 });
-      makeFloatingDamageText(this.scene, att.rig.group.position.clone().setY(2), `${reflDmg}`, '#e83a5a');
+      makeFloatingDamageText(this.scene, att.rig.group.position.clone().setY(2), `${finalReflDmg}`, '#e83a5a');
       await wait(300);
     }
     
@@ -1261,12 +1393,61 @@ export class Battle {
         
         if (!tgt.statuses) tgt.statuses = [];
         tgt.statuses = tgt.statuses.filter(s => s.id !== tech.statusEffect!.id);
-        tgt.statuses.push({ ...tech.statusEffect });
+        
+        const activeStatus = { ...tech.statusEffect };
+        if (activeStatus.effect === 'shield') {
+          activeStatus.shieldHp = Math.floor(tgt.g.stats.hp * activeStatus.value);
+        }
+        if (activeStatus.effect === 'provoke') {
+          activeStatus.provokedBy = att;
+        }
+        tgt.statuses.push(activeStatus);
         
         this.log(`✨ <b>${tgt.g.nickname}</b> received status: <b>${tech.statusEffect.name}</b> (${tech.statusEffect.duration}t)!`);
         
-        const color = tech.statusEffect.type === 'buff' ? 0x5ad88a : 0xe83a5a;
-        this.fx.flashMaterials(tgt.rig.body, color, 0.25);
+        // Floating 3D text
+        const isBuff = activeStatus.type === 'buff';
+        let colorStr = isBuff ? '#5ad88a' : '#e83a5a';
+        if (activeStatus.effect === 'freeze') colorStr = '#8ae2ff';
+        else if (activeStatus.effect === 'sleep') colorStr = '#7b9aff';
+        else if (activeStatus.effect === 'curse') colorStr = '#df45ff';
+        else if (activeStatus.effect === 'provoke') colorStr = '#ff5e5e';
+        else if (activeStatus.effect === 'berserk') colorStr = '#ff3b3b';
+        else if (activeStatus.effect === 'shield') colorStr = '#66f59a';
+        else if (activeStatus.effect === 'corrosion') colorStr = '#ffaa00';
+        
+        makeFloatingDamageText(this.scene, tgt.rig.group.position.clone().setY(2.2), `${activeStatus.name}!`, colorStr);
+        
+        // Custom 3D status application VFX
+        const pos = tgt.rig.group.position.clone();
+        if (activeStatus.effect === 'freeze') {
+          sfx('zap');
+          this.fx.spikes(pos, 0x8ae2ff, { count: 8, height: 1.0, life: 0.6, radius: 0.55 });
+          this.fx.glow(pos.setY(0.8), 0x8ae2ff, { scale: 1.3, life: 0.4 });
+        } else if (activeStatus.effect === 'sleep') {
+          sfx('debuff');
+          this.fx.implode(pos.setY(0.8), 0x3366ff, { count: 15, radius: 1.2, life: 0.5, size: 0.1 });
+        } else if (activeStatus.effect === 'provoke') {
+          sfx('debuff');
+          this.fx.burst(pos.setY(1.2), 0xff3333, { count: 12, speed: 2, up: 0.5, size: 0.12 });
+          this.fx.ring(tgt.rig.group.position, 0xff3333, { maxR: 1.0, life: 0.4 });
+        } else if (activeStatus.effect === 'curse') {
+          sfx('dark');
+          this.fx.pillar(tgt.rig.group.position, 0x8800ff, { height: 4, radius: 0.4, life: 0.5 });
+        } else if (activeStatus.effect === 'shield') {
+          sfx('guard');
+          this.fx.ring(tgt.rig.group.position, 0x5ad88a, { maxR: 1.2, life: 0.5, tube: 0.08 });
+          this.fx.glow(pos.setY(0.8), 0x5ad88a, { scale: 1.5, life: 0.5 });
+        } else if (activeStatus.effect === 'berserk') {
+          sfx('charge');
+          this.fx.burst(pos.setY(1.2), 0xff3333, { count: 16, speed: 3, up: 1.0, size: 0.15 });
+          this.fx.spiral(tgt.rig.group.position, 0xff0000, { up: true, dur: 0.8 });
+        } else {
+          const color = activeStatus.type === 'buff' ? 0x5ad88a : 0xe83a5a;
+          sfx(activeStatus.type === 'buff' ? 'buff' : 'debuff');
+          this.fx.flashMaterials(tgt.rig.body, color, 0.25);
+          this.fx.spiral(tgt.rig.group.position, color, { up: activeStatus.type === 'buff', dur: 0.7 });
+        }
       }
       this.renderCards();
       await wait(300);
@@ -1298,12 +1479,12 @@ export class Battle {
     if (crit) pct *= 1.5;
     if (target.guarding) pct *= 0.45;
     const dmg = Math.max(1, Math.floor(ds.hp * Math.min(0.45, pct)));
-    target.g.hp = Math.max(0, target.g.hp - dmg);
-    this.recordHit(att, target, dmg);
+    const finalDmg = await this.inflictDamage(target, dmg, 'strike');
+    this.recordHit(att, target, finalDmg);
     att.g.sp = Math.min(as.sp, att.g.sp + Math.max(2, Math.floor(as.sp * 0.08))); // striking builds SP
     this.fx.burst(this.chest(target), 0xfff0d0, { count: 14, speed: 2.6, gravity: -3, life: 0.45, size: 0.1 });
     this.fx.glow(this.chest(target), color, { scale: 1.0, life: 0.22 });
-    await this.hitReact(target, dmg, 1, crit, att.rig.group.position);
+    await this.hitReact(target, finalDmg, 1, crit, att.rig.group.position);
     await this.meleeReturn(att, home);
     this.pushLog('👊', `<b>${who}</b> attacked ${target.g.nickname} — ${dmg} dmg.`);
     this.renderCards();
@@ -1326,6 +1507,12 @@ export class Battle {
     for (const u of this.units) {
       if (u.g.fainted) continue;
       if (getSpeciesPassive(u.g.species).name === 'Verdant Growth') {
+        if (u.statuses && u.statuses.some(st => st.effect === 'curse')) {
+          this.log(`🔮 <b>${u.g.nickname}</b> is Cursed! Verdant Growth healing failed!`);
+          makeFloatingDamageText(this.scene, u.rig.group.position.clone().setY(2.2), 'Heal Blocked!', '#df45ff');
+          await wait(300);
+          continue;
+        }
         const heal = Math.floor(u.g.stats.hp * 0.08);
         if (heal > 0 && u.g.hp < u.g.stats.hp) {
           u.g.hp = Math.min(u.g.stats.hp, u.g.hp + heal);
@@ -1339,53 +1526,84 @@ export class Battle {
       }
     }
 
-    // 2. Process active status ticks (duration countdown, DoT, HoT, Doom)
+    // 2. Process active status ticks (duration countdown, DoT, HoT, Doom, Corrosion, Curse)
     for (const u of this.units) {
       if (u.g.fainted) continue;
       if (!u.statuses || u.statuses.length === 0) continue;
 
       const nextStatuses: ActiveStatus[] = [];
+      const isCursed = u.statuses.some(st => st.effect === 'curse');
+
       for (const s of u.statuses) {
         s.duration--;
 
         if (s.effect === 'dot') {
-          const dotDmg = Math.floor(u.g.stats.hp * s.value);
-          u.g.hp = Math.max(0, u.g.hp - dotDmg);
-          this.log(`💢 <b>${u.g.nickname}</b> takes ${dotDmg} damage from ${s.name}!`);
+          const multiplier = isCursed ? 2.0 : 1.0;
+          const dotDmg = Math.floor(u.g.stats.hp * s.value * multiplier);
+          const finalDot = await this.inflictDamage(u, dotDmg, 'dot');
+          this.log(`💢 <b>${u.g.nickname}</b> takes ${finalDot} damage from ${s.name}!${isCursed ? ' (Curse doubled DoT!)' : ''}`);
           sfx('hit');
           const color = s.id === 'poison' ? 0x5ad88a : 0xff6600;
           this.fx.flashMaterials(u.rig.body, color, 0.25);
-          makeFloatingDamageText(this.scene, u.rig.group.position.clone().setY(2), `${dotDmg}`, s.id === 'poison' ? '#5ad88a' : '#ff6600');
+          makeFloatingDamageText(this.scene, u.rig.group.position.clone().setY(2), `${finalDot}`, s.id === 'poison' ? '#5ad88a' : '#ff6600');
           this.renderCards();
           await wait(450);
         }
         else if (s.effect === 'hot') {
-          const hotHeal = Math.floor(u.g.stats.hp * s.value);
-          if (hotHeal > 0 && u.g.hp < u.g.stats.hp) {
-            u.g.hp = Math.min(u.g.stats.hp, u.g.hp + hotHeal);
-            this.log(`💚 <b>${u.g.nickname}</b> heals ${hotHeal} HP from ${s.name}!`);
-            sfx('heal');
-            this.fx.glow(this.chest(u), 0x8af2b0, { scale: 1.2, life: 0.4 });
-            makeFloatingDamageText(this.scene, u.rig.group.position.clone().setY(2), `+${hotHeal}`, '#5ad88a');
-            this.renderCards();
-            await wait(450);
+          if (isCursed) {
+            this.log(`🔮 <b>${u.g.nickname}</b> is Cursed! HoT heal from ${s.name} failed!`);
+            makeFloatingDamageText(this.scene, u.rig.group.position.clone().setY(2.2), 'Heal Blocked!', '#df45ff');
+            await wait(300);
+          } else {
+            const hotHeal = Math.floor(u.g.stats.hp * s.value);
+            if (hotHeal > 0 && u.g.hp < u.g.stats.hp) {
+              u.g.hp = Math.min(u.g.stats.hp, u.g.hp + hotHeal);
+              this.log(`💚 <b>${u.g.nickname}</b> heals ${hotHeal} HP from ${s.name}!`);
+              sfx('heal');
+              this.fx.glow(this.chest(u), 0x8af2b0, { scale: 1.2, life: 0.4 });
+              makeFloatingDamageText(this.scene, u.rig.group.position.clone().setY(2), `+${hotHeal}`, '#5ad88a');
+              this.renderCards();
+              await wait(450);
+            }
           }
         }
         else if (s.effect === 'doom' && s.duration <= 0) {
           const doomDmg = Math.floor(u.g.stats.hp * s.value);
-          u.g.hp = Math.max(0, u.g.hp - doomDmg);
-          this.log(`💀 <b>${u.g.nickname}</b>'s doom clock expired! Takes ${doomDmg} doom damage!`);
+          const finalDoom = await this.inflictDamage(u, doomDmg, 'doom');
+          this.log(`💀 <b>${u.g.nickname}</b>'s doom clock expired! Takes ${finalDoom} doom damage!`);
           sfx('hit');
           this.fx.pillar(u.rig.group.position, 0x9a5af2, { height: 6, radius: 0.7, life: 1.1 });
-          makeFloatingDamageText(this.scene, u.rig.group.position.clone().setY(2), `${doomDmg}`, '#9a5af2');
+          makeFloatingDamageText(this.scene, u.rig.group.position.clone().setY(2), `${finalDoom}`, '#9a5af2');
           this.renderCards();
           await wait(600);
+        }
+        else if (s.effect === 'corrosion') {
+          const corrosionDmg = Math.floor(u.g.stats.hp * s.value);
+          const finalCorrosion = await this.inflictDamage(u, corrosionDmg, 'corrosion');
+          u.mods.def = Math.max(0.5, u.mods.def - 0.15); // corrode armor
+          this.log(`🌋 <b>${u.g.nickname}</b> takes ${finalCorrosion} acid damage and lost Defense from Corrosion!`);
+          sfx('debuff');
+          this.fx.burst(u.rig.group.position.clone().setY(0.5), 0xffaa00, { count: 8, speed: 1.5, up: 0.5, size: 0.1 });
+          makeFloatingDamageText(this.scene, u.rig.group.position.clone().setY(2), `${finalCorrosion}`, '#ffaa00');
+          this.renderCards();
+          await wait(450);
+        }
+        else if (s.effect === 'curse') {
+          const curseDmg = Math.floor(u.g.stats.hp * s.value);
+          const finalCurse = await this.inflictDamage(u, curseDmg, 'curse');
+          this.log(`🔮 <b>${u.g.nickname}</b> takes ${finalCurse} damage from Curse!`);
+          sfx('dark');
+          this.fx.burst(u.rig.group.position.clone().setY(0.5), 0x9900ee, { count: 8, speed: 1.2, up: 0.4, size: 0.08 });
+          makeFloatingDamageText(this.scene, u.rig.group.position.clone().setY(2), `${finalCurse}`, '#df45ff');
+          this.renderCards();
+          await wait(450);
         }
 
         if (s.duration > 0) {
           nextStatuses.push(s);
         } else {
           this.log(`✨ <b>${u.g.nickname}</b>'s ${s.name} expired.`);
+          makeFloatingDamageText(this.scene, u.rig.group.position.clone().setY(2.2), `${s.name} Expired`, '#8a93c0');
           await wait(200);
         }
       }
@@ -1410,6 +1628,19 @@ export class Battle {
   }
 
   private async playerTurn(u: Unit): Promise<'acted' | 'fled'> {
+    // 1. Berserk check: forces a random basic strike and returns 'acted'
+    if (u.statuses && u.statuses.some(s => s.effect === 'berserk')) {
+      const foes = this.alive('enemy');
+      if (foes.length) {
+        const target = foes[Math.floor(Math.random() * foes.length)];
+        this.log(`😡 <b>${u.g.nickname}</b> is BERSERK! Red-hot rage forces a wild strike!`);
+        this.fx.glow(this.chest(u), 0xff3333, { scale: 1.3, life: 0.45 });
+        await wait(600);
+        await this.basicStrike(u, target);
+        return 'acted';
+      }
+    }
+
     // Auto-Action: if engaged and this Guardian has a remembered order, redo it.
     if (this.autoMode) {
       const replay = this.reresolveAction(u, this.lastAction.get(u.g.id));
@@ -1434,8 +1665,23 @@ export class Battle {
       const act = buttons[await this.menu(buttons)].key;
 
       if (act === 'strike') {
-        const target = await this.pickTarget('Attack which foe?', this.alive('enemy'));
-        if (!target) continue;
+        let provokedBy: Unit | null = null;
+        if (u.statuses) {
+          const provStatus = u.statuses.find(s => s.effect === 'provoke');
+          if (provStatus && provStatus.provokedBy && !provStatus.provokedBy.g.fainted) {
+            provokedBy = provStatus.provokedBy;
+          }
+        }
+        
+        let target: Unit | null = null;
+        if (provokedBy) {
+          target = provokedBy;
+          this.log(`💢 <b>${u.g.nickname}</b> is provoked! Forced to attack <b>${target.g.nickname}</b>!`);
+          await wait(500);
+        } else {
+          target = await this.pickTarget('Attack which foe?', this.alive('enemy'));
+          if (!target) continue;
+        }
         return this.commit(u, { kind: 'strike', target });
       }
       if (act === 'tech') {
@@ -1449,10 +1695,25 @@ export class Battle {
         ]);
         if (ti >= techs.length) continue;
         const tech = techs[ti];
+        
+        let provokedBy: Unit | null = null;
+        if (u.statuses) {
+          const provStatus = u.statuses.find(s => s.effect === 'provoke');
+          if (provStatus && provStatus.provokedBy && !provStatus.provokedBy.g.fainted) {
+            provokedBy = provStatus.provokedBy;
+          }
+        }
+        
         let target: Unit | null = null;
         if (tech.target === 'one') {
-          target = await this.pickTarget('Target which foe?', this.alive('enemy'));
-          if (!target) continue;
+          if (provokedBy) {
+            target = provokedBy;
+            this.log(`💢 <b>${u.g.nickname}</b> is provoked! Forced to target <b>${target.g.nickname}</b>!`);
+            await wait(500);
+          } else {
+            target = await this.pickTarget('Target which foe?', this.alive('enemy'));
+            if (!target) continue;
+          }
         } else if (tech.target === 'ally') {
           target = await this.pickTarget('Heal which ally?', this.alive('player'));
           if (!target) continue;
@@ -1650,21 +1911,40 @@ export class Battle {
     const it = ITEMS[itemId];
     this.player.removeItem(itemId);
     const s = target.g.stats;
-    if (it.kind === 'heal') target.g.hp = Math.min(s.hp, target.g.hp + it.value);
-    else if (it.kind === 'sp') target.g.sp = Math.min(s.sp, target.g.sp + it.value);
-    else if (it.kind === 'revive') {
+    const isTargetCursed = target.statuses && target.statuses.some(st => st.effect === 'curse');
+
+    if (it.kind === 'heal') {
+      if (isTargetCursed) {
+        this.log(`🔮 <b>${target.g.nickname}</b> is Cursed! The healing tonic had no effect!`);
+        makeFloatingDamageText(this.scene, target.rig.group.position.clone().setY(2.2), 'Heal Blocked!', '#df45ff');
+        sfx('debuff');
+        this.fx.glow(this.chest(target), 0x9900ee, { scale: 1.2, life: 0.4 });
+      } else {
+        target.g.hp = Math.min(s.hp, target.g.hp + it.value);
+        sfx('heal');
+        this.fx.spiral(target.rig.group.position.clone(), 0x5ad88a, { up: true, dur: 0.8 });
+        this.fx.glow(this.chest(target), 0x8af2b0, { scale: 1.3, life: 0.4 });
+        makeFloatingDamageText(this.scene, target.rig.group.position.clone().setY(2), '♥', '#5ad88a');
+      }
+    } else if (it.kind === 'sp') {
+      target.g.sp = Math.min(s.sp, target.g.sp + it.value);
+      sfx('heal');
+      this.fx.spiral(target.rig.group.position.clone(), 0x5ad88a, { up: true, dur: 0.8 });
+      this.fx.glow(this.chest(target), 0x8af2b0, { scale: 1.3, life: 0.4 });
+      makeFloatingDamageText(this.scene, target.rig.group.position.clone().setY(2), '★', '#8ac5ff');
+    } else if (it.kind === 'revive') {
       target.g.hp = Math.floor(s.hp * it.value);
       target.rig.group.visible = true;
       target.rig.group.rotation.z = 0;
       target.rig.group.scale.setScalar(1);
       target.rig.group.position.copy(this.slotPos('player', target.slot));
       this.fx.pillar(target.rig.group.position, 0x8af2b0, { height: 4, radius: 0.6, life: 0.8 });
+      sfx('heal');
+      this.fx.spiral(target.rig.group.position.clone(), 0x5ad88a, { up: true, dur: 0.8 });
+      this.fx.glow(this.chest(target), 0x8af2b0, { scale: 1.3, life: 0.4 });
+      makeFloatingDamageText(this.scene, target.rig.group.position.clone().setY(2), '♥', '#5ad88a');
     }
-    sfx('heal');
-    this.fx.spiral(target.rig.group.position.clone(), 0x5ad88a, { up: true, dur: 0.8 });
-    this.fx.glow(this.chest(target), 0x8af2b0, { scale: 1.3, life: 0.4 });
     this.log(`Used <b>${it.name}</b> on ${target.g.nickname}!`);
-    makeFloatingDamageText(this.scene, target.rig.group.position.clone().setY(2), '♥', '#5ad88a');
     if (u.side === 'player') this.stat(u.g.id).assists += 1;
     this.pushLog('🎒', `Used <b>${it.name}</b> on ${target.g.nickname}.`);
     this.renderCards();
@@ -1715,22 +1995,56 @@ export class Battle {
     const allies = this.alive('enemy');
     const foes = this.alive('player');
     if (!foes.length) return;
+
+    // 1. Berserk check: forces a random basic strike on a player unit
+    if (u.statuses && u.statuses.some(s => s.effect === 'berserk')) {
+      const target = foes[Math.floor(Math.random() * foes.length)];
+      this.log(`😡 Wild <b>${u.g.nickname}</b> is BERSERK! Red-hot rage forces a wild strike!`);
+      this.fx.glow(this.chest(u), 0xff3333, { scale: 1.3, life: 0.45 });
+      await wait(600);
+      await this.basicStrike(u, target);
+      return;
+    }
+
     const techs = u.g.techniques.filter(t => u.g.sp >= t.spCost);
 
-    // 1. heal a hurt ally if possible
+    // 2. Provoke check: forces attack on the provoker
+    let provokedBy: Unit | null = null;
+    if (u.statuses) {
+      const provStatus = u.statuses.find(s => s.effect === 'provoke');
+      if (provStatus && provStatus.provokedBy && !provStatus.provokedBy.g.fainted) {
+        provokedBy = provStatus.provokedBy;
+      }
+    }
+
+    if (provokedBy) {
+      const dmgTechs = techs.filter(t => t.effect === 'damage' || t.effect === 'drain' || (t.power > 0 && t.effect.startsWith('debuff')));
+      const singleDmgTechs = dmgTechs.filter(t => t.target === 'one');
+      this.log(`Wild <b>${u.g.nickname}</b> is provoked by <b>${provokedBy.g.nickname}</b>!`);
+      await wait(400);
+      if (singleDmgTechs.length && Math.random() < 0.75) {
+        const tech = singleDmgTechs[Math.floor(Math.random() * singleDmgTechs.length)];
+        await this.execTech(u, tech, provokedBy);
+      } else {
+        await this.basicStrike(u, provokedBy);
+      }
+      return;
+    }
+
+    // 3. heal a hurt ally if possible
     const healTech = techs.find(t => t.effect === 'heal');
     const hurtAlly = allies.find(a => a.g.hp / a.g.stats.hp < 0.4);
     if (healTech && hurtAlly && Math.random() < 0.6) {
       await this.execTech(u, healTech, hurtAlly);
       return;
     }
-    // 2. buff sometimes when healthy
+    // 4. buff sometimes when healthy
     const buffTech = techs.find(t => t.effect === 'buffAtk' || t.effect === 'buffDef');
     if (buffTech && u.mods.atk < 1.3 && u.g.hp / u.g.stats.hp > 0.7 && Math.random() < 0.25) {
       await this.execTech(u, buffTech, null);
       return;
     }
-    // 3. pick best damaging tech vs best target (prefer type advantage & low HP)
+    // 5. pick best damaging tech vs best target (prefer type advantage & low HP)
     const dmgTechs = techs.filter(t => t.effect === 'damage' || t.effect === 'drain' || (t.power > 0 && t.effect.startsWith('debuff')));
     if (dmgTechs.length && Math.random() < 0.8) {
       let best: { t: Technique; tgt: Unit; score: number } | null = null;
@@ -1747,7 +2061,7 @@ export class Battle {
         return;
       }
     }
-    // 4. guard occasionally at low HP
+    // 6. guard occasionally at low HP
     if (u.g.hp / u.g.stats.hp < 0.25 && Math.random() < 0.3) {
       u.guarding = true;
       sfx('guard');
@@ -1757,7 +2071,7 @@ export class Battle {
       await wait(550);
       return;
     }
-    // 5. fallback strike weakest foe
+    // 7. fallback strike weakest foe
     const target = foes.reduce((a, b) => (a.g.hp < b.g.hp ? a : b));
     await this.basicStrike(u, target);
   }
@@ -1965,7 +2279,7 @@ export class Battle {
   }
 
   private async learnTechFlow(g: Guardian, tech: Technique): Promise<void> {
-    if (g.learnedTechs.length < 4) {
+    if (g.learnedTechs.length < 5) {
       g.learnedTechs.push(tech.id);
       sfx('fanfare');
       await this.victoryCard(
@@ -1980,7 +2294,7 @@ export class Battle {
       const pick = await this.victoryCard(
         `<div class="vc-evo-emoji">✨</div>
          <h2 class="vc-title">Learn ${tech.name}?</h2>
-         <p class="vc-sub"><b style="color:${TYPE_CSS[g.species.type]}">${g.nickname}</b> can learn <b style="color:${TYPE_CSS[tech.type]}">${tech.name}</b>, but already knows four. Forget one to make room?</p>
+         <p class="vc-sub"><b style="color:${TYPE_CSS[g.species.type]}">${g.nickname}</b> can learn <b style="color:${TYPE_CSS[tech.type]}">${tech.name}</b>, but already knows five. Forget one to make room?</p>
          ${this.techCardHtml(tech)}`,
         [
           ...current.map(t => ({ label: `Forget <span style="color:${TYPE_CSS[t.type]}">${t.name}</span> <span class="sub">(Pow ${t.power} · ${t.spCost} SP)</span>` })),

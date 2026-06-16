@@ -4,7 +4,7 @@
 // ============================================================
 import * as THREE from 'three';
 import { ITEMS, CRAWLER_PARTS, CRAWLER_SLOTS, CRAWLER_SLOT_INFO, TYPE_CSS, STAT_NAMES, HOUSES, DUNGEONS, expForLevel, SPECIES, TECHS, elementChipsHTML, type StatKey, type CrawlerSlot, getSpeciesPassive } from './data';
-import { Player, Guardian } from './state';
+import { Player, Guardian, ParentSnapshot } from './state';
 import { makeGuardian, disposeRig, makeCrawler, disposeCrawler } from './models';
 import { GUILD_LORE, avatarURL, guildIconURL, rankFor, questsDoneCount } from './guilds';
 import { journalEntries, questProgress, type QuestDef, type QuestState } from './quests';
@@ -14,7 +14,7 @@ import { RANKS, rankIndexFor, rankBadgeHTML, rankLadderHTML } from './ranks';
 import { evoTreeHTML, wireEvoTree } from './evotree';
 import { checkAchievements, achievementsHTML } from './achievements';
 import { sfx, toggleMute, isMuted, getMusicVolume, getSoundVolume, setMusicVolume, setSoundVolume } from './audio';
-import { openTutorialReplayMenu } from './tutorial';
+import { openTutorialReplayMenu, runGuardianTutorial, isTutorialOpen } from './tutorial';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
 
@@ -535,6 +535,7 @@ export function openPanel(kind: PanelKind, player: Player, ctx: PanelCtx): Promi
       resolve();
     };
     const onKey = (e: KeyboardEvent) => {
+      if (isTutorialOpen()) return;
       const k = e.key.toLowerCase();
       if (k === 'escape') { close(); return; }
       const target = PANEL_KEYS[k];
@@ -564,10 +565,18 @@ export function openPanel(kind: PanelKind, player: Player, ctx: PanelCtx): Promi
       (el.querySelector('#panel-close') as HTMLElement).onclick = close;
     };
 
+    const checkTut = async () => {
+      if (current === 'guardians' && !player.flags['tut_guardian_ui']) {
+        await runGuardianTutorial(player);
+        render();
+      }
+    };
+
     const render = () => {
       const el = openScreen(shell(renderPanelBody(current, player, render, ctx)));
       wire(el);
       wirePanelBody(current, el, player, render, ctx);
+      checkTut();
     };
     render();
   });
@@ -636,7 +645,7 @@ function renderPanelBody(kind: PanelKind, p: Player, refresh: () => void, ctx: P
     };
     return `
       <h3>${PANEL_TITLES.guardians}</h3>
-      <div class="grid2">
+      <div class="grid2" id="guardians-panel-grid">
         <div><h3>Party (${p.party.length}/3)</h3>${p.party.map((g, i) => row(g, 'party', i)).join('') || '<div class="sub">Empty.</div>'}</div>
         <div><h3>Reserve (${p.reserve.length})</h3><div style="max-height:380px;overflow-y:auto">${p.reserve.map((g, i) => row(g, 'reserve', i)).join('') || '<div class="sub">No reserve Guardians.</div>'}</div></div>
       </div>`;
@@ -1149,6 +1158,61 @@ function initPreview3D(container: HTMLElement, speciesId: string): () => void {
   };
 }
 
+function renderPedigreeTreeHtml(g: Guardian): string {
+  if (!g.parents) return '';
+
+  const getCardHtml = (node: ParentSnapshot | null, label: string, isOffspring = false) => {
+    if (!node) {
+      return `<div class="pedigree-card empty">
+        <span class="sub" style="font-size:9px;text-transform:uppercase;color:var(--ui-dim);letter-spacing:0.5px">${label}</span>
+        <div class="pedigree-title" style="color:#555">Unknown</div>
+        <div class="pedigree-sub">No record</div>
+      </div>`;
+    }
+    const spec = SPECIES[node.speciesId];
+    const typeColor = spec ? TYPE_CSS[spec.type] : '#8b93b8';
+    const specName = spec ? spec.name : 'Unknown';
+    const displayLabel = isOffspring ? '🌟 Offspring' : label;
+    return `
+      <div class="pedigree-card ${isOffspring ? 'offspring-node' : ''}">
+        <span class="sub" style="font-size:9px;text-transform:uppercase;color:var(--ui-gold);letter-spacing:0.5px">${displayLabel}</span>
+        <div class="pedigree-title" style="color:${typeColor}">${node.nickname}</div>
+        <div class="pedigree-sub">${specName} · Lv.${node.level}</div>
+      </div>
+    `;
+  };
+
+  const parentA = g.parents.parentA;
+  const parentB = g.parents.parentB;
+  const grandparentA1 = parentA.parents?.parentA ?? null;
+  const grandparentA2 = parentA.parents?.parentB ?? null;
+  const grandparentB1 = parentB.parents?.parentA ?? null;
+  const grandparentB2 = parentB.parents?.parentB ?? null;
+
+  return `
+    <h3 style="margin-top:16px;border-top:1px dashed var(--ui-border);padding-top:12px;color:var(--ui-gold);">🧬 Guardian Lineage & Pedigree</h3>
+    <div class="pedigree-container">
+      <!-- Generation 3: Grandparents -->
+      <div class="pedigree-column">
+        ${getCardHtml(grandparentA1, 'Grandparent')}
+        ${getCardHtml(grandparentA2, 'Grandparent')}
+        <div style="border-top:1px dashed rgba(255,255,255,0.05);margin:4px 0;"></div>
+        ${getCardHtml(grandparentB1, 'Grandparent')}
+        ${getCardHtml(grandparentB2, 'Grandparent')}
+      </div>
+      <!-- Generation 2: Parents -->
+      <div class="pedigree-column">
+        ${getCardHtml(parentA, 'Parent A')}
+        ${getCardHtml(parentB, 'Parent B')}
+      </div>
+      <!-- Generation 1: Offspring -->
+      <div class="pedigree-column">
+        ${getCardHtml({ nickname: g.nickname, speciesId: g.speciesId, level: g.level, parents: g.parents }, 'Offspring', true)}
+      </div>
+    </div>
+  `;
+}
+
 function showGuardianDetail(g: Guardian, back: () => void): void {
   const s = g.stats;
   const statRows = (Object.keys(STAT_NAMES) as StatKey[]).map(k =>
@@ -1170,7 +1234,7 @@ function showGuardianDetail(g: Guardian, back: () => void): void {
         <h3>Stats — Lv${g.level}/${g.levelCap} (${g.species.stage})</h3>
         ${statRows}
         <div class="sub" style="margin-top:6px">EXP: ${g.exp} / ${expForLevel(g.level + 1)} (${g.expToNext} to next)</div>
-        <div class="sub">Technique Points: <b class="goldcol">${g.techPoints}</b></div>
+        <div class="sub">Technique Points: <b class="goldcol">${g.techPoints}</b> · Evolution Points: <b class="goldcol">${g.evolutionPoints}</b></div>
         ${evo ? `<div class="sub">Evolves to <b>${SPECIES[evo.species]?.name ?? evo.species}</b> at Lv${evo.level}</div>` : '<div class="sub">Final form.</div>'}
         <div class="sub" style="margin-top:8px;border-top:1px dashed var(--ui-border);padding-top:8px">Passive: <b class="goldcol">${passive.name}</b> — <i>${passive.desc}</i></div>
       </div>
@@ -1182,6 +1246,7 @@ function showGuardianDetail(g: Guardian, back: () => void): void {
         <div style="max-height:300px;overflow-y:auto">${techRows}</div>
       </div>
     </div>
+    ${renderPedigreeTreeHtml(g)}
     <div style="display:flex;justify-content:flex-end;margin-top:12px">
       <button class="ui-btn primary" id="detail-back">Back</button>
     </div>`);
@@ -1227,7 +1292,7 @@ function showTechniqueManagement(g: Guardian, back: () => void): void {
       .filter(Boolean);
 
     const learnableRows = learnable.map(t => {
-      const canLearn = g.techPoints > 0 && g.learnedTechs.length < 4;
+      const canLearn = g.techPoints > 0 && g.learnedTechs.length < 5;
       return `
         <div class="list-row">
           <div style="flex:1">
@@ -1242,15 +1307,15 @@ function showTechniqueManagement(g: Guardian, back: () => void): void {
     const el = openScreen(`
       <h3>Manage Techniques — ${g.nickname}</h3>
       <div class="sub" style="margin-bottom:12px">
-        Technique Points: <b class="goldcol">${g.techPoints}</b> · Active Slots: <b>${g.learnedTechs.length}/4</b>
+        Technique Points: <b class="goldcol">${g.techPoints}</b> · Active Slots: <b>${g.learnedTechs.length}/5</b>
       </div>
       <div class="grid2">
         <div>
-          <h3>Active Moves (${g.learnedTechs.length}/4)</h3>
+          <h3>Active Moves (${g.learnedTechs.length}/5)</h3>
           <div style="max-height:340px;overflow-y:auto">${learnedRows}</div>
         </div>
         <div>
-          <h3>Learnable Moves</h3>
+          <h3>Tech Box (Unlocked Moves)</h3>
           <div style="max-height:340px;overflow-y:auto">${learnableRows}</div>
         </div>
       </div>
@@ -1274,7 +1339,7 @@ function showTechniqueManagement(g: Guardian, back: () => void): void {
     el.querySelectorAll<HTMLElement>('[data-learn]').forEach(btn => {
       btn.onclick = () => {
         const id = btn.dataset.learn!;
-        if (g.techPoints > 0 && g.learnedTechs.length < 4) {
+        if (g.techPoints > 0 && g.learnedTechs.length < 5) {
           g.learnedTechs.push(id);
           g.techPoints--;
           toast(`Learned ${TECHS[id].name}!`, 'gold');
