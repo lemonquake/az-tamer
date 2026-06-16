@@ -2134,6 +2134,7 @@ export class University {
       if (pick !== 0) return;
     }
     p.flags['university_done'] = true;
+    p.savedLocation = undefined;
     p.save();
     this.resolveExit?.();
   }

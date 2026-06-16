@@ -257,6 +257,7 @@ async function runUniversity(revisit: boolean, initialRoom?: string): Promise<vo
   await fadeOut();
   setView(null);
   hideHUD();
+  player.savedLocation = undefined;
 }
 
 // ---------------- Agdao Island ----------------
@@ -319,6 +320,8 @@ async function runSalmonan(startSpawn?: 'pier' | 'ridge'): Promise<void> {
   await fadeOut();
   setView(null);
   hideHUD();
+  player.savedLocation = undefined;
+  player.save();
 }
 
 // ---------------- Terra City (the Circuit-Crown of Tharkand) ----------------
@@ -337,6 +340,7 @@ async function runTerra(initialRoom?: string): Promise<void> {
   await fadeOut();
   setView(null);
   hideHUD();
+  player.savedLocation = undefined;
   syncStoryQuests(player).forEach(n => toast(n, 'gold'));
   player.save();
 }
