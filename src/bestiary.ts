@@ -10369,6 +10369,7 @@ function buildProceduralArchetype(arch: string, p: { primary: number; secondary:
     for (let i = 0; i < 5; i++) {
       const seg = new THREE.Mesh(new THREE.SphereGeometry(r, 14, 10), i % 2 ? sec : prim);
       seg.position.set(x, y, 0); g.add(seg);
+      if (i === 0) seg.name = 'tail';
       y += r * 1.15; x -= 0.1; r *= 0.88;
     }
     const head = new THREE.Group(); head.position.set(x + 0.12, y + 0.05, 0);
