@@ -183,7 +183,10 @@ export function openGuildCard(player: Player, onPhotoChanged?: () => void): Prom
       overlay.remove();
       resolve();
     };
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
+    const onKey = (e: KeyboardEvent) => {
+      const k = e.key.toLowerCase();
+      if (k === 'escape' || k === 'esc') close();
+    };
     window.addEventListener('keydown', onKey);
     window.addEventListener('resize', size);
     overlay.querySelector<HTMLElement>('#gcard-close')!.onclick = close;
@@ -545,7 +548,8 @@ export function openGuildPerksPanel(player: Player, houseColor: string, onClose?
     `;
 
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      const k = e.key.toLowerCase();
+      if (k === 'escape' || k === 'esc') {
         window.removeEventListener('keydown', onKey);
         overlay.remove();
         onClose?.();

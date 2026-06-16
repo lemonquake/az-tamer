@@ -1344,7 +1344,7 @@ export class TerraCity {
     else if (k === 'i') this.openPanelGuarded('inventory');
     else if (k === 'g') this.openPanelGuarded('guardians');
     else if (k === 'j') this.openPanelGuarded('quests');
-    else if (k === 'escape') {
+    else if (k === 'escape' || k === 'esc') {
       this.busy = true;
       openPauseMenu(this.player, { canSave: true }).then(() => { updateHUD(this.player, 'Terra City'); this.busy = false; });
     }

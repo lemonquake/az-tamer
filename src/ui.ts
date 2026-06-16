@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import { ITEMS, CRAWLER_PARTS, CRAWLER_SLOTS, CRAWLER_SLOT_INFO, TYPE_CSS, STAT_NAMES, HOUSES, DUNGEONS, expForLevel, SPECIES, TECHS, elementChipsHTML, type StatKey, type CrawlerSlot, getSpeciesPassive } from './data';
 import { Player, Guardian, ParentSnapshot } from './state';
 import { makeGuardian, disposeRig, makeCrawler, disposeCrawler } from './models';
-import { GUILD_LORE, avatarURL, guildIconURL, rankFor, questsDoneCount } from './guilds';
+import { GUILD_LORE, avatarURL, guildIconURL, rankFor, questsDoneCount, makeCardNo } from './guilds';
 import { journalEntries, questProgress, questState, type QuestDef, type QuestState } from './quests';
 import { openGuildCard } from './guildcard';
 import { openGuardianCard } from './guardiancard';
@@ -114,7 +114,8 @@ export function choose(speaker: string, text: string, options: string[]): Promis
     wrap.style.display = 'flex';
 
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      const k = e.key.toLowerCase();
+      if (k === 'escape' || k === 'esc') {
         if (document.activeElement instanceof HTMLInputElement) return;
         e.preventDefault();
         e.stopPropagation();
@@ -180,7 +181,8 @@ export function askName(title: string, placeholder = '', cancelable = false): Pr
     };
 
     const onWindowKey = (e: KeyboardEvent) => {
-      if (cancelable && e.key === 'Escape') {
+      const k = e.key.toLowerCase();
+      if (cancelable && (k === 'escape' || k === 'esc')) {
         e.preventDefault();
         e.stopPropagation();
         cancel();
@@ -190,9 +192,10 @@ export function askName(title: string, placeholder = '', cancelable = false): Pr
     $('name-confirm').onclick = confirm;
 
     input.onkeydown = e => {
-      if (e.key === 'Enter') {
+      const k = e.key.toLowerCase();
+      if (k === 'enter') {
         confirm();
-      } else if (cancelable && e.key === 'Escape') {
+      } else if (cancelable && (k === 'escape' || k === 'esc')) {
         e.preventDefault();
         e.stopPropagation();
         cancel();
@@ -506,7 +509,8 @@ export function openOptionsMenu(player?: Player): Promise<void> {
     updateAutosaveBtnLabel();
 
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      const k = e.key.toLowerCase();
+      if (k === 'escape' || k === 'esc') {
         e.preventDefault();
         e.stopPropagation();
         close();
@@ -630,6 +634,16 @@ export function openMasterDebugMenu(player: Player): Promise<void> {
       });
     }
 
+    // Populate guild options
+    const guildSelect = $<HTMLSelectElement>('db-guild-select');
+    guildSelect.innerHTML = '<option value="none">-- None --</option>';
+    HOUSES.forEach(h => {
+      const opt = document.createElement('option');
+      opt.value = h.id;
+      opt.textContent = `${h.name} (${h.type})`;
+      guildSelect.appendChild(opt);
+    });
+
     const updateSlotsDisplay = () => {
       shardsVal.textContent = player.shards.toLocaleString();
 
@@ -653,6 +667,15 @@ export function openMasterDebugMenu(player: Player): Promise<void> {
           lvlInput.disabled = true;
         }
       }
+
+      // Guild & Rank updates
+      guildSelect.value = player.houseId || 'none';
+      $('db-card-val').textContent = player.cardNo || 'No Card';
+      $('db-gp-val').textContent = (player.guildPoints ?? 0).toLocaleString();
+      
+      const rIdx = rankIndexFor(player);
+      const rankName = RANKS[rIdx].name;
+      $('db-rank-val').textContent = `${rankName} (${player.tournamentPoints} TP)`;
     };
 
     updateSlotsDisplay();
@@ -759,6 +782,88 @@ export function openMasterDebugMenu(player: Player): Promise<void> {
       toast('Added 10 of all items to inventory!', 'gold');
     };
 
+    // Guild & Rank adjustments
+    guildSelect.onchange = () => {
+      const val = guildSelect.value;
+      if (val === 'none') {
+        player.houseId = null;
+        player.cardNo = '';
+      } else {
+        player.houseId = val;
+        const prefix = val.slice(0, 2).toUpperCase();
+        if (!player.cardNo || !player.cardNo.startsWith(prefix)) {
+          player.cardNo = makeCardNo(val);
+        }
+      }
+      player.save(false);
+      refreshHUD();
+      updateSlotsDisplay();
+      toast(`Guild set to: ${val === 'none' ? 'None' : val}`, 'gold');
+    };
+
+    const addGP = (amount: number) => {
+      player.guildPoints = (player.guildPoints ?? 0) + amount;
+      player.save(false);
+      refreshHUD();
+      updateSlotsDisplay();
+      toast(`Added ${amount} GP!`, 'gold');
+    };
+    $('db-gp-10').onclick = () => addGP(10);
+    $('db-gp-100').onclick = () => addGP(100);
+    $('db-gp-500').onclick = () => addGP(500);
+
+    $('db-gp-max-perks').onclick = () => {
+      player.guildPerks = {
+        elementMastery: 10,
+        itemDiscount: 5,
+        crawlerDiscount: 5,
+        monoSynergy: 5,
+        rainbowSynergy: 5,
+        tacticalSynergy: 5,
+      };
+      player.save(false);
+      refreshHUD();
+      updateSlotsDisplay();
+      toast('Maxed out all Guild Perks!', 'gold');
+    };
+
+    $('db-gp-reset').onclick = () => {
+      player.guildPoints = 0;
+      player.guildPerks = {
+        elementMastery: 1,
+        itemDiscount: 0,
+        crawlerDiscount: 0,
+        monoSynergy: 0,
+        rainbowSynergy: 0,
+        tacticalSynergy: 0,
+      };
+      player.save(false);
+      refreshHUD();
+      updateSlotsDisplay();
+      toast('Guild Points & Perks reset!', 'red');
+    };
+
+    const addTP = (amount: number) => {
+      player.tournamentPoints += amount;
+      player.save(false);
+      refreshHUD();
+      updateSlotsDisplay();
+      const rIdx = rankIndexFor(player);
+      toast(`Added ${amount} TP! Rank: ${RANKS[rIdx].name}`, 'gold');
+    };
+    $('db-tp-10').onclick = () => addTP(10);
+    $('db-tp-50').onclick = () => addTP(50);
+    $('db-tp-100').onclick = () => addTP(100);
+    $('db-tp-250').onclick = () => addTP(250);
+
+    $('db-tp-reset').onclick = () => {
+      player.tournamentPoints = 0;
+      player.save(false);
+      refreshHUD();
+      updateSlotsDisplay();
+      toast('Tournament Points reset to 0!', 'red');
+    };
+
     // 5. Warp/Teleportation
     $('db-warp-btn').onclick = () => {
       const destType = $<HTMLSelectElement>('db-warp-select').value;
@@ -863,7 +968,8 @@ export function openMasterDebugMenu(player: Player): Promise<void> {
     };
 
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      const k = e.key.toLowerCase();
+      if (k === 'escape' || k === 'esc') {
         e.preventDefault();
         e.stopPropagation();
         close();
@@ -888,6 +994,17 @@ export function openMasterDebugMenu(player: Player): Promise<void> {
       $('db-gold-10k').onclick = null;
       $('db-gold-50k').onclick = null;
       $('db-items-all').onclick = null;
+      guildSelect.onchange = null;
+      $('db-gp-10').onclick = null;
+      $('db-gp-100').onclick = null;
+      $('db-gp-500').onclick = null;
+      $('db-gp-max-perks').onclick = null;
+      $('db-gp-reset').onclick = null;
+      $('db-tp-10').onclick = null;
+      $('db-tp-50').onclick = null;
+      $('db-tp-100').onclick = null;
+      $('db-tp-250').onclick = null;
+      $('db-tp-reset').onclick = null;
       $('db-cine-play').onclick = null;
       $('db-fish-play').onclick = null;
       $('db-warp-btn').onclick = null;
@@ -948,7 +1065,7 @@ export function openPanel(kind: PanelKind, player: Player, ctx: PanelCtx): Promi
     const onKey = (e: KeyboardEvent) => {
       if (isTutorialOpen()) return;
       const k = e.key.toLowerCase();
-      if (k === 'escape') { close(); return; }
+      if (k === 'escape' || k === 'esc') { close(); return; }
       const target = PANEL_KEYS[k];
       if (target && !(e.target instanceof HTMLInputElement)) {
         if (target === current) close();
@@ -1831,7 +1948,10 @@ export function openPauseMenu(
 ): Promise<void> {
   return new Promise(resolve => {
     const close = () => { closeMenu(); window.removeEventListener('keydown', esc); resolve(); };
-    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
+    const esc = (e: KeyboardEvent) => {
+      const k = e.key.toLowerCase();
+      if (k === 'escape' || k === 'esc') close();
+    };
     window.addEventListener('keydown', esc);
 
     let menuHtml = '';

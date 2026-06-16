@@ -2095,7 +2095,7 @@ export const DUNGEONS: DungeonDef[] = [
   { id: 'thunderfen', name: 'Thunderfen Mire', floors: 3, levelRange: [8, 12], theme: 'storm',
     pool: ['joltuft', 'sparkmote', 'gearmite', 'ampyre', 'mistling', 'shroomple', 'nimbusyl', 'puddla', 'zephlet', 'stormchick', 'flarefly', 'voltcrab'],
     boss: 'dynamaul', bossLevel: 15, rewardShards: 700, unlockFlag: 'historian_intel',
-    drop: { item: 'storm_amber', chance: 0.4, max: 1 },
+    drop: { item: 'storm_amber', chance: 1.0, max: 1 },
     desc: 'A drowned bog that appeared overnight where lightning keeps striking the same dead trees. The wild Guardians here carry sparks fossilized in amber.', coords: [32, -18], quest: true },
   // story chapter V — Greggy's test, entered from Agdao Island itself
   { id: 'cradle', name: 'Cradle Hollow', floors: 3, levelRange: [18, 24], theme: 'cavern', hidden: true,

@@ -314,7 +314,10 @@ export function openFishHub(player: Player, fs: FishingState, opts: { tab?: HubT
       window.removeEventListener('keydown', onKey);
       resolve();
     };
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
+    const onKey = (e: KeyboardEvent) => {
+      const k = e.key.toLowerCase();
+      if (k === 'escape' || k === 'esc') close();
+    };
     window.addEventListener('keydown', onKey);
 
     const visibleTabs: HubTab[] = canBuy
@@ -960,7 +963,8 @@ export function openFishPreviewModal(fish: SpeciesDef, rec: { count: number; max
   };
   
   const onKey = (e: KeyboardEvent) => {
-    if (e.key === 'Escape') {
+    const k = e.key.toLowerCase();
+    if (k === 'escape' || k === 'esc') {
       close();
       e.stopPropagation();
     }

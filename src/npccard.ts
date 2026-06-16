@@ -976,7 +976,10 @@ export function openNpcCard(profile: NpcProfile): Promise<void> {
       overlay.remove();
       resolve();
     };
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
+    const onKey = (e: KeyboardEvent) => {
+      const k = e.key.toLowerCase();
+      if (k === 'escape' || k === 'esc') close();
+    };
     window.addEventListener('keydown', onKey);
     window.addEventListener('resize', size);
     overlay.querySelector<HTMLElement>('#gcard-close')!.onclick = close;

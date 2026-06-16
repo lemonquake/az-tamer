@@ -1289,7 +1289,7 @@ export class AgdaoIsland {
     else if (k === 'c') this.openPanelGuarded('crawler');
     else if (k === 'j') this.openPanelGuarded('quests');
     else if (k === 'v') this.openPanelGuarded('evotree');
-    else if (k === 'escape') {
+    else if (k === 'escape' || k === 'esc') {
       this.busy = true;
       openPauseMenu(this.player, { canSave: true }).then(() => {
         updateHUD(this.player, 'Agdao Island');

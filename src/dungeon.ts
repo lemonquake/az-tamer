@@ -939,86 +939,92 @@ export class DungeonRun {
     if (this.busy || this.moving) return;
     const tile = this.map.tiles[this.pos.y][this.pos.x];
     const p = this.ctx.player;
-    if (tile === 'stairs') {
-      this.busy = true;
-      this.floorNum++;
-      this.vfx.pillar(new THREE.Vector3(this.pos.x, 0, this.pos.y), 0x5ab8e8, { height: 4, radius: 0.7, life: 0.8 });
-      sfx('open');
-      await say('', `Descending to B${this.floorNum}F…`);
-      this.newFloor();
-      this.busy = false;
-    } else if (tile === 'exit') {
-      this.busy = true;
-      // a dungeon with no warden is conquered by charting it to the deepest floor
-      const deepest = this.floorNum >= this.def.floors && !this.def.boss;
-      const pick = await choose('', deepest
-        ? 'You have charted this place to its deepest floor. Return to the surface in triumph?'
-        : 'Leave the dungeon and return to the surface?', ['Leave', 'Stay']);
-      this.busy = false;
-      if (pick === 0) {
-        if (deepest) {
-          p.shards += this.def.rewardShards;
-          p.dungeonClears[this.def.id] = (p.dungeonClears[this.def.id] ?? 0) + 1;
-          toast(`🏆 ${this.def.name} fully charted! Bonus: ◆${this.def.rewardShards}`, 'gold');
-          this.finish('cleared');
-        } else {
-          this.finish('retreat');
-        }
-      }
-    } else if (tile === 'boss' && this.def.boss) {
-      this.busy = true;
-      const pick = await choose('', 'A monstrous presence stirs beyond this seal. Challenge it?', ['Challenge!', 'Not yet']);
-      if (pick === 0) {
-        sfx('boom');
-        this.vfx.shake(0.3, 0.7);
-        this.vfx.pillar(new THREE.Vector3(this.pos.x, 0, this.pos.y), 0xe83a5a, { height: 6, radius: 0.8, life: 1 });
-        const result = await this.ctx.runBattle(
-          [{ speciesId: this.def.boss, level: this.def.bossLevel ?? 10 }],
-          { boss: true, theme: this.def.theme, arena: this.def.id, intro: '⚠️ The dungeon\'s master awakens!' }
-        );
-        if (result === 'win') {
-          p.shards += this.def.rewardShards;
-          p.dungeonClears[this.def.id] = (p.dungeonClears[this.def.id] ?? 0) + 1;
-          if (this.def.id === 'trial') {
-            await say('Alex', `Holy shards, you actually did it! Ironhusk is defeated! I was half-expecting to call the recovery team, haha.`);
-            await say('Alex', `Outstanding battle sense, recruit. You've officially finished your final exam. Head back to the surface and report to Instructor Hale!`);
+    try {
+      if (tile === 'stairs') {
+        this.busy = true;
+        this.floorNum++;
+        this.vfx.pillar(new THREE.Vector3(this.pos.x, 0, this.pos.y), 0x5ab8e8, { height: 4, radius: 0.7, life: 0.8 });
+        sfx('open');
+        await say('', `Descending to B${this.floorNum}F…`);
+        this.newFloor();
+      } else if (tile === 'exit') {
+        this.busy = true;
+        // a dungeon with no warden is conquered by charting it to the deepest floor
+        const deepest = this.floorNum >= this.def.floors && !this.def.boss;
+        const pick = await choose('', deepest
+          ? 'You have charted this place to its deepest floor. Return to the surface in triumph?'
+          : 'Leave the dungeon and return to the surface?', ['Leave', 'Stay']);
+        if (pick === 0) {
+          if (deepest) {
+            p.shards += this.def.rewardShards;
+            p.dungeonClears[this.def.id] = (p.dungeonClears[this.def.id] ?? 0) + 1;
+            toast(`🏆 ${this.def.name} fully charted! Bonus: ◆${this.def.rewardShards}`, 'gold');
+            this.finish('cleared');
           } else {
-            await say('', `🏆 ${this.def.name} conquered! Bonus reward: ◆${this.def.rewardShards} Shards!`);
+            this.finish('retreat');
           }
-          this.busy = false;
-          this.finish('cleared');
-          return;
         }
-        if (result === 'lose') { this.busy = false; this.finish('dead'); return; }
+      } else if (tile === 'boss' && this.def.boss) {
+        this.busy = true;
+        const pick = await choose('', 'A monstrous presence stirs beyond this seal. Challenge it?', ['Challenge!', 'Not yet']);
+        if (pick === 0) {
+          sfx('boom');
+          this.vfx.shake(0.3, 0.7);
+          this.vfx.pillar(new THREE.Vector3(this.pos.x, 0, this.pos.y), 0xe83a5a, { height: 6, radius: 0.8, life: 1 });
+          const result = await this.ctx.runBattle(
+            [{ speciesId: this.def.boss, level: this.def.bossLevel ?? 10 }],
+            { boss: true, theme: this.def.theme, arena: this.def.id, intro: '⚠️ The dungeon\'s master awakens!' }
+          );
+          if (result === 'win') {
+            p.shards += this.def.rewardShards;
+            p.dungeonClears[this.def.id] = (p.dungeonClears[this.def.id] ?? 0) + 1;
+            if (this.def.id === 'trial') {
+              await say('Alex', `Holy shards, you actually did it! Ironhusk is defeated! I was half-expecting to call the recovery team, haha.`);
+              await say('Alex', `Outstanding battle sense, recruit. You've officially finished your final exam. Head back to the surface and report to Instructor Hale!`);
+            } else {
+              await say('', `🏆 ${this.def.name} conquered! Bonus reward: ◆${this.def.rewardShards} Shards!`);
+            }
+            this.finish('cleared');
+            return;
+          }
+          if (result === 'lose') { this.finish('dead'); return; }
+        }
       }
+    } finally {
       this.busy = false;
     }
   }
 
   private async wildBattle(): Promise<void> {
     this.busy = true;
-    const p = this.ctx.player;
-    const n = 1 + Math.floor(Math.random() * Math.min(3, 1 + this.floorNum));
-    const [lo, hi] = this.def.levelRange;
-    const specs = Array.from({ length: n }, () => ({
-      speciesId: this.def.pool[Math.floor(Math.random() * this.def.pool.length)],
-      level: lo + Math.floor(Math.random() * (hi - lo + 1)) + (this.floorNum - 1),
-    }));
-    const firstStrike = Math.random() < p.crawler.firstStrikeChance;
-    this.vfx.shake(0.12, 0.3);
-    const result = await this.ctx.runBattle(specs, { wild: true, theme: this.def.theme, arena: this.def.id, firstStrike });
-    if (result === 'lose') { this.finish('dead'); return; }
-    // story relics shed by the wilds (e.g. Storm-Touched Amber in the Thunderfen)
-    if (result === 'win' && this.def.drop) {
-      const d = this.def.drop;
-      if (p.itemCount(d.item) < (d.max ?? 1) && Math.random() < d.chance && p.addItem(d.item)) {
-        sfx('toast');
-        await say('', `✨ One of the fallen wild Guardians shed something rare: <b>${ITEMS[d.item].name}</b>!`);
+    try {
+      const p = this.ctx.player;
+      const n = 1 + Math.floor(Math.random() * Math.min(3, 1 + this.floorNum));
+      const [lo, hi] = this.def.levelRange;
+      const specs = Array.from({ length: n }, () => ({
+        speciesId: this.def.pool[Math.floor(Math.random() * this.def.pool.length)],
+        level: lo + Math.floor(Math.random() * (hi - lo + 1)) + (this.floorNum - 1),
+      }));
+      const firstStrike = Math.random() < p.crawler.firstStrikeChance;
+      this.vfx.shake(0.12, 0.3);
+      const result = await this.ctx.runBattle(specs, { wild: true, theme: this.def.theme, arena: this.def.id, firstStrike });
+      if (result === 'lose') { this.finish('dead'); return; }
+      if (result === 'win' && this.def.drop) {
+        const d = this.def.drop;
+        if (p.itemCount(d.item) < (d.max ?? 1) && Math.random() < d.chance) {
+          if (p.addItem(d.item)) {
+            sfx('toast');
+            await say('', `✨ One of the fallen wild Guardians shed something rare: <b>${ITEMS[d.item].name}</b>!`);
+          } else {
+            await say('', `✨ One of the fallen wild Guardians tried to shed a rare item: <b>${ITEMS[d.item].name}</b>… but your inventory is full!`);
+          }
+        }
       }
+      updateHUD(p, this.def.name, { floor: this.floorNum });
+      this.drawMinimap();
+    } finally {
+      this.busy = false;
     }
-    updateHUD(p, this.def.name, { floor: this.floorNum });
-    this.drawMinimap();
-    this.busy = false;
   }
 
   private async crawlerDestroyed(): Promise<void> {
@@ -1076,10 +1082,11 @@ export class DungeonRun {
 
   private openPanelGuarded(kind: PanelKind): void {
     this.busy = true;
-    openPanel(kind, this.ctx.player, { canSave: false }).then(() => {
-      updateHUD(this.ctx.player, this.def.name, { floor: this.floorNum });
-      this.busy = false;
-    });
+    openPanel(kind, this.ctx.player, { canSave: false })
+      .finally(() => {
+        updateHUD(this.ctx.player, this.def.name, { floor: this.floorNum });
+        this.busy = false;
+      });
   }
 
   private onKeyDown = (e: KeyboardEvent) => {
@@ -1094,8 +1101,8 @@ export class DungeonRun {
     else if (k === 'c') this.openPanelGuarded('crawler');
     else if (k === 'j') this.openPanelGuarded('quests');
     else if (k === 'v') this.openPanelGuarded('evotree');
-    else if (k === 'escape' && this.bigMapOpen) this.toggleBigMap();
-    else if (k === 'escape') {
+    else if ((k === 'escape' || k === 'esc') && this.bigMapOpen) this.toggleBigMap();
+    else if (k === 'escape' || k === 'esc') {
       this.busy = true;
       openPauseMenu(this.ctx.player, {
         canSave: false,
@@ -1107,7 +1114,7 @@ export class DungeonRun {
             this.finish('retreat');
           }
         }
-      }).then(() => {
+      }).finally(() => {
         if (this.finished === null) {
           return;
         }

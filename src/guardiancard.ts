@@ -582,7 +582,10 @@ export function openGuardianCard(subject: Guardian | string, player?: Player): P
       overlay.remove();
       resolve();
     };
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
+    const onKey = (e: KeyboardEvent) => {
+      const k = e.key.toLowerCase();
+      if (k === 'escape' || k === 'esc') { e.stopPropagation(); close(); }
+    };
     window.addEventListener('keydown', onKey, true);
     window.addEventListener('resize', size);
     overlay.querySelector<HTMLElement>('#pcard-close')!.onclick = close;

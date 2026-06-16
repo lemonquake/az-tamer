@@ -1850,6 +1850,45 @@
           </div>
         </div>
 
+        <!-- Section: Guild & Rank Management -->
+        <div style="border: 1px solid rgba(242,193,78,0.2); padding: 10px; border-radius: 8px; background: rgba(0,0,0,0.2)">
+          <div style="color: var(--ui-gold); font-size: 13px; font-weight: bold; margin-bottom: 8px; letter-spacing: 0.5px; text-transform: uppercase">⚔️ Guild & Rank Management</div>
+          <div style="display: flex; flex-direction: column; gap: 8px">
+            <!-- Row 1: Guild Selector & Card No -->
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; border-bottom: 1px dashed rgba(255,255,255,0.08); padding-bottom: 8px">
+              <span style="font-weight: bold; font-size: 13px; width: 65px">Guild:</span>
+              <select id="db-guild-select" style="flex: 1; background: #11162e; border: 1px solid var(--ui-border); color: #fff; border-radius: 4px; padding: 3px; font-size: 12px; max-width: 160px">
+                <option value="none">-- None --</option>
+              </select>
+              <span id="db-card-val" style="font-size: 11px; color: var(--ui-dim); font-family: monospace">No Card</span>
+            </div>
+            <!-- Row 2: Guild Points (GP) -->
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; border-bottom: 1px dashed rgba(255,255,255,0.08); padding-bottom: 8px">
+              <span style="font-weight: bold; font-size: 13px; width: 65px">GP:</span>
+              <span id="db-gp-val" style="font-size: 13px; font-weight: bold; color: var(--ui-gold); width: 60px">0</span>
+              <div style="display: flex; gap: 4px">
+                <button class="ui-btn" id="db-gp-10" style="padding: 3px 6px; font-size: 11px; min-width: auto">+10</button>
+                <button class="ui-btn" id="db-gp-100" style="padding: 3px 6px; font-size: 11px; min-width: auto">+100</button>
+                <button class="ui-btn" id="db-gp-500" style="padding: 3px 6px; font-size: 11px; min-width: auto">+500</button>
+                <button class="ui-btn" id="db-gp-max-perks" style="padding: 3px 6px; font-size: 11px; min-width: auto" title="Maxes out all 6 Guild Perks instantly">Max Perks</button>
+                <button class="ui-btn" id="db-gp-reset" style="padding: 3px 6px; font-size: 11px; min-width: auto" title="Reset GP and Perks">Reset</button>
+              </div>
+            </div>
+            <!-- Row 3: Tournament Points (TP) / Rank -->
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px">
+              <span style="font-weight: bold; font-size: 13px; width: 65px">Rank (TP):</span>
+              <span id="db-rank-val" style="font-size: 12px; font-weight: bold; color: var(--ui-gold); width: 140px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap">Beginner (0)</span>
+              <div style="display: flex; gap: 4px">
+                <button class="ui-btn" id="db-tp-10" style="padding: 3px 6px; font-size: 11px; min-width: auto">+10</button>
+                <button class="ui-btn" id="db-tp-50" style="padding: 3px 6px; font-size: 11px; min-width: auto">+50</button>
+                <button class="ui-btn" id="db-tp-100" style="padding: 3px 6px; font-size: 11px; min-width: auto">+100</button>
+                <button class="ui-btn" id="db-tp-250" style="padding: 3px 6px; font-size: 11px; min-width: auto" title="Add 250 TP (Grand Chief)">+250</button>
+                <button class="ui-btn" id="db-tp-reset" style="padding: 3px 6px; font-size: 11px; min-width: auto" title="Reset TP and Rank">Reset</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Section: Cinematics & Minigames -->
         <div style="border: 1px solid rgba(242,193,78,0.2); padding: 10px; border-radius: 8px; background: rgba(0,0,0,0.2)">
           <div style="color: var(--ui-gold); font-size: 13px; font-weight: bold; margin-bottom: 8px; letter-spacing: 0.5px; text-transform: uppercase">🎬 Cinematics & Minigames</div>
