@@ -28,6 +28,7 @@ import { updateTamerAppearance } from './clothes';
 import { worldOrbit } from './camorbit';
 import { tagNpc, crowdName, attachNpcPicker } from './npccard';
 import { runBasicsTutorial, isTutorialOpen } from './tutorial';
+import { runCinematicScene } from './main';
 
 const ROOM_TITLES: Record<string, string> = {
   lobby: 'University — Grand Lobby', cafeteria: 'University — Cafeteria',
@@ -345,40 +346,51 @@ export class University {
         await say('Historian Veyl', 'Charts. Storm-tracks. Nine years of triangulating a man who does not wish to be triangulated. Unless Instructor Hale sent you, I am — politely — catastrophically busy.');
         return;
       }
-      await conversation([
-        ['Historian Veyl', `Hale's graduate. Yes. You have the look — half triumph, half "where exactly am I going". Sit. Don't touch that chart. Or that one. Best keep your hands in the air, honestly.`],
-        ['Historian Veyl', `You want Greggy the Stormheart. Everyone wants Greggy — the Houses, the papers, one EXTREMELY persistent biographer. The difference is that I can actually find him, because I don't chase the man. I chase the WEATHER.`],
-        ['Historian Veyl', `Nine years of storm-tracks, and every anomalous strike pattern bends around one truth: the Stormheart grounds himself where the world's charge gathers. Find tomorrow's lightning, and you find yesterday's legend.`],
-        ['Historian Veyl', `And as it happens — three weeks ago a bog north-east of Haven started catching the SAME lightning every night. Thunderfen Mire, the locals call it now. New on every map, including yours — I've just marked it.`],
-      ]);
-      p.flags['met_historian'] = true;
-      p.flags['historian_intel'] = true;   // the Thunderfen gate wakes on the overworld
-      const summary = completeQuest(p, 'story_historian');
-      toast('✅ Chapter II complete: The Man Who Maps Storms!', 'gold');
-      if (summary) toast(`Received ${summary}`, 'gold');
-      syncStoryQuests(p).forEach(n => toast(n, 'gold'));
-      await conversation([
-        ['Historian Veyl', `Now — the price of my next sentence. The wild Guardians in that mire are shedding STORM-TOUCHED AMBER: fossil resin with a living spark sealed inside. Amber remembers the storm that made it. Bring me one piece and I can read where that storm has been roosting.`],
-        ['Historian Veyl', `One piece. Unbruised. The wilds drop it after an honest scrap. Off you go — and if Hale asks, tell him I was charming.`],
-      ]);
+      await runCinematicScene('library', async cine => {
+        cine.shot('wide');
+        await say('Historian Veyl', `Hale's graduate. Yes. You have the look — half triumph, half "where exactly am I going". Sit. Don't touch that chart. Or that one. Best keep your hands in the air, honestly.`);
+        cine.shot('veyl');
+        await say('Historian Veyl', `You want Greggy the Stormheart. Everyone wants Greggy — the Houses, the papers, one EXTREMELY persistent biographer. The difference is that I can actually find him, because I don't chase the man. I chase the WEATHER.`);
+        await say('Historian Veyl', `Nine years of storm-tracks, and every anomalous strike pattern bends around one truth: the Stormheart grounds himself where the world's charge gathers. Find tomorrow's lightning, and you find yesterday's legend.`);
+        cine.shot('desk');
+        await say('Historian Veyl', `And as it happens — three weeks ago a bog north-east of Haven started catching the SAME lightning every night. Thunderfen Mire, the locals call it now. New on every map, including yours — I've just marked it.`);
+        
+        p.flags['met_historian'] = true;
+        p.flags['historian_intel'] = true;   // the Thunderfen gate wakes on the overworld
+        const summary = completeQuest(p, 'story_historian');
+        toast('✅ Chapter II complete: The Man Who Maps Storms!', 'gold');
+        if (summary) toast(`Received ${summary}`, 'gold');
+        syncStoryQuests(p).forEach(n => toast(n, 'gold'));
+
+        cine.shot('veyl');
+        await say('Historian Veyl', `Now — the price of my next sentence. The wild Guardians in that mire are shedding STORM-TOUCHED AMBER: fossil resin with a living spark sealed inside. Amber remembers the storm that made it. Bring me one piece and I can read where that storm has been roosting.`);
+        cine.shot('hero');
+        await say('Historian Veyl', `One piece. Unbruised. The wilds drop it after an honest scrap. Off you go — and if Hale asks, tell him I was charming.`);
+      });
       updateHUD(p, 'Leodones University');
       return;
     }
 
     // Chapter III — the amber turn-in: the chart to Agdao
     if (questState(p, 'story_amber') === 'ready') {
-      await conversation([
-        ['Historian Veyl', `You have it. You actually— give it here, GENTLY, it's older than the Compact...`],
-        ['Historian Veyl', `...There. Look at the spark spiral — counter-clockwise, tight, with a western drift. This charge was born over open sea. The Stormheart isn't on any continent at all. He's on an ISLAND.`],
-        ['Historian Veyl', `And there is exactly one island in the western sea where a storm would go to REST. Where everything went to begin. Agdao — the Cradle of Tamers. Aurelia's island. Of course. OF COURSE. Nine years and the answer was a history book.`],
-        ['Historian Veyl', `Take my sea-chart — seven hundred years of corrections, nine inks, one slightly heroic coffee stain. Your overworld map knows the way to Agdao now. Ask the islanders when you land; they notice everything and forgive most of it.`],
-      ]);
-      const summary = completeQuest(p, 'story_amber');   // consumes the amber, grants the chart, unlocks Agdao
-      toast('✅ Chapter III complete: Amber in the Mire!', 'gold');
-      if (summary) toast(`Received ${summary}`, 'gold');
-      toast('🏝️ Agdao Island is now on your overworld map!', 'gold');
-      syncStoryQuests(p).forEach(n => toast(n, 'gold'));
-      await say('Historian Veyl', 'When you find him — and you will — tell him Veyl finally worked it out. He\'ll laugh. It\'s a good laugh. It\'s why nobody minds that he hides.');
+      await runCinematicScene('library', async cine => {
+        cine.shot('desk');
+        await say('Historian Veyl', `You have it. You actually— give it here, GENTLY, it's older than the Compact...`);
+        cine.shot('veyl');
+        await say('Historian Veyl', `...There. Look at the spark spiral — counter-clockwise, tight, with a western drift. This charge was born over open sea. The Stormheart isn't on any continent at all. He's on an ISLAND.`);
+        await say('Historian Veyl', `And there is exactly one island in the western sea where a storm would go to REST. Where everything went to begin. Agdao — the Cradle of Tamers. Aurelia's island. Of course. OF COURSE. Nine years and the answer was a history book.`);
+        cine.shot('desk');
+        await say('Historian Veyl', `Take my sea-chart — seven hundred years of corrections, nine inks, one slightly heroic coffee stain. Your overworld map knows the way to Agdao now. Ask the islanders when you land; they notice everything and forgive most of it.`);
+
+        const summary = completeQuest(p, 'story_amber');   // consumes the amber, grants the chart, unlocks Agdao
+        toast('✅ Chapter III complete: Amber in the Mire!', 'gold');
+        if (summary) toast(`Received ${summary}`, 'gold');
+        toast('🏝️ Agdao Island is now on your overworld map!', 'gold');
+        syncStoryQuests(p).forEach(n => toast(n, 'gold'));
+
+        cine.shot('wide');
+        await say('Historian Veyl', 'When you find him — and you will — tell him Veyl finally worked it out. He\'ll laugh. It\'s a good laugh. It\'s why nobody minds that he hides.');
+      });
       updateHUD(p, 'Leodones University');
       return;
     }

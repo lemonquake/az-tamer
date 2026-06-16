@@ -32,6 +32,7 @@ import { updateTamerAppearance } from './clothes';
 import { worldClock, DayNightRig } from './daynight';
 import { worldOrbit } from './camorbit';
 import { tagNpc, attachNpcPicker } from './npccard';
+import { runCinematicScene } from './main';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
 
@@ -1067,43 +1068,53 @@ export class AgdaoIsland {
 
     // ---- first meeting: Chapter IV turn-in, Chapter V hook ----
     if (!p.flags['met_greggy']) {
-      sfx('zap');
-      this.vfx.bolt(greggy.position.clone().add(new THREE.Vector3(0, 9, 0)), greggy.position.clone().add(new THREE.Vector3(0, 2.2, 0)), 0xfff2a0, { life: 0.3, jitter: 0.4 });
-      await conversation([
-        ['???', `Took you long enough. The amber lit up on Veyl's desk nine days ago — I felt it from here. Yes, I can do that. No, I won't explain it.`],
-        ['Greggy the Stormheart', `So. ${p.tamerName}, isn't it? Hale radios me about every graduate worth radioing about, and Veyl doesn't hand his sea-chart to people he expects to drown. I was expecting you. Sit. Mind the serpent — Fulgrath pretends to sleep, badly.`],
-        ['Greggy the Stormheart', `Nine years I've roosted on this rock. Closest land in the world to where Ghandra's seal sits folded, did you know that? I listen to it the way Bayan listens to his fishing line. And lately, tamer... lately something is nibbling.`],
-        ['Greggy the Stormheart', `You'll want stories about the war. Everyone does. Here's the only one that matters today: a seal woven from trust frays wherever trust was FIRST woven. The Cradle Hollow — Aurelia's own sea-cave, down under my bluff — has something Legion-touched nested in it. In the gentlest place in the world. That's not chance. That's strategy.`],
-      ]);
-      p.flags['met_greggy'] = true;
-      const summary = completeQuest(p, 'story_agdao');
-      toast('✅ Chapter IV complete: The Cradle of Tamers!', 'gold');
-      if (summary) toast(`Received ${summary}`, 'gold');
-      const notes = syncStoryQuests(p);
-      notes.forEach(n => toast(n, 'gold'));
-      await conversation([
-        ['Greggy the Stormheart', `I'm too loud to go down there — the corruption would hear my static an island away and burrow deeper. You're new. You're quiet. The seal on the cave mouth will part for you now; I've asked it nicely.`],
-        ['Greggy the Stormheart', `Cleanse the Hollow, and when you come back I'll tell you something Veyl's charts don't know. About Aljay. About his FAMILY. Fair trade? Fair trade. Off you go — east beach, below the bluff. And tamer... pack tonics. The nest-warden is a grown one.`],
-      ]);
+      await runCinematicScene('bluff', async cine => {
+        cine.shot('wide');
+        sfx('zap');
+        await say('???', `Took you long enough. The amber lit up on Veyl's desk nine days ago — I felt it from here. Yes, I can do that. No, I won't explain it.`);
+        cine.shot('greggy');
+        await say('Greggy the Stormheart', `So. ${p.tamerName}, isn't it? Hale radios me about every graduate worth radioing about, and Veyl doesn't hand his sea-chart to people he expects to drown. I was expecting you. Sit. Mind the serpent — Fulgrath pretends to sleep, badly.`);
+        await say('Greggy the Stormheart', `Nine years I've roosted on this rock. Closest land in the world to where Ghandra's seal sits folded, did you know that? I listen to it the way Bayan listens to his fishing line. And lately, tamer... lately something is nibbling.`);
+        cine.shot('ocean');
+        await say('Greggy the Stormheart', `You'll want stories about the war. Everyone does. Here's the only one that matters today: a seal woven from trust frays wherever trust was FIRST woven. The Cradle Hollow — Aurelia's own sea-cave, down under my bluff — has something Legion-touched nested in it. In the gentlest place in the world. That's not chance. That's strategy.`);
+        
+        p.flags['met_greggy'] = true;
+        const summary = completeQuest(p, 'story_agdao');
+        toast('✅ Chapter IV complete: The Cradle of Tamers!', 'gold');
+        if (summary) toast(`Received ${summary}`, 'gold');
+        const notes = syncStoryQuests(p);
+        notes.forEach(n => toast(n, 'gold'));
+
+        cine.shot('greggy');
+        await say('Greggy the Stormheart', `I'm too loud to go down there — the corruption would hear my static an island away and burrow deeper. You're new. You're quiet. The seal on the cave mouth will part for you now; I've asked it nicely.`);
+        cine.shot('hero');
+        await say('Greggy the Stormheart', `Cleanse the Hollow, and when you come back I'll tell you something Veyl's charts don't know. About Aljay. About his FAMILY. Fair trade? Fair trade. Off you go — east beach, below the bluff. And tamer... pack tonics. The nest-warden is a grown one.`);
+      });
       updateHUD(p, 'Agdao Island');
       return;
     }
 
     // ---- Chapter V turn-in: the Hollow cleansed → the daughters revealed ----
     if (questState(p, 'story_cradle') === 'ready') {
-      await conversation([
-        ['Greggy the Stormheart', `The water below changed color an hour ago — back to the blue it's supposed to be. The whole island felt it. Mama Imee is making you a stew with your name carved into the bowl, I'm told. Island rules.`],
-        ['Greggy the Stormheart', `You did well, tamer. Better than well. So — payment. The thing I know that the charts don't.`],
-        ['Greggy the Stormheart', `Aljay has two daughters. Azrin and Azrael. Tamers, both — real ones, sharper at their age than their father was at his, and if you ever tell them I said that, Fulgrath will find you.`],
-        ['Greggy the Stormheart', `They've been chasing the same wrongness you just scrubbed out of the Cradle — across three continents, two oceans, and one extremely confused customs office in Tharkand. I sent them a storm-petrel the day Veyl's amber lit. They're already in Haven City. By the fountain. Waiting for YOU, specifically.`],
-        ['Greggy the Stormheart', `Take this — I wound it myself. When you stand before something that hums, it will hum back. You'll know what that means when it matters.`],
-      ]);
-      const summary = completeQuest(p, 'story_cradle');
-      p.flags['daughters_known'] = true;
-      toast('✅ Chapter V complete: The First Hollow!', 'gold');
-      if (summary) toast(`Received ${summary}`, 'gold');
-      syncStoryQuests(p).forEach(n => toast(n, 'gold'));
-      await say('Greggy the Stormheart', 'Go and meet the Dawnflame\'s fire — both colors of it. And mind Azrin\'s handshake. She doesn\'t know her own grip.');
+      await runCinematicScene('bluff', async cine => {
+        cine.shot('wide');
+        await say('Greggy the Stormheart', `The water below changed color an hour ago — back to the blue it's supposed to be. The whole island felt it. Mama Imee is making you a stew with your name carved into the bowl, I'm told. Island rules.`);
+        cine.shot('greggy');
+        await say('Greggy the Stormheart', `You did well, tamer. Better than well. So — payment. The thing I know that the charts don't.`);
+        await say('Greggy the Stormheart', `Aljay has two daughters. Azrin and Azrael. Tamers, both — real ones, sharper at their age than their father was at his, and if you ever tell them I said that, Fulgrath will find you.`);
+        cine.shot('ocean');
+        await say('Greggy the Stormheart', `They've been chasing the same wrongness you just scrubbed out of the Cradle — across three continents, two oceans, and one extremely confused customs office in Tharkand. I sent them a storm-petrel the day Veyl's amber lit. They're already in Haven City. By the fountain. Waiting for YOU, specifically.`);
+        await say('Greggy the Stormheart', `Take this — I wound it myself. When you stand before something that hums, it will hum back. You'll know what that means when it matters.`);
+
+        const summary = completeQuest(p, 'story_cradle');
+        p.flags['daughters_known'] = true;
+        toast('✅ Chapter V complete: The First Hollow!', 'gold');
+        if (summary) toast(`Received ${summary}`, 'gold');
+        syncStoryQuests(p).forEach(n => toast(n, 'gold'));
+
+        cine.shot('greggy');
+        await say('Greggy the Stormheart', 'Go and meet the Dawnflame\'s fire — both colors of it. And mind Azrin\'s handshake. She doesn\'t know her own grip.');
+      });
       updateHUD(p, 'Agdao Island');
       return;
     }
@@ -1114,22 +1125,27 @@ export class AgdaoIsland {
 
     // ---- Chapter VII turn-in: the Stormspire silenced ----
     if (questState(p, 'story_echoes') === 'ready') {
-      sfx('boom');
-      this.vfx.shake(0.18, 0.6);
-      await conversation([
-        ['Greggy the Stormheart', `I heard it stop. Twenty years that engine has been counting in the back of my skull like a dripping tap — and last night, for the first time, the world went QUIET. You magnificent, terrifying graduate.`],
-        ['Greggy the Stormheart', `Now tell me the engine's last word. The girls said you'd know it. Say it slowly.`],
-        [p.tamerName, `...It wasn't a word. It was a name. The engine was answering to "ALJAY".`],
-        ['Greggy the Stormheart', `...Fulgrath. Wake up. Properly.`],
-        ['Greggy the Stormheart', `Fifteen years ago, nine of us walked out of Ghandra and one stayed at the door — that's the part the songs get wrong, tamer. Aljay walks BACK to the seal, every few years, alone, to feed it. Trust must be renewed. He never let us share the cost. Stubborn, glorious idiot.`],
-        ['Greggy the Stormheart', `If the Legion's engines are answering to his name, then either my best friend is standing at the seal right now, holding it shut with his bare hands... or something inside has learned to wear his voice. Either way — EITHER way — the next door we open is Ghandra's.`],
-        ['Greggy the Stormheart', `Not today. Today you rest, and eat Imee's stew, and let an old man write three letters. But soon, ${p.tamerName}. The coil I gave you, Azrael's lantern, Azrin's fire and one quiet graduate the Legion never saw coming. When the petrel finds you — come. We go together. All of us.`],
-      ]);
-      const summary = completeQuest(p, 'story_echoes');
-      toast('✅ Chapter VII complete: Echoes of Ghandra!', 'gold');
-      if (summary) toast(`Received ${summary}`, 'gold');
-      toast('📖 The Chronicle — Arc One complete. Ghandra waits…', 'gold');
-      syncStoryQuests(p).forEach(n => toast(n, 'gold'));
+      await runCinematicScene('bluff', async cine => {
+        cine.shot('wide');
+        sfx('boom');
+        await say('Greggy the Stormheart', `I heard it stop. Twenty years that engine has been counting in the back of my skull like a dripping tap — and last night, for the first time, the world went QUIET. You magnificent, terrifying graduate.`);
+        cine.shot('greggy');
+        await say('Greggy the Stormheart', `Now tell me the engine's last word. The girls said you'd know it. Say it slowly.`);
+        cine.shot('hero');
+        await say(p.tamerName, `...It wasn't a word. It was a name. The engine was answering to "ALJAY".`);
+        cine.shot('greggy');
+        await say('Greggy the Stormheart', `...Fulgrath. Wake up. Properly.`);
+        await say('Greggy the Stormheart', `Fifteen years ago, nine of us walked out of Ghandra and one stayed at the door — that's the part the songs get wrong, tamer. Aljay walks BACK to the seal, every few years, alone, to feed it. Trust must be renewed. He never let us share the cost. Stubborn, glorious idiot.`);
+        cine.shot('ocean');
+        await say('Greggy the Stormheart', `If the Legion's engines are answering to his name, then either my best friend is standing at the seal right now, holding it shut with his bare hands... or something inside has learned to wear his voice. Either way — EITHER way — the next door we open is Ghandra's.`);
+        await say('Greggy the Stormheart', `Not today. Today you rest, and eat Imee's stew, and let an old man write three letters. But soon, ${p.tamerName}. The coil I gave you, Azrael's lantern, Azrin's fire and one quiet graduate the Legion never saw coming. When the petrel finds you — come. We go together. All of us.`);
+
+        const summary = completeQuest(p, 'story_echoes');
+        toast('✅ Chapter VII complete: Echoes of Ghandra!', 'gold');
+        if (summary) toast(`Received ${summary}`, 'gold');
+        toast('📖 The Chronicle — Arc One complete. Ghandra waits…', 'gold');
+        syncStoryQuests(p).forEach(n => toast(n, 'gold'));
+      });
       updateHUD(p, 'Agdao Island');
       return;
     }

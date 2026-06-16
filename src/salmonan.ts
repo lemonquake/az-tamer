@@ -33,6 +33,7 @@ import {
 } from './ui';
 import { drawAreaMap, hideAreaMap, type MapMarker } from './townmap';
 import { updateTamerAppearance } from './clothes';
+import { runCinematicScene } from './main';
 import { worldOrbit } from './camorbit';
 import { worldClock, DayNightRig } from './daynight';
 import { tagNpc, attachNpcPicker } from './npccard';
@@ -1069,44 +1070,54 @@ export class NewSalmonan {
 
     // ---- first meeting: the veil starts to fall ----
     if (!p.flags['met_ivan']) {
-      await conversation([
-        ['Ivan Lawrence', `There you are. The tamer who walked a stolen ledger up a stranger's hill and gave him his name back. Maris! Put another plate out — no, the GOOD plates, we discussed this!`],
-        ['Ivan Lawrence', `I'd offer you a quiet dinner and a week of fishing, friend. I'd have LOVED to offer you that. But you've seen the crystals, or you're about to. Sit down. This is going to be ugly.`],
-        ['Ivan Lawrence', `Thirty-six hours. That's how long my name stayed clean. Then every crystal on four continents, same hour, same calm faces: "THE LAWRENCE TAPES — A FORGERY?" Question mark doing all the work, the way it always does. The valley watched the truth go out from its own tower… and then watched the world get told it never happened.`],
-        ['Ivan Lawrence', `Here's what nine years of being erased teaches you: the Sponsors were never the whole animal. They were a FINGER. The hand is Foretales — the network itself. The news you grew up inside, friend. The polls. The serials. The morning headlines four continents read at the same hour and call the weather.`],
-      ]);
-      sfx('blip');
-      await conversation([
-        ['Greggy (relay)', `—krzzt— Ivan, you old fraud, is the kid there? Good. Listen, both of you. I did some arithmetic last night and I want somebody to tell me I'm wrong.`],
-        ['Greggy (relay)', `SIXTEEN YEARS since any continent seated a proper leader. Sixteen! Every cycle the same story: front-runner withdraws, or drowns in scandal, or just… stops being MENTIONED. And every poll that "discovered the public never wanted them anyway" — run through a Foretales subsidiary. I checked. Veyl double-checked. Veyl is currently lying down.`],
-        ['Greggy (relay)', `It runs deep, kid. It runs wide. And from what they did to Ivan here — it runs VIOLENT. One more thing and then I need to shout at an ocean: have you ever ONCE seen Aljay sit for them? Real interviews from the three of us — you can count them on one hand. Everything else is fabricated. And I'm starting to think… something more. Greggy out. —krzzt—`],
-        ['Ivan Lawrence', `…He does that. No goodbye for nine years, now he won't get off my relay. ANYWAY.`],
-        ['Ivan Lawrence', `They rewrote the valley's own broadcast from somewhere CLOSE — overrides don't travel far, that's relay physics, Esta will explain it until you beg her to stop. So we show the world the gears while they're still turning. Three proofs, friend. Esta's tower logs. Auntie Dalisay's unedited festival crystal. And that "traveling sketch artist" who's been drawing our mural for three days and asking the children very soft questions. NOBODY sketches a wall fourteen times.`],
-      ]);
-      p.flags['met_ivan'] = true;
-      p.save();
-      syncStoryQuests(p).forEach(n => toast(n, 'gold'));
-      await say('Ivan Lawrence', 'Esta at the tower. Dalisay in the market. The stranger by the mural — and watch that one, friend. Foretales stringers travel with company. The ugly kind.');
+      await runCinematicScene('porch', async cine => {
+        cine.shot('wide');
+        await say('Ivan Lawrence', `There you are. The tamer who walked a stolen ledger up a stranger's hill and gave him his name back. Maris! Put another plate out — no, the GOOD plates, we discussed this!`);
+        cine.shot('ivan');
+        await say('Ivan Lawrence', `I'd offer you a quiet dinner and a week of fishing, friend. I'd have LOVED to offer you that. But you've seen the crystals, or you're about to. Sit down. This is going to be ugly.`);
+        await say('Ivan Lawrence', `Thirty-six hours. That's how long my name stayed clean. Then every crystal on four continents, same hour, same calm faces: "THE LAWRENCE TAPES — A FORGERY?" Question mark doing all the work, the way it always does. The valley watched the truth go out from its own tower… and then watched the world get told it never happened.`);
+        await say('Ivan Lawrence', `Here's what nine years of being erased teaches you: the Sponsors were never the whole animal. They were a FINGER. The hand is Foretales — the network itself. The news you grew up inside, friend. The polls. The serials. The morning headlines four continents read at the same hour and call the weather.`);
+        
+        sfx('blip');
+        cine.shot('wide');
+        await say('Greggy (relay)', `—krzzt— Ivan, you old fraud, is the kid there? Good. Listen, both of you. I did some arithmetic last night and I want somebody to tell me I'm wrong.`);
+        await say('Greggy (relay)', `SIXTEEN YEARS since any continent seated a proper leader. Sixteen! Every cycle the same story: front-runner withdraws, or drowns in scandal, or just… stops being MENTIONED. And every poll that "discovered the public never wanted them anyway" — run through a Foretales subsidiary. I checked. Veyl double-checked. Veyl is currently lying down.`);
+        await say('Greggy (relay)', `It runs deep, kid. It runs wide. And from what they did to Ivan here — it runs VIOLENT. One more thing and then I need to shout at an ocean: have you ever ONCE seen Aljay sit for them? Real interviews from the three of us — you can count them on one hand. Everything else is fabricated. And I'm starting to think… something more. Greggy out. —krzzt—`);
+        
+        cine.shot('ivan');
+        await say('Ivan Lawrence', `…He does that. No goodbye for nine years, now he won't get off my relay. ANYWAY.`);
+        await say('Ivan Lawrence', `They rewrote the valley's own broadcast from somewhere CLOSE — overrides don't travel far, that's relay physics, Esta will explain it until you beg her to stop. So we show the world the gears while they're still turning. Three proofs, friend. Esta's tower logs. Auntie Dalisay's unedited festival crystal. And that "traveling sketch artist" who's been drawing our mural for three days and asking the children very soft questions. NOBODY sketches a wall fourteen times.`);
+        
+        p.flags['met_ivan'] = true;
+        p.save();
+        syncStoryQuests(p).forEach(n => toast(n, 'gold'));
+        
+        cine.shot('hero');
+        await say('Ivan Lawrence', 'Esta at the tower. Dalisay in the market. The stranger by the mural — and watch that one, friend. Foretales stringers travel with company. The ugly kind.');
+      });
       updateHUD(p, 'New Salmonan');
       return;
     }
 
     // ---- Chapter XXII turn-in: three proofs → the Mirrorhouse names itself ----
     if (questState(p, 'story_veilfall') === 'ready') {
-      await conversation([
-        ['Ivan Lawrence', `Esta's log. Bino's crystal. And the stringer's own assignment book — he had a LEDGER? Of course he had a ledger. The machine writes everything down; that was always going to be how the machine dies.`],
-        ['Ivan Lawrence', `Look at the routing stamp, friend. FT-PRIME, priority absolute — and the ledger's drop point is "RELAY BASTION 9, EAST VALLEYS." We've poled rice past that building my whole life. The locals have a better name for it: the MIRRORHOUSE. Because whatever you carry up that road, the world is shown something else.`],
-        ['Ivan Lawrence', `Sixteen years of headlines for every valley east of the capital — written THERE. Edited THERE. My erasure, stamped THERE. It was never some distant tower in some glittering city. It was on our ridge, humming over our paddies, the whole time.`],
-        ['Ivan Lawrence', `…You know what's funny? Nine years I thought the machine that broke me was too big to see. Turns out I could see it from my porch.`],
-      ]);
-      const summary = completeQuest(p, 'story_veilfall');
-      toast('✅ Chapter XXII complete: The Veil, Falling!', 'gold');
-      if (summary) toast(`Received ${summary}`, 'gold');
-      syncStoryQuests(p).forEach(n => toast(n, 'gold'));
-      await conversation([
-        ['Ivan Lawrence', `The ledger and Esta's stamp-copies will fool that gate long enough to admit you — keepers and stringers carry the same keys, they just file different reports.`],
-        ['Ivan Lawrence', `Find the master spool, friend. The Continuity Reel — the one they print TOMORROW from. And do one thing for me, personally. Check the date on the directive about my match-fixing. I want to know how long before my fall they wrote it.`],
-      ]);
+      await runCinematicScene('porch', async cine => {
+        cine.shot('wide');
+        await say('Ivan Lawrence', `Esta's log. Bino's crystal. And the stringer's own assignment book — he had a LEDGER? Of course he had a ledger. The machine writes everything down; that was always going to be how the machine dies.`);
+        cine.shot('ivan');
+        await say('Ivan Lawrence', `Look at the routing stamp, friend. FT-PRIME, priority absolute — and the ledger's drop point is "RELAY BASTION 9, EAST VALLEYS." We've poled rice past that building my whole life. The locals have a better name for it: the MIRRORHOUSE. Because whatever you carry up that road, the world is shown something else.`);
+        await say('Ivan Lawrence', `Sixteen years of headlines for every valley east of the capital — written THERE. Edited THERE. My erasure, stamped THERE. It was never some distant tower in some glittering city. It was on our ridge, humming over our paddies, the whole time.`);
+        await say('Ivan Lawrence', `…You know what's funny? Nine years I thought the machine that broke me was too big to see. Turns out I could see it from my porch.`);
+
+        const summary = completeQuest(p, 'story_veilfall');
+        toast('✅ Chapter XXII complete: The Veil, Falling!', 'gold');
+        if (summary) toast(`Received ${summary}`, 'gold');
+        syncStoryQuests(p).forEach(n => toast(n, 'gold'));
+
+        cine.shot('hero');
+        await say('Ivan Lawrence', `The ledger and Esta's stamp-copies will fool that gate long enough to admit you — keepers and stringers carry the same keys, they just file different reports.`);
+        await say('Ivan Lawrence', `Find the master spool, friend. The Continuity Reel — the one they print TOMORROW from. And do one thing for me, personally. Check the date on the directive about my match-fixing. I want to know how long before my fall they wrote it.`);
+      });
       updateHUD(p, 'New Salmonan');
       return;
     }
@@ -1118,28 +1129,35 @@ export class NewSalmonan {
 
     // ---- Chapter XXIII turn-in: the Continuity Reel ----
     if (questState(p, 'story_mirrorhouse') === 'ready') {
-      sfx('boom');
-      this.vfx.shake(0.14, 0.5);
-      await conversation([
-        ['Ivan Lawrence', `The ridge stopped humming an hour ago. Esta says it's the first silent dawn in nineteen years of logs. The whole valley keeps looking up like the sky changed color. Show me, friend. Show me what was up there.`],
-        [p.tamerName, `Sixteen years of front pages… filed before the events they report. Election withdrawals dated weeks before the candidates withdrew. Disasters with the coverage pre-written. And Ivan — your match-fixing scandal. The directive is dated TWO YEARS before your fall.`],
-        ['Ivan Lawrence', `Two years. They had me drafted two years before they spent me. I wasn't even news, friend. I was INVENTORY.`],
-        ['Ivan Lawrence', `…Give me a moment.`],
-        ['Ivan Lawrence', `…All right. All right. The last frame — Maris said there was a last frame. Read it to me. I want to hear it out loud, on my own porch, in daylight.`],
-        [p.tamerName, `"Standing directive, all desks, regarding the Dawnflame, the Stormheart and the Worldroot: GLAZE. DO NOT TOUCH. NOT YET. SOON."`],
-        ['Ivan Lawrence', `Not yet. SOON. Four continents of anniversary specials and soft-lit documentaries — and underneath, a loaded gun with my best friend's name on it, waiting for a date. THAT'S why Aljay never sat for them. He counted the true interviews same as Greggy: one hand. He KNEW the glaze was a leash they hadn't pulled yet.`],
-      ]);
-      sfx('blip');
-      await conversation([
-        ['Greggy (relay)', `—krzzt— I heard "soon". Define "soon". No — don't. I've grounded storms with better manners than whatever wrote that sentence.`],
-        ['Greggy (relay)', `Kid. You just took the eastern valleys' tomorrow out of their hands — the first piece of the machine anyone has EVER taken. They'll notice. The veil is falling now, one valley at a time, and what's behind it was already looking at the three of us. Rest tonight. Eat whatever Dalisay forces on you. The next move is mine to arrange and yours to make. Greggy out. —krzzt—`],
-        ['Ivan Lawrence', `You heard the thunderhead. Tonight the valley eats by lantern light and tomorrow the broadsheets won't know what happened to their tomorrow — because for once, NOBODY wrote it yet. First unwritten morning in sixteen years, friend. You did that.`],
-      ]);
-      const summary = completeQuest(p, 'story_mirrorhouse');
-      toast('✅ Chapter XXIII complete: The Mirrorhouse!', 'gold');
-      if (summary) toast(`Received ${summary}`, 'gold');
-      toast('📖 The Chronicle — the veil is falling. Foretales knows your name now…', 'gold');
-      syncStoryQuests(p).forEach(n => toast(n, 'gold'));
+      await runCinematicScene('porch', async cine => {
+        cine.shot('wide');
+        sfx('boom');
+        await say('Ivan Lawrence', `The ridge stopped humming an hour ago. Esta says it's the first silent dawn in nineteen years of logs. The whole valley keeps looking up like the sky changed color. Show me, friend. Show me what was up there.`);
+        cine.shot('hero');
+        await say(p.tamerName, `Sixteen years of front pages… filed before the events they report. Election withdrawals dated weeks before the candidates withdrew. Disasters with the coverage pre-written. And Ivan — your match-fixing scandal. The directive is dated TWO YEARS before your fall.`);
+        cine.shot('ivan');
+        await say('Ivan Lawrence', `Two years. They had me drafted two years before they spent me. I wasn't even news, friend. I was INVENTORY.`);
+        await say('Ivan Lawrence', `…Give me a moment.`);
+        await say('Ivan Lawrence', `…All right. All right. The last frame — Maris said there was a last frame. Read it to me. I want to hear it out loud, on my own porch, in daylight.`);
+        cine.shot('hero');
+        await say(p.tamerName, `"Standing directive, all desks, regarding the Dawnflame, the Stormheart and the Worldroot: GLAZE. DO NOT TOUCH. NOT YET. SOON."`);
+        cine.shot('ivan');
+        await say('Ivan Lawrence', `Not yet. SOON. Four continents of anniversary specials and soft-lit documentaries — and underneath, a loaded gun with my best friend's name on it, waiting for a date. THAT'S why Aljay never sat for them. He counted the true interviews same as Greggy: one hand. He KNEW the glaze was a leash they hadn't pulled yet.`);
+        
+        sfx('blip');
+        cine.shot('wide');
+        await say('Greggy (relay)', `—krzzt— I heard "soon". Define "soon". No — don't. I've grounded storms with better manners than whatever wrote that sentence.`);
+        await say('Greggy (relay)', `Kid. You just took the eastern valleys' tomorrow out of their hands — the first piece of the machine anyone has EVER taken. They'll notice. The veil is falling now, one valley at a time, and what's behind it was already looking at the three of us. Rest tonight. Eat whatever Dalisay forces on you. The next move is mine to arrange and yours to make. Greggy out. —krzzt—`);
+        
+        cine.shot('ivan');
+        await say('Ivan Lawrence', `You heard the thunderhead. Tonight the valley eats by lantern light and tomorrow the broadsheets won't know what happened to their tomorrow — because for once, NOBODY wrote it yet. First unwritten morning in sixteen years, friend. You did that.`);
+
+        const summary = completeQuest(p, 'story_mirrorhouse');
+        toast('✅ Chapter XXIII complete: The Mirrorhouse!', 'gold');
+        if (summary) toast(`Received ${summary}`, 'gold');
+        toast('📖 The Chronicle — the veil is falling. Foretales knows your name now…', 'gold');
+        syncStoryQuests(p).forEach(n => toast(n, 'gold'));
+      });
       updateHUD(p, 'New Salmonan');
       return;
     }

@@ -11,9 +11,10 @@ import * as THREE from 'three';
 import {
   makeTamer, makeVoxelHuman, updateVoxelHuman, setVoxelSeated, makeCrawler,
   tileTexture, wallpaperTexture, groundTexture, plankTexture, skyGradient,
+  carpetTexture, bookshelfTexture,
 } from './models';
 
-export type CineKind = 'academy' | 'camp';
+export type CineKind = 'academy' | 'camp' | 'library' | 'bluff' | 'fountain' | 'porch';
 
 interface Shot {
   pos: THREE.Vector3;
@@ -31,7 +32,12 @@ export class Cinematic {
   private t = 0;
 
   constructor(kind: CineKind) {
-    if (kind === 'academy') this.buildAcademy(); else this.buildCamp();
+    if (kind === 'academy') this.buildAcademy();
+    else if (kind === 'camp') this.buildCamp();
+    else if (kind === 'library') this.buildLibrary();
+    else if (kind === 'bluff') this.buildBluff();
+    else if (kind === 'fountain') this.buildFountain();
+    else if (kind === 'porch') this.buildPorch();
     const first = Object.values(this.shots)[0];
     this.goal = first;
     this.camera.position.copy(first.pos);
@@ -352,6 +358,188 @@ export class Cinematic {
       fire: { pos: new THREE.Vector3(2.6, 1.7, 3.6), look: new THREE.Vector3(-0.6, 0.9, 0.4) },
       medic: { pos: new THREE.Vector3(-0.8, 1.5, 2.6), look: new THREE.Vector3(1.7, 1.2, -0.9) },
       wide: { pos: new THREE.Vector3(0, 4.4, 9), look: new THREE.Vector3(0, 0.8, -0.5) },
+    };
+  }
+
+  // ================= library archives =================
+  private buildLibrary(): void {
+    const s = this.scene;
+    s.background = skyGradient('#16233b', '#080c14');
+    s.add(new THREE.AmbientLight(0x8da4d8, 0.45));
+    const key = new THREE.DirectionalLight(0xfffaed, 0.4);
+    key.position.set(3, 8, 2);
+    s.add(key);
+
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(20, 16),
+      new THREE.MeshStandardMaterial({ map: carpetTexture('#1f2b3e', '#b8a268', 2), roughness: 0.85 }));
+    floor.rotation.x = -Math.PI / 2;
+    floor.receiveShadow = true;
+    s.add(floor);
+
+    const wallMat = new THREE.MeshStandardMaterial({ color: 0x1c2436, roughness: 0.9 });
+    const backWall = new THREE.Mesh(new THREE.BoxGeometry(20, 6, 0.4), wallMat);
+    backWall.position.set(0, 3, -7);
+    s.add(backWall);
+
+    const bookTex = bookshelfTexture();
+    const bookMat = new THREE.MeshStandardMaterial({ map: bookTex, roughness: 0.7 });
+    for (const bx of [-5, 5]) {
+      const shelf = new THREE.Mesh(new THREE.BoxGeometry(3.5, 4.5, 0.8), bookMat);
+      shelf.position.set(bx, 2.25, -6.5);
+      shelf.castShadow = true;
+      s.add(shelf);
+    }
+
+    const tableMat = new THREE.MeshStandardMaterial({ map: plankTexture('#3e2b1d', 1), roughness: 0.75 });
+    const table = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.85, 1.4), tableMat);
+    table.position.set(0, 0.425, -2);
+    table.receiveShadow = true;
+    table.castShadow = true;
+    s.add(table);
+
+    const lamp = new THREE.PointLight(0xffa834, 18, 12);
+    lamp.position.set(0, 2.2, -2);
+    s.add(lamp);
+
+    // Veyl (seated behind table) & Hero (standing)
+    const veyl = this.person({ top: 0x225588, hair: 0xddc090, bottom: 0x333333, cap: null }, 0, -1.3, 0, true, 0.45);
+    const hero = this.person({ top: 0x2a5ad8, bottom: 0x32384e, cap: 0xd84a3a }, 0, -3.2, Math.PI);
+
+    const heroToVeyl = Math.atan2(veyl.position.x - hero.position.x, veyl.position.z - hero.position.z);
+    const veylToHero = Math.atan2(hero.position.x - veyl.position.x, hero.position.z - veyl.position.z);
+
+    this.shots = {
+      wide: { pos: new THREE.Vector3(2.8, 2.2, 1.5), look: new THREE.Vector3(0, 1.2, -2), facings: [[hero, heroToVeyl], [veyl, veylToHero]] },
+      veyl: { pos: new THREE.Vector3(0.8, 1.4, -2.8), look: new THREE.Vector3(0, 1.1, -1.3), facings: [[veyl, veylToHero]] },
+      hero: { pos: new THREE.Vector3(-0.8, 1.4, -1.8), look: new THREE.Vector3(0, 1.3, -3.2), facings: [[hero, heroToVeyl]] },
+      desk: { pos: new THREE.Vector3(0, 2.0, -3.2), look: new THREE.Vector3(0, 0.85, -2), facings: [[hero, heroToVeyl], [veyl, veylToHero]] },
+    };
+  }
+
+  // ================= Greggy's Agdao cliff bluff =================
+  private buildBluff(): void {
+    const s = this.scene;
+    s.background = skyGradient('#0d182e', '#03050c');
+    s.add(new THREE.AmbientLight(0x7aa2d8, 0.25));
+    const moon = new THREE.DirectionalLight(0x8da4d8, 0.5);
+    moon.position.set(-4, 10, -6);
+    s.add(moon);
+
+    const ocean = new THREE.Mesh(new THREE.PlaneGeometry(80, 80),
+      new THREE.MeshStandardMaterial({ color: 0x0a1e3b, roughness: 0.1, metalness: 0.8 }));
+    ocean.position.y = -6;
+    ocean.rotation.x = -Math.PI / 2;
+    s.add(ocean);
+
+    const cliff = new THREE.Mesh(new THREE.BoxGeometry(10, 6, 8),
+      new THREE.MeshStandardMaterial({ map: groundTexture('#223a1a', '#335227', 4), roughness: 0.95 }));
+    cliff.position.set(0, -3, -1);
+    cliff.receiveShadow = true;
+    s.add(cliff);
+
+    // Greggy (weathered mentor, arms crossed) & Hero
+    const greggy = this.person({ top: 0x2b3e5a, hair: 0xdedede, bottom: 0x1f293d, cap: null }, 1.5, -2.5, -0.6);
+    const hero = this.person({ top: 0x2a5ad8, bottom: 0x32384e, cap: 0xd84a3a }, -1.2, -1.8, 1.2);
+
+    const heroToGreggy = Math.atan2(greggy.position.x - hero.position.x, greggy.position.z - hero.position.z);
+    const greggyToHero = Math.atan2(hero.position.x - greggy.position.x, hero.position.z - greggy.position.z);
+
+    this.shots = {
+      wide: { pos: new THREE.Vector3(4.5, 1.8, 3.8), look: new THREE.Vector3(0, 0.8, -1.5), facings: [[hero, heroToGreggy], [greggy, greggyToHero]] },
+      greggy: { pos: new THREE.Vector3(-0.4, 1.4, -0.8), look: new THREE.Vector3(1.5, 1.2, -2.5), facings: [[greggy, greggyToHero]] },
+      hero: { pos: new THREE.Vector3(2.4, 1.4, -1.2), look: new THREE.Vector3(-1.2, 1.2, -1.8), facings: [[hero, heroToGreggy]] },
+      ocean: { pos: new THREE.Vector3(-1.5, 1.8, -1.8), look: new THREE.Vector3(10, 0.5, -15), facings: [[hero, heroToGreggy], [greggy, greggyToHero]] },
+    };
+  }
+
+  // ================= Haven plaza fountain backdrop =================
+  private buildFountain(): void {
+    const s = this.scene;
+    s.background = skyGradient('#7da2d8', '#cfdcf0');
+    s.add(new THREE.AmbientLight(0xffffff, 0.7));
+    const sun = new THREE.DirectionalLight(0xfffaed, 0.65);
+    sun.position.set(10, 15, 8);
+    s.add(sun);
+
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(24, 24),
+      new THREE.MeshStandardMaterial({ map: tileTexture('#a8b0c0', '#7a8498', 12), roughness: 0.6 }));
+    floor.rotation.x = -Math.PI / 2;
+    floor.receiveShadow = true;
+    s.add(floor);
+
+    const fGroup = new THREE.Group();
+    const rim = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.2, 0.45, 16),
+      new THREE.MeshStandardMaterial({ color: 0x6e788c, roughness: 0.8 }));
+    rim.position.y = 0.225;
+    const water = new THREE.Mesh(new THREE.CylinderGeometry(2.0, 2.0, 0.35, 16),
+      new THREE.MeshStandardMaterial({ color: 0x3d7cb8, transparent: true, opacity: 0.8, roughness: 0.1 }));
+    water.position.y = 0.24;
+    fGroup.add(rim, water);
+    fGroup.position.set(0, 0, -2.5);
+    s.add(fGroup);
+
+    // Azrin, Azrael, Hero
+    const azrin = this.person({ top: 0xd86a2a, hair: 0xd8ab2a, bottom: 0x222222, cap: null }, -1.4, -1.2, 0.8);
+    const azrael = this.person({ top: 0x323e5a, hair: 0x333333, bottom: 0x444444, cap: null }, -2.5, -1.8, 0.8);
+    const hero = this.person({ top: 0x2a5ad8, bottom: 0x32384e, cap: 0xd84a3a }, 0.8, -1.6, -1.2);
+
+    const heroToAzrin = Math.atan2(azrin.position.x - hero.position.x, azrin.position.z - hero.position.z);
+    const azrinToHero = Math.atan2(hero.position.x - azrin.position.x, hero.position.z - azrin.position.z);
+    const azraelToHero = Math.atan2(hero.position.x - azrael.position.x, hero.position.z - azrael.position.z);
+
+    this.shots = {
+      wide: { pos: new THREE.Vector3(2.5, 2.2, 3.2), look: new THREE.Vector3(-0.8, 1.1, -1.5), facings: [[hero, heroToAzrin], [azrin, azrinToHero], [azrael, azraelToHero]] },
+      azrin: { pos: new THREE.Vector3(-0.2, 1.4, -0.6), look: new THREE.Vector3(-1.4, 1.15, -1.2), facings: [[azrin, azrinToHero]] },
+      azrael: { pos: new THREE.Vector3(-1.2, 1.4, -0.8), look: new THREE.Vector3(-2.5, 1.15, -1.8), facings: [[azrael, azraelToHero]] },
+      hero: { pos: new THREE.Vector3(-1.8, 1.4, -2.2), look: new THREE.Vector3(0.8, 1.2, -1.6), facings: [[hero, heroToAzrin]] },
+    };
+  }
+
+  // ================= Ivan Lawrence's porch =================
+  private buildPorch(): void {
+    const s = this.scene;
+    s.background = skyGradient('#d86c3f', '#3c1b18');
+    s.add(new THREE.AmbientLight(0xdc8d6a, 0.45));
+    const sun = new THREE.DirectionalLight(0xff6a22, 1.25);
+    sun.position.set(8, 2, 4);
+    s.add(sun);
+
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(24, 24),
+      new THREE.MeshStandardMaterial({ map: groundTexture('#4e3d22', '#2c3e1e', 8), roughness: 0.95 }));
+    ground.rotation.x = -Math.PI / 2;
+    ground.receiveShadow = true;
+    s.add(ground);
+
+    const cabin = new THREE.Group();
+    const deck = new THREE.Mesh(new THREE.BoxGeometry(4.5, 0.35, 3.2),
+      new THREE.MeshStandardMaterial({ map: plankTexture('#6a4e34', 1), roughness: 0.8 }));
+    deck.position.set(0, 0.175, 0);
+    deck.receiveShadow = true;
+    const wall = new THREE.Mesh(new THREE.BoxGeometry(4.5, 3.0, 0.35),
+      new THREE.MeshStandardMaterial({ color: 0x5a4430, roughness: 0.9 }));
+    wall.position.set(0, 1.65, -1.5);
+    wall.castShadow = true;
+    const postL = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 3.0),
+      new THREE.MeshStandardMaterial({ color: 0x4a3625 }));
+    postL.position.set(-2.0, 1.65, 1.4);
+    postL.castShadow = true;
+    const postR = postL.clone();
+    postR.position.x = 2.0;
+    cabin.add(deck, wall, postL, postR);
+    cabin.position.set(-1.5, 0, -4.5);
+    s.add(cabin);
+
+    // Ivan (seated) & Hero (standing)
+    const ivan = this.person({ top: 0x8a6a4a, hair: 0x5a5a5a, bottom: 0x333333, cap: null }, -2.2, -3.8, 0.5, true, 0.45);
+    const hero = this.person({ top: 0x2a5ad8, bottom: 0x32384e, cap: 0xd84a3a }, -0.6, -2.6, -1.8);
+
+    const heroToIvan = Math.atan2(ivan.position.x - hero.position.x, ivan.position.z - hero.position.z);
+    const ivanToHero = Math.atan2(hero.position.x - ivan.position.x, hero.position.z - ivan.position.z);
+
+    this.shots = {
+      wide: { pos: new THREE.Vector3(2.8, 1.8, -0.6), look: new THREE.Vector3(-1.5, 1.0, -3.8), facings: [[hero, heroToIvan], [ivan, ivanToHero]] },
+      ivan: { pos: new THREE.Vector3(-1.1, 1.3, -2.8), look: new THREE.Vector3(-2.2, 0.95, -3.8), facings: [[ivan, ivanToHero]] },
+      hero: { pos: new THREE.Vector3(-2.8, 1.4, -4.2), look: new THREE.Vector3(-0.6, 1.25, -2.6), facings: [[hero, heroToIvan]] },
     };
   }
 }

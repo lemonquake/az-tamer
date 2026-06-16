@@ -17,7 +17,7 @@ import { AgdaoIsland } from './agdao';
 import { NewSalmonan } from './salmonan';
 import { TerraCity } from './terra';
 import { University } from './university';
-import { Cinematic } from './cinematic';
+import { Cinematic, CineKind } from './cinematic';
 import { syncStoryQuests } from './quests';
 import { initAudio, toggleMute, playMusic } from './audio';
 import { initMobileControls } from './mobile';
@@ -65,8 +65,23 @@ $('app').prepend(canvas);
 const renderer = makeRenderer(canvas);
 (window as unknown as Record<string, unknown>).__renderer = renderer; // debug handle (see window.__town)
 
-let activeView: View | null = null;
-const setView = (v: View | null) => { activeView = v; };
+export let activeView: View | null = null;
+export const setView = (v: View | null) => { activeView = v; };
+
+export async function runCinematicScene(kind: CineKind, flow: (cine: Cinematic) => Promise<void>): Promise<void> {
+  const prev = activeView;
+  const cine = new Cinematic(kind);
+  await fadeOut();
+  setView(cine.view);
+  await fadeIn();
+  try {
+    await flow(cine);
+  } finally {
+    await fadeOut();
+    setView(prev);
+    await fadeIn();
+  }
+}
 
 window.addEventListener('resize', () => {
   renderer.setSize(innerWidth, innerHeight);

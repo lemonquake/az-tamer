@@ -33,6 +33,7 @@ import { tagNpc, crowdName, attachNpcPicker } from './npccard';
 import { runCityTutorial, isTutorialOpen } from './tutorial';
 import { worldClock, DayNightRig } from './daynight';
 import { sfx, playMusic } from './audio';
+import { runCinematicScene } from './main';
 import { openFishingShop, openFishingBoard, type FishingSpotInfo } from './fishing';
 import { cDesk, cFountain, cReadingDesk, cColumnSconces, cHangingBanner, cTelescope, cPainting } from './aurelian_hall_helpers';
 
@@ -2470,29 +2471,32 @@ export class Town {
     });
 
     const meet = async () => {
-      // both sisters turn to you
-      sisters.forEach(g => {
-        g.rotation.y = Math.atan2(this.tamer.position.x - g.position.x, this.tamer.position.z - g.position.z);
-      });
-
       if (p.quests['story_daughters'] === 'active' && !p.flags['met_daughters']) {
-        await conversation([
-          ['Azrin', `There! Hah — I TOLD you that was the walk of someone uncle Greggy sent. You owe me a honey roll, Az.`],
-          ['Azrael', `I owe you nothing; I said "probably". ${p.tamerName}, yes? Azrael. The loud one is my sister.`],
-          ['Azrin', `Azrin! The DAWNFLAME'S daughter — the better-looking one of the three of us, dad included. So you're the graduate who scrubbed the Cradle clean. Respect. That nest-warden was a grown one and you went in with a STUDENT badge.`],
-          ['Azrael', `We've been hunting the same corruption for two years — Veyra, Tharkand, one deeply unpleasant week under Noruun's ice. It moves like strategy, not rot. Father taught us what that means before he... went walking.`],
-          ['Azrin', `He's FINE. He's always fine. He's Aljay. ...Anyway! Uncle Greggy's petrel says you're the quiet one the Legion never saw coming, so — welcome to the family business, graduate.`],
-        ]);
-        p.flags['met_daughters'] = true;
-        const summary = completeQuest(p, 'story_daughters');
-        toast('✅ Chapter VI complete: Daughters of the Dawnflame!', 'gold');
-        if (summary) toast(`Received ${summary}`, 'gold');
-        syncStoryQuests(p).forEach(n => toast(n, 'gold'));
-        await conversation([
-          ['Azrael', `Now — here's what we know. The Stormspire's war-engine isn't counting down. It's ANSWERING. Call and response... and the call comes from inside Ghandra's seal.`],
-          ['Azrin', `So we cut the conversation! You silence the engine — five floors, big angry Lv 26 landlord, you'll love it — and take its last word back to uncle Greggy on Agdao.`],
-          ['Azrael', `We'll manage the continent's panicking in the meantime. It panics very efficiently when Azrin smiles at it. Good hunting, ${p.tamerName}.`],
-        ]);
+        await runCinematicScene('fountain', async cine => {
+          cine.shot('wide');
+          await say('Azrin', `There! Hah — I TOLD you that was the walk of someone uncle Greggy sent. You owe me a honey roll, Az.`);
+          cine.shot('azrael');
+          await say('Azrael', `I owe you nothing; I said "probably". ${p.tamerName}, yes? Azrael. The loud one is my sister.`);
+          cine.shot('azrin');
+          await say('Azrin', `Azrin! The DAWNFLAME'S daughter — the better-looking one of the three of us, dad included. So you're the graduate who scrubbed the Cradle clean. Respect. That nest-warden was a grown one and you went in with a STUDENT badge.`);
+          cine.shot('azrael');
+          await say('Azrael', `We've been hunting the same corruption for two years — Veyra, Tharkand, one deeply unpleasant week under Noruun's ice. It moves like strategy, not rot. Father taught us what that means before he... went walking.`);
+          cine.shot('azrin');
+          await say('Azrin', `He's FINE. He's always fine. He's Aljay. ...Anyway! Uncle Greggy's petrel says you're the quiet one the Legion never saw coming, so — welcome to the family business, graduate.`);
+
+          p.flags['met_daughters'] = true;
+          const summary = completeQuest(p, 'story_daughters');
+          toast('✅ Chapter VI complete: Daughters of the Dawnflame!', 'gold');
+          if (summary) toast(`Received ${summary}`, 'gold');
+          syncStoryQuests(p).forEach(n => toast(n, 'gold'));
+
+          cine.shot('azrael');
+          await say('Azrael', `Now — here's what we know. The Stormspire's war-engine isn't counting down. It's ANSWERING. Call and response... and the call comes from inside Ghandra's seal.`);
+          cine.shot('azrin');
+          await say('Azrin', `So we cut the conversation! You silence the engine — five floors, big angry Lv 26 landlord, you'll love it — and take its last word back to uncle Greggy on Agdao.`);
+          cine.shot('hero');
+          await say('Azrael', `We'll manage the continent's panicking in the meantime. It panics very efficiently when Azrin smiles at it. Good hunting, ${p.tamerName}.`);
+        });
         updateHUD(p, 'Haven City');
         return;
       }
