@@ -50,6 +50,7 @@ export function toast(msg: string, kind: '' | 'gold' | 'red' = '', ms = 2400): v
 }
 
 // ---------------- dialogue ----------------
+let screenEscHandler: ((e: KeyboardEvent) => void) | null = null;
 let dialogueBusy = false;
 export const isDialogueOpen = () => dialogueBusy;
 
@@ -71,15 +72,18 @@ export function say(speaker: string, text: string): Promise<void> {
     const next = $('dialogue-next');
     $('dialogue-choices').style.display = 'none';
     next.style.display = 'none';
+    
+    // Strip HTML tags for typewriter animation so tags do not render literally during reveal
+    const plain = text.replace(/<[^>]+>/g, '');
     txt.textContent = '';
     let i = 0, done = false;
     const iv = setInterval(() => {
-      if (i >= text.length) { finishTyping(); return; }
-      txt.textContent = text.slice(0, ++i);
+      if (i >= plain.length) { finishTyping(); return; }
+      txt.textContent = plain.slice(0, ++i);
     }, 14);
     const finishTyping = () => {
       clearInterval(iv);
-      txt.textContent = text;
+      txt.innerHTML = text;
       done = true;
       next.style.display = 'block';
     };
@@ -107,7 +111,7 @@ export function choose(speaker: string, text: string, options: string[]): Promis
   return new Promise(resolve => {
     dialogueBusy = true;
     showBox(speaker);
-    $('dialogue-text').textContent = text;
+    $('dialogue-text').innerHTML = text;
     $('dialogue-next').style.display = 'none';
     const wrap = $('dialogue-choices');
     wrap.innerHTML = '';
@@ -1026,6 +1030,10 @@ export function openMasterDebugMenu(player: Player): Promise<void> {
 export function closeMenu(): void {
   $('menu-screen').style.display = 'none';
   menuOpen = false;
+  if (screenEscHandler) {
+    window.removeEventListener('keydown', screenEscHandler, true);
+    screenEscHandler = null;
+  }
 }
 
 function openScreen(html: string): HTMLElement {
@@ -1034,6 +1042,33 @@ function openScreen(html: string): HTMLElement {
   content.innerHTML = html;
   sc.style.display = 'flex';
   menuOpen = true;
+
+  if (screenEscHandler) {
+    window.removeEventListener('keydown', screenEscHandler, true);
+    screenEscHandler = null;
+  }
+
+  screenEscHandler = (e: KeyboardEvent) => {
+    const k = e.key.toLowerCase();
+    if (k === 'escape' || k === 'esc') {
+      // List of closing button IDs across various screens (shop, garage, boutique, fusion, notice board, panels)
+      const closeIds = [
+        'shop-close', 'garage-close', 'boutique-close', 
+        'fusion-close', 'hub-close', 'panel-close', 'board-close'
+      ];
+      for (const id of closeIds) {
+        const btn = document.getElementById(id);
+        if (btn && btn.style.display !== 'none' && !btn.hasAttribute('disabled')) {
+          e.preventDefault();
+          e.stopPropagation();
+          btn.click();
+          return;
+        }
+      }
+    }
+  };
+  window.addEventListener('keydown', screenEscHandler, true);
+
   return content;
 }
 export { openScreen };
