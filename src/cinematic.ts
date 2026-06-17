@@ -11,7 +11,8 @@ import * as THREE from 'three';
 import {
   makeTamer, makeVoxelHuman, updateVoxelHuman, setVoxelSeated, makeCrawler,
   tileTexture, wallpaperTexture, groundTexture, plankTexture, skyGradient,
-  carpetTexture, bookshelfTexture, makeGuardian, disposeRig
+  carpetTexture, bookshelfTexture, makeGuardian, disposeRig,
+  stoneTexture, makeStreetLamp, makeTree
 } from './models';
 import { HOUSES, SPECIES } from './data';
 
@@ -90,6 +91,10 @@ export class Cinematic {
       }
       if (o.name === 'firelight') {
         (o as THREE.PointLight).intensity = 16 + Math.sin(now * 0.011) * 4 + Math.sin(now * 0.037) * 2;
+      }
+      if (o.name === 'fountain-jet') {
+        o.scale.y = 1 + Math.sin(now * 0.004) * 0.18;
+        ((o as THREE.Mesh).material as THREE.MeshStandardMaterial).opacity = 0.5 + Math.sin(now * 0.005) * 0.15;
       }
     });
 
@@ -491,37 +496,221 @@ export class Cinematic {
     sun.position.set(10, 15, 8);
     s.add(sun);
 
+    // 1. Canvas Texture for the Ground (Haven Plaza style)
+    const S = 512;
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = S;
+    const ctx = canvas.getContext('2d')!;
+    const px = (x: number) => (x + 12) / 24 * S;
+    const pz = (z: number) => (z + 12) / 24 * S;
+
+    // Grass base with two-tone mottle
+    ctx.fillStyle = '#4a6a36';
+    ctx.fillRect(0, 0, S, S);
+    for (let i = 0; i < 600; i++) {
+      const x = Math.random() * S;
+      const y = Math.random() * S;
+      const r = 2 + Math.random() * 5;
+      ctx.fillStyle = Math.random() < 0.5 ? '#54763e' : '#41602e';
+      ctx.globalAlpha = 0.4;
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalAlpha = 1.0;
+
+    // Central stone plaza at (0, -2.5) with radius 8.5
+    const centerX = 0;
+    const centerZ = -2.5;
+    const radiusWorld = 8.5;
+    const radiusPixels = radiusWorld / 24 * S;
+    const pg = ctx.createRadialGradient(px(centerX), pz(centerZ), 1 / 24 * S, px(centerX), pz(centerZ), radiusPixels);
+    pg.addColorStop(0, '#9a8e7a');
+    pg.addColorStop(0.85, '#8a7e6a');
+    pg.addColorStop(1, '#6e5a3c');
+    ctx.fillStyle = pg;
+    ctx.beginPath(); ctx.arc(px(centerX), pz(centerZ), radiusPixels, 0, Math.PI * 2); ctx.fill();
+
+    // Flagstone joints
+    ctx.strokeStyle = 'rgba(60,52,40,0.5)';
+    ctx.lineWidth = 1.6;
+    for (let ring = 1.8; ring <= radiusWorld; ring += 1.8) {
+      ctx.beginPath(); ctx.arc(px(centerX), pz(centerZ), ring / 24 * S, 0, Math.PI * 2); ctx.stroke();
+    }
+    for (let i = 0; i < 24; i++) {
+      const a = (i / 24) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(px(centerX + Math.cos(a) * 1.8), pz(centerZ + Math.sin(a) * 1.8));
+      ctx.lineTo(px(centerX + Math.cos(a) * radiusWorld), pz(centerZ + Math.sin(a) * radiusWorld));
+      ctx.stroke();
+    }
+
+    const groundTex = new THREE.CanvasTexture(canvas);
+    groundTex.colorSpace = THREE.SRGBColorSpace;
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(24, 24),
-      new THREE.MeshStandardMaterial({ map: tileTexture('#a8b0c0', '#7a8498', 12), roughness: 0.6 }));
+      new THREE.MeshStandardMaterial({ map: groundTex, roughness: 0.85 }));
     floor.rotation.x = -Math.PI / 2;
     floor.receiveShadow = true;
     s.add(floor);
 
+    // 2. Grand Fountain
     const fGroup = new THREE.Group();
-    const rim = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.2, 0.45, 16),
-      new THREE.MeshStandardMaterial({ color: 0x6e788c, roughness: 0.8 }));
-    rim.position.y = 0.225;
-    const water = new THREE.Mesh(new THREE.CylinderGeometry(2.0, 2.0, 0.35, 16),
-      new THREE.MeshStandardMaterial({ color: 0x3d7cb8, transparent: true, opacity: 0.8, roughness: 0.1 }));
-    water.position.y = 0.24;
-    fGroup.add(rim, water);
-    fGroup.position.set(0, 0, -2.5);
+    const fountain = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.5, 0.7, 18),
+      new THREE.MeshStandardMaterial({ map: stoneTexture('#8a93b8', '#5a6280', 2), roughness: 0.6 }));
+    fountain.position.y = 0.35;
+    fountain.castShadow = true;
+    fountain.receiveShadow = true;
+
+    const water = new THREE.Mesh(new THREE.CylinderGeometry(1.05, 1.05, 0.1, 18),
+      new THREE.MeshStandardMaterial({ color: 0x3a9df2, emissive: 0x1a4d88, emissiveIntensity: 0.4, roughness: 0.1, transparent: true, opacity: 0.9 }));
+    water.position.y = 0.72;
+
+    const column = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.22, 1.0, 10),
+      new THREE.MeshStandardMaterial({ map: stoneTexture('#9aa3c8', '#6a7290', 1), roughness: 0.5 }));
+    column.position.y = 1.2;
+    column.castShadow = true;
+
+    const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.3, 0.22, 14),
+      new THREE.MeshStandardMaterial({ map: stoneTexture('#9aa3c8', '#6a7290', 1), roughness: 0.5 }));
+    bowl.position.y = 1.75;
+    bowl.castShadow = true;
+
+    const jet = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.9, 10),
+      new THREE.MeshStandardMaterial({ color: 0x9ad4f2, emissive: 0x5ab8e8, emissiveIntensity: 0.5, transparent: true, opacity: 0.65 }));
+    jet.position.y = 2.3;
+    jet.name = 'fountain-jet';
+    
+    fGroup.add(fountain, water, column, bowl, jet);
+    fGroup.position.set(centerX, 0, centerZ);
     s.add(fGroup);
 
-    // Azrin, Azrael, Hero
-    const azrin = this.person({ top: 0xd86a2a, hair: 0xd8ab2a, bottom: 0x222222, cap: null }, -1.4, -1.2, 0.8);
-    const azrael = this.person({ top: 0x323e5a, hair: 0x333333, bottom: 0x444444, cap: null }, -2.5, -1.8, 0.8);
-    const hero = this.person({ top: 0x2a5ad8, bottom: 0x32384e, cap: 0xd84a3a }, 0.8, -1.6, -1.2);
+    // 3. Benches
+    const addBench = (bx: number, bz: number, rotY: number) => {
+      const g = new THREE.Group();
+      const wood = new THREE.MeshStandardMaterial({ map: plankTexture('#7a5630'), roughness: 0.85 });
+      const iron = new THREE.MeshStandardMaterial({ color: 0x23262e, metalness: 0.5, roughness: 0.6 });
+      for (const sy of [0.42, 0.5]) {
+        const slat = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.05, 0.16), wood);
+        slat.position.set(0, sy - 0.06, (sy - 0.42) * 4 - 0.1);
+        g.add(slat);
+      }
+      for (const by of [0.62, 0.74]) {
+        const back = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.07, 0.04), wood);
+        back.position.set(0, by, -0.3);
+        g.add(back);
+      }
+      for (const side of [-0.62, 0.62]) {
+        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.4, 0.5), iron);
+        leg.position.set(side, 0.2, -0.05);
+        const backPost = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.5, 0.05), iron);
+        backPost.position.set(side, 0.55, -0.3);
+        backPost.rotation.x = -0.15;
+        g.add(leg, backPost);
+      }
+      g.position.set(bx, 0, bz);
+      g.rotation.y = rotY;
+      g.traverse(o => { o.castShadow = true; });
+      s.add(g);
+    };
+
+    addBench(0, 2.1, 0);
+    addBench(-4.6, -2.5, Math.PI / 2);
+    addBench(4.6, -2.5, -Math.PI / 2);
+
+    // 4. Street Lamps
+    const addLamp = (lx: number, lz: number, faceX: number, faceZ: number) => {
+      const lamp = makeStreetLamp('plaza');
+      lamp.position.set(lx, 0, lz);
+      lamp.rotation.y = Math.atan2(faceX - lx, faceZ - lz);
+      s.add(lamp);
+    };
+
+    addLamp(-6.0, 3.5, 0, -2.5);
+    addLamp(6.0, 3.5, 0, -2.5);
+    addLamp(-6.0, -8.5, 0, -2.5);
+    addLamp(6.0, -8.5, 0, -2.5);
+
+    // 5. Market Stalls
+    const addMarketStall = (x: number, z: number, stripes: [number, number], goods: 'fruit' | 'fish') => {
+      const g = new THREE.Group();
+      const wood = new THREE.MeshStandardMaterial({ map: plankTexture('#6a4a2a'), roughness: 0.9 });
+      const counter = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.9, 1.1), wood);
+      counter.position.y = 0.45;
+      g.add(counter);
+      for (const side of [-1.05, 1.05]) {
+        const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 2.2, 6), wood);
+        pole.position.set(side, 1.1, 0.4);
+        g.add(pole);
+      }
+      for (let i = 0; i < 5; i++) {
+        const strip = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.05, 1.5),
+          new THREE.MeshStandardMaterial({ color: stripes[i % 2], roughness: 0.9 }));
+        strip.position.set(-1.04 + i * 0.52, 2.24, 0.3);
+        strip.rotation.x = 0.22;
+        g.add(strip);
+      }
+      if (goods === 'fruit') {
+        for (let i = 0; i < 8; i++) {
+          const fruit = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 6),
+            new THREE.MeshStandardMaterial({ color: [0xd84a3a, 0xf2a23a, 0xc4d23a][i % 3], roughness: 0.55 }));
+          fruit.position.set(-0.8 + (i % 4) * 0.5, 0.98, 0.2 - Math.floor(i / 4) * 0.4);
+          g.add(fruit);
+        }
+      } else {
+        for (let i = 0; i < 4; i++) {
+          const fish = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 6),
+            new THREE.MeshStandardMaterial({ color: 0x9ab4c8, roughness: 0.3, metalness: 0.4 }));
+          fish.scale.set(2.0, 0.6, 0.7);
+          fish.position.set(-0.6 + (i % 2) * 0.9, 0.96, 0.25 - Math.floor(i / 2) * 0.45);
+          fish.rotation.y = (i % 2 ? 1 : -1) * 0.3;
+          g.add(fish);
+        }
+        const ice = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.08, 0.95),
+          new THREE.MeshStandardMaterial({ color: 0xd8ecf8, roughness: 0.2, transparent: true, opacity: 0.85 }));
+        ice.position.y = 0.92;
+        g.add(ice);
+      }
+      const basket = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.2, 0.34, 9), wood);
+      basket.position.set(1.4, 0.17, 0.4);
+      g.add(basket);
+      g.position.set(x, 0, z);
+      g.rotation.y = Math.atan2(-x, -z + 2.5);
+      g.traverse(o => { o.castShadow = true; });
+      s.add(g);
+    };
+
+    addMarketStall(6.4, -9.1, [0xd84a3a, 0xf2ead0], 'fruit');
+    addMarketStall(-6.8, -8.3, [0x3a9df2, 0xf2ead0], 'fish');
+
+    // 6. Background Voxel Trees
+    const tree1 = makeTree('blossom', 777);
+    tree1.position.set(-8.5, 0, -5.5);
+    s.add(tree1);
+
+    const tree2 = makeTree('oak', 888);
+    tree2.position.set(8.5, 0, -5.5);
+    s.add(tree2);
+
+    const tree3 = makeTree('blossom', 999);
+    tree3.position.set(-7.5, 0, 4.0);
+    s.add(tree3);
+
+    const tree4 = makeTree('oak', 555);
+    tree4.position.set(7.5, 0, 4.0);
+    s.add(tree4);
+
+    // 7. Characters (Azrin, Azrael, Hero)
+    const azrin = this.person({ top: 0xd86a2a, hair: 0xd8ab2a, bottom: 0x222222, cap: null }, -1.6, -0.9, 0.8);
+    const azrael = this.person({ top: 0x323e5a, hair: 0x333333, bottom: 0x444444, cap: null }, -2.4, -2.4, 0.8);
+    const hero = this.person({ top: 0x2a5ad8, bottom: 0x32384e, cap: 0xd84a3a }, 1.2, -0.6, -1.2);
 
     const heroToAzrin = Math.atan2(azrin.position.x - hero.position.x, azrin.position.z - hero.position.z);
     const azrinToHero = Math.atan2(hero.position.x - azrin.position.x, hero.position.z - azrin.position.z);
     const azraelToHero = Math.atan2(hero.position.x - azrael.position.x, hero.position.z - azrael.position.z);
 
     this.shots = {
-      wide: { pos: new THREE.Vector3(2.5, 2.2, 3.2), look: new THREE.Vector3(-0.8, 1.1, -1.5), facings: [[hero, heroToAzrin], [azrin, azrinToHero], [azrael, azraelToHero]] },
-      azrin: { pos: new THREE.Vector3(-0.2, 1.4, -0.6), look: new THREE.Vector3(-1.4, 1.15, -1.2), facings: [[azrin, azrinToHero]] },
-      azrael: { pos: new THREE.Vector3(-1.2, 1.4, -0.8), look: new THREE.Vector3(-2.5, 1.15, -1.8), facings: [[azrael, azraelToHero]] },
-      hero: { pos: new THREE.Vector3(-1.8, 1.4, -2.2), look: new THREE.Vector3(0.8, 1.2, -1.6), facings: [[hero, heroToAzrin]] },
+      wide: { pos: new THREE.Vector3(2.5, 2.2, 1.5), look: new THREE.Vector3(-1.0, 1.0, -1.8), facings: [[hero, heroToAzrin], [azrin, azrinToHero], [azrael, azraelToHero]] },
+      azrin: { pos: new THREE.Vector3(0.0, 1.4, -0.3), look: new THREE.Vector3(-1.6, 1.15, -0.9), facings: [[azrin, azrinToHero]] },
+      azrael: { pos: new THREE.Vector3(-1.0, 1.4, -1.6), look: new THREE.Vector3(-2.4, 1.15, -2.4), facings: [[azrael, azraelToHero]] },
+      hero: { pos: new THREE.Vector3(-0.4, 1.4, -1.2), look: new THREE.Vector3(1.2, 1.2, -0.6), facings: [[hero, heroToAzrin]] },
     };
   }
 
