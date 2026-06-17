@@ -556,6 +556,111 @@ export function tileTexture(a = '#b8bcc8', b = '#787e92', repeat = 8): THREE.Tex
   }, repeat);
 }
 
+/** Rusted, dark sci-fi tech panels with glowing circuit conduits. */
+export function techCircuitTexture(base = '#12141a', panelBorder = '#2a2f3d', glowColor = '#11ffcc', repeat = 8): THREE.Texture {
+  return canvasTex(256, (ctx, s) => {
+    const rnd = mulberry(521);
+    ctx.fillStyle = base;
+    ctx.fillRect(0, 0, s, s);
+
+    // Draw tech panels (grid with offsets)
+    ctx.strokeStyle = panelBorder;
+    ctx.lineWidth = 3;
+    const numPanels = 4;
+    const size = s / numPanels;
+    for (let x = 0; x < numPanels; x++) {
+      for (let y = 0; y < numPanels; y++) {
+        const px = x * size;
+        const py = y * size;
+        ctx.strokeRect(px + 1, py + 1, size - 2, size - 2);
+
+        // Add small rivet/screw dots in the corners of each panel
+        ctx.fillStyle = '#444c5e';
+        ctx.fillRect(px + 4, py + 4, 3, 3);
+        ctx.fillRect(px + size - 7, py + 4, 3, 3);
+        ctx.fillRect(px + 4, py + size - 7, 3, 3);
+        ctx.fillRect(px + size - 7, py + size - 7, 3, 3);
+
+        // Add rust / scratch marks
+        ctx.fillStyle = 'rgba(100, 70, 50, 0.15)'; // rust brown
+        for (let i = 0; i < 4; i++) {
+          const rx = px + rnd() * size;
+          const ry = py + rnd() * size;
+          ctx.fillRect(rx, ry, 2 + rnd() * 8, 2 + rnd() * 4);
+        }
+      }
+    }
+
+    // Draw glowing circuit line conduits running through the plate seams
+    ctx.strokeStyle = glowColor;
+    ctx.shadowColor = glowColor;
+    ctx.shadowBlur = 4;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    let curX = 0;
+    let curY = s / 2;
+    ctx.moveTo(curX, curY);
+    for (let i = 0; i < 5; i++) {
+      curX += s / 5;
+      curY += (rnd() - 0.5) * (s / 2);
+      curY = Math.max(10, Math.min(s - 10, curY));
+      ctx.lineTo(curX, curY);
+      
+      // Node circle at joints
+      ctx.fillStyle = glowColor;
+      ctx.fillRect(curX - 3, curY - 3, 6, 6);
+    }
+    ctx.stroke();
+
+    // Reset shadow
+    ctx.shadowBlur = 0;
+
+    // Add general noise
+    for (let i = 0; i < 600; i++) {
+      ctx.fillStyle = `rgba(255,255,255,${rnd() * 0.04})`;
+      ctx.fillRect(rnd() * s, rnd() * s, 1.5, 1.5);
+    }
+  }, repeat);
+}
+
+/** Heavily rusted metal texture with grid grating. */
+export function rustedMetalTexture(base = '#2b2420', rust = '#663a18', repeat = 4): THREE.Texture {
+  return canvasTex(128, (ctx, s) => {
+    const rnd = mulberry(777);
+    ctx.fillStyle = base;
+    ctx.fillRect(0, 0, s, s);
+
+    // Draw grating lines
+    ctx.fillStyle = '#1a1614';
+    for (let y = 0; y < s; y += 8) {
+      ctx.fillRect(0, y, s, 2);
+    }
+
+    // Rust streaks running vertically
+    for (let i = 0; i < 30; i++) {
+      ctx.fillStyle = `rgba(102, 58, 24, ${0.3 + rnd() * 0.4})`;
+      const w = 4 + rnd() * 12;
+      const h = 20 + rnd() * 60;
+      const x = rnd() * s;
+      const y = rnd() * (s - h);
+      ctx.fillRect(x, y, w, h);
+    }
+
+    // Metal scratch marks
+    ctx.strokeStyle = '#4e423b';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 15; i++) {
+      ctx.beginPath();
+      const x1 = rnd() * s; const y1 = rnd() * s;
+      const x2 = x1 + (rnd() - 0.5) * 15; const y2 = y1 + (rnd() - 0.5) * 15;
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+    }
+  }, repeat);
+}
+
+
 /** Wainscoted interior wall: painted upper, wood lower, trim rail. */
 export function wallpaperTexture(upper = '#5a6080', lower = '#4a3826', rail = '#c8b282', repeat = 3): THREE.Texture {
   return canvasTex(256, (ctx, s) => {

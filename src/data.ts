@@ -1940,6 +1940,9 @@ export const ITEMS: Record<string, ItemDef> = Object.fromEntries([
   // Act V — the Foretales arc
   I('override_ledger', 'Override Ledger', 'relic', 0, 0, 'Three proofs bound in river-twine: Esta\'s relay logs stamped FT-PRIME, Dalisay\'s unedited festival crystal, and a Foretales stringer\'s assignment book. Together they say one thing: the news is written before it happens.'),
   I('continuity_reel', 'The Continuity Reel', 'relic', 0, 0, 'The Mirrorhouse\'s master spool — sixteen years of front pages filed BEFORE the events they report. The last frame is a standing directive on the Big Three: "GLAZE. DO NOT TOUCH. NOT YET. SOON."'),
+  I('dragons_tear', "Dragon's Tear", 'relic', 0, 0, 'A pure red chrome gem recovered from the secret ancient Dungeon of Terra City. It hums with immense power, needed to upgrade the Crawler\'s Main Board.'),
+  I('third_harmonik', "3rd Harmonik Notes", 'relic', 0, 0, 'A compilation of frequency notes on Ghandra and the Aether Line by Doctor Clyde. Take these to the Haven Town Sanctum for study.'),
+  I('tems_backup', "Tem's Backup Logs", 'relic', 0, 0, 'A backup copy of Hyujon\'s north gate gate-records, saved by Archivist Tem in an air duct. It logs a single man passing alone with a lantern.'),
 ].map(i => [i.id, i]));
 
 // ---------------- Crawler parts ----------------
@@ -2108,6 +2111,10 @@ export const DUNGEONS: DungeonDef[] = [
     pool: ['gloomite', 'mournmoth', 'duskweaver', 'nightloom', 'cryptling', 'sarcophang', 'gearmite', 'ampyre', 'teslarch', 'voltyx', 'nocthowl'],
     boss: 'phantasmoth', bossLevel: 54, rewardShards: 6500,
     desc: 'The Foretales relay-bastion where the eastern valleys\' news is made — before it happens. Dark glass, dead-light conduits, and a print floor that has never once stopped.', coords: [12, 70], quest: true },
+  { id: 'drowned_terminal', name: 'Drowned Terminal', floors: 4, levelRange: [28, 34], theme: 'vault', hidden: true,
+    pool: ['frostfin', 'coralkit', 'reefrider', 'pearlance', 'jellymote', 'abyssarch', 'seaturt', 'frostfin', 'wavepup'],
+    boss: 'vormaela', bossLevel: 36, rewardShards: 4500,
+    desc: 'Hyujon\'s flooded mag-rail underworks. Rusted rails, drowned machinery, and the Communion Tideling-Mother Vormaela\'s Echo lurking in the deep.', coords: [52, 12], quest: true },
 ];
 
 export const SHOP_STOCK = ['tonic', 'tonic_plus', 'soda', 'soda_plus', 'soda_max', 'berry', 'honey_roll', 'star_treat', 'aether_confit', 'revive_leaf', 'revive_bloom', 'cell', 'cell_plus', 'cell_max', 'plating', 'plating_plus', 'elixir'];

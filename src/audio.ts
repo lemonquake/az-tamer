@@ -38,6 +38,10 @@ const TRACKS: Record<string, string> = {
   fishing_success_rare: 'music/fishing_success_rare.mp3',
   level_up: 'music/level_up.mp3',
   evolve: 'music/evolve.mp3',
+  hyujon: 'music/hyujon_theme.mp3',
+  agdao: 'music/agdao_theme.mp3',
+  dungeon1: 'music/dungeon_theme1.mp3',
+  dungeon2: 'music/dungeon_theme2.mp3',
 };
 
 function ensureCtx(): AudioContext | null {

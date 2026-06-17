@@ -429,6 +429,41 @@ export async function executeCheatFlow(player: Player): Promise<void> {
       player.save(false);
       refreshHUD();
       toast('Cheat Activated: Lineup +10 Levels, +30 items, +5000 Shards, +5 Aether Confit!', 'gold');
+    } else if (code.toLowerCase() === 'skip8') {
+      const questsToComplete = ['story_roads', 'story_historian', 'story_amber', 'story_agdao', 'story_cradle', 'story_daughters', 'story_echoes'];
+      questsToComplete.forEach(id => {
+        player.quests[id] = 'done';
+      });
+      player.flags['exam_done'] = true;
+      player.flags['university_done'] = true;
+      player.flags['met_historian'] = true;
+      player.flags['agdao_unlocked'] = true;
+      player.flags['met_greggy'] = true;
+      player.flags['met_daughters'] = true;
+      player.shards += 50000;
+      player.save(false);
+      refreshHUD();
+      toast('Cheat Activated: Skipped to Chapter 8, +50,000 Shards!', 'gold');
+    } else if (code.toLowerCase() === 'skip10') {
+      const questsToComplete = [
+        'story_roads', 'story_historian', 'story_amber', 'story_agdao', 
+        'story_cradle', 'story_daughters', 'story_echoes', 'story_getup', 'story_christine'
+      ];
+      questsToComplete.forEach(id => {
+        player.quests[id] = 'done';
+      });
+      player.flags['exam_done'] = true;
+      player.flags['university_done'] = true;
+      player.flags['met_historian'] = true;
+      player.flags['agdao_unlocked'] = true;
+      player.flags['met_greggy'] = true;
+      player.flags['met_daughters'] = true;
+      player.flags['dragon_tear_quest_unlocked'] = true;
+      player.flags['met_christine'] = true;
+      player.shards += 80000;
+      player.save(false);
+      refreshHUD();
+      toast('Cheat Activated: Skipped to Chapter 10, +80,000 Shards!', 'gold');
     } else if (code.toLowerCase() === 'gold') {
       player.shards += 10000;
       player.save(false);

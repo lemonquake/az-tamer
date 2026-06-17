@@ -93,6 +93,12 @@ const DOSSIERS: Record<string, Omit<NpcProfile, 'name'>> = {
     stats: [['Customers served', '88,400'], ['Tonics sold', '31,556'], ['Credit extended', 'too much'], ['Honey rolls baked', 'daily']],
     portrait: { top: '#d95a8a', hair: '#3a2a1a' },
   },
+  'Granny Essa': {
+    title: 'Haven Town Resident · Gossip Archivist',
+    bio: 'Spent sixty years watching Haven Town grow from a ring of rubble. Claims she knows every secret in the plaza and has personally outlasted three different mayors.',
+    stats: [['Years in Haven', '64'], ['Benches sat on', '4'], ['Gulls fed', 'hundreds'], ['Secrets kept', 'none of them']],
+    portrait: { top: '#d9a14a', hair: '#c8c8d0' },
+  },
   'Dax': {
     title: 'Master Mechanic of the Garage', houseId: 'stormcall', rank: 'Captain',
     bio: 'The only civilian to whom Greggy the Stormheart still sends handwritten schematics. Dax frames them instead of building them — "some art is load-bearing" — then builds something better.',
@@ -361,7 +367,7 @@ const DOSSIERS: Record<string, Omit<NpcProfile, 'name'>> = {
   'Greggy the Stormheart': {
     title: 'Legendary Tamer · The Stormheart', guild: { name: 'Hall of Legends', color: '#f2d23a', epithet: 'Nine Lights Against Nine Generals' }, rank: 'Grand Chief',
     bio: 'Nine championships — the longest reign in Coliseum history — and the Legion\'s armies learned to fear distant thunder. Grounded the Storm-Tyrant with a coil built overnight. Now roosts on the closest land in the world to Ghandra\'s seal, listening. Lately, something is nibbling.',
-    stats: [['World Championships', '9 (AE 17–28)'], ['Aether Guardians bonded', 'Raijura · Voltherion · Fulgrath'], ['Generals grounded', 'Voltrazar, personally'], ['Years on the bluff', '9'], ['Fishing hooks bent into coils', 'all of Bayan\'s']],
+    stats: [['Battles won', '1,509'], ['World Championships', '9 (AE 17–28)'], ['Aether Guardians bonded', 'Raijura · Voltherion · Fulgrath'], ['Generals grounded', 'Voltrazar, personally'], ['Years on the bluff', '9'], ['Fishing hooks bent into coils', 'all of Bayan\'s']],
     portrait: { top: '#b09a22', hair: '#d8d8d8' },
   },
 
@@ -428,9 +434,39 @@ const DOSSIERS: Record<string, Omit<NpcProfile, 'name'>> = {
   },
   'Pilgrim Dass': {
     title: 'Olivar Traveler · First Pod East', guild: { name: 'Haven Guild Authority', color: '#f2c14e', epithet: 'Across the Strait' }, rank: 'Beginner',
-    bio: 'Rode the Pod the day the Terra line reopened, half-expecting ruins. Walked out into a city of light and has not closed his mouth since. Keeps muttering that they told him Terra was lost. Terra, overhearing, keeps offering him a chair and a hot bowl.',
-    stats: [['Expected ruins', 'yes'], ['Found ruins', 'no'], ['Jaw, current location', 'the floor'], ['Bowls accepted from strangers', '4 and counting']],
+    bio: 'They told him Terra was a ruin; Dass rode the pod expecting rubble and found a city built of light. Currently sitting at the counter trying to decide how to write his family that he is never, ever coming home.',
+    stats: [['Pods ridden', '1'], ['Bowls accepted free', '2'], ['Wrong assumptions corrected', 'all of them'], ['Letters home postponed', 'daily']],
     portrait: { top: '#3a6aa8', hair: '#6a3a1a' },
+  },
+  'Mayor Christine': {
+    title: 'Mayor of Terra City · The Circuit-Crown',
+    bio: 'Cousin of Aljay the Dawnflame. Rebuilt Terra City\'s civic chambers with glowing light-traces and a healthy dose of humor. Believes government should be 20% logistics and 80% stand-up comedy.',
+    stats: [['Jokes told', '4,212'], ['Hecklers grounded', '37'], ['Crawler boards upgraded', '12'], ['Cousins set on fire', '1 (Aljay)']],
+    portrait: { top: '#05070e', hair: '#ff9ad6' },
+  },
+  'Doctor Clyde': {
+    title: "Renegade Researcher · Aljay's Gear-Master",
+    bio: "Aljay's old friend. Fled Haven when Ghandra's frequencies began to crack, setting up a secret lab in forgotten Hyujon. Delighted to see Aljay's spark in the next generation. Has spent nine years calculating the sunder of the Aether Line.",
+    stats: [['Calculations run', '1,490,200'], ['Aether lines mapped', '3'], ['Dawnflame models built', '5'], ['Kettles boiled', 'too many']],
+    portrait: { top: '#4e5ae8', hair: '#c8c8c8' },
+  },
+  'Gem Merchant Vahn': {
+    title: "Prestige Relic Vendor",
+    bio: "Sells highly expensive, pristine stat-boosting gems salvaged from tech-city ruins. Knows that quality tamers will pay anything for an edge.",
+    stats: [['Flawless gems sold', '110'], ['Shards collected', '900,000+'], ['Rare gems in stock', '7 types']],
+    portrait: { top: '#ffd23a', hair: '#2a2018' },
+  },
+  'Grieving Tamer': {
+    title: "Exiled Tamer of Hyujon",
+    bio: "Remembers the neon brilliance of Hyujon before the dark static set in. Walks the ruined streets, wishing the spires would hum once more.",
+    stats: [['Years in exile', '9'], ['Spires remembered', '4'], ['Battles lost to static', '14']],
+    portrait: { top: '#5a5a6a', hair: '#1a1a2e' },
+  },
+  'Old Machinist': {
+    title: "Retired City Engineer",
+    bio: "Worked on the core of Hyujon's original relays. Remembers when Aljay and Greggy visited to calibrate their Crawlers.",
+    stats: [['Relays built', '18'], ['Legends met', '2 (Aljay & Greggy)'], ['Broken coils repaired', '105']],
+    portrait: { top: '#3a2a1a', hair: '#e0e0e0' },
   },
   // — Terra street crowd (named so their cards read true to the Circuit-Crown) —
   'Solder Jin': {

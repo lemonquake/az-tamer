@@ -16,6 +16,7 @@ import { Overworld } from './overworld';
 import { AgdaoIsland } from './agdao';
 import { NewSalmonan } from './salmonan';
 import { TerraCity } from './terra';
+import { HyujonCity } from './hyujon';
 import { University } from './university';
 import { Cinematic, CineKind } from './cinematic';
 import { syncStoryQuests } from './quests';
@@ -56,6 +57,7 @@ interface View {
   scene: THREE.Scene;
   camera: THREE.PerspectiveCamera;
   update(dt: number): void;
+  owner?: any;
 }
 
 // ---------------- renderer & loop ----------------
@@ -121,9 +123,10 @@ async function runBattle(specs: { speciesId: string; level: number }[], opts: Ba
   await fadeOut();
   
   let track = 'battle';
+  const prevOwner = prev?.owner;
   if (opts.boss) {
     track = 'battle_boss';
-  } else if (prev && (prev as any).intName === 'Grand Coliseum') {
+  } else if (prevOwner && prevOwner.constructor?.name === 'Town' && prevOwner.intName === 'Grand Coliseum') {
     track = 'battle_coliseum';
   }
   playMusic(track);
@@ -135,16 +138,26 @@ async function runBattle(specs: { speciesId: string; level: number }[], opts: Ba
   await fadeOut();
   
   let returnTrack = 'overworld';
-  if (prev && prev.constructor?.name === 'Town') {
-    if ((prev as any).intName === 'Grand Coliseum') {
-      returnTrack = 'coliseum';
-    } else {
-      returnTrack = 'haven_town';
+  if (prevOwner) {
+    const name = prevOwner.constructor?.name;
+    if (name === 'Town') {
+      if (prevOwner.intName === 'Grand Coliseum') {
+        returnTrack = 'coliseum';
+      } else {
+        returnTrack = 'haven_town';
+      }
+    } else if (name === 'University') {
+      returnTrack = 'university';
+    } else if (name === 'TerraCity') {
+      returnTrack = 'terra_city';
+    } else if (name === 'AgdaoIsland') {
+      returnTrack = 'agdao';
+    } else if (name === 'HyujonCity') {
+      returnTrack = 'hyujon';
+    } else if (name === 'DungeonRun') {
+      const dungeonId = prevOwner.def.id;
+      returnTrack = (dungeonId === 'trial' || dungeonId === 'mossdeep' || dungeonId === 'cradle') ? 'dungeon1' : 'dungeon2';
     }
-  } else if (prev && prev.constructor?.name === 'University') {
-    returnTrack = 'university';
-  } else if (prev && prev.constructor?.name === 'TerraCity') {
-    returnTrack = 'terra_city';
   }
   playMusic(returnTrack);
   
@@ -169,7 +182,8 @@ async function runFishing(info: FishingSpotInfo): Promise<void> {
 
 async function runDungeon(def: DungeonDef): Promise<DungeonOutcome> {
   await fadeOut();
-  playMusic('overworld');
+  const track = (def.id === 'trial' || def.id === 'mossdeep' || def.id === 'cradle') ? 'dungeon1' : 'dungeon2';
+  playMusic(track);
   player.inDungeon = true;
   const dungeon = new DungeonRun({ player, runBattle }, def);
   setView(dungeon.view);
@@ -269,7 +283,7 @@ async function runAgdao(startSpawn?: 'pier' | 'cave'): Promise<void> {
   while (true) {
     const isle = new AgdaoIsland(player, spawnAt);
     await fadeOut();
-    playMusic('overworld');
+    playMusic('agdao');
     setView(isle.view);
     await fadeIn();
     const res = await isle.run();
@@ -347,8 +361,45 @@ async function runTerra(initialRoom?: string): Promise<void> {
   player.save();
 }
 
+// ---------------- Hyujon (the Forgotten Tech-City of the North) ----------------
+async function runHyujon(initialRoom?: string): Promise<void> {
+  const firstArrival = !player.flags['hyujon_visited'];
+  let initRoom = initialRoom;
+  while (true) {
+    const city = new HyujonCity(player, firstArrival);
+    if (initRoom) {
+      (city as any).initialRoom = initRoom;
+      initRoom = undefined; // clear after first load
+    }
+    await fadeOut();
+    playMusic('hyujon'); // A dark, atmospheric mechanical track
+    setView(city.view);
+    await fadeIn();
+    const res = await city.run();
+    if (res && res.kind === 'dungeon') {
+      const outcome = await runDungeon(res.def);
+      syncStoryQuests(player).forEach(n => toast(n, 'gold'));
+      if (outcome === 'dead') {
+        const lost = Math.floor(player.shards * 0.25);
+        player.shards -= lost;
+        player.healAll();
+        await say('', `The recovery team drags your Crawler back to the Hyujon Aether-Pod Gate. Doctor Clyde patches your team and charges ◆${lost} for "nanotech welding and field battery refills".`);
+      }
+      player.save();
+      continue; // back to Hyujon
+    }
+    break; // returned to overworld/exit
+  }
+  await fadeOut();
+  setView(null);
+  hideHUD();
+  player.savedLocation = undefined;
+  syncStoryQuests(player).forEach(n => toast(n, 'gold'));
+  player.save();
+}
+
 // ---------------- main game loop ----------------
-async function runOverworldLoop(startRegion = 'aurel'): Promise<DungeonDef | 'agdao' | 'salmonan' | null> {
+async function runOverworldLoop(startRegion = 'aurel'): Promise<DungeonDef | 'agdao' | 'salmonan' | 'hyujon' | null> {
   let region = startRegion;
   while (true) {
     const overworld = new Overworld(player, region);
@@ -453,6 +504,8 @@ async function cityLoop(): Promise<never> {
       } else if (startLoc.type === 'salmonan') {
         const spawnAt = (startLoc.spawnAt as 'pier' | 'ridge') || 'pier';
         await runSalmonan(spawnAt);
+      } else if (startLoc.type === 'hyujon') {
+        await runHyujon(startLoc.room);
       } else if (startLoc.type === 'overworld') {
         const startRegion = startLoc.room || 'aurel';
         const dungeonDef = await runOverworldLoop(startRegion);
@@ -461,6 +514,8 @@ async function cityLoop(): Promise<never> {
             await runAgdao();
           } else if (dungeonDef === 'salmonan') {
             await runSalmonan();
+          } else if (dungeonDef === 'hyujon') {
+            await runHyujon();
           } else {
             const outcome = await runDungeon(dungeonDef);
             await handleDungeonOutcome(outcome, dungeonDef);
@@ -490,6 +545,10 @@ async function cityLoop(): Promise<never> {
     }
     if (dungeonDef === 'salmonan') {
       await runSalmonan();
+      continue;
+    }
+    if (dungeonDef === 'hyujon') {
+      await runHyujon();
       continue;
     }
 

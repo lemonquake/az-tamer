@@ -250,7 +250,7 @@ export class DungeonRun {
   }
 
   get view() {
-    return { scene: this.scene, camera: this.camera, update: (dt: number) => this.update(dt) };
+    return { scene: this.scene, camera: this.camera, update: (dt: number) => this.update(dt), owner: this };
   }
 
   // ---------------- setup ----------------

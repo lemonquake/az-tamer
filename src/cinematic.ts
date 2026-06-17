@@ -489,6 +489,32 @@ export class Cinematic {
     const greggy = this.person({ top: 0x2b3e5a, hair: 0xdedede, bottom: 0x1f293d, cap: null }, 1.5, -2.5, -0.6);
     const hero = this.person({ top: 0x2a5ad8, bottom: 0x32384e, cap: 0xd84a3a }, -1.2, -1.8, 1.2);
 
+    const placeTorch = (tx: number, tz: number) => {
+      const g = new THREE.Group();
+      const wood = new THREE.MeshStandardMaterial({ map: plankTexture('#6a4a2a', 1), roughness: 0.95 });
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 1.7, 6), wood);
+      pole.position.y = 0.85;
+      const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.1, 0.2, 8),
+        new THREE.MeshStandardMaterial({ color: 0x4a3a26, roughness: 0.9 }));
+      bowl.position.y = 1.78;
+      const flame = new THREE.Mesh(new THREE.ConeGeometry(0.13, 0.4, 7),
+        new THREE.MeshBasicMaterial({ color: 0xffa54e, transparent: true, opacity: 0.9 }));
+      flame.position.y = 2.05;
+      flame.name = 'flame';
+      g.add(pole, bowl, flame);
+      g.position.set(tx, 0, tz);
+      s.add(g);
+
+      const light = new THREE.PointLight(0xff9a4e, 12, 7);
+      light.position.set(tx, 2.1, tz);
+      light.name = 'firelight';
+      light.castShadow = true;
+      s.add(light);
+    };
+
+    placeTorch(0.2, -3.2);
+    placeTorch(-2.8, -1.0);
+
     const heroToGreggy = Math.atan2(greggy.position.x - hero.position.x, greggy.position.z - hero.position.z);
     const greggyToHero = Math.atan2(hero.position.x - greggy.position.x, hero.position.z - greggy.position.z);
 

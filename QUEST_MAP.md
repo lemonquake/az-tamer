@@ -2,9 +2,8 @@
 ### *The Chronicle of Aurel — every road, every door, every name worth knowing*
 
 > **How to use this book.** Part I is the world primer — read it once and the rest sings.
-> Part II maps every quest **currently in the game**, chapter by chapter: where it starts, who
-> to talk to, whether a dungeon waits, what map opens, and what comes next. Part III is the
-> **Survival Codex** — read this if Mossdeep keeps eating you. Part IV is **Act II: The
+> Part II is **Act I — Road to the Stormheart**: You graduate the Academy, join a Grand House, travel to Agdao, silence the Stormspire, buy a proper outfit, and get Mayor Christine's approval in Terra City to enter the ancient Dungeon for the Dragon's Tear (to upgrade your Crawler's Main Board).
+> Part III is the **Survival Codex** — read this if Mossdeep keeps eating you. Part IV is **Act II: The
 > Anomalies** — Greggy's silence, the four Factions, the fall of Hyujon, the Dawnshard, and
 > the daughters of the Dawnflame. Part V is **Act III: The Turmal Run** — Louie, the floating
 > island, the Seasonal Tournament and its Sponsors, the Violet Garden, and the Breathing
@@ -14,7 +13,7 @@
 > before it happens, the sixteen-year interregnum, the Mirrorhouse, and the standing
 > directive about the Big Three that ends "NOT YET. SOON."
 > Parts IV–VII are the canonical design bible for the long Anomalies Saga.
-> **Chapters XXII–XXIII of Part VII are already built and playable** (the New Salmonan
+> **Chapters XII–XIII of Part VII are already built and playable** (the New Salmonan
 > map, the Mirrorhouse dungeon, Ivan, the three proofs, the Continuity Reel).
 >
 > **Legend** used throughout:
@@ -155,13 +154,35 @@ and opens the Expedition Gate and the Sunken Vault.
 - Silence it, then report to Greggy on Agdao.
 - 🎁 ◆5000, HP & ATK gems, 2 Grand Elixirs · ⏭ **the door left ajar — Act II begins here.**
 
+**Chapter VIII — A Proper Get Up** 🧥
+- 🗣 **Mayor Airah**, Haven City — **Aurelian Hall**
+- No dungeon. Before Airah will give you directions to Terra City's Mayor, she insists that you dress appropriately.
+- You must buy and equip a new cap, shirt, and pants (different from your starting uniform) at Madame Celeste's Boutique in Haven Town or the prestige Aetherline Atelier Boutique in Terra City.
+- 🎁 ◆1000 · ⏭ Airah hands you the proposal to deliver to Mayor Christine.
+
+**Chapter IX — The Mayor of Terra City** 🏙️
+- 🗣 **Mayor Christine**, Terra City — **Civic Hall** (NW building in Terra City plaza)
+- Go to the new 3-floor building in the North-West area of Terra City, climb to the top floor (Floor 3), and present the proposal to Mayor Christine.
+- She will comment and rate your style, remember Aljay (she's his cousin), and release the seal on the secret ancient Dungeon where the **Dragon's Tear** is kept.
+- 🎁 ◆1500 · ⏭ You are authorized to enter the Dungeon to get the "Dragon's Tear" gem and upgrade your Crawler's Main Board.
+
+**Chapter X — The Forgotten Tech-City** 🏙️
+- 🗣 **Doctor Clyde**, Hyujon — **Abandoned Laboratory** (west side of the city plaza)
+- No dungeon. Clyde recognizes the Dawnflame's spark in you, tells the story of Ghandra's primordial deities and the fading Aether Line, and hands you the **3rd Harmonik** notes.
+- 🎁 ◆1500 · ⏭ Clyde directs you to take the notes to the Sanctum in Haven Town to unlock Aether Evo.
+
+**Chapter XI — The 3rd Harmonik** 📜
+- 🗣 **Sanctum Keeper** (or Reactor), Haven Town — **Sanctum**
+- Deliver the **3rd Harmonik** notes. The fusion laboratory reactor processes the Ghandra frequencies and unlocks **Aether Evo** study for your Guardians.
+- 🎁 ◆2000, **Prism Gem** · ⏭ completes Chapter 11, unlocking Chapter 12 ("The Veil, Falling").
+
 ### GUILD MAIN QUESTS (your House's own four-quest telling of the same war)
 Every House runs the same spine with its own story: **m1** win 3 battles → **m2** conquer
 the Sunken Vault → **m3** befriend 3 wild Guardians → **m4** silence the Stormspire.
 Turn each in to your House master on the Grand House terrace, north Haven City.
 Rewards stack *on top of* Chronicle rewards — run them in parallel, always.
 
-### SIDE QUESTS (all at the University — easy shards while you're there for Veyl)
+### SIDE QUESTS (university and town side quests)
 | Quest | 🗣 Giver | Do this | 🎁 |
 |---|---|---|---|
 | A Pinch of Sweetness | Chef Marlo, Cafeteria | Bring 3 Sweet Berries | ◆220, Honey Rolls |
@@ -170,6 +191,7 @@ Rewards stack *on top of* Chronicle rewards — run them in parallel, always.
 | Schoolyard Legend | Rival Kade, Training Hall | Beat Kade in a spar | ◆350, Ruby Gem |
 | Overdue | Archivist Wren, Library | Ledger's in the Cafeteria, soaking up gravy | ◆240, Charge Cells |
 | A Friend for Niko | Student Niko, Lobby | Befriend any wild Guardian, tell him | ◆200, Berries |
+| Granny Essa's Question | Granny Essa, Haven Fountain | Answer how many battles Greggy won (1,509) | ◆500, +1 Level to active party Guardians |
 
 ---
 
@@ -671,7 +693,7 @@ else dared.
 
 ### Chapter-by-chapter — THE CHRONICLE, ACT V
 
-**Chapter XXII — The Veil, Falling** 📡 *(BUILT — playable)*
+**Chapter XII — The Veil, Falling** 📡 *(BUILT — playable)*
 - 🗺 **NEW SALMONAN** — *new map, fully built*: the Valley of Loud Kitchens. A working
   river with flat-barge piers and a plank bridge, terraced mirror-water paddies on the
   west slope, a dawn market, the Loud Kitchen Inn (free Sanctum-grade rest, forever —
@@ -691,7 +713,7 @@ else dared.
   "RELAY BASTION 9, EAST VALLEYS" — the building the locals call the **Mirrorhouse**,
   humming over the paddies the whole time. Ivan could see it from his porch.
 
-**Chapter XXIII — The Mirrorhouse** 🪞 *(BUILT — playable)*
+**Chapter XIII — The Mirrorhouse** 🪞 *(BUILT — playable)*
 - 🏰 **THE MIRRORHOUSE** — *new dungeon*: the Foretales relay-bastion above the valley
   (5 floors, Lv 46–52, warden **"the Anchor" — Phantasmoth Lv 54**). Dark-glass theme:
   black panels, dead-light conduits in cold white, violet print-floor seams, spark-motes
@@ -737,20 +759,17 @@ else dared.
 
 | Ch. | Title | 📍 Start | 🏰 Dungeon (boss) | 🗺 New map | Key gain | Status |
 |---|---|---|---|---|---|---|
-| XXII | The Veil, Falling | Ivan's porch, New Salmonan | — (⚔️ stringer battle) | **NEW SALMONAN** | 3 proofs; **Override Ledger** | **BUILT** |
-| XXIII | The Mirrorhouse | the ridge stair | **The Mirrorhouse** (Phantasmoth "the Anchor", Lv 54) | — | **The Continuity Reel**; the glaze directive | **BUILT** |
+| XII | The Veil, Falling | Ivan's porch, New Salmonan | — (⚔️ stringer battle) | **NEW SALMONAN** | 3 proofs; **Override Ledger** | **BUILT** |
+| XIII | The Mirrorhouse | the ridge stair | **The Mirrorhouse** (Phantasmoth "the Anchor", Lv 54) | — | **The Continuity Reel**; the glaze directive | **BUILT** |
 | XXIV | The Unwritten Morning | Esta's tower | relay defense gauntlets | — | the honest-relay network | design |
 | XXV | The Glazed Crown | Louie's loft / Veyl's archive | TBD | — | the Continuity Editor; the Cantor's voice | design |
 | XXVI | *(finale — next part)* | the capital press | — | — | the front-page war begins | design |
 
 ### Implementation notes (for the build)
-- **Quest ids:** `story_veilfall` (Ch XXII) and `story_mirrorhouse` (Ch XXIII) in
+- **Quest ids:** `story_veilfall` (Ch XII) and `story_mirrorhouse` (Ch XIII) in
   `quests.ts`. Proof flags: `salm_proof_relay`, `salm_proof_crystal`,
   `salm_proof_stringer`. Completion flags: `mirrorhouse_unlocked`, `veil_fallen`.
-- **Temporary anchoring:** both chapters currently `require: 'story_echoes'` (Ch VII),
-  and `salmonan_unlocked` is granted by Ch VII's completion — **re-anchor both to
-  `story_ivan` (Ch XXI) when Acts II–IV are implemented.** The chapter numbers (22, 23)
-  are already final.
+- **Anchoring:** both chapters are anchored to the end of Clyde's questline — `story_veilfall` requires `story_aether_evo` (Ch XI), and `story_mirrorhouse` requires `story_veilfall`.
 - **New Salmonan** lives in `salmonan.ts`; the Mirrorhouse dungeon def in `data.ts`
   (id `mirrorhouse`, hidden — entered only from the valley's ridge stair) with its
   bespoke dark-glass theme in `dungeon.ts`. Lore in `lore.ts` (`SALMONAN_LORE`,

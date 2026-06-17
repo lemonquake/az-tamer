@@ -5,7 +5,12 @@ import path from 'path';
 export default defineConfig({
   base: './',
   build: { target: 'es2022' },
-  server: { port: Number(process.env.PORT) || 5180 },
+  server: {
+    port: Number(process.env.PORT) || 5180,
+    watch: {
+      ignored: ['**/.vs/**']
+    }
+  },
   plugins: [
     {
       name: 'copy-music',

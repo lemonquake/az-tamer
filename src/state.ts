@@ -394,7 +394,7 @@ let activeSlot = 1;
 const slotKey = (slot: number) => (slot <= 1 ? SAVE_KEY_BASE : `${SAVE_KEY_BASE}-s${slot}`);
 
 export interface SavedLocation {
-  type: 'town' | 'university' | 'terra' | 'agdao' | 'salmonan' | 'overworld';
+  type: 'town' | 'university' | 'terra' | 'agdao' | 'salmonan' | 'hyujon' | 'overworld';
   room?: string;
   spawnAt?: string;
 }

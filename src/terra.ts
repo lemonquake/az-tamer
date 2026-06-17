@@ -28,6 +28,7 @@ import { updateTamerAppearance, CLOTHES_DATABASE } from './clothes';
 import { worldOrbit } from './camorbit';
 import { tagNpc, attachNpcPicker } from './npccard';
 import { sfx } from './audio';
+import { questState, acceptQuest, completeQuest } from './quests';
 
 const minimapCanvas = () => document.getElementById('minimap') as HTMLCanvasElement;
 
@@ -35,7 +36,7 @@ interface Interactable { pos: THREE.Vector3; radius: number; label: string; hand
 interface Collider { pos: THREE.Vector3; r: number; }
 
 type Mode = 'street' | 'interior';
-type VenueId = 'lumen' | 'sizzle' | 'voltmart' | 'pulse';
+type VenueId = 'lumen' | 'sizzle' | 'voltmart' | 'pulse' | 'mayor_f1' | 'mayor_f2' | 'mayor_office';
 
 // ---- the palette of the Circuit-Crown ----
 const CYAN = 0x4fe0ff;          // the city's signature filament glow
@@ -181,6 +182,7 @@ export class TerraCity {
       get scene() { return self.mode === 'interior' && self.interiorScene ? self.interiorScene : self.streetScene; },
       camera: this.camera,
       update: (dt: number) => this.update(dt),
+      owner: this,
     };
   }
 
@@ -296,6 +298,7 @@ export class TerraCity {
     this.buildVenueExterior(s, 'sizzle', -19, 16, 'restaurant', ACID, '🍜 Spark & Sizzle');
     this.buildVenueExterior(s, 'voltmart', 22, -6, 'store', ACID, '🛒 Volt-Mart');
     this.buildVenueExterior(s, 'pulse', 19, 16, 'store', CYAN, '🏪 Pulse Pantry');
+    this.buildVenueExterior(s, 'mayor_f1', -16, -24, 'restaurant', GOLD, '👑 Civic Hall');
 
     // ---- the Aetherline Atelier: Terra City's prestige fashion boutique ----
     // West of the central axis, set back from the entrance, facing south so the
@@ -710,12 +713,26 @@ export class TerraCity {
     this.player.savedLocation = { type: 'terra' };
   }
 
+  private async changeFloor(id: VenueId, spawnZ: number, rotY: number): Promise<void> {
+    this.busy = true;
+    this.buildVenue(id);
+    this.tamer.position.set(0, 0, spawnZ);
+    this.tamer.rotation.y = rotY;
+    this.camera.position.set(0, 6, spawnZ + (rotY === 0 ? -4 : 4));
+    this.interiorScene!.add(this.tamer);
+    toast(this.intName, 'gold');
+    this.currentVenueId = id;
+    this.player.savedLocation = { type: 'terra', room: id };
+    this.busy = false;
+  }
+
   private buildVenue(id: VenueId): void {
     const s = new THREE.Scene();
     this.interiorScene = s;
     this.intInteractables = [];
     this.intColliders = [];
     this.intNpcs = [];
+    this.intMarkers = [];
     this.intRigs.forEach(disposeRig); this.intRigs = [];
     this.intCamH = 5.6; this.intCamD = 6.6;
 
@@ -724,6 +741,9 @@ export class TerraCity {
       sizzle:   { name: 'Spark & Sizzle', glow: ACID, room: { w: 17, d: 13 }, sky: ['#0a1a12', '#040c08'] as [string, string], floor: ['#14281c', '#5aff9a'] as [string, string], warm: 0xc8ffd8 },
       voltmart: { name: 'Volt-Mart', glow: ACID, room: { w: 17, d: 13 }, sky: ['#0a1612', '#04100a'] as [string, string], floor: ['#16221c', '#9af0c8'] as [string, string], warm: 0xd8ffe8 },
       pulse:    { name: 'Pulse Pantry', glow: CYAN, room: { w: 16, d: 12 }, sky: ['#08141f', '#040a12'] as [string, string], floor: ['#142230', '#9adfff'] as [string, string], warm: 0xbfe8ff },
+      mayor_f1: { name: 'Civic Hall — Floor 1', glow: GOLD, room: { w: 18, d: 14 }, sky: ['#1a1008', '#080402'] as [string, string], floor: ['#2a1c10', '#ffd23a'] as [string, string], warm: 0xffeab8 },
+      mayor_f2: { name: 'Civic Hall — Floor 2', glow: GOLD, room: { w: 18, d: 14 }, sky: ['#1a1008', '#080402'] as [string, string], floor: ['#2a1c10', '#ffd23a'] as [string, string], warm: 0xffeab8 },
+      mayor_office: { name: "Mayor's Office", glow: GOLD, room: { w: 18, d: 14 }, sky: ['#1a1008', '#080402'] as [string, string], floor: ['#2a1c10', '#ffd23a'] as [string, string], warm: 0xffeab8 },
     }[id];
     this.intRoom = cfg.room; this.intName = cfg.name;
     const { w, d } = cfg.room; const glow = cfg.glow;
@@ -762,18 +782,41 @@ export class TerraCity {
 
     // per-venue dressing
     if (id === 'lumen' || id === 'sizzle') this.dressRestaurant(s, id, glow);
-    else this.dressStore(s, id, glow);
+    else if (id === 'voltmart' || id === 'pulse') this.dressStore(s, id, glow);
+    else if (id === 'mayor_f1' || id === 'mayor_f2' || id === 'mayor_office') this.dressMayorCivic(s, id, glow);
 
-    // exit back to the street
-    const exitGlow = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 2.6), TerraCity.glow(glow, 0.3));
-    exitGlow.position.set(0, 1.3, d / 2 - 0.25); exitGlow.name = 'portal'; s.add(exitGlow);
-    this.label3d(s, '↓ Back to Terra City', '#bfe8ff', new THREE.Vector3(0, 3.2, d / 2 - 0.3), 3.0);
-    this.intInteractables.push({
-      pos: new THREE.Vector3(0, 0, d / 2 - 1.0), radius: 1.8,
-      label: 'Press <b>E</b> — step back out to the plaza',
-      handler: async () => this.exitVenue(),
-    });
-    this.intMarkers.push({ x: 0, z: d / 2, label: 'Exit', color: '#bfe8ff', kind: 'door' });
+    // exit / down portal routing
+    if (id === 'mayor_f2') {
+      const exitGlow = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 2.6), TerraCity.glow(glow, 0.3));
+      exitGlow.position.set(0, 1.3, d / 2 - 0.25); exitGlow.name = 'portal'; s.add(exitGlow);
+      this.label3d(s, '↓ Down to Floor 1', '#bfe8ff', new THREE.Vector3(0, 3.2, d / 2 - 0.3), 3.0);
+      this.intInteractables.push({
+        pos: new THREE.Vector3(0, 0, d / 2 - 1.0), radius: 1.8,
+        label: 'Press <b>E</b> — descend to Floor 1',
+        handler: async () => this.changeFloor('mayor_f1', -d / 2 + 1.4, 0),
+      });
+      this.intMarkers.push({ x: 0, z: d / 2, label: 'Down', color: '#bfe8ff', kind: 'door' });
+    } else if (id === 'mayor_office') {
+      const exitGlow = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 2.6), TerraCity.glow(glow, 0.3));
+      exitGlow.position.set(0, 1.3, d / 2 - 0.25); exitGlow.name = 'portal'; s.add(exitGlow);
+      this.label3d(s, '↓ Down to Floor 2', '#bfe8ff', new THREE.Vector3(0, 3.2, d / 2 - 0.3), 3.0);
+      this.intInteractables.push({
+        pos: new THREE.Vector3(0, 0, d / 2 - 1.0), radius: 1.8,
+        label: 'Press <b>E</b> — descend to Floor 2',
+        handler: async () => this.changeFloor('mayor_f2', -d / 2 + 1.4, 0),
+      });
+      this.intMarkers.push({ x: 0, z: d / 2, label: 'Down', color: '#bfe8ff', kind: 'door' });
+    } else {
+      const exitGlow = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 2.6), TerraCity.glow(glow, 0.3));
+      exitGlow.position.set(0, 1.3, d / 2 - 0.25); exitGlow.name = 'portal'; s.add(exitGlow);
+      this.label3d(s, '↓ Back to Terra City', '#bfe8ff', new THREE.Vector3(0, 3.2, d / 2 - 0.3), 3.0);
+      this.intInteractables.push({
+        pos: new THREE.Vector3(0, 0, d / 2 - 1.0), radius: 1.8,
+        label: 'Press <b>E</b> — step back out to the plaza',
+        handler: async () => this.exitVenue(),
+      });
+      this.intMarkers.push({ x: 0, z: d / 2, label: 'Exit', color: '#bfe8ff', kind: 'door' });
+    }
   }
 
   /** Booths, tables, a holo-plating counter and a chef. */
@@ -924,6 +967,121 @@ export class TerraCity {
       { x: 0, z: 0.6, label: clerkName, color: '#9af0ff', kind: 'npc' },
       { x: 0, z: 1.6, label: 'Counter', color: '#f2c14e', kind: 'poi' },
     );
+  }
+
+  private dressMayorCivic(s: THREE.Scene, id: VenueId, glow: number): void {
+    const { w, d } = this.intRoom;
+    const p = this.player;
+
+    if (id === 'mayor_f1') {
+      const desk = new THREE.Mesh(new THREE.BoxGeometry(4.0, 1.0, 1.2), TerraCity.darkChrome());
+      desk.position.set(0, 0.5, -2); s.add(desk);
+      this.intColliders.push({ pos: new THREE.Vector3(0, 0, -2), r: 1.6 });
+
+      const receptionist = makeVoxelHuman({ top: 0x1c5a6a, hair: 0x3a2a1a, skin: 0xe0a878 });
+      receptionist.position.set(0, 0, -2.8); receptionist.rotation.y = 0;
+      tagNpc(receptionist, 'Civic Clerk'); s.add(receptionist);
+      this.intNpcs.push(receptionist);
+      this.intInteractables.push({
+        pos: new THREE.Vector3(0, 0, -1.0), radius: 1.8,
+        label: 'Press <b>E</b> — speak with Civic Clerk',
+        handler: async () => {
+          await say('Civic Clerk', "Welcome to the Terra City Civic Hall! Mayor Christine's office is located on the third floor. You can use the stairs at the back to go up.");
+        }
+      });
+      this.intMarkers.push({ x: 0, z: -2.8, label: 'Civic Clerk', color: '#9af0ff', kind: 'npc' });
+
+      // Stairs UP (North wall portal)
+      const upGlow = new THREE.Mesh(new THREE.PlaneGeometry(2.0, 2.6), TerraCity.glow(glow, 0.3));
+      upGlow.position.set(0, 1.3, -d / 2 + 0.25); upGlow.name = 'portal'; s.add(upGlow);
+      this.label3d(s, '↑ Up to Floor 2', '#f2c14e', new THREE.Vector3(0, 3.2, -d / 2 + 0.3), 3.0);
+      this.intInteractables.push({
+        pos: new THREE.Vector3(0, 0, -d / 2 + 1.2), radius: 1.8,
+        label: 'Press <b>E</b> — climb to Floor 2',
+        handler: async () => this.changeFloor('mayor_f2', d / 2 - 1.4, Math.PI),
+      });
+      this.intMarkers.push({ x: 0, z: -d / 2, label: 'Upstairs', color: '#f2c14e', kind: 'door' });
+    }
+
+    if (id === 'mayor_f2') {
+      const couch = new THREE.Mesh(new THREE.BoxGeometry(3.5, 0.8, 1.0), new THREE.MeshStandardMaterial({ color: 0x1c5a6a, roughness: 0.6 }));
+      couch.position.set(-4, 0.4, 0); s.add(couch);
+      this.intColliders.push({ pos: new THREE.Vector3(-4, 0, 0), r: 1.5 });
+
+      const guard = makeVoxelHuman({ top: 0x3a4252, hair: 0x222222, skin: 0xb98a64 });
+      guard.position.set(4, 0, 0); guard.rotation.y = -Math.PI / 2;
+      tagNpc(guard, 'Civic Guard'); s.add(guard);
+      this.intNpcs.push(guard);
+      this.intInteractables.push({
+        pos: new THREE.Vector3(3, 0, 0), radius: 1.8,
+        label: 'Press <b>E</b> — speak with Civic Guard',
+        handler: async () => {
+          await say('Civic Guard', "Mayor Christine's office is just upstairs. She's in a good mood today — well, she's always cracking jokes, so it's hard to tell.");
+        }
+      });
+      this.intMarkers.push({ x: 4, z: 0, label: 'Civic Guard', color: '#9af0ff', kind: 'npc' });
+
+      // Stairs UP (North wall portal)
+      const upGlow = new THREE.Mesh(new THREE.PlaneGeometry(2.0, 2.6), TerraCity.glow(glow, 0.3));
+      upGlow.position.set(0, 1.3, -d / 2 + 0.25); upGlow.name = 'portal'; s.add(upGlow);
+      this.label3d(s, '↑ Up to Mayor\'s Office', '#f2c14e', new THREE.Vector3(0, 3.2, -d / 2 + 0.3), 3.0);
+      this.intInteractables.push({
+        pos: new THREE.Vector3(0, 0, -d / 2 + 1.2), radius: 1.8,
+        label: 'Press <b>E</b> — climb to Mayor\'s Office',
+        handler: async () => this.changeFloor('mayor_office', d / 2 - 1.4, Math.PI),
+      });
+      this.intMarkers.push({ x: 0, z: -d / 2, label: 'Upstairs', color: '#f2c14e', kind: 'door' });
+    }
+
+    if (id === 'mayor_office') {
+      const desk = new THREE.Mesh(new THREE.BoxGeometry(4.5, 1.0, 1.6), TerraCity.darkChrome());
+      desk.position.set(0, 0.5, -4); s.add(desk);
+      const deskEdge = new THREE.Mesh(new THREE.BoxGeometry(4.5, 0.08, 1.65), TerraCity.emis(CYAN, 1.2));
+      deskEdge.position.set(0, 1.04, -4); deskEdge.name = 'legendpulse'; s.add(deskEdge);
+      this.intColliders.push({ pos: new THREE.Vector3(0, 0, -4), r: 2.0 });
+
+      const holo = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.8, 12), TerraCity.glow(CYAN, 0.6));
+      holo.position.set(0, 1.4, -4); holo.name = 'aetherfloat'; holo.userData.baseY = 1.4; holo.userData.ph = 0; s.add(holo);
+
+      const christine = makeVoxelHuman({ top: 0x05070e, sleeves: 0x05070e, bottom: 0x1c1c24, hair: 0xff9ad6, hairstyle: 'ponytail', skin: 0xd29a6a });
+      christine.position.set(0, 0, -5.2); christine.rotation.y = 0;
+      tagNpc(christine, 'Mayor Christine'); s.add(christine);
+      this.intNpcs.push(christine);
+      this.intInteractables.push({
+        pos: new THREE.Vector3(0, 0, -2.8), radius: 2.2,
+        label: 'Press <b>E</b> — present proposal to Mayor Christine',
+        handler: async () => {
+          christine.rotation.y = Math.atan2(this.tamer.position.x - christine.position.x, this.tamer.position.z - christine.position.z);
+          const activeQuestId = 'story_christine';
+          const qst = questState(p, activeQuestId);
+
+          if (qst === 'active' || qst === 'ready') {
+            await conversation([
+              ['Mayor Christine', "Well, well! What do we have here? A tamer all the way from Haven City!"],
+              ['Mayor Christine', "And look at that get up! Let me rate it... Hmm. On a scale of one to ten, I\'d give it a solid... eleven for effort! HA! Just kidding, it actually looks pretty slick."],
+              ['Mayor Christine', "You know, my cousin Aljay the Dawnflame used to have the exact same taste in clothes. Always thought he looked like a walking spark plug. Oh, the laughs we had!"],
+              ['Mayor Christine', "Yes, Aljay is my cousin. We shared the same sandbox. I used to steal his lunchbox, and he used to set my shoelaces on fire. Good times."],
+              ['Mayor Christine', "But enough nostalgia. Let me see what Airah sent. Ah, the proposal for the ancient Dungeon..."],
+              ['Mayor Christine', "She wants to send you down there to fetch the \"Dragon's Tear\" gem. That pure red chrome beauty. Upgrading the Crawler's Main Board, are we? Unlock all those fancy parts?"],
+              ['Mayor Christine', "Makes sense. You'll need that board upgrade if you ever want to get through \"Aether Road\" to Thurkand. That road is a nightmare of energy storms."],
+              ['Mayor Christine', "Very well! I accept the proposal. I will grant you access to the secret ancient Dungeon. The seal on it is now released. Go, defeat the boss, get that Dragon's Tear, and show the world what a Haven graduate can do!"],
+            ]);
+            
+            const summary = completeQuest(p, activeQuestId);
+            toast(`Quest complete: The Mayor of Terra City!`, 'gold');
+            if (summary) toast(`Received ${summary}`, 'gold');
+            toast("🔓 Ancient Dungeon unlocked! Crawler Main Board upgrade path open.", "gold");
+            p.save();
+            updateHUD(p, 'Terra City');
+          } else if (qst === 'done') {
+            await say('Mayor Christine', "The ancient Dungeon is open to you. Bring back the \"Dragon's Tear\" to upgrade your Crawler's Main Board so you can tackle the Aether Road!");
+          } else {
+            await say('Mayor Christine', "Hello! I\'m Christine, Mayor of Terra City. Nice outfit! Did you get that from the clearance rack? HA! I\'m just joking. Mostly.");
+          }
+        }
+      });
+      this.intMarkers.push({ x: 0, z: -5.2, label: 'Mayor Christine', color: '#ff9ad6', kind: 'poi' });
+    }
   }
 
   /** A neon buy-menu for the convenience stores. */
@@ -1297,7 +1455,7 @@ export class TerraCity {
     if (this.mode === 'street') {
       drawAreaMap(cv, {
         shape: 'circle', radius: TerraCity.WALL_R + 1,
-        markers: [...this.streetMarkers, ...this.patrollers.map(p => ({ x: p.grp.position.x, z: p.grp.position.z, color: '#d8d8e8', kind: 'npc' as const }))],
+        markers: this.streetMarkers.filter(m => m.kind !== 'npc'),
         player: { x: t.x, z: t.z, rot: this.tamer.rotation.y },
         title: '⚡ Terra City — the Circuit-Crown',
         playerState: this.player,

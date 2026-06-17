@@ -17,7 +17,7 @@ import {
 import { updateTamerAppearance } from './clothes';
 import { worldClock, DayNightRig, skyAt, lerpHex } from './daynight';
 import { say, conversation, choose, toast, fadeIn, fadeOut, hideHUD } from './ui';
-import { playMusic, sfx } from './audio';
+import { playMusic, sfx, type SfxName } from './audio';
 import {
   makeWater, makeFish, makeFishShadow, makeRod, makeBobber, swimFish, makeSplash, makeRipple, disposeFish,
   makeCastingReticle,
@@ -28,7 +28,9 @@ import {
   timeOfDay, rollFish, rollSize, computeScore, simulateLeaderboard, rankPlayer,
   fishingLevelFromExp, fishingExpForLevel, titleForLevel, rankTitle, normalizeFishingState,
   FISH_ACHIEVEMENTS, fmt,
+  personalityOf, biomeOf, rarityRank, PERSONALITIES,
   type SpeciesDef, type Weather, type SpotKind, type FishingState, type Rarity, type CatchContext,
+  type BeatType, type PersonalityDef,
 } from './fishingdata';
 import { showCatchSummary, showShowcaseBanner, hideShowcaseBanner, announceRank, openFishHub, type CatchSummaryData } from './fishingui';
 
@@ -36,6 +38,38 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getEl
 
 type Phase = 'idle' | 'cast' | 'flying' | 'wait' | 'bite' | 'hook' | 'fight' | 'land' | 'showcase' | 'summary' | 'done';
 type HookResult = 'perfect' | 'good' | 'weak' | 'miss';
+
+// One falling note on the DDR-style reel highway.
+interface ActiveBeat {
+  id: number;
+  type: BeatType;
+  lane: number;          // 0=LEFT 1=REEL(space) 2=HAUL(e) 3=RIGHT
+  isFeint: boolean;
+  timeSpawned: number;
+  targetTime: number;    // moment the note head sits on the receptor
+  duration: number;      // travel time top→receptor
+  holdDur: number;       // sustain length for hold notes (0 otherwise)
+  hit: boolean;
+  isHolding: boolean;
+  holdStartTime?: number;
+  dom?: HTMLElement;
+  subType?: 'normal' | 'speedy' | 'slow' | 'golden' | 'fire' | 'tension' | 'chaos';
+}
+
+// The four reel-highway lanes. A note's lane decides which key reels it in.
+//   0 LEFT (counter a left dart)   1 REEL (the steady haul + power-holds)
+//   2 HAUL (sharp jabs)            3 RIGHT (counter a right dart)
+const LANES: { glyph: string; keyLabel: string; color: string; glow: string; keys: string[] }[] = [
+  { glyph: '◀',  keyLabel: 'A',     color: '#f2c14e', glow: 'rgba(242,193,78,0.6)',  keys: ['a', 'arrowleft'] },
+  { glyph: '⟳',  keyLabel: 'SPACE', color: '#5ab8e8', glow: 'rgba(90,184,232,0.6)',  keys: [' ', 'spacebar'] },
+  { glyph: '✊', keyLabel: 'E',     color: '#5ad88a', glow: 'rgba(90,216,138,0.6)',  keys: ['e'] },
+  { glyph: '▶',  keyLabel: 'D',     color: '#ff7ad8', glow: 'rgba(255,122,216,0.6)', keys: ['d', 'arrowright'] },
+];
+const LANE_LEFT = 0, LANE_REEL = 1, LANE_HAUL = 2, LANE_RIGHT = 3;
+const laneForKey = (k: string): number => LANES.findIndex(l => l.keys.includes(k));
+type Judgment = 'perfect' | 'great' | 'good' | 'miss';
+/** % of the highway height at which a note's head meets the receptor. */
+const RECEPTOR_PCT = 78;
 
 interface Shadow {
   grp: THREE.Group; sp: SpeciesDef;
@@ -110,6 +144,49 @@ export class Fishing {
   private specialMovesCountered = 0;
   private totalSpecialMoves = 0;
   private hookQuality: HookResult = 'weak';
+  
+  // Rhythm Engine fields
+  private activeBeats: ActiveBeat[] = [];
+  private beatQueue: BeatType[] = [];
+  private beatSpawnTimer = 0;
+  private combo = 0;
+  private maxCombo = 0;
+  private perfectHits = 0;
+  private greatHits = 0;
+  private goodHits = 0;
+  private missesCount = 0;
+  private buttonMashesCount = 0;
+  private beatIdCounter = 0;
+  private bossPhase = 1;
+  private totalBossPhases = 1;
+  private baseBeatTimeMult = 1.0;
+  private baseGapMult = 1.0;
+  private nextBeatIsFeint = false;
+  private burstCountRemaining = 0;
+  private targetHitFlashTimer = 0;
+  private isHoldingSpace = false;
+  private bossPhaseTransitionTimer = 0.0;
+  private lastTapLane = LANE_HAUL;   // alternate tap notes between REEL/HAUL lanes
+  private perfectStreak = 0;
+  private specialScoreBonus = 0;
+
+  // live thrashing fish (shown breaching at the surface during the fight)
+  private fightFishModel: THREE.Group | null = null;
+  private fishDart = 0;              // current lateral lunge of the fish (-1..1)
+  private fishDartTarget = 0;
+  private fishDive = 0;              // how far it's pulling under (0..1)
+  private fishBreachTimer = 2.0;     // countdown to the next leap
+  private fishBreach = 0;            // current breach height factor (0..1)
+
+  // angler full-body physics — impulse driven, smoothed every frame
+  private anglerHaul = 0;            // how hard he's currently hauling (0..~1.3)
+  private haulImpulse = 0;           // transient spike on a strong pull
+  private leanX = 0;                 // smoothed body/rod lean (-1..1)
+  private leanXTarget = 0;
+  private stumble = 0;               // transient forward lurch on a miss
+  private reelCrank = 0;             // reel-hand crank phase
+  private reelCrankVel = 0;          // crank speed (spikes on a reel hit)
+  private bodyNeutral = 1;           // 1 = relaxed stance, 0 = full fighting stance
 
   // resolvers for the async phase machine
   private castResolve: (() => void) | null = null;
@@ -452,13 +529,31 @@ export class Fishing {
       this.updateFloatyTextDOM();
     }
 
+    // Decay transition timer and camera zoom offset
+    if (this.bossPhaseTransitionTimer > 0) {
+      this.bossPhaseTransitionTimer -= dt;
+    }
+    if (this.camZoomOffset > 0) {
+      this.camZoomOffset = Math.max(0, this.camZoomOffset - dt * 5.0);
+    }
+
     // camera kinetics
     if (this.phase === 'fight') {
-      const standardCam = new THREE.Vector3(0, 4.6, 8.5);
-      // track bobber slightly
-      standardCam.x += this.bobber.position.x * 0.4;
-      this.camera.position.lerp(standardCam, dt * 2.0);
-      this.camera.lookAt(this.bobber.position.x * 0.8, 1.0, this.bobber.position.z);
+      let standardCam: THREE.Vector3;
+      if (this.bossPhaseTransitionTimer > 0) {
+        // Cinematic side-angle view during transitions
+        standardCam = new THREE.Vector3(6.5, 3.2, 4.5);
+        this.camera.position.lerp(standardCam, dt * 3.0);
+        this.camera.lookAt(this.tamer.position.x, 1.2, this.tamer.position.z);
+      } else {
+        // Standard combat camera following rod lean and perfect hits
+        standardCam = new THREE.Vector3(0, 4.6, 8.5);
+        standardCam.x += this.prevRodLean * 2.2;
+        standardCam.z -= this.camZoomOffset;
+        standardCam.x += this.bobber.position.x * 0.45;
+        this.camera.position.lerp(standardCam, dt * 2.0);
+        this.camera.lookAt(this.bobber.position.x * 0.8, 1.0, this.bobber.position.z);
+      }
     } else if (this.phase === 'hook') {
       // hook zoom-in is handled via tween/timeout, so do not override camera here
     } else if (this.phase === 'cast') {
@@ -655,6 +750,11 @@ export class Fishing {
         break;
       }
     }
+
+    // keep the angler alive between casts — eases back to a relaxed stance
+    if (this.phase === 'idle' || this.phase === 'wait' || this.phase === 'bite') {
+      this.updateAnglerPose(dt);
+    }
   }
 
   // ============================================================
@@ -663,6 +763,17 @@ export class Fishing {
   private onKeyDown = (e: KeyboardEvent) => {
     if (e.target instanceof HTMLInputElement) return;
     const k = e.key.toLowerCase();
+    
+    if (this.phase === 'fight') {
+      if (k === ' ' || k === 'spacebar' || k === 'e' || k === 'arrowleft' || k === 'a' || k === 'arrowright' || k === 'd') {
+        if (k === ' ' || k === 'spacebar') e.preventDefault();
+        this.handleRhythmKeyDown(k);
+        return;
+      }
+      if (k === 'escape') this.onEscape();
+      return;
+    }
+    
     if (k === ' ' || k === 'spacebar') { e.preventDefault(); if (!this.keys.has('space')) { this.keys.add('space'); this.onAction(); } }
     else if (k === 'arrowleft' || k === 'a') this.keys.add('left');
     else if (k === 'arrowright' || k === 'd') this.keys.add('right');
@@ -670,6 +781,14 @@ export class Fishing {
   };
   private onKeyUp = (e: KeyboardEvent) => {
     const k = e.key.toLowerCase();
+    
+    if (this.phase === 'fight') {
+      if (k === ' ' || k === 'spacebar' || k === 'e' || k === 'arrowleft' || k === 'a' || k === 'arrowright' || k === 'd') {
+        this.handleRhythmKeyUp(k);
+      }
+      return;
+    }
+    
     if (k === ' ' || k === 'spacebar') this.keys.delete('space');
     else if (k === 'arrowleft' || k === 'a') this.keys.delete('left');
     else if (k === 'arrowright' || k === 'd') this.keys.delete('right');
@@ -694,6 +813,306 @@ export class Fishing {
       this.quitRequested = true;
     }
   }
+
+  // ============================================================
+  //  RHYTHM INPUT HANDLING
+  // ============================================================
+  private camZoomOffset = 0;
+
+  private handleRhythmKeyDown(key: string): void {
+    if (this.phase !== 'fight') return;
+    const lane = laneForKey(key);
+    if (lane < 0) return;
+
+    if (this.playerStamina <= 0 || this.exhaustedTimer > 0) {
+      this.triggerFloatyText('EXHAUSTED!', '#ff5a6a');
+      sfx('cancel');
+      return;
+    }
+
+    this.flashReceptor(lane, '#ffffff');
+
+    const p = personalityOf(this.fightFish!);
+    const windowLimit = p.window * 1.6;
+    const now = this.elapsed;
+
+    // DDR-style: judge the nearest catchable note IN THIS LANE
+    let best: ActiveBeat | null = null; let bestAbs = Infinity;
+    for (const b of this.activeBeats) {
+      if (b.hit || b.lane !== lane || b.isHolding) continue;
+      const a = Math.abs(now - b.targetTime);
+      if (a < bestAbs) { bestAbs = a; best = b; }
+    }
+    if (!best || bestAbs > windowLimit) { this.penalizeMash(lane); return; }
+
+    if (best.isFeint) { this.registerBeatResult(best, 'miss'); return; } // decoy — don't hit it
+
+    if (best.type === 'hold') {
+      // begin the power-hold; held all the way through = PERFECT haul
+      best.isHolding = true;
+      best.holdStartTime = now;
+      this.isHoldingSpace = true;
+      this.haulImpulse = Math.max(this.haulImpulse, 0.7);
+      best.dom?.classList.add('holding');
+      this.flashReceptor(lane, LANES[lane].color);
+      sfx('charge');
+      return;
+    }
+
+    this.registerBeatResult(best, this.getRatingForDiff(now - best.targetTime, p.window));
+  }
+
+  private handleRhythmKeyUp(key: string): void {
+    if (this.phase !== 'fight') return;
+    if (laneForKey(key) !== LANE_REEL) return; // only the reel lane carries holds
+    this.isHoldingSpace = false;
+    const held = this.activeBeats.find(b => b.type === 'hold' && b.isHolding && !b.hit);
+    if (!held) return;
+    const releaseTarget = held.targetTime + held.holdDur;
+    if (this.elapsed >= releaseTarget - 0.12) {
+      this.registerBeatResult(held, 'perfect');             // rode it out — power pull!
+    } else {
+      const p = personalityOf(this.fightFish!);
+      this.registerBeatResult(held, Math.abs(this.elapsed - releaseTarget) <= p.window * 1.5 ? 'good' : 'miss');
+    }
+  }
+
+  private getRatingForDiff(diff: number, windowSize: number): Judgment {
+    const absDiff = Math.abs(diff);
+    if (absDiff <= windowSize * 0.28) return 'perfect';
+    if (absDiff <= windowSize * 0.58) return 'great';
+    if (absDiff <= windowSize) return 'good';
+    return 'miss';
+  }
+
+  private penalizeMash(lane = -1): void {
+    this.buttonMashesCount++;
+    this.combo = 0;
+    this.perfectStreak = 0;
+    this.updateComboDisplay();
+    const line = LINES[this.fs.equippedLine] ?? LINES.basic_mono;
+    this.tension += 0.04 * line.tensionRateBonus;
+    this.camShake = Math.max(this.camShake, 0.2);
+    this.stumble = Math.max(this.stumble, 0.5);
+    if (lane >= 0) this.flashReceptor(lane, '#ff5a6a');
+    sfx('cancel');
+    this.triggerFloatyText('⚠️ EARLY!', '#ff5a6a');
+  }
+
+  /** Punch the lane's receptor with a coloured flash. */
+  private flashReceptor(lane: number, color: string): void {
+    const rec = this.meterBox.querySelector(`#receptor-${lane}`) as HTMLElement | null;
+    if (!rec) return;
+    rec.style.setProperty('--flash', color);
+    rec.classList.remove('flash');
+    void rec.offsetWidth;
+    rec.classList.add('flash');
+  }
+
+  private registerBeatResult(beat: ActiveBeat, rating: Judgment): void {
+    beat.hit = true;
+    beat.isHolding = false;
+    if (beat.dom) { const d = beat.dom; d.classList.add('struck'); setTimeout(() => d.remove(), 130); beat.dom = undefined; }
+
+    const line = LINES[this.fs.equippedLine] ?? LINES.basic_mono;
+    const rod = RODS[this.fs.equippedRod] ?? RODS.beginner;
+    const holdMul = beat.type === 'hold' ? 1.7 : 1.0;   // power-holds haul the most
+
+    // direction notes decide which way he yanks; reel/haul recenter him
+    if (beat.lane === LANE_LEFT) this.leanXTarget = -1;
+    else if (beat.lane === LANE_RIGHT) this.leanXTarget = 1;
+    else this.leanXTarget *= 0.35;
+    this.fishDartTarget = 0; // a clean hit counters the fish's lunge
+
+    if (rating === 'perfect') {
+      this.perfectHits++; this.combo++;
+      this.perfectStreak++;
+    } else if (rating === 'great') {
+      this.greatHits++; this.combo++;
+      this.perfectStreak = 0;
+    } else if (rating === 'good') {
+      this.goodHits++; this.combo++;
+      this.perfectStreak = 0;
+    } else {
+      this.missesCount++; this.combo = 0;
+      this.perfectStreak = 0;
+    }
+
+    if (beat.subType === 'golden' && rating !== 'miss') {
+      this.combo += 1; // +2 total combo (+1 from base increment, +1 extra)
+    }
+
+    let chainMult = 1.0;
+    if (this.perfectStreak >= 10) chainMult = 2.0;
+    else if (this.perfectStreak >= 5) chainMult = 1.5;
+    else if (this.perfectStreak >= 3) chainMult = 1.25;
+
+    let pointsEarned = 0;
+    if (rating !== 'miss') {
+      let basePoints = 100;
+      if (rating === 'great') basePoints = 70;
+      if (rating === 'good') basePoints = 40;
+
+      if (beat.subType === 'speedy') basePoints = Math.round(basePoints * 1.5);
+      else if (beat.subType === 'chaos') basePoints = Math.round(basePoints * 2.0);
+
+      pointsEarned = Math.round(basePoints * chainMult);
+
+      if (beat.subType === 'golden') {
+        pointsEarned += 500;
+      }
+      this.specialScoreBonus += pointsEarned;
+
+      // stamina damage
+      let staminaDmg = (rating === 'perfect' ? 0.09 : rating === 'great' ? 0.06 : 0.032) * holdMul;
+      staminaDmg *= chainMult;
+      if (beat.subType === 'fire') staminaDmg *= 2.0;
+      this.fishStamina = Math.max(0, this.fishStamina - staminaDmg);
+
+      // reel progress
+      let inc = (rating === 'perfect' ? (0.072 + rod.reelPower * 0.014) :
+                 rating === 'great' ? (0.046 + rod.reelPower * 0.01) :
+                 (0.024 + rod.reelPower * 0.005)) * holdMul;
+      inc *= chainMult;
+      if (this.fishStamina <= 0) inc *= 1.8;
+      this.reelProgress += inc;
+
+      // player stamina
+      const staminaGain = (rating === 'perfect' ? 0.05 : rating === 'great' ? 0.025 : 0.01);
+      this.playerStamina = Math.min(1.0, this.playerStamina + staminaGain);
+
+      // tension recovery
+      let tensionDec = (rating === 'perfect' ? 0.06 : rating === 'great' ? 0.03 : 0.0);
+      if (beat.subType === 'tension') tensionDec = 0.35;
+      this.tension = Math.max(0, this.tension - tensionDec);
+
+      // flash and sfx
+      let flashColor = '#5ad88a';
+      let text = 'GOOD';
+      let textColor = '#5ad88a';
+      let sfxName: SfxName = 'guard';
+
+      if (rating === 'perfect') {
+        flashColor = '#ff7ad8';
+        text = '⭐ PERFECT!';
+        textColor = '#ff7ad8';
+        sfxName = 'crit';
+        this.haulImpulse = 1.0; this.reelCrankVel += 16; this.camZoomOffset = 1.5;
+        this.fishBreachTimer = Math.min(this.fishBreachTimer, 0.05);
+      } else if (rating === 'great') {
+        flashColor = '#5ab8e8';
+        text = 'GREAT!';
+        textColor = '#5ab8e8';
+        sfxName = 'hit';
+        this.haulImpulse = Math.max(this.haulImpulse, 0.7); this.reelCrankVel += 11;
+      } else {
+        this.haulImpulse = Math.max(this.haulImpulse, 0.4); this.reelCrankVel += 7;
+      }
+
+      if (beat.subType === 'golden') {
+        flashColor = '#ffd700';
+        text = '🌟 GOLD';
+        textColor = '#ffd700';
+        sfxName = 'fanfare';
+      } else if (beat.subType === 'fire') {
+        flashColor = '#ff4500';
+        text = '🔥 FIRE BLAST!';
+        textColor = '#ff4500';
+        sfxName = 'boom';
+      } else if (beat.subType === 'tension') {
+        flashColor = '#00f5ff';
+        text = '🍃 RECOVERY';
+        textColor = '#00f5ff';
+        sfxName = 'confirm';
+      } else if (beat.subType === 'speedy') {
+        flashColor = '#ffff00';
+        text = '⚡ SPEEDY!';
+        textColor = '#ffff00';
+      } else if (beat.subType === 'chaos') {
+        flashColor = '#9400d3';
+        text = '🌀 CHAOS!';
+        textColor = '#9400d3';
+      } else if (beat.subType === 'slow') {
+        flashColor = '#e066ff';
+        text = '⏱️ SLOW!';
+        textColor = '#e066ff';
+      }
+
+      this.flashReceptor(beat.lane, flashColor);
+      sfx(sfxName);
+
+      // Floaty text
+      let floatyStr = `${text} +${pointsEarned}`;
+      if (chainMult > 1.0 && rating === 'perfect') {
+        floatyStr += ` (×${chainMult} Chain!)`;
+      }
+      this.triggerFloatyText(floatyStr, textColor);
+
+      // Receptor explosion animation
+      const laneEl = this.meterBox.querySelector(`#lane-notes-${beat.lane}`);
+      if (laneEl) {
+        const expl = document.createElement('div');
+        expl.className = 'rhythm-explosion';
+        expl.style.borderColor = flashColor;
+        laneEl.appendChild(expl);
+        setTimeout(() => expl.remove(), 400);
+      }
+    } else {
+      this.tension += 0.11 * line.tensionRateBonus;
+      this.reelProgress = Math.max(0, this.reelProgress - 0.04);
+      this.playerStamina = Math.max(0, this.playerStamina - 0.12);
+      if (this.playerStamina <= 0) this.exhaustedTimer = 1.4;
+      this.camShake = Math.max(this.camShake, 0.5);
+      this.flashReceptor(beat.lane, '#ff5a6a');
+      this.triggerFloatyText('❌ MISS!', '#ff5a6a');
+      sfx('cancel');
+      this.stumble = 1.0; this.haulImpulse = 0;
+    }
+
+    if (rating !== 'miss') {
+      this.maxCombo = Math.max(this.maxCombo, this.combo);
+      const callouts: Record<number, string> = {
+        5: '🔥 ON FIRE!', 10: '⚡ UNSTOPPABLE!', 20: '🌊 MASTER ANGLER!', 50: '🌈 LEGENDARY STREAK!',
+      };
+      if (callouts[this.combo]) {
+        this.triggerFloatyText(callouts[this.combo], '#ffd25a');
+        sfx('fanfare');
+        this.camShake = Math.max(this.camShake, 0.4);
+      }
+    }
+    this.updateComboDisplay();
+  }
+
+  private updateComboDisplay(): void {
+    const comboEl = this.meterBox.querySelector('#rhythm-combo') as HTMLElement;
+    if (!comboEl) return;
+    if (this.combo >= 2) {
+      comboEl.style.display = 'flex';
+      const numEl = comboEl.querySelector('.combo-num') as HTMLElement;
+      const labelEl = comboEl.querySelector('.combo-label') as HTMLElement;
+      if (numEl) {
+        if (this.perfectStreak >= 3) {
+          numEl.textContent = `${this.combo}× COMBO (🔥 P-CHAIN ×${this.perfectStreak})`;
+        } else {
+          numEl.textContent = `${this.combo}× COMBO`;
+        }
+      }
+      let label = 'KEEP IT UP';
+      if (this.perfectStreak >= 10) label = '⚡ PERFECT CHAIN ×10+ (2.0x MULT!)';
+      else if (this.perfectStreak >= 5) label = '🔥 PERFECT CHAIN ×5+ (1.5x MULT!)';
+      else if (this.perfectStreak >= 3) label = '✨ PERFECT CHAIN ×3+ (1.25x MULT!)';
+      else if (this.combo >= 50) label = 'LEGENDARY STREAK!';
+      else if (this.combo >= 20) label = 'MASTER ANGLER!';
+      else if (this.combo >= 10) label = 'UNSTOPPABLE!';
+      else if (this.combo >= 5) label = 'ON FIRE!';
+      if (labelEl) labelEl.textContent = label;
+      comboEl.style.animation = 'none'; void comboEl.offsetHeight;
+      comboEl.style.animation = 'combopulse 0.18s cubic-bezier(0.175,0.885,0.32,1.275)';
+    } else {
+      comboEl.style.display = 'none';
+    }
+  }
+
   private quitRequested = false;
 
   // ============================================================
@@ -714,8 +1133,9 @@ export class Fishing {
       await conversation([
         ['Old Bait Pete', `Welcome to the Great Pond, ${this.player.tamerName}! Finest fishing in all of Haven City. Let me give you the quick of it.`],
         ['Old Bait Pete', 'Watch the water — those dark shapes are FISH. Bigger shadow, bigger fish. A colored glow under the surface? That\'s something RARE. Cast near \'em.'],
-        ['Old Bait Pete', 'Press SPACE to set your cast power. Wait for a bite, then SPACE again to HOOK \'em — time it in the green! Then reel: hold SPACE to pull, let go to ease off. Don\'t snap the line!'],
-        ['Old Bait Pete', 'Land a beauty and you\'ll score big. Climb the leaderboard, fill the Encyclopedia, cook your catch for battle. Now — tight lines!'],
+        ['Old Bait Pete', 'Press SPACE to set your cast power. Wait for a bite, then SPACE again to STRIKE — time it in the green to set the hook!'],
+        ['Old Bait Pete', 'Then the real fight! Notes come racing down four lanes — hit them ON THE BEAT: A and D to counter its left/right runs, SPACE to reel, E to haul, and HOLD SPACE for the long power-pulls. Nail the timing for PERFECTs, chain COMBOS, and watch that tension bar — too many misses and SNAP goes the line!'],
+        ['Old Bait Pete', 'Every fish fights different — a lazy carp, a frenzied tuna, a multi-stage leviathan. Land beauties to score big, climb the leaderboard and fill the Encyclopedia. Now — tight lines!'],
       ]);
     }
 
@@ -844,24 +1264,54 @@ export class Fishing {
   private async animateCast(): Promise<void> {
     this.phase = 'flying';
     const armR = this.tamer.getObjectByName('armR');
+    const armL = this.tamer.getObjectByName('armL');
+    const pelvis = this.tamer.getObjectByName('pelvis');
+    const torso = this.tamer.getObjectByName('torso');
+    const head = this.tamer.getObjectByName('head');
+
+    // STAGE 1 — coil: rod up & back over the shoulder, body winds up
+    sfx('whoosh');
+    await tween(0.30, t => {
+      if (armR) { armR.rotation.x = -0.6 - t * 2.1; armR.rotation.z = -t * 0.3; }
+      if (armL) armL.rotation.x = -0.5 - t * 0.4;
+      if (pelvis) pelvis.rotation.y = t * 0.45;
+      if (torso) torso.rotation.y = -t * 0.35;
+      if (head) head.rotation.y = -t * 0.3;
+      if (this.rod) this.rod.rotation.x = -0.5 + t * 0.4;
+    }, Ease.outQuad);
+
+    // STAGE 2 — whip: explosive forward sweep with a spincast twirl of the rod
     const tipW = new THREE.Vector3(); this.rodTip.getWorldPosition(tipW);
     this.bobber.position.copy(tipW);
     this.bobber.visible = true;
-    // wind-up then whip
-    if (armR) await tween(0.18, t => { armR.rotation.x = -0.5 - t * 1.0; });
-    if (armR) tween(0.22, t => { armR.rotation.x = -1.5 + t * 1.3; }, Ease.outQuad);
-    const start = tipW.clone();
+    sfx('whoosh');
+    await tween(0.20, t => {
+      if (armR) { armR.rotation.x = -2.7 + t * 2.9; armR.rotation.z = -0.3 + t * 0.3; }
+      if (pelvis) pelvis.rotation.y = 0.45 - t * 0.65;
+      if (torso) torso.rotation.y = -0.35 + t * 0.5;
+      if (this.rod) this.rod.rotation.y = t * Math.PI * 2; // the reel/rod spins
+    }, Ease.inQuad);
+    if (this.rod) this.rod.rotation.y = 0;
+
+    // STAGE 3 — the bobber sails out on its arc; the body uncoils & follows through
+    const start = new THREE.Vector3(); this.rodTip.getWorldPosition(start);
     const end = new THREE.Vector3(this.landX, 0.12, this.landZ);
+    sfx('whoosh');
     await tween(0.5, t => {
       this.bobber.position.x = start.x + (end.x - start.x) * t;
       this.bobber.position.z = start.z + (end.z - start.z) * t;
-      const arc = Math.sin(t * Math.PI) * (2.0 + this.castDistance * 0.15);
+      const arc = Math.sin(t * Math.PI) * (2.2 + this.castDistance * 0.16);
       this.bobber.position.y = start.y + (end.y - start.y) * t + arc;
+      if (armR) armR.rotation.x = 0.2 - t * 0.7;
+      if (armL) armL.rotation.x = -0.9 + t * 0.4;
+      if (pelvis) pelvis.rotation.y = -0.2 + t * 0.2;
+      if (torso) torso.rotation.y = 0.15 - t * 0.15;
+      if (head) head.rotation.y = -0.3 + t * 0.3;
     }, Ease.linear);
-    if (armR) tween(0.3, t => { armR.rotation.x = -0.2 - t * 0.3; });
+
     this.bobberAnchor.copy(end);
     this.bobber.position.copy(end);
-    makeSplash(this.scene, end.x, 0.05, end.z, 1.0);
+    makeSplash(this.scene, end.x, 0.05, end.z, 1.1);
     makeRipple(this.scene, end.x, 0.05, end.z);
     sfx('splash');
   }
@@ -965,9 +1415,23 @@ export class Fishing {
     this.phase = 'hook';
     this.hookT = 0; this.hookDir = 1;
     this.showMeterBox('hook');
-    this.setPrompt('❗ <b>BITE!</b> Press <b>SPACE</b> in the green to set the hook!');
+    this.setPrompt('❗ <b>STRIKE!</b> Press <b>SPACE</b> in the green to set the hook!');
     sfx('blip');
-    
+
+    // the rod snaps as he SETS the hook — a hard reactive jerk, then settle
+    const hkArmR = this.tamer.getObjectByName('armR');
+    const hkPelvis = this.tamer.getObjectByName('pelvis');
+    sfx('hit');
+    tween(0.13, t => {
+      if (hkArmR) hkArmR.rotation.x = -0.6 - t * 1.3;
+      if (this.rod) this.rod.rotation.x = -0.5 - t * 0.8;
+      if (hkPelvis) hkPelvis.rotation.x = -t * 0.22;
+    }, Ease.outQuad).then(() => tween(0.5, t => {
+      if (hkArmR) hkArmR.rotation.x = -1.9 + t * 1.3;
+      if (this.rod) this.rod.rotation.x = -1.3 + t * 0.8;
+      if (hkPelvis) hkPelvis.rotation.x = -0.22 + t * 0.22;
+    }, Ease.outQuad));
+
     // cinematic zoom-in on hook moment
     const oldCamPos = this.camera.position.clone();
     const targetCamPos = new THREE.Vector3(this.bobber.position.x, 2.5, this.bobber.position.z + 4.0);
@@ -1019,288 +1483,407 @@ export class Fishing {
   // ---------- PHASE 4: FIGHT ----------
   private async doFight(fish: SpeciesDef, hook: HookResult): Promise<boolean> {
     this.phase = 'fight';
-    this.reelProgress = hook === 'perfect' ? 0.15 : hook === 'good' ? 0.05 : 0;
-    this.tension = 0.25;
     this.fightT = 0;
     this.fightFish = fish;
-    
-    // stamina systems
-    this.playerStamina = 1.0;
-    this.fishStamina = hook === 'perfect' ? 0.80 : 1.0; // perfect hook stuns fish!
-    if (this.floatyText.includes('CRITICAL')) {
-      this.fishStamina = 0.65; // extra critical stun!
-    }
-    this.exhaustedTimer = 0;
-    this.quantumReelTime = 0;
-    
-    // struggle setup
-    this.fishStruggleDir = 'none';
-    this.struggleTimer = 1.2;
-    this.prevRodLean = 0;
+    this.fightStartMs = performance.now();
 
-    // special move and grading trackers setup
-    this.specialMoveTimer = 3.5 + Math.random() * 4.0;
-    this.specialMoveType = 'none';
-    this.specialMoveDuration = 0;
-    this.perfectLeansCount = 0;
-    this.wrongLeansCount = 0;
-    this.specialMovesCountered = 0;
-    this.totalSpecialMoves = 0;
+    // rhythm-highway state reset
+    this.activeBeats = [];
+    this.beatQueue = fish.signature ? [...fish.signature] : [];
+    this.beatSpawnTimer = 0.7;       // a beat of breathing room before notes start
+    this.combo = 0; this.maxCombo = 0;
+    this.perfectHits = 0; this.greatHits = 0; this.goodHits = 0;
+    this.missesCount = 0; this.buttonMashesCount = 0;
+    this.beatIdCounter = 0;
+    this.bossPhase = 1;
+    this.lastTapLane = LANE_HAUL;
+    this.perfectStreak = 0;
+    this.specialScoreBonus = 0;
+
+    const p = personalityOf(fish);
+    this.totalBossPhases = p.phases;
+    this.baseBeatTimeMult = 1.0;
+    this.baseGapMult = 1.0;
+    this.nextBeatIsFeint = false;
+    this.burstCountRemaining = 0;
+    this.isHoldingSpace = false;
+    this.camZoomOffset = 0;
+    this.targetHitFlashTimer = 0;
+
+    // starting stats — a clean hook stuns the fish & gives a head start
+    this.reelProgress = hook === 'perfect' ? 0.12 : hook === 'good' ? 0.05 : 0;
+    this.tension = 0.20;
+    this.playerStamina = 1.0;
+    this.fishStamina = hook === 'perfect' ? 0.80 : 1.0;
+    this.exhaustedTimer = 0;
     this.hookQuality = hook;
-    
+
+    // angler + fish animation reset → snap into the fighting stance
+    this.prevRodLean = 0;
+    this.anglerHaul = 0; this.haulImpulse = 0; this.leanX = 0; this.leanXTarget = 0;
+    this.stumble = 0; this.reelCrank = 0; this.reelCrankVel = 0; this.bodyNeutral = 0;
+    this.fishDart = 0; this.fishDartTarget = 0; this.fishDive = 0;
+    this.fishBreach = 0; this.fishBreachTimer = 2.2;
+
+    // a real fish now thrashes at the surface — hide the flat shadow silhouette
+    if (this.targetShadow) this.targetShadow.grp.visible = false;
+    this.spawnFightFish(fish);
+
     this.showMeterBox('fight');
-    this.setPrompt('🎣 <b>Hold SPACE</b> to reel · <b>A/D</b> to counter fish darting!');
+    this.setPrompt(`🎣 <b>REEL IT IN!</b> Hit the notes on the beat — <b>${PERSONALITIES[p.id].name}</b> fighter!`);
+
+    const isLegend = rarityRank(fish.rarity) >= 4;
+    if (isLegend && this.speedLinesDOM) this.speedLinesDOM.classList.add('active');
+
     const won = await new Promise<boolean>(res => { this.fightResolve = res; });
+
+    if (this.speedLinesDOM) this.speedLinesDOM.classList.remove('active');
+    for (const b of this.activeBeats) b.dom?.remove();
+    this.activeBeats = [];
     this.fightResolve = null;
+    this.bodyNeutral = 1;            // relax the body again
+    this.disposeFightFish();
+    if (this.targetShadow) this.targetShadow.grp.visible = true; // restore the silhouette
+    this.isHoldingSpace = false;
     this.phase = 'idle';
     this.hideMeterBox();
     return won;
   }
 
+  /** Build the live, breaching fish model that fights at the surface. */
+  private spawnFightFish(fish: SpeciesDef): void {
+    this.disposeFightFish();
+    const m = makeFish(fish);
+    const len = Math.min(2.2, 0.5 + fish.lengthCm[1] / 150);
+    m.scale.setScalar(len);
+    m.position.copy(this.bobber.position);
+    m.position.y = -0.25;
+    this.scene.add(m);
+    this.fightFishModel = m;
+  }
+  private disposeFightFish(): void {
+    if (this.fightFishModel) { disposeFish(this.fightFishModel); this.fightFishModel = null; }
+  }
+
   private tickFight(dt: number): void {
     const fish = this.fightFish!;
+    const p = personalityOf(fish);
     const rod = RODS[this.fs.equippedRod] ?? RODS.beginner;
     const line = LINES[this.fs.equippedLine] ?? LINES.basic_mono;
-    
+    const windowLimit = p.window * 1.6;
+    const now = this.elapsed;       // update() already advanced elapsed this frame
     this.fightT += dt;
-    
-    // fish struggles & tires out
-    this.fishStamina = Math.max(0.05, this.fishStamina - dt * 0.03); // base tiring
-    
-    // special move tick
-    if (this.specialMoveType === 'none') {
-      this.specialMoveTimer -= dt;
-      if (this.specialMoveTimer <= 0 && this.fightT > 2.0) {
-        this.specialMoveType = Math.random() < 0.5 ? 'deep_dive' : 'breach';
-        this.specialMoveDuration = 1.6;
-        this.totalSpecialMoves++;
-        sfx('charge');
-        this.triggerFloatyText(
-          this.specialMoveType === 'deep_dive' ? '⚠️ DEEP DIVE! RELEASE REEL!' : '🚨 BREACH! REEL REPEATEDLY!',
-          this.specialMoveType === 'deep_dive' ? '#ff5a6a' : '#29b6f6'
-        );
-      }
-    } else {
-      this.specialMoveDuration -= dt;
-      const reeling = this.keys.has('space');
-      const isExhausted = this.playerStamina <= 0 || this.exhaustedTimer > 0;
-      const activeReeling = reeling && !isExhausted;
-      
-      if (activeReeling) {
-        this.playerStamina = Math.max(0, this.playerStamina - 0.15 * dt);
-      } else {
-        this.playerStamina = Math.min(1.0, this.playerStamina + 0.2 * dt);
-      }
-      
-      if (this.specialMoveType === 'deep_dive') {
-        const ratio = this.specialMoveDuration / 1.6;
-        this.bobber.position.y = 0.12 - 1.1 * Math.sin(ratio * Math.PI);
-        if (this.targetShadow) {
-          this.targetShadow.grp.position.y = -0.15 - 0.8 * Math.sin(ratio * Math.PI);
-        }
-        
-        if (activeReeling) {
-          this.tension += 0.52 * dt * line.tensionRateBonus;
-          this.camShake = Math.max(this.camShake, 0.45);
-          if (Math.random() < dt * 3.5) {
-            this.triggerFloatyText('⚠️ RELEASE SPACE!', '#ff5a6a');
-            sfx('cancel');
-          }
-        } else {
-          this.tension = Math.max(0, this.tension - 0.42 * dt);
-          this.fishStamina = Math.max(0.05, this.fishStamina - dt * 0.15);
-        }
-      } else if (this.specialMoveType === 'breach') {
-        const ratio = this.specialMoveDuration / 1.6;
-        this.bobber.position.y = 0.12 + 1.6 * Math.sin(ratio * Math.PI);
-        if (this.targetShadow) {
-          this.targetShadow.grp.position.y = this.bobber.position.y - 0.15;
-          this.targetShadow.grp.rotation.x = Math.sin(ratio * Math.PI) * 0.6;
-        }
-        if (Math.random() < dt * 6) {
-          makeSplash(this.scene, this.bobber.position.x, 0.05, this.bobber.position.z, 0.7);
-        }
-        
-        if (activeReeling) {
-          this.tension = Math.min(0.85, this.tension + 0.22 * dt);
-        } else {
-          this.tension = Math.max(0, this.tension - 0.75 * dt);
-          if (this.tension <= 0.02 && Math.random() < dt * 0.55) {
-            this.triggerFloatyText('💥 SLACK LINE ESCAPE!', '#ff5a6a');
-            sfx('toastBad');
-            this.fightResolve?.(false);
-            this.fightResolve = null;
-            return;
-          }
-        }
-      }
-      
-      if (this.specialMoveDuration <= 0) {
-        let success = true;
-        if (this.specialMoveType === 'deep_dive' && activeReeling) {
-          success = false;
-        } else if (this.specialMoveType === 'breach' && this.tension < 0.1) {
-          success = false;
-        }
-        
-        if (success) {
-          this.specialMovesCountered++;
-          this.triggerFloatyText('✨ COUNTERED!', '#5ad88a');
-          sfx('confirm');
-        } else {
-          this.triggerFloatyText('❌ COUNTER FAILED!', '#ff5a6a');
-          sfx('cancel');
-        }
-        
-        this.specialMoveType = 'none';
-        this.specialMoveTimer = 4.5 + Math.random() * 5.0;
-        
-        this.bobber.position.y = 0.12;
-        if (this.targetShadow) {
-          this.targetShadow.grp.position.y = -0.15;
-          this.targetShadow.grp.rotation.x = 0;
-        }
-      }
-      
-      this.renderFightMeter();
-      if (this.tension >= 1) { this.fightResolve?.(false); this.fightResolve = null; }
-      else if (this.reelProgress >= 1) { this.fightResolve?.(true); this.fightResolve = null; }
-      return;
-    }
-    
-    // check directional struggle
-    this.struggleTimer -= dt;
-    if (this.struggleTimer <= 0) {
-      this.struggleTimer = 2.0 + Math.random() * 2.0;
-      if (this.fishStruggleDir === 'none') {
-        this.fishStruggleDir = Math.random() < 0.5 ? 'left' : 'right';
-        sfx('whoosh');
-      } else {
-        this.fishStruggleDir = 'none';
-      }
-    }
 
-    // correct lean checks:
-    const pullingLeft = this.keys.has('left');
-    const pullingRight = this.keys.has('right');
-    
-    let leanState: 'correct' | 'wrong' | 'neutral' = 'neutral';
-    if (this.fishStruggleDir === 'left') {
-      leanState = pullingRight ? 'correct' : pullingLeft ? 'wrong' : 'neutral';
-    } else if (this.fishStruggleDir === 'right') {
-      leanState = pullingLeft ? 'correct' : pullingRight ? 'wrong' : 'neutral';
-    } else {
-      if (pullingLeft || pullingRight) leanState = 'wrong';
-    }
-
-    if (leanState === 'correct') {
-      this.fishStamina = Math.max(0.05, this.fishStamina - dt * 0.12); // tire fish 4x faster!
-      this.perfectLeansCount += dt;
-      if (Math.random() < dt * 2.5) {
-        this.triggerFloatyText('★ COUNTER PULL!', '#5ad88a');
-        sfx('confirm');
-      }
-    } else if (leanState === 'wrong' && this.fishStruggleDir !== 'none') {
-      this.tension += 0.16 * dt * line.tensionRateBonus;
-      this.camShake = Math.max(this.camShake, 0.35);
-      this.reelProgress = Math.max(0, this.reelProgress - 0.03 * dt);
-      this.wrongLeansCount += dt;
-      if (performance.now() - this.lastStruggleWarningTime > 1200) {
-        this.triggerFloatyText('⚠️ WRONG LEAN!', '#ff5a6a');
-        sfx('cancel');
-        this.lastStruggleWarningTime = performance.now();
-      }
-    }
-
-    // the fish surges on a rhythm set by aggression; intelligence makes surges less predictable
-    const surge = Math.sin(this.fightT * (1.5 + fish.fight.aggression * 0.25) + Math.sin(this.fightT * fish.fight.intelligence * 0.3) * 1.5);
-    const staminaFactor = 0.4 + 0.6 * this.fishStamina;
-    
-    let basePull = (0.35 + fish.fight.strength * 0.07) * (0.6 + 0.4 * surge) * staminaFactor;
-    // Leviathan Harpoon ability
-    const isMassive = fish.shadow === 'large' || fish.shadow === 'massive';
-    if (rod.id === 'leviathan_harpoon' && isMassive) {
-      basePull *= 0.65;
-    }
-    this.fightPull = basePull;
-
-    const reeling = this.keys.has('space');
-    const isExhausted = this.playerStamina <= 0 || this.exhaustedTimer > 0;
-    
-    // stamina system ticks
-    if (reeling && !isExhausted) {
-      const drain = (0.12 + Math.max(0, this.fightPull) * 0.08) * dt;
-      this.playerStamina = Math.max(0, this.playerStamina - drain);
+    // 1. Stamina / exhaustion
+    if (this.exhaustedTimer > 0) {
+      this.exhaustedTimer -= dt;
+      this.playerStamina = Math.min(1.0, this.playerStamina + 0.12 * dt);
+    } else if (this.isHoldingSpace) {
+      this.playerStamina = Math.max(0, this.playerStamina - 0.09 * dt);
       if (this.playerStamina <= 0) {
-        this.triggerFloatyText('EXHAUSTED!', '#ff5a6a');
-        sfx('cancel');
-        this.exhaustedTimer = 1.5; // lock reeling for 1.5s
+        this.triggerFloatyText('EXHAUSTED!', '#ff5a6a'); sfx('cancel');
+        this.exhaustedTimer = 1.4; this.isHoldingSpace = false;
+        const h = this.activeBeats.find(b => b.type === 'hold' && b.isHolding && !b.hit);
+        if (h) this.registerBeatResult(h, 'miss');
       }
     } else {
-      if (this.exhaustedTimer > 0) {
-        this.exhaustedTimer -= dt;
-      }
-      this.playerStamina = Math.min(1.0, this.playerStamina + 0.24 * dt);
+      this.playerStamina = Math.min(1.0, this.playerStamina + 0.18 * dt);
     }
 
-    // reel rate and tension adjustments
-    if (reeling && !isExhausted) {
-      let reelPower = rod.reelPower;
-      let tensionMult = 1.0;
+    // 2. The fish is ALWAYS pulling — tension constantly creeps up, harder for tougher fish
+    const pull = 0.5 + fish.fight.strength * 0.06 + fish.fight.aggression * 0.03 + (this.bossPhase - 1) * 0.25;
+    this.tension += pull * 0.045 * dt * line.tensionRateBonus;
+    // a little natural give from the rod/line
+    this.tension = Math.max(0, this.tension - (0.018 + rod.lineStrength * 0.01 * line.strengthBonus) * dt);
+
+    // 3. Advance falling notes; resolve expiries, feints and sustained holds
+    for (const beat of this.activeBeats) {
+      if (beat.hit) continue;
+      if (beat.isHolding) {
+        // riding a power-hold — once the sustain is ridden out it's a perfect haul
+        if (now >= beat.targetTime + beat.holdDur) { this.registerBeatResult(beat, 'perfect'); continue; }
+        this.reelProgress += 0.05 * dt;     // steady gain while hauling
+        if (beat.dom) {
+          const fill = beat.dom.querySelector('.note-fill') as HTMLElement | null;
+          if (fill) fill.style.height = `${Math.min(100, ((now - (beat.holdStartTime ?? now)) / Math.max(0.01, beat.holdDur)) * 100)}%`;
+        }
+        continue;
+      }
+      if (now > beat.targetTime + windowLimit) {
+        if (beat.isFeint) {                 // dodged the decoy by NOT pressing
+          beat.hit = true; beat.dom?.remove(); beat.dom = undefined;
+          this.perfectHits++; this.combo++; this.maxCombo = Math.max(this.maxCombo, this.combo);
+          this.perfectStreak++;
+          const fakePoints = Math.round(100 * (this.perfectStreak >= 10 ? 2.0 : this.perfectStreak >= 5 ? 1.5 : this.perfectStreak >= 3 ? 1.25 : 1.0));
+          this.specialScoreBonus += fakePoints;
+          this.tension = Math.max(0, this.tension - 0.06);
+          this.triggerFloatyText(`✨ READ THE FAKE! +${fakePoints}`, '#5ad88a'); sfx('confirm');
+          this.updateComboDisplay();
+        } else {
+          this.registerBeatResult(beat, 'miss');
+        }
+        continue;
+      }
+      // position the note as it falls toward the receptor
+      if (beat.dom) {
+        let prog = (now - beat.timeSpawned) / beat.duration; // 0 at top, 1 at receptor
+        if (beat.subType === 'chaos') {
+          prog = Math.pow(Math.max(0, Math.min(1, prog)), 2.2);
+        }
+        beat.dom.style.top = `${prog * RECEPTOR_PCT}%`;
+        beat.dom.classList.toggle('near', Math.abs(now - beat.targetTime) < p.window);
+      }
+    }
+    this.activeBeats = this.activeBeats.filter(b => { if (b.hit) { b.dom?.remove(); return false; } return true; });
+
+    // 4. Spawn the next note on the steady beat
+    this.beatSpawnTimer -= dt;
+    if (this.beatSpawnTimer <= 0) {
+      let type: BeatType = this.beatQueue.length > 0 ? this.beatQueue.shift()! : this.rollBeatType(p);
+      const isFeint = type !== 'hold' && Math.random() < p.feint;
       
-      if (rod.id === 'quantum_reeler') {
-        this.quantumReelTime += dt;
-        reelPower *= (1.0 + Math.min(1.0, this.quantumReelTime * 0.45));
-        tensionMult *= (1.0 + Math.min(1.2, this.quantumReelTime * 0.6));
+      let subType: ActiveBeat['subType'] = 'normal';
+      let speedMult = 1.0;
+      if (!isFeint) {
+        if (Math.random() < 0.20) {
+          const roll = Math.random();
+          if (roll < 0.20) {
+            subType = 'golden';
+          } else if (roll < 0.40) {
+            subType = 'fire';
+          } else if (roll < 0.55) {
+            subType = 'tension';
+          } else if (roll < 0.70) {
+            subType = 'speedy';
+            speedMult = 1.4;
+          } else if (roll < 0.85) {
+            subType = 'slow';
+            speedMult = 0.7;
+          } else {
+            subType = 'chaos';
+          }
+        }
+      }
+
+      const duration = (p.beatTime * this.baseBeatTimeMult) / speedMult;
+      const lane = this.laneForBeat(type);
+      const holdDur = type === 'hold' ? Math.max(0.45, Math.min(0.9, p.beatTime * 0.7)) : 0;
+
+      this.beatIdCounter++;
+      const beat: ActiveBeat = {
+        id: this.beatIdCounter, type, lane, isFeint,
+        timeSpawned: now, targetTime: now + duration, duration, holdDur,
+        hit: false, isHolding: false,
+        subType,
+      };
+      beat.dom = this.buildNoteDom(beat);
+      this.activeBeats.push(beat);
+
+      // the fish lunges the way the next directional note points
+      if (type === 'left') this.fishDartTarget = -1;
+      else if (type === 'right') this.fishDartTarget = 1;
+
+      if (this.burstCountRemaining > 0) { this.burstCountRemaining--; this.beatSpawnTimer = p.beatTime * 0.32; }
+      else if (Math.random() < p.burst) { this.burstCountRemaining = 1 + Math.floor(Math.random() * 2); this.beatSpawnTimer = p.beatTime * 0.32; }
+      else this.beatSpawnTimer = p.gap * this.baseGapMult;
+    }
+
+    // 5. Win / loss / boss-phase transitions
+    if (this.tension >= 1) {
+      sfx('boom'); this.camShake = 1.2;
+      this.fishBreach = 0;
+      this.fightResolve?.(false); this.fightResolve = null; return;
+    }
+    if (this.reelProgress >= 1) {
+      if (this.bossPhase < this.totalBossPhases) {
+        this.bossPhase++;
+        this.baseBeatTimeMult *= 0.86; this.baseGapMult *= 0.86;
+        this.reelProgress = 0.28; this.fishStamina = 1.0; this.playerStamina = 1.0;
+        for (const b of this.activeBeats) b.dom?.remove();
+        this.activeBeats = [];
+        this.beatQueue = fish.signature ? [...fish.signature] : [];
+        this.beatSpawnTimer = 1.4;
+        this.camShake = 1.25; this.bossPhaseTransitionTimer = 1.8;
+        this.fishBreachTimer = 0.05;        // it erupts out of the water
+        sfx('charge'); sfx('fanfare');
+        this.triggerFloatyText(`🌊 IT'S NOT DONE — STAGE ${this.bossPhase}!`, '#b18ae8');
+        makeSplash(this.scene, this.bobber.position.x, 0.05, this.bobber.position.z, 2.4);
       } else {
-        this.quantumReelTime = 0;
+        this.fightResolve?.(true); this.fightResolve = null; return;
       }
-      
-      const rate = (0.10 + reelPower * 0.06) / (1 + fish.fight.stamina * 0.12);
-      this.reelProgress += rate * dt;
-      this.tension += (this.fightPull * 0.85) * line.tensionRateBonus * tensionMult * dt;
-    } else {
-      this.quantumReelTime = 0;
-      this.tension -= (0.55 + rod.lineStrength * 0.12 * line.strengthBonus) * dt;
-      this.reelProgress -= 0.02 * dt; // the fish takes a little line back
     }
-    
-    // the fish's own pull always nudges tension
-    this.tension += this.fightPull * 0.18 * dt * line.tensionRateBonus;
-    this.tension = Math.max(0, this.tension);
-    this.reelProgress = Math.max(0, this.reelProgress);
 
-    // Move bobber closer to player based on reelProgress
+    // 6. Drag the catch shoreward as the reel fills
     const playerPos = new THREE.Vector3(this.tamer.position.x, 0.12, this.tamer.position.z - 0.4);
     this.bobber.position.lerpVectors(this.bobberAnchor, playerPos, this.reelProgress);
-    this.bobber.position.y = 0.12 + Math.sin(this.elapsed * 18) * 0.05 * (1 - this.reelProgress);
 
-    // thrash splashes & rod bend — bigger fish churn more water
-    if (this.tension > 0.65 && Math.random() < dt * 6) {
-      const sx = this.bobber.position.x + (Math.random() - 0.5), sz = this.bobber.position.z + (Math.random() - 0.5);
-      makeSplash(this.scene, sx, 0.05, sz, 0.4 + fish.fight.strength * 0.06);
-    }
-    
-    // Animate rod flex / lean!
-    const armR = this.tamer.getObjectByName('armR');
-    if (armR) {
-      armR.rotation.x = -0.4 - this.tension * 0.65 + Math.sin(this.elapsed * 20) * 0.04 * (reeling && !isExhausted ? 1 : 0);
-    }
-    if (this.rod) {
-      // rotate rod based on tension and left/right lean!
-      let targetLean = 0;
-      if (pullingLeft) targetLean = -0.35;
-      else if (pullingRight) targetLean = 0.35;
-      
-      this.prevRodLean = this.prevRodLean * 0.9 + targetLean * 0.1;
-      this.rod.rotation.z = 0.2 + this.prevRodLean;
-      this.rod.rotation.x = -0.5 - this.tension * 0.5;
-    }
-
+    // 7. Drive the live fish + the angler's whole body
+    this.updateFightFish(dt, fish);
+    this.updateAnglerPose(dt);
     this.renderFightMeter();
+  }
 
-    if (this.tension >= 1) { this.fightResolve?.(false); this.fightResolve = null; }
-    else if (this.reelProgress >= 1) { this.fightResolve?.(true); this.fightResolve = null; }
+  private rollBeatType(p: PersonalityDef): BeatType {
+    const mix = p.mix;
+    const total = mix.tap + mix.dir + mix.hold;
+    const roll = Math.random() * total;
+    if (roll < mix.tap) return 'tap';
+    if (roll < mix.tap + mix.dir) return Math.random() < 0.5 ? 'left' : 'right';
+    return 'hold';
+  }
+
+  /** Pick which highway lane a beat falls down. Taps alternate between the two reel lanes. */
+  private laneForBeat(type: BeatType): number {
+    if (type === 'left') return LANE_LEFT;
+    if (type === 'right') return LANE_RIGHT;
+    if (type === 'hold') return LANE_REEL;
+    this.lastTapLane = this.lastTapLane === LANE_REEL ? LANE_HAUL : LANE_REEL;
+    return this.lastTapLane;
+  }
+
+  /** Build a falling-note element inside its lane. */
+  private buildNoteDom(beat: ActiveBeat): HTMLElement | undefined {
+    const laneEl = this.meterBox.querySelector(`#lane-notes-${beat.lane}`);
+    if (!laneEl) return undefined;
+    const L = LANES[beat.lane];
+    const note = document.createElement('div');
+    const subTypeClass = beat.subType && beat.subType !== 'normal' ? ` ${beat.subType}` : '';
+    note.className = `dn dn-lane${beat.lane}${beat.type === 'hold' ? ' dn-hold' : ''}${beat.isFeint ? ' dn-feint' : ''}${subTypeClass}`;
+    note.style.setProperty('--dn-color', beat.isFeint ? '#ff5a6a' : L.color);
+    note.style.setProperty('--dn-glow', beat.isFeint ? 'rgba(255,90,106,0.6)' : L.glow);
+    note.style.top = '0%';
+
+    let glyph = L.glyph;
+    if (beat.type === 'hold') {
+      glyph = '✊';
+    }
+    if (!beat.isFeint && beat.subType) {
+      if (beat.subType === 'golden') glyph = '★';
+      else if (beat.subType === 'fire') glyph = '🔥';
+      else if (beat.subType === 'tension') glyph = '🍃';
+      else if (beat.subType === 'speedy') glyph = '⚡';
+      else if (beat.subType === 'slow') glyph = '⏱️';
+      else if (beat.subType === 'chaos') glyph = '🌀';
+    }
+    if (beat.isFeint) {
+      glyph = '✕';
+    }
+
+    if (beat.type === 'hold') {
+      const h = Math.min(58, (beat.holdDur / beat.duration) * RECEPTOR_PCT);
+      note.style.height = `calc(${h}% + 44px)`;
+      note.innerHTML = `<div class="note-fill"></div><span class="dn-glyph">${glyph}</span>`;
+    } else {
+      note.innerHTML = `<span class="dn-glyph">${glyph}</span>`;
+    }
+    laneEl.appendChild(note);
+    return note;
+  }
+
+  // ============================================================
+  //  LIVE FISH + ANGLER PHYSICS (the visible fight)
+  // ============================================================
+  /** The hooked fish thrashes, darts and breaches at the surface as you reel. */
+  private updateFightFish(dt: number, fish: SpeciesDef): void {
+    const m = this.fightFishModel;
+    if (!m) return;
+
+    // lateral lunge eases toward the direction the fish is bolting
+    this.fishDart += (this.fishDartTarget - this.fishDart) * Math.min(1, dt * 6);
+
+    // periodic breach out of the water
+    this.fishBreachTimer -= dt;
+    if (this.fishBreachTimer <= 0 && this.fishBreach <= 0.01) {
+      this.fishBreach = 1;
+      this.fishBreachTimer = 2.6 + Math.random() * 2.6;
+      makeSplash(this.scene, m.position.x, 0.05, m.position.z, 1.2 + fish.fight.strength * 0.08);
+      sfx('splash');
+      this.camShake = Math.max(this.camShake, 0.3);
+    }
+    this.fishBreach = Math.max(0, this.fishBreach - dt * 1.9);
+    const breach = Math.sin(Math.min(1, this.fishBreach) * Math.PI); // 0→1→0 arc
+
+    const dartAmp = 0.75 * (1 - this.reelProgress * 0.4);
+    m.position.x = this.bobber.position.x + this.fishDart * dartAmp + Math.sin(this.elapsed * 7) * 0.08;
+    m.position.z = this.bobber.position.z + Math.cos(this.elapsed * 5) * 0.06;
+    const submerge = -0.30 + this.tension * 0.14;                 // a tense fish digs deeper
+    m.position.y = submerge + breach * (1.1 + fish.fight.strength * 0.05);
+
+    // wriggle hard, face away from the angler, pitch up on a breach
+    const toAngler = Math.atan2(this.tamer.position.x - m.position.x, this.tamer.position.z - m.position.z);
+    m.rotation.y = toAngler + Math.PI + Math.sin(this.elapsed * 16) * 0.4 + this.fishDart * 0.5;
+    m.rotation.z = Math.sin(this.elapsed * 19) * 0.25 * (0.5 + this.tension);
+    m.rotation.x = -breach * 0.6;
+    swimFish(m, this.elapsed, 1.3 + this.tension * 1.6 + breach);
+
+    // it churns the surface while it fights
+    if (Math.random() < dt * (4 + this.tension * 8)) {
+      makeSplash(this.scene, m.position.x + (Math.random() - 0.5) * 0.6, 0.05, m.position.z + (Math.random() - 0.5) * 0.6, 0.3 + this.tension * 0.5);
+    }
+  }
+
+  /**
+   * Drive the angler's whole body from the fight state — bracing legs, a
+   * hauling rod arm, a cranking reel hand, a straining torso that trembles
+   * under tension and lurches on a miss. Blends back to a relaxed stance
+   * (bodyNeutral→1) between casts so he never freezes mid-heave.
+   */
+  private updateAnglerPose(dt: number): void {
+    const get = (n: string) => this.tamer.getObjectByName(n);
+    const armL = get('armL'), armR = get('armR'), legL = get('legL'), legR = get('legR'),
+          torso = get('torso'), head = get('head'), pelvis = get('pelvis');
+
+    const fighting = this.phase === 'fight';
+    this.bodyNeutral += ((fighting ? 0 : 1) - this.bodyNeutral) * Math.min(1, dt * 4);
+    const f = 1 - this.bodyNeutral;                       // 0 relaxed … 1 full fight
+
+    // smooth the physical drivers
+    const haulTarget = fighting ? Math.min(1.3, 0.32 + this.tension * 0.8 + (this.isHoldingSpace ? 0.35 : 0)) : 0;
+    this.anglerHaul += (haulTarget - this.anglerHaul) * Math.min(1, dt * 6);
+    this.haulImpulse *= Math.pow(0.00008, dt);            // snappy decay
+    this.stumble *= Math.pow(0.00025, dt);
+    this.leanX += (this.leanXTarget - this.leanX) * Math.min(1, dt * 7);
+    this.leanXTarget *= Math.pow(0.2, dt);
+    this.reelCrank += this.reelCrankVel * dt;
+    this.reelCrankVel *= Math.pow(0.02, dt);
+
+    const haul = this.anglerHaul + this.haulImpulse * 0.5;
+    const tremor = this.tension > 0.55 ? Math.sin(this.elapsed * 38) * (this.tension - 0.5) * 0.12 : 0;
+    const lean = this.leanX;
+
+    // pelvis — lean back hauling, drop & brace, lurch forward on a miss
+    if (pelvis) {
+      pelvis.position.x = f * lean * 0.06;
+      pelvis.position.y = 0.62 - f * (0.05 + haul * 0.05);
+      pelvis.position.z = f * (-(0.05 + haul * 0.10) + this.stumble * 0.32);
+      pelvis.rotation.x = f * (-(0.08 + haul * 0.20) + this.stumble * 0.55) + tremor * 0.25;
+      pelvis.rotation.z = f * lean * 0.12;
+      pelvis.rotation.y = f * lean * 0.10;
+    }
+    // legs braced wide — front foot toward the water, back leg driving
+    if (legL) { legL.rotation.x = f * (0.42 + haul * 0.30 + this.stumble * 0.4); legL.rotation.z = f * 0.10; }
+    if (legR) { legR.rotation.x = f * (-(0.34 + haul * 0.45)); legR.rotation.z = f * -0.10; }
+    // torso twists into the pull
+    if (torso) { torso.rotation.z = f * lean * 0.18; torso.rotation.y = f * lean * 0.16; torso.rotation.x = f * (-(0.05 + haul * 0.12)); }
+    // rod arm hauls back hard (+ whip impulse + tremor)
+    if (armR) {
+      armR.rotation.x = -0.6 - f * (0.3 + haul * 0.7) - this.haulImpulse * 0.45 + tremor;
+      armR.rotation.z = f * lean * 0.4;
+      armR.rotation.y = f * lean * 0.2;
+    }
+    // off hand cranks the reel — winds faster right after a clean hit
+    if (armL) {
+      armL.rotation.x = -0.5 + Math.sin(this.reelCrank) * 0.5 * f - f * haul * 0.2;
+      armL.rotation.z = 0.2 + Math.cos(this.reelCrank) * 0.35 * f;
+    }
+    // head fixed on the line, jolts on a heave
+    if (head) { head.rotation.x = f * (0.18 + haul * 0.12) + this.haulImpulse * 0.12; head.rotation.y = f * lean * 0.2; }
+    // the rod loads deep under tension, whips on impulse, trembles at the limit
+    if (this.rod) {
+      this.prevRodLean += (lean * 0.32 - this.prevRodLean) * Math.min(1, dt * 9);
+      this.rod.rotation.x = -0.5 - f * (this.tension * 0.7 + haul * 0.3) - this.haulImpulse * 0.5 + tremor * 1.6;
+      this.rod.rotation.z = 0.2 + f * this.prevRodLean;
+    }
   }
 
   // ---------- PHASE 5: LAND ----------
@@ -1344,98 +1927,123 @@ export class Fishing {
     this.phase = 'showcase';
     const rd = RARITY[fish.rarity];
     const legendary = fish.rarity === 'Legendary';
+    const armL = this.tamer.getObjectByName('armL'), armR = this.tamer.getObjectByName('armR');
+    const pelvis = this.tamer.getObjectByName('pelvis'), torso = this.tamer.getObjectByName('torso');
+    const head = this.tamer.getObjectByName('head');
+    const legL = this.tamer.getObjectByName('legL'), legR = this.tamer.getObjectByName('legR');
 
-    // big splash as it breaks the surface
-    makeSplash(this.scene, this.bobber.position.x, 0.05, this.bobber.position.z, legendary ? 3 : rd.rareMusic ? 2 : 1.2, rd.glow ? 0xffffff : 0xdaf0ff);
-    sfx(legendary ? 'boom' : 'splash');
-
-    // hide bobber, build the showcase fish in the angler's hands
     this.bobber.visible = false; this.line.visible = false;
+    this.disposeFightFish();
     this.targetShadow = null;
-
     playMusic(legendary ? 'fishing_success_rare' : (rd.rareMusic ? 'fishing_success_rare' : 'fishing_success'));
 
+    // the catch erupts from the water and gets hoisted high on the line
     const fishModel = makeFish(fish);
-    // size the model to its actual length (cm → world units, clamped for framing)
-    const len = Math.min(2.6, 0.6 + size.lengthCm / 120);
-    fishModel.scale.setScalar(len);
-    const holdPos = new THREE.Vector3(this.tamer.position.x, 1.7, this.tamer.position.z - 0.9);
-    fishModel.position.copy(holdPos);
-    fishModel.rotation.y = Math.PI * 0.5;
+    fishModel.scale.setScalar(Math.min(2.6, 0.6 + size.lengthCm / 120));
+    const fromPos = new THREE.Vector3(this.tamer.position.x, -0.3, this.tamer.position.z - 2.4);
+    const hoistPos = new THREE.Vector3(this.tamer.position.x + 0.2, 2.7, this.tamer.position.z - 1.2);
+    fishModel.position.copy(fromPos);
+    fishModel.rotation.y = Math.PI;
     this.scene.add(fishModel);
 
-    // raise the angler's arms proudly
-    const armL = this.tamer.getObjectByName('armL'), armR = this.tamer.getObjectByName('armR');
-    if (armL) tween(0.5, t => { armL.rotation.x = -0.4 - t * 1.6; }, Ease.outBack);
-    if (armR) tween(0.5, t => { armR.rotation.x = -0.4 - t * 1.6; }, Ease.outBack);
-
-    // camera dives in for the hero shot
+    // STAGE 1 — THE HEAVE: one huge yank rips it clear of the water
+    sfx(legendary ? 'boom' : 'splash');
+    makeSplash(this.scene, fromPos.x, 0.05, fromPos.z, legendary ? 3.4 : rd.rareMusic ? 2.4 : 1.6, rd.glow ? 0xffffff : 0xdaf0ff);
+    this.camShake = legendary ? 1.4 : 0.9;
     const camStart = this.camera.position.clone();
-    const camEnd = new THREE.Vector3(this.tamer.position.x + 2.2, 2.1, this.tamer.position.z - 3.6);
-    const look = holdPos.clone();
-    await tween(0.9, t => {
-      this.camera.position.lerpVectors(camStart, camEnd, t);
-      this.camera.lookAt(look);
+    await tween(0.5, t => {
+      if (armR) armR.rotation.x = -0.6 - t * 1.7;
+      if (armL) armL.rotation.x = -0.5 - t * 1.5;
+      if (pelvis) { pelvis.rotation.x = -t * 0.42; pelvis.position.z = -t * 0.32; }
+      if (legL) legL.rotation.x = t * 0.6;
+      if (legR) legR.rotation.x = -t * 0.42;
+      if (torso) torso.rotation.x = -t * 0.2;
+      fishModel.position.lerpVectors(fromPos, hoistPos, Ease.outQuad(t));
+      fishModel.position.y = fromPos.y + (hoistPos.y - fromPos.y) * t + Math.sin(t * Math.PI) * 0.9;
+      fishModel.rotation.z = t * 1.3;
+      swimFish(fishModel, this.elapsed, 1.8);
+      this.camera.lookAt(this.tamer.position.x, 1.4, this.tamer.position.z - 1.2);
     }, Ease.inOut);
 
+    // STAGE 2 — THE HOIST: rod & catch raised in triumph
+    if (armR) tween(0.45, t => { armR.rotation.x = -2.3 - t * 0.3; }, Ease.outBack);
+    if (armL) tween(0.45, t => { armL.rotation.x = -2.0 - t * 0.3; }, Ease.outBack);
+    if (pelvis) tween(0.45, t => { pelvis.rotation.x = -0.42 + t * 0.42; pelvis.position.z = -0.32 + t * 0.32; });
+    if (legL) tween(0.45, t => { legL.rotation.x = 0.6 - t * 0.6; });
+    if (legR) tween(0.45, t => { legR.rotation.x = -0.42 + t * 0.42; });
     showShowcaseBanner(fish, size.weightKg, size.lengthCm);
+    sfx(legendary ? 'fanfare' : 'confirm');
 
-    // a slow turntable of the catch
-    const spinDur = legendary ? 3.2 : 2.0;
-    let spun = 0;
-    await tween(spinDur, t => {
-      fishModel.rotation.y = Math.PI * 0.5 + t * Math.PI * 2;
-      fishModel.position.y = holdPos.y + Math.sin(t * Math.PI * 2) * 0.06;
-      spun = t;
-      swimFish(fishModel, this.elapsed, 0.4);
+    // STAGE 3 — ORBIT hero shot around the hoisted catch
+    const look = hoistPos.clone();
+    const orbitDur = legendary ? 3.4 : 2.2;
+    const radius = 4.6;
+    await tween(orbitDur, t => {
+      const ang = Math.PI * 0.5 + (t - 0.5) * 1.7;   // sweep ~95°
+      this.camera.position.set(
+        this.tamer.position.x + Math.sin(ang) * radius,
+        2.0 + Math.sin(t * Math.PI) * 0.7,
+        this.tamer.position.z + Math.cos(ang) * radius,
+      );
+      fishModel.position.y = hoistPos.y + Math.sin(t * Math.PI * 3) * 0.12;
+      fishModel.rotation.y = Math.PI + Math.sin(t * Math.PI * 2) * 0.5;
+      fishModel.rotation.z = Math.sin(t * Math.PI * 4) * 0.2;
+      swimFish(fishModel, this.elapsed, 0.7);
       this.camera.lookAt(look);
-    }, Ease.linear);
-    void spun;
-
-    if (legendary) {
-      // extra cinematic burst
-      for (let i = 0; i < 5; i++) { makeSplash(this.scene, holdPos.x + (Math.random() - 0.5) * 2, 0.6 + Math.random(), holdPos.z, 2, 0xffe14a); }
-      sfx('fanfare');
-    }
+      if (legendary && Math.random() < 0.08) makeSplash(this.scene, hoistPos.x + (Math.random() - 0.5) * 2, 0.6 + Math.random(), hoistPos.z, 1.6, 0xffe14a);
+    }, Ease.inOut);
 
     hideShowcaseBanner();
     disposeFish(fishModel);
-    // arms back down, camera back out
-    if (armL) tween(0.4, t => { armL.rotation.x = -2.0 + t * 1.6; });
-    if (armR) tween(0.4, t => { armR.rotation.x = -2.0 + t * 1.6; });
+
+    // settle the camera & reset the body to a clean stance for the next cast
+    const orbitEnd = this.camera.position.clone();
+    if (armL) tween(0.4, t => { armL.rotation.x = -2.3 + t * 1.7; });
+    if (armR) tween(0.4, t => { armR.rotation.x = -2.6 + t * 2.0; });
     await tween(0.6, t => {
-      this.camera.position.lerpVectors(camEnd, camStart, t);
+      this.camera.position.lerpVectors(orbitEnd, camStart, t);
       this.camera.lookAt(0, 1.0, -6);
     }, Ease.inOut);
+    if (pelvis) { pelvis.rotation.set(0, 0, 0); pelvis.position.set(0, 0.62, 0); }
+    if (torso) torso.rotation.set(0, 0, 0);
+    if (legL) legL.rotation.set(0, 0, 0);
+    if (legR) legR.rotation.set(0, 0, 0);
+    if (head) head.rotation.set(0, 0, 0);
     void battleMs;
   }
 
   private calculateGrade(): { grade: 'SSS' | 'SS' | 'S' | 'A' | 'B' | 'C'; multiplier: number } {
-    let score = 100;
+    const totalBeats = this.perfectHits + this.greatHits + this.goodHits + this.missesCount;
+    if (totalBeats === 0) return { grade: 'B', multiplier: 1.0 };
+
+    const accuracy = (this.perfectHits * 1.0 + this.greatHits * 0.70 + this.goodHits * 0.40) / totalBeats;
+    let score = Math.round(accuracy * 100);
+
+    // misses penalty
+    score -= this.missesCount * 6;
     
-    // wrong leans deduct points
-    score -= Math.floor(this.wrongLeansCount * 12);
+    // button mash penalty
+    score -= Math.floor(this.buttonMashesCount * 1.5);
     
     // hook quality checks
-    if (this.hookQuality === 'good') score -= 8;
-    else if (this.hookQuality === 'weak') score -= 20;
+    if (this.hookQuality === 'good') score -= 5;
+    else if (this.hookQuality === 'weak') score -= 12;
     
-    // correct leans add points
-    score += Math.floor(this.perfectLeansCount * 3.5);
+    // combo bonus
+    if (this.maxCombo >= 20) score += 10;
+    else if (this.maxCombo >= 10) score += 5;
     
-    // special moves missed deduct points
-    if (this.totalSpecialMoves > 0) {
-      const missed = this.totalSpecialMoves - this.specialMovesCountered;
-      score -= missed * 18;
-    }
-    
-    if (score >= 100 && this.wrongLeansCount === 0 && this.hookQuality === 'perfect') {
+    score = Math.max(0, Math.min(100, score));
+
+    // SSS requirements: >96% accuracy, no misses, no button mashes, perfect hook
+    if (accuracy >= 0.96 && this.missesCount === 0 && this.buttonMashesCount === 0 && this.hookQuality === 'perfect') {
       return { grade: 'SSS', multiplier: 1.5 };
     }
+    
     if (score >= 88) return { grade: 'SS', multiplier: 1.3 };
-    if (score >= 75) return { grade: 'S', multiplier: 1.15 };
-    if (score >= 60) return { grade: 'A', multiplier: 1.05 };
-    if (score >= 45) return { grade: 'B', multiplier: 1.0 };
+    if (score >= 76) return { grade: 'S', multiplier: 1.15 };
+    if (score >= 62) return { grade: 'A', multiplier: 1.05 };
+    if (score >= 48) return { grade: 'B', multiplier: 1.0 };
     return { grade: 'C', multiplier: 0.8 };
   }
 
@@ -1464,6 +2072,7 @@ export class Fishing {
       lineId: fs.equippedLine,
       fightGrade: gradeResult.grade,
       gradeMult: gradeResult.multiplier,
+      rhythmBonusPoints: this.specialScoreBonus,
     });
 
     // update records
@@ -1529,10 +2138,11 @@ export class Fishing {
       baitName: (BAITS[fs.equippedBait] ?? BAITS.worm).name, timeLabel: worldClock.label,
       fightGrade: gradeResult.grade,
       gradeMult: gradeResult.multiplier,
-      perfectLeansCount: this.perfectLeansCount,
-      wrongLeansCount: this.wrongLeansCount,
-      specialMovesCountered: this.specialMovesCountered,
-      totalSpecialMoves: this.totalSpecialMoves,
+      perfectHits: this.perfectHits,
+      greatHits: this.greatHits,
+      goodHits: this.goodHits,
+      misses: this.missesCount,
+      maxCombo: this.maxCombo,
     };
 
     const choice = await showCatchSummary(data);
@@ -1589,6 +2199,7 @@ export class Fishing {
   // ============================================================
   //  DOM HUD & METERS
   // ============================================================
+  private speedLinesDOM!: HTMLElement;
   private buildDom(): void {
     this.hud = document.createElement('div');
     this.hud.id = 'fishing-hud';
@@ -1596,12 +2207,15 @@ export class Fishing {
     this.meterBox.id = 'fishing-meters';
     this.floatyDOM = document.createElement('div');
     this.floatyDOM.id = 'fishing-floaty';
-    document.body.append(this.hud, this.meterBox, this.floatyDOM);
+    this.speedLinesDOM = document.createElement('div');
+    this.speedLinesDOM.className = 'legendary-speed-lines';
+    document.body.append(this.hud, this.meterBox, this.floatyDOM, this.speedLinesDOM);
   }
   private teardownDom(): void {
     this.hud?.remove();
     this.meterBox?.remove();
     this.floatyDOM?.remove();
+    this.speedLinesDOM?.remove();
     hideShowcaseBanner();
   }
 
@@ -1638,18 +2252,26 @@ export class Fishing {
       this.meterBox.innerHTML = `<div class="meter-prompt" id="m-prompt"></div>
         <div class="hook-track"><div class="hook-window"></div><div class="hook-marker" id="hook-marker"></div></div>`;
     } else if (kind === 'fight') {
+      const lanesHtml = LANES.map((l, i) => `
+        <div class="reel-lane">
+          <div class="lane-notes" id="lane-notes-${i}"></div>
+          <div class="receptor" id="receptor-${i}" style="--lane-color:${l.color};--lane-glow:${l.glow}">
+            <span class="rcp-glyph">${l.glyph}</span><span class="rcp-key">${l.keyLabel}</span>
+          </div>
+        </div>`).join('');
       this.meterBox.innerHTML = `<div class="meter-prompt" id="m-prompt"></div>
-        <div class="fight-wrap" style="flex-direction:column;gap:8px;width:100%">
-          <div style="display:flex;gap:16px;width:100%">
-            <div class="fight-col"><span class="fl">REEL PROGRESS</span><div class="reel-track"><div class="reel-fill" id="reel-fill"></div></div></div>
-            <div class="fight-col"><span class="fl">LINE TENSION</span><div class="tension-track"><div class="tension-fill" id="tension-fill"></div><div class="tension-danger"></div></div></div>
+        <div class="reel-highway">
+          <div id="rhythm-combo" class="rhythm-combo-display" style="display:none;">
+            <div class="combo-num">0</div><div class="combo-label">STREAK</div>
           </div>
-          <div style="display:flex;gap:16px;width:100%">
-            <div class="fight-col"><span class="fl">ANGLER STAMINA</span><div class="reel-track" style="border-color:#b18ae8"><div class="reel-fill" id="stamina-fill" style="background:linear-gradient(90deg,#b18ae8,#ff7ad8)"></div></div></div>
-            <div class="fight-col"><span class="fl">FISH EXHAUSTION</span><div class="reel-track" style="border-color:#f2935a"><div class="reel-fill" id="fish-fill" style="background:linear-gradient(90deg,#f2935a,#f2c14e)"></div></div></div>
-          </div>
-          <div id="struggle-alert" style="width:100%;text-align:center;font-weight:800;font-size:16px;min-height:22px;color:#ff5a6a;margin-top:2px"></div>
-        </div>`;
+          <div class="reel-lanes">${lanesHtml}<div class="hit-line"></div></div>
+        </div>
+        <div class="fight-bars">
+          <div class="fight-col"><span class="fl">🎣 REEL IT IN</span><div class="reel-track"><div class="reel-fill" id="reel-fill"></div></div></div>
+          <div class="fight-col"><span class="fl">⚠️ LINE TENSION</span><div class="tension-track"><div class="tension-fill" id="tension-fill"></div><div class="tension-danger"></div></div></div>
+          <div class="fight-col" style="max-width:130px"><span class="fl">💪 STAMINA</span><div class="reel-track" style="border-color:#b18ae8"><div class="reel-fill" id="stamina-fill" style="background:linear-gradient(90deg,#b18ae8,#ff7ad8)"></div></div></div>
+        </div>
+        <div id="struggle-alert" class="struggle-alert"></div>`;
     } else {
       this.meterBox.innerHTML = `<div class="meter-prompt land-flash" id="m-prompt"></div>`;
     }
@@ -1677,30 +2299,18 @@ export class Fishing {
     const r = this.meterBox.querySelector('#reel-fill') as HTMLElement | null;
     const t = this.meterBox.querySelector('#tension-fill') as HTMLElement | null;
     const s = this.meterBox.querySelector('#stamina-fill') as HTMLElement | null;
-    const f = this.meterBox.querySelector('#fish-fill') as HTMLElement | null;
     const alert = this.meterBox.querySelector('#struggle-alert') as HTMLElement | null;
-    
+
     if (r) r.style.width = `${Math.min(100, this.reelProgress * 100)}%`;
     if (t) {
-      const pct = Math.min(100, this.tension * 100);
-      t.style.width = `${pct}%`;
+      t.style.width = `${Math.min(100, this.tension * 100)}%`;
       t.style.background = this.tension > 0.82 ? '#e85a6a' : this.tension > 0.6 ? '#f2935a' : '#5ad88a';
     }
     if (s) s.style.width = `${Math.min(100, this.playerStamina * 100)}%`;
-    if (f) {
-      const exhaustPct = Math.min(100, (1.0 - this.fishStamina) * 100);
-      f.style.width = `${exhaustPct}%`;
-    }
     if (alert) {
-      if (this.fishStruggleDir === 'left') {
-        alert.innerHTML = '◀◀◀ PULL RIGHT (HOLD D / →) ◀◀◀';
-        alert.style.color = '#ff5a6a';
-      } else if (this.fishStruggleDir === 'right') {
-        alert.innerHTML = '▶▶▶ PULL LEFT (HOLD A / ←) ▶▶▶';
-        alert.style.color = '#ff5a6a';
-      } else {
-        alert.innerHTML = '';
-      }
+      if (this.tension > 0.8) { alert.textContent = '⚠️ LINE ABOUT TO SNAP — KEEP REELING!'; alert.classList.add('danger'); }
+      else if (this.exhaustedTimer > 0) { alert.textContent = '😮‍💨 EXHAUSTED — EASE OFF A SECOND!'; alert.classList.remove('danger'); }
+      else { alert.textContent = ''; alert.classList.remove('danger'); }
     }
   }
 

@@ -144,6 +144,18 @@ function decorateQuestMarkers(p: Player, markers: MapMarker[], title: string): M
       }
     }
     
+    // Hyujon
+    if (t.includes('hyujon')) {
+      if (label.includes('clyde')) {
+        const sHyujon = questState(p, 'story_hyujon');
+        if (sHyujon === 'active' || sHyujon === 'ready') activeQuestIds.push('story_hyujon');
+      }
+      if (label.includes('terminal') || label.includes('bunker') || label.includes('cells') || label.includes('crater') || label.includes('kovar') || label.includes('tem') || label.includes('defector') || label.includes('exchange')) {
+        const sDrowned = questState(p, 'story_drowned_terminal');
+        if (sDrowned === 'active' || sDrowned === 'ready') activeQuestIds.push('story_drowned_terminal');
+      }
+    }
+    
     let highlight = mk.highlight;
     if (t.includes('haven')) {
       const sRoads = questState(p, 'story_roads');

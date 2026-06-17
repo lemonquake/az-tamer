@@ -184,6 +184,7 @@ export class University {
       get scene() { return self.rooms.get(self.current)?.scene ?? self.bootScene; },
       camera: this.camera,
       update: (dt: number) => this.update(dt),
+      owner: this,
     };
   }
 
@@ -2203,12 +2204,38 @@ export class University {
           continue;
         }
         to.normalize();
-        const nx = w.g.position.x + to.x * w.speed * dt;
-        const nz = w.g.position.z + to.z * w.speed * dt;
-        const blocked = r.colliders.some(c => c.r > 0 && Math.hypot(nx - c.pos.x, nz - c.pos.z) < c.r + 0.25)
-          || Math.hypot(nx - this.tamer.position.x, nz - this.tamer.position.z) < 0.8;
+        const curX = w.g.position.x;
+        const curZ = w.g.position.z;
+        const nx = curX + to.x * w.speed * dt;
+        const nz = curZ + to.z * w.speed * dt;
+        const blocked = r.colliders.some(c => {
+          if (c.r <= 0) return false;
+          const nextDist = Math.hypot(nx - c.pos.x, nz - c.pos.z);
+          const limit = c.r + 0.25;
+          if (nextDist < limit) {
+            const curDist = Math.hypot(curX - c.pos.x, curZ - c.pos.z);
+            return nextDist < curDist;
+          }
+          return false;
+        }) || (() => {
+          const nextDist = Math.hypot(nx - this.tamer.position.x, nz - this.tamer.position.z);
+          if (nextDist < 0.8) {
+            const curDist = Math.hypot(curX - this.tamer.position.x, curZ - this.tamer.position.z);
+            return nextDist < curDist;
+          }
+          return false;
+        })();
         if (blocked) {
           w.pause = 0.6;             // wait politely, then re-route
+          // pick a fresh destination immediately
+          for (let tries = 0; tries < 10; tries++) {
+            const tx = (Math.random() - 0.5) * (r.w - 8);
+            const tz = (Math.random() - 0.5) * (r.d - 8);
+            if (!r.colliders.some(c => c.r > 0 && Math.hypot(tx - c.pos.x, tz - c.pos.z) < c.r + 0.6)) {
+              w.target.set(tx, 0, tz);
+              break;
+            }
+          }
           updateVoxelHuman(w.g, false, dt);
           continue;
         }

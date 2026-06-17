@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>AZ Tamer — Pitch Deck</title>
+  <style>
+    :root {
+      --bg: #060810;
+      --bg-2: #0a0d1e;
+      --panel: rgba(12, 16, 34, 0.96);
+      --gold: #f2c14e;
+      --gold-2: #f2935a;
+      --blue: #5a7bd8;
+      --text: #e8ecff;
+      --dim: #8b93b8;
+      --green: #5ad88a;
+      --red: #e85a6a;
+      --purple: #b18ae8;
+      --fire: #f2603a;
+      --water: #3a9df2;
+      --nature: #4ec45e;
+      --electric: #f2d23a;
+      --space: #7a8af2;
+      --dark: #9a5af2;
+      --aether: #ff9ad2;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    @page { size: 297mm 210mm; margin: 0; }
+
+    body {
+      margin: 0; padding: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', 'Trebuchet MS', sans-serif;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+
+    .slide {
+      width: 297mm;
+      height: 210mm;
+      page-break-after: always;
+      position: relative;
+      overflow: hidden;
+      padding: 16mm 22mm;
+      background:
+        radial-gradient(ellipse at 20% 20%, rgba(90, 123, 216, 0.12), transparent 45%),
+        radial-gradient(ellipse at 80% 80%, rgba(242, 193, 78, 0.08), transparent 45%),
+        radial-gradient(ellipse at 50% 40%, #16204a 0%, var(--bg) 70%);
+      border-bottom: 1px solid rgba(90,123,216,0.15);
+    }
+
+    .slide::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3mm;
+      background: linear-gradient(90deg, var(--gold), var(--blue), var(--purple));
+    }
+
+    .slide:last-child { page-break-after: auto; }
+
+    h1 {
+      font-family: Georgia, serif;
+      font-size: 54pt;
+      letter-spacing: 6pt;
+      color: var(--gold);
+      text-shadow: 0 0 16pt rgba(242,193,78,0.4), 0 3pt 0 rgba(0,0,0,0.4);
+      line-height: 1.05;
+    }
+
+    h2 {
+      font-family: Georgia, serif;
+      font-size: 26pt;
+      color: var(--gold);
+      letter-spacing: 2pt;
+      margin-bottom: 16pt;
+      text-transform: uppercase;
+    }
+
+    h3 {
+      font-size: 12pt; letter-spacing: 2pt; text-transform: uppercase;
+      color: var(--blue); margin-bottom: 6pt;
+    }
+
+    h4 { font-size: 13pt; color: var(--gold); margin-bottom: 4pt; }
+
+    p, li { font-size: 13pt; line-height: 1.55; color: var(--text); }
+    .dim { color: var(--dim); }
+    .gold { color: var(--gold); }
+
+    .quote {
+      font-family: Georgia, serif;
+      font-style: italic;
+      font-size: 14pt;
+      color: var(--text);
+      border-left: 2pt solid var(--gold);
+      padding: 10pt 0 10pt 14pt;
+      margin: 14pt 0;
+      background: rgba(242,193,78,0.05);
+      border-radius: 0 8pt 8pt 0;
+    }
+
+    .center { text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+
+    .row { display: flex; gap: 18pt; }
+    .col { flex: 1; }
+    .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14pt; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12pt; }
+    .grid-5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10pt; }
+
+    .kicker {
+      font-size: 11pt; letter-spacing: 3pt; text-transform: uppercase;
+      color: var(--dim); margin-bottom: 10pt;
+    }
+
+    .stat-row {
+      display: flex; justify-content: center; gap: 18pt; margin-top: 24pt; flex-wrap: wrap;
+    }
+    .stat {
+      text-align: center; min-width: 70pt;
+      padding: 12pt 10pt; border-radius: 8pt;
+      background: rgba(255,255,255,0.04); border: 1pt solid rgba(90,123,216,0.25);
+    }
+    .stat .num {
+      font-family: Georgia, serif; font-size: 26pt; color: var(--gold);
+      display: block; line-height: 1;
+    }
+    .stat .lab { font-size: 9pt; letter-spacing: 1pt; color: var(--dim); text-transform: uppercase; margin-top: 4pt; }
+
+    .card {
+      background: rgba(255,255,255,0.045);
+      border: 1pt solid rgba(90,123,216,0.25);
+      border-radius: 8pt;
+      padding: 11pt;
+    }
+    .card p { font-size: 10.5pt; line-height: 1.45; color: var(--dim); }
+
+    .legend-card {
+      padding: 12pt; border-radius: 10pt;
+      border: 1pt solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.04);
+      position: relative; overflow: hidden;
+    }
+    .legend-card::after {
+      content: ''; position: absolute; top: 0; left: 0; width: 3pt; height: 100%;
+    }
+    .legend-card.aljay::after { background: var(--fire); box-shadow: 0 0 8pt var(--fire); }
+    .legend-card.greggy::after { background: var(--electric); box-shadow: 0 0 8pt var(--electric); }
+    .legend-card.onnel::after { background: var(--nature); box-shadow: 0 0 8pt var(--nature); }
+    .legend-card h4 { font-size: 16pt; margin-bottom: 2pt; }
+    .legend-card .title { font-size: 10pt; color: var(--dim); letter-spacing: 1pt; margin-bottom: 6pt; }
+    .legend-card .guardians { font-size: 10.5pt; color: var(--text); }
+    .legend-card p { font-size: 9.5pt; margin-top: 6pt; color: var(--dim); line-height: 1.4; }
+
+    .house-card {
+      text-align: center; padding: 10pt 6pt; border-radius: 8pt;
+      background: rgba(255,255,255,0.04); border: 1pt solid rgba(255,255,255,0.1);
+    }
+    .house-card .icon {
+      width: 34pt; height: 34pt; line-height: 34pt; border-radius: 50%; margin: 0 auto 5pt;
+      font-family: Georgia, serif; font-size: 16pt; font-weight: 700; color: #fff;
+    }
+    .house-card .name { font-size: 11pt; font-weight: 700; margin-bottom: 1pt; }
+    .house-card .type { font-size: 8pt; color: var(--dim); text-transform: uppercase; letter-spacing: 1pt; }
+    .house-card .starter { font-size: 9pt; margin-top: 4pt; color: var(--text); }
+
+    .timeline { position: relative; padding-left: 16pt; }
+    .timeline::before {
+      content: ''; position: absolute; left: 4pt; top: 4pt; bottom: 4pt; width: 1.5pt;
+      background: linear-gradient(180deg, var(--gold), var(--blue), var(--purple));
+    }
+    .t-item { position: relative; margin-bottom: 9pt; }
+    .t-item::before {
+      content: ''; position: absolute; left: -15pt; top: 4pt; width: 6pt; height: 6pt;
+      border-radius: 50%; background: var(--bg); border: 1.5pt solid var(--gold);
+    }
+    .t-item .when { font-size: 8pt; color: var(--gold); letter-spacing: 1pt; text-transform: uppercase; }
+    .t-item .what { font-size: 12pt; font-weight: 700; }
+    .t-item p { font-size: 9.5pt; color: var(--dim); line-height: 1.35; margin-top: 1pt; }
+
+    .act-label {
+      display: inline-block; font-size: 9pt; letter-spacing: 2pt; text-transform: uppercase;
+      padding: 4pt 10pt; border-radius: 12pt; border: 1pt solid var(--gold);
+      color: var(--gold); margin-bottom: 10pt;
+    }
+
+    .pillar {
+      display: flex; align-items: flex-start; gap: 10pt;
+      padding: 10pt; border-radius: 8pt;
+      background: rgba(255,255,255,0.04); border: 1pt solid rgba(90,123,216,0.2);
+    }
+    .pillar .num {
+      flex-shrink: 0; width: 24pt; height: 24pt; line-height: 24pt; border-radius: 50%;
+      text-align: center; font-size: 11pt; font-weight: 800; color: var(--bg);
+      background: var(--gold);
+    }
+    .pillar h4 { font-size: 12pt; margin-bottom: 2pt; }
+    .pillar p { font-size: 9.5pt; color: var(--dim); line-height: 1.4; }
+
+    .tag {
+      display: inline-block; font-size: 9pt; font-weight: 700; letter-spacing: 1pt;
+      padding: 4pt 9pt; border-radius: 8pt; text-transform: uppercase;
+      background: rgba(242,193,78,0.12); border: 1pt solid rgba(242,193,78,0.4); color: var(--gold);
+    }
+
+    .big-circle {
+      width: 170pt; height: 170pt; border-radius: 50%;
+      background: radial-gradient(circle at 40% 40%, rgba(242,193,78,0.22), transparent 60%), rgba(255,255,255,0.04);
+      border: 1pt solid rgba(90,123,216,0.3);
+      display: flex; align-items: center; justify-content: center; text-align: center; padding: 22pt;
+    }
+
+    .directive-box {
+      width: 100%; padding: 20pt; border-radius: 10pt;
+      background: rgba(0,0,0,0.25); border: 1pt solid rgba(177,138,232,0.35); text-align: center;
+    }
+    .directive-box .label { font-size: 12pt; letter-spacing: 3pt; color: var(--purple); text-transform: uppercase; margin-bottom: 10pt; }
+    .directive-box p { font-family: Georgia, serif; font-size: 18pt; line-height: 1.5; }
+    .directive-box .sub { font-size: 10pt; color: var(--dim); margin-top: 10pt; }
+
+    .mini-tag {
+      display: inline-block; font-size: 8pt; font-weight: 800; letter-spacing: 1pt;
+      padding: 2pt 6pt; border-radius: 5pt; margin-right: 5pt;
+      background: rgba(242,193,78,0.15); color: var(--gold); border: 1pt solid rgba(242,193,78,0.35);
+      vertical-align: middle;
+    }
+
+    .page-footer {
+      position: absolute; bottom: 10mm; left: 22mm; right: 22mm;
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: 8pt; color: var(--dim); letter-spacing: 1pt;
+      border-top: 0.5pt solid rgba(90,123,216,0.25); padding-top: 6pt;
+    }
+
+    @media print {
+      .slide { page-break-after: always; }
+      .slide:last-child { page-break-after: auto; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 1. Title -->
+  <section class="slide center">
+    <div class="kicker">A Monster Taming RPG</div>
+    <h1>AZ TAMER</h1>
+    <p class="dim" style="font-size: 14pt; letter-spacing: 3pt; margin-top: 8pt;">BY ALJAY LEODONES</p>
+    <p class="quote" style="max-width: 170mm; margin-top: 24pt; border: none; background: transparent; font-size: 16pt;">
+      "Trust is trained, never forced."
+    </p>
+    <div class="stat-row">
+      <div class="stat"><span class="num">3,000</span><span class="lab">Years of Lore</span></div>
+      <div class="stat"><span class="num">4</span><span class="lab">Continents</span></div>
+      <div class="stat"><span class="num">9</span><span class="lab">Legion Generals</span></div>
+      <div class="stat"><span class="num">&infin;</span><span class="lab">Bonds to Forge</span></div>
+    </div>
+    <div class="page-footer"><span>AZ Tamer Pitch Deck</span><span>1 / 14</span></div>
+  </section>
+
+  <!-- 2. The Pitch -->
+  <section class="slide">
+    <h2>The Pitch</h2>
+    <div class="row">
+      <div class="col">
+        <p style="margin-bottom: 10pt;"><strong class="gold">AZ Tamer</strong> is a lore-first, cinematic monster-taming RPG built as a custom WebGL experience. Players graduate the Tamer University of Aurel, pledge to a Grand House, and step into a world where the seal on a dimension of corrupted gods is thinning -- and the legends who sealed it have gone silent.</p>
+        <p class="dim">It is a love letter to classic creature-collecting, wrapped in a political thriller about erased records, buried empires, and a news network that writes tomorrow before it happens.</p>
+      </div>
+      <div class="col grid-2">
+        <div class="card"><h4><span class="mini-tag">01</span>Graduate &amp; Pledge</h4><p>Pick a House, receive your starter Guardian, and earn your Guild Card.</p></div>
+        <div class="card"><h4><span class="mini-tag">02</span>Battle with Depth</h4><p>SP economy, ten elements, status effects, and 3v3 tactics.</p></div>
+        <div class="card"><h4><span class="mini-tag">03</span>Befriend, Never Break</h4><p>Gift berries, win trust, and build a party of true bonds.</p></div>
+        <div class="card"><h4><span class="mini-tag">04</span>Climb the Circuit</h4><p>Rank up through sanctioned tournaments across four continents.</p></div>
+      </div>
+    </div>
+    <div class="page-footer"><span>AZ Tamer Pitch Deck</span><span>2 / 14</span></div>
+  </section>
+
+  <!-- 3. World of Aurel -->
+  <section class="slide">
+    <h2>The World of Aurel</h2>
+    <div class="row">
+      <div class="col" style="flex: 0.85;">
+        <div class="timeline">
+          <div class="t-item">
+            <div class="when">~3,000 years ago</div>
+            <div class="what">The First Dawn</div>
+            <p>The Veil to Ghandra thins for nine nights. Guardians walk into the world.</p>
+          </div>
+          <div class="t-item">
+            <div class="when">~700 years ago</div>
+            <div class="what">Aurelia &amp; the First Bond</div>
+            <p>A fisher-girl saves a storm-wounded Guardian on Agdao. Taming begins.</p>
+          </div>
+          <div class="t-item">
+            <div class="when">~400 years ago</div>
+            <div class="what">The Guild Compact</div>
+            <p>Tamers outlaw forced bonds and chains. Every guildhall becomes a sanctuary.</p>
+          </div>
+          <div class="t-item">
+            <div class="when">15 years ago</div>
+            <div class="what">The Legion War</div>
+            <p>Three friends seal nine corrupted generals in Ghandra. The seal weakens yearly.</p>
+          </div>
+          <div class="t-item">
+            <div class="when">Now</div>
+            <div class="what">You Graduate</div>
+            <p>The legends stop answering their radios. The Stormspire answers the dark.</p>
+          </div>
+        </div>
+      </div>
+      <div class="col" style="display:flex; flex-direction:column; gap:8pt;">
+        <div class="card"><h4><span class="mini-tag">W</span>Olivar</h4><p>Haven City, the five Grand Houses, and the University of Aurel.</p></div>
+        <div class="card"><h4><span class="mini-tag">W</span>Veyra</h4><p>Western sea-continent of a thousand harbors and drowned ruins.</p></div>
+        <div class="card"><h4><span class="mini-tag">E</span>Tharkand</h4><p>Red waste of dead war-engines; home to the Circuit-Crown Terra City.</p></div>
+        <div class="card"><h4><span class="mini-tag">S</span>Noruun</h4><p>Frozen south where auroras reflect Ghandra and ice Guardians sleep.</p></div>
+      </div>
+    </div>
+    <div class="page-footer"><span>AZ Tamer Pitch Deck</span><span>3 / 14</span></div>
+  </section>
+
+  <!-- 4. Agdao Island -->
+  <section class="slide">
+    <div class="kicker">The Cradle of Tamers</div>
+    <h2 style="margin-bottom: 12pt;">Agdao Island</h2>
+    <div class="row">
+      <div class="col">
+        <p class="quote" style="font-size: 14pt;">
+          "Aurelia pulled a storm-wounded Guardian from the surf and nursed it through a monsoon. The bond between them was the first of its kind: not a leash, but a promise kept both ways."
+        </p>
+        <p class="dim" style="margin-bottom: 8pt;">Seven hundred years later, the islanders still leave a fish on the north rocks every monsoon -- for <strong class="gold">Cero, the Surf-Light</strong>, the Guardian that started everything.</p>
+        <p>Agdao is where players first meet <strong>Greggy the Stormheart</strong>, retired to a windy bluff, guarding the old ways -- and the new silence.</p>
+      </div>
+      <div class="col" style="display:flex; align-items:center; justify-content:center;">
+        <div class="big-circle">
+          <div>
+            <div style="font-family:Georgia,serif; font-size:26pt; color:var(--gold); margin-bottom:8pt;">I</div>
+            <div style="font-family:Georgia,serif; font-size:16pt; color:var(--gold);">Circle of the First Fire</div>
+            <div style="font-size:10pt; color:var(--dim); margin-top:6pt;">The oldest Guild in the world.<br>Never moved. Never broke the Compact.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="page-footer"><span>AZ Tamer Pitch Deck</span><span>4 / 14</span></div>
+  </section>
+
+  <!-- 5. The Big Three -->
+  <section class="slide">
+    <h2>The Big Three</h2>
+    <p style="margin-bottom: 14pt;">Nine Guardians against nine generals. The Legion stayed behind, sealed. These are the three best friends who walked into Ghandra and came back legends.</p>
+    <div class="grid-3">
+      <div class="legend-card aljay">
+        <h4>Aljay <span style="color:var(--dim); font-size:10pt;">the Dawnflame</span></h4>
+        <div class="title">8-Time World Champion | Fire</div>
+        <div class="guardians dim">Firgara · Onthrofa · Vulfenix</div>
+        <p>Introverted, wise, and quietly carrying the weight of the world. Father to Azrin and Azrael. Husband to Mayor Airah. Now missing.</p>
+      </div>
+      <div class="legend-card greggy">
+        <h4>Greggy <span style="color:var(--dim); font-size:10pt;">the Stormheart</span></h4>
+        <div class="title">9-Time World Champion | Electric</div>
+        <div class="guardians dim">Raijura · Voltherion · Fulgrath</div>
+        <p>Gruff, weathered mentor retired to Agdao's bluff. The first to notice the silence -- and the first to call it by name: <em>Anomalies</em>.</p>
+      </div>
+      <div class="legend-card onnel">
+        <h4>Onnel <span style="color:var(--dim); font-size:10pt;">the Worldroot</span></h4>
+        <div class="title">5-Time World Champion | Nature</div>
+        <div class="guardians dim">Verdalune · Gaiathorn · Nyxroot</div>
+        <p>Quiet center of the trio. Wove the seal that holds Ghandra shut. Their anchor-thread is part of the seal -- and it has gone still.</p>
+      </div>
+    </div>
+    <div class="page-footer"><span>AZ Tamer Pitch Deck</span><span>5 / 14</span></div>
+  </section>
+
+  <!-- 6. Five Grand Houses -->
+  <section class="slide">
+    <h2>Choose Your House</h2>
+    <p style="margin-bottom: 14pt;">Every graduate pledges to one of the five Grand Houses of Olivar. Your House decides your starter Guardian, your Guild Card, and the family that has your back.</p>
+    <div class="grid-5">
+      <div class="house-card" style="border-color: rgba(242,96,58,0.4);">
+        <div class="icon" style="background: var(--fire);">P</div>
+        <div class="name" style="color: var(--fire);">Pyrelight</div>
+        <div class="type">Blaze</div>
+        <div class="starter">Cindcub</div>
+      </div>
+      <div class="house-card" style="border-color: rgba(58,157,242,0.4);">
+        <div class="icon" style="background: var(--water);">M</div>
+        <div class="name" style="color: var(--water);">Mistveil</div>
+        <div class="type">Tide</div>
+        <div class="starter">Puddla</div>
+      </div>
+      <div class="house-card" style="border-color: rgba(78,196,94,0.4);">
+        <div class="icon" style="background: var(--nature);">T</div>
+        <div class="name" style="color: var(--nature);">Thornward</div>
+        <div class="type">Verdant</div>
+        <div class="starter">Sproutle</div>
+      </div>
+      <div class="house-card" style="border-color: rgba(242,210,58,0.4);">
+        <div class="icon" style="background: var(--electric); color: var(--bg);">S</div>
+        <div class="name" style="color: var(--electric);">Stormcall</div>
+        <div class="type">Volt</div>
+        <div class="starter">Zaplet</div>
+      </div>
+      <div class="house-card" style="border-color: rgba(154,90,242,0.4);">
+        <div class="icon" style="background: var(--dark);">D</div>
+        <div class="name" style="color: var(--dark);">Duskwatch</div>
+        <div class="type">Umbra</div>
+        <div class="starter">Shadekit</div>
+      </div>
+    </div>
+    <p class="quote" style="margin-top: 20pt; text-align: center; border: none; background: transparent;">
+      Your starter carries a <strong class="gold">2.025x stat bloom</strong> no wild Guardian gets.<br>It is your wall, your sword, and your reason the early dungeons are survivable.
+    </p>
+    <div class="page-footer"><span>AZ Tamer Pitch Deck</span><span>6 / 14</span></div>
+  </section>
+
+  <!-- 7. Gameplay Pillars -->
+  <section class="slide">
+    <h2>Gameplay Pillars</h2>
+    <div class="grid-2">
+      <div class="pillar">
+        <div class="num">1</div>
+        <div>
+          <h4>Bond, Never Break</h4>
+          <p>Gift Sweet Berries to wild Guardians, win their trust, and fill your party. The Guild Compact forbids chains -- and so does the game's soul.</p>
+        </div>
+      </div>
+      <div class="pillar">
+        <div class="num">2</div>
+        <div>
+          <h4>Battle with Depth</h4>
+          <p>Strike to build SP, Guard to breathe, then cash in with Techniques. Ten elements multiply across every defender typing.</p>
+        </div>
+      </div>
+      <div class="pillar">
+        <div class="num">3</div>
+        <div>
+          <h4>Build Your Crawler</h4>
+          <p>Customize hull, engine, legs, cannon, scanner, and cargo. Upgrade with Mystic parts once wielded by legends.</p>
+        </div>
+      </div>
+      <div class="pillar">
+        <div class="num">4</div>
+        <div>
+          <h4>Rise in Rank</h4>
+          <p>Universal Rank moves only on Tournament Points earned in sanctioned brackets. Champions are made in the ring.</p>
+        </div>
+      </div>
+      <div class="pillar">
+        <div class="num">5</div>
+        <div>
+          <h4>Live the Story</h4>
+          <p>Every main quest plays out in a living 3D backdrop with directed cameras, character blocking, and atmospheric lighting.</p>
+        </div>
+      </div>
+      <div class="pillar">
+        <div class="num">6</div>
+        <div>
+          <h4>Evolve &amp; Fuse</h4>
+          <p>Multi-stage evolution lines, Aether studies, and fusion Guardians. Your team is a living pedigree.</p>
+        </div>
+      </div>
+    </div>
+    <div class="page-footer"><span>AZ Tamer Pitch Deck</span><span>7 / 14</span></div>
+  </section>
+
+  <!-- 8. Act I -->
+  <section class="slide">
+    <div class="act-label">Act I -- Fully Playable</div>
+    <h2 style="margin-bottom: 12pt;">The Road to the Stormheart</h2>
+    <p style="margin-bottom: 12pt;">Graduate. Pledge. Travel from Haven City to Agdao Island. Prove the diploma was deserved -- then discover the diploma was the easy part.</p>
+    <div class="row" style="gap: 12pt; align-items: stretch;">
+      <div class="card col"><h4><span class="mini-tag">I</span>Prologue</h4><p>The graduation trial, the loaner Guardians, and Instructor Hale's first radio call.</p></div>
+      <div class="card col"><h4><span class="mini-tag">II</span>Mossdeep &amp; Sunken Vault</h4><p>Two dungeons teach the four economies: SP, elements, body, and Crawler.</p></div>
+      <div class="card col"><h4><span class="mini-tag">III</span>Thunderfen Mire</h4><p>Farm Storm-Touched Amber for Historian Veyl and unlock the sea-chart to Agdao.</p></div>
+      <div class="card col"><h4><span class="mini-tag">IV</span>Stormspire Depths</h4><p>The war-engine isn't counting down -- it's answering something inside Ghandra's seal.</p></div>
+    </div>
+    <p class="quote" style="margin-top: 16pt;">
+      "Silence the Stormspire, then report to Greggy. The door left ajar is where Act II begins."
+    </p>
+    <div class="page-footer"><span>AZ Tamer Pitch Deck</span><span>8 / 14</span></div>
+  </section>
+
+  <!-- 9. Act II -->
+  <section class="slide">
+    <div class="act-label">Act II -- The Anomalies</div>
+    <h2 style="margin-bottom: 12pt;">Somebody Started Praying at the Door</h2>
+    <div class="row">
+      <div class="col">
+        <p style="margin-bottom: 8pt;">A terror-cult worships the nine corrupted Guardians of Ghandra as imprisoned gods. They call the Legion War <em>"the Great Theft"</em> and the seal <em>"the Ninefold Insult."</em></p>
+        <p class="dim" style="margin-bottom: 8pt;">They surfaced quietly -- defaced shrines, stolen relics, missing wardens -- until the night they stopped being quiet: the invasion of <strong>Hyujon</strong>, the Lantern of the North.</p>
+        <p>Their four Factions each worship a "choir" of the nine. The deadliest -- <strong>the Crownless Procession</strong> -- is led by the Veiled Cantor, whose voice sounds like a struck bell.</p>
+      </div>
+      <div class="col" style="display:flex; flex-direction:column; gap:6pt;">
+        <div class="card"><h4><span class="mini-tag">FD</span>Choir of the False Dawn</h4><p>Zealot-priests of counterfeit sunrise. Burn the unworthy, convert the rest.</p></div>
+        <div class="card"><h4><span class="mini-tag">SW</span>The Stillwater Communion</h4><p>Drowned-quiet infiltrators who call victims "the kept." Took Hyujon's harbor in one tide.</p></div>
+        <div class="card"><h4><span class="mini-tag">RT</span>The Rootless</h4><p>Saboteurs of soil and stone who starve cities into prayer.</p></div>
+        <div class="card" style="border-color: rgba(232,90,106,0.45);"><h4><span class="mini-tag">CP</span>The Crownless Procession</h4><p>The head of the snake. Their project: walk the Hollow Crown out of Ghandra.</p></div>
+      </div>
+    </div>
+    <div class="page-footer"><span>AZ Tamer Pitch Deck</span><span>9 / 14</span></div>
+  </section>
+
+  <!-- 10. Act III -->
+  <section class="slide">
+    <div class="act-label">Act III -- The Turmal Run</div>
+    <h2 style="margin-bottom: 12pt;">An Island That Never Agreed to Land</h2>
+    <div class="row">
+      <div class="col">
+        <p style="margin-bottom: 8pt;"><strong>Turmal</strong> floats above the western sea, held aloft by no map and no explanation. Its Seasonal Tournament is the loudest open circuit outside the Grand Coliseum -- and its Sponsors' gold is three layers laundered.</p>
+        <p class="dim" style="margin-bottom: 8pt;">Players enter not for glory, but for access. Behind the hospitality boxes waits a freight elevator not on any blueprint, and at the bottom: a Rip in space and time.</p>
+        <div class="quote" style="font-size: 12pt; padding: 8pt 0 8pt 12pt;">"They took the wrong sister. Coming, Rin."<br><span style="font-size:9pt; color:var(--dim);">-- Azrael's last note, pinned where Onnel's chair could see it</span></div>
+      </div>
+      <div class="col" style="display:flex; flex-direction:column; gap:6pt;">
+        <div class="card"><h4><span class="mini-tag">L</span>Louie, the Gear-Man</h4><p>Aljay's old Crawler mechanic. Kettle always on. Gives you the Mystic Dawnflame Manifold.</p></div>
+        <div class="card"><h4><span class="mini-tag">T</span>The Seasonal</h4><p>Bracket gauntlets, rival cameos, and Sponsor agents asking too-smooth questions.</p></div>
+        <div class="card"><h4><span class="mini-tag">V</span>The Violet Garden</h4><p>Azrin charges in alone. The Anomalies capture a daughter of the Dawnflame.</p></div>
+        <div class="card"><h4><span class="mini-tag">B</span>The Breathing Forest Hideout</h4><p>The Big Three's old camp. Azrael was here. So was Aljay.</p></div>
+      </div>
+    </div>
+    <div class="page-footer"><span>AZ Tamer Pitch Deck</span><span>10 / 14</span></div>
+  </section>
+
+  <!-- 11. Act IV & V -->
+  <section class="slide">
+    <div class="act-label">Acts IV &amp; V -- Built &amp; Designing</div>
+    <h2 style="margin-bottom: 12pt;">The Rip &amp; Foretales</h2>
+    <div class="row">
+      <div class="col">
+        <h3>The Rip</h3>
+        <p style="margin-bottom: 8pt;">A 300-year-old wound beneath Turmal, fed by caged Guardian sacrifices. The Sponsors and the Anomalies were never partners -- <strong>they were always the same thing.</strong></p>
+        <p class="dim" style="margin-bottom: 10pt;">The Old Empire did not drown in ambition. It was bled. The Reliquary Ledger proves it.</p>
+        <h3>Foretales</h3>
+        <p>The four-continent news network doesn't report the world -- it <strong>drafts</strong> it. Ivan Lawrence was not their first deletion; he was a rehearsal.</p>
+      </div>
+      <div class="col" style="display:flex; align-items:center;">
+        <div class="directive-box">
+          <div class="label">Standing Directive</div>
+          <p>"GLAZE. DO NOT TOUCH.<br><strong class="gold">NOT YET. SOON.</strong>"</p>
+          <div class="sub">The only three names the machine is forbidden to touch:<br>the Dawnflame, the Stormheart, and the Worldroot.</div>
+        </div>
+      </div>
+    </div>
+    <div class="page-footer"><span>AZ Tamer Pitch Deck</span><span>11 / 14</span></div>
+  </section>
+
+  <!-- 12. Cinematic Storytelling -->
+  <section class="slide">
+    <h2>Cinematic Storytelling</h2>
+    <p style="margin-bottom: 12pt;">AZ Tamer does not play story over black screens. Every conversation happens inside a <strong class="gold">living 3D backdrop</strong> with its own lighting rig, camera shots, and character blocking.</p>
+    <div class="grid-3">
+      <div class="card"><h4><span class="mini-tag">A</span>No Standing Statues</h4><p>Actors idle, gesture, shift weight, and turn to face the current speaker.</p></div>
+      <div class="card"><h4><span class="mini-tag">B</span>Handheld Sway</h4><p>Every shot breathes with a subtle, continuous camera sway -- a real operator holding the lens.</p></div>
+      <div class="card"><h4><span class="mini-tag">C</span>Glide Transitions</h4><p>Camera moves lerp smoothly from wide shots to intimate close-ups.</p></div>
+      <div class="card"><h4><span class="mini-tag">D</span>The Warm Camp</h4><p>Flickering firelight, navy-to-star sky, and the sound of waves on Agdao.</p></div>
+      <div class="card"><h4><span class="mini-tag">E</span>The Media Cathedral</h4><p>Piercing shafts of white light, high-contrast shadows, spark-motes like camera flashes.</p></div>
+      <div class="card"><h4><span class="mini-tag">F</span>The Bioluminescent Grotto</h4><p>Violet ambient light, pulsing flowers, wet reflections on keel-stone.</p></div>
+    </div>
+    <div class="page-footer"><span>AZ Tamer Pitch Deck</span><span>12 / 14</span></div>
+  </section>
+
+  <!-- 13. Why AZ Tamer? -->
+  <section class="slide">
+    <h2>Why AZ Tamer Stands Out</h2>
+    <div class="row" style="align-items: stretch;">
+      <div class="col" style="display:flex; flex-direction:column; gap:8pt;">
+        <div class="pillar"><div class="num">1</div><div><h4>Lore-First World</h4><p>3,000 years of history, written into every dungeon, Guild, and family line.</p></div></div>
+        <div class="pillar"><div class="num">2</div><div><h4>Genre Fusion</h4><p>Monster taming meets political thriller: erased records, puppet news networks, and cults older than empires.</p></div></div>
+        <div class="pillar"><div class="num">3</div><div><h4>Hand-Built Aesthetic</h4><p>Custom WebGL engine, hand-sculpted voxel Guardians, procedural textures, and atmospheric lighting.</p></div></div>
+      </div>
+      <div class="col" style="display:flex; flex-direction:column; gap:8pt;">
+        <div class="pillar"><div class="num">4</div><div><h4>Emotional Core</h4><p>A father's secret departure, a sister's desperate rescue, a mentor's buried fear, a champion's erased name.</p></div></div>
+        <div class="pillar"><div class="num">5</div><div><h4>Ethical Heart</h4><p>The Compact is not window dressing: bond by choice, no chains, Guardians as friends -- never tools.</p></div></div>
+        <div class="pillar"><div class="num">6</div><div><h4>Built by a Visionary</h4><p>A solo-dev epic with the scope of a saga and the soul of a world its creator wants players to believe in.</p></div></div>
+      </div>
+    </div>
+    <div class="page-footer"><span>AZ Tamer Pitch Deck</span><span>13 / 14</span></div>
+  </section>
+
+  <!-- 14. Final -->
+  <section class="slide center">
+    <div class="kicker">The Chronicle Awaits</div>
+    <h1 style="margin-bottom: 16pt;">Walk Well, Tamer.</h1>
+    <p style="max-width: 200mm; font-size: 15pt; line-height: 1.6; margin-bottom: 24pt;">
+      <strong class="gold">AZ Tamer</strong> is more than a monster-taming RPG. It is a living world, a cinematic saga, and an invitation to become the kind of legend the next generation of Tamers will whisper about.
+    </p>
+    <div class="row" style="justify-content:center; flex-wrap:wrap; gap: 10pt;">
+      <span class="tag">Play the Build</span>
+      <span class="tag">Pledge a House</span>
+      <span class="tag">Silence the Stormspire</span>
+      <span class="tag">Uncover Foretales</span>
+    </div>
+    <p class="dim" style="margin-top: 28pt; font-size: 11pt; letter-spacing: 2pt;">BY ALJAY LEODONES | AZ TAMER</p>
+    <div class="page-footer"><span>AZ Tamer Pitch Deck</span><span>14 / 14</span></div>
+  </section>
+
+</body>
+</html>

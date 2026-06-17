@@ -54,6 +54,79 @@ export const FAMILIES: Record<FamilyId, FamilyDef> = {
   ancient:  { id: 'ancient',  name: 'Ancient Fish',  habitat: 'both',  blurb: 'Living fossils and world-serpents from before the maps.' },
 };
 
+// ============================================================
+//  FISH PERSONALITY SYSTEM  (drives the rhythm-reel fight)
+// ============================================================
+// A "beat" is one timed input the angler must nail while reeling.
+//   tap   → press E / SPACE (or tap the ring)
+//   left  → press A / ←  (counter a left dart)
+//   right → press D / →  (counter a right dart)
+//   hold  → hold SPACE through the power-pull, release on the beat
+export type BeatType = 'tap' | 'left' | 'right' | 'hold';
+
+export type PersonalityId = 'passive' | 'energetic' | 'aggressive' | 'intelligent' | 'frenzied' | 'boss';
+
+export interface PersonalityDef {
+  id: PersonalityId;
+  name: string;
+  blurb: string;
+  /** seconds for a beat's timing ring to collapse through the target (lower = faster, harder) */
+  beatTime: number;
+  /** scale-unit half-width of the GOOD window around the target ring (smaller = tighter) */
+  window: number;
+  /** seconds of breathing room between consecutive beats */
+  gap: number;
+  /** relative spawn weights for each beat type */
+  mix: { tap: number; dir: number; hold: number };
+  /** 0..1 chance a beat is a feint — a flipped/decoy prompt that punishes button-mashers */
+  feint: number;
+  /** 0..1 chance to fire a rapid 2–3 beat burst with almost no gap */
+  burst: number;
+  /** stamina phases — a boss re-energises this many times, ramping speed each phase */
+  phases: number;
+}
+
+export const PERSONALITIES: Record<PersonalityId, PersonalityDef> = {
+  passive:     { id: 'passive',     name: 'Passive',     blurb: 'Slow, forgiving patterns — it barely fights.',          beatTime: 1.55, window: 0.22, gap: 0.52, mix: { tap: 0.72, dir: 0.23, hold: 0.05 }, feint: 0.00, burst: 0.00, phases: 1 },
+  energetic:   { id: 'energetic',   name: 'Energetic',   blurb: 'Frequent darting — keep up with the movement.',         beatTime: 1.18, window: 0.18, gap: 0.38, mix: { tap: 0.45, dir: 0.45, hold: 0.10 }, feint: 0.00, burst: 0.12, phases: 1 },
+  aggressive:  { id: 'aggressive',  name: 'Aggressive',  blurb: 'Sudden, hard-hitting attacks. Stay sharp.',             beatTime: 1.00, window: 0.16, gap: 0.32, mix: { tap: 0.40, dir: 0.40, hold: 0.20 }, feint: 0.06, burst: 0.20, phases: 1 },
+  intelligent: { id: 'intelligent', name: 'Intelligent', blurb: 'Fake-outs and delayed timing. Read it carefully.',      beatTime: 1.16, window: 0.17, gap: 0.44, mix: { tap: 0.48, dir: 0.30, hold: 0.22 }, feint: 0.30, burst: 0.05, phases: 1 },
+  frenzied:    { id: 'frenzied',    name: 'Frenzied',    blurb: 'Blistering, high-speed sequences. Pure reflex.',        beatTime: 0.82, window: 0.15, gap: 0.24, mix: { tap: 0.50, dir: 0.42, hold: 0.08 }, feint: 0.05, burst: 0.42, phases: 1 },
+  boss:        { id: 'boss',        name: 'Boss',        blurb: 'A multi-phase battle of attrition. Outlast it.',        beatTime: 0.96, window: 0.16, gap: 0.30, mix: { tap: 0.40, dir: 0.38, hold: 0.22 }, feint: 0.22, burst: 0.26, phases: 3 },
+};
+
+// ============================================================
+//  BIOME SYSTEM  (data scaffold for the multi-ecosystem world)
+// ============================================================
+// Each species belongs to a biome. Today the playable scenes are the
+// pond / river / secret-cove spots; biomes drive the Encyclopedia's
+// habitat grouping and the palette/ambience of future fishing scenes.
+export type BiomeId =
+  | 'river' | 'lake' | 'mangrove' | 'ocean' | 'deepsea'
+  | 'frozen' | 'volcanic' | 'storm' | 'abyss' | 'moonlit';
+
+export interface BiomeDef {
+  id: BiomeId;
+  name: string;
+  emoji: string;
+  blurb: string;
+  /** water palette for the future dedicated scene (deep / shallow hex) */
+  water: { deep: number; shallow: number };
+}
+
+export const BIOMES: Record<BiomeId, BiomeDef> = {
+  river:    { id: 'river',    name: 'River Run',      emoji: '🏞️', blurb: 'Cold, fast current racing south past the city.',          water: { deep: 0x16415a, shallow: 0x2f86a2 } },
+  lake:     { id: 'lake',     name: 'Great Pond',     emoji: '🪷', blurb: 'Calm, weed-fringed water just outside the walls.',         water: { deep: 0x123a52, shallow: 0x2f7a9a } },
+  mangrove: { id: 'mangrove', name: 'Tangled Mangrove', emoji: '🌿', blurb: 'Brackish roots and green murk where ambushers lurk.',     water: { deep: 0x1a3a30, shallow: 0x3a7a5a } },
+  ocean:    { id: 'ocean',    name: 'Open Ocean',     emoji: '🌊', blurb: 'Sunlit blue swells far from any shore.',                   water: { deep: 0x0e3a6a, shallow: 0x2f8ad0 } },
+  deepsea:  { id: 'deepsea',  name: 'The Deep Sea',   emoji: '🐙', blurb: 'Crushing dark where light gives up and lures glow.',        water: { deep: 0x06121e, shallow: 0x0e2a44 } },
+  frozen:   { id: 'frozen',   name: 'Frozen Waters',  emoji: '❄️', blurb: 'Black water under shelf-ice and the pale dawn.',           water: { deep: 0x123048, shallow: 0x6ab0d8 } },
+  volcanic: { id: 'volcanic', name: 'Volcanic Waters', emoji: '🌋', blurb: 'Steaming sulphur pools fed by the deep fire.',            water: { deep: 0x2a0e0e, shallow: 0x7a2a14 } },
+  storm:    { id: 'storm',    name: 'Storm Sea',      emoji: '⛈️', blurb: 'Lightning-lashed chop where the thunder-runs spawn.',      water: { deep: 0x1a2342, shallow: 0x3a4a7a } },
+  abyss:    { id: 'abyss',    name: 'Corrupted Abyss', emoji: '🕳️', blurb: 'The drowned vault under the pond. Things remember here.', water: { deep: 0x0a0a16, shallow: 0x1a2a4a } },
+  moonlit:  { id: 'moonlit',  name: 'Moonlit Lake',   emoji: '🌙', blurb: 'A mirror-still pool that only wakes after dark.',          water: { deep: 0x141a3a, shallow: 0x3a4a8a } },
+};
+
 // ---------------- time of day & weather ----------------
 export type TimeOfDay = 'dawn' | 'day' | 'dusk' | 'night';
 export type Weather = 'clear' | 'cloudy' | 'rain' | 'storm' | 'fog';
@@ -111,6 +184,12 @@ export interface SpeciesDef {
   fight: { stamina: number; strength: number; aggression: number; intelligence: number };
   spawn: SpawnRule;
   lore: string;
+  /** how it fights — drives the rhythm-reel pattern (auto-derived if omitted) */
+  personality?: PersonalityId;
+  /** which ecosystem it belongs to (auto-derived if omitted) */
+  biome?: BiomeId;
+  /** optional hand-authored opening beat sequence for signature fights */
+  signature?: BeatType[];
 }
 
 // helper to keep the table terse
@@ -285,7 +364,254 @@ export const FISH: Record<string, SpeciesDef> = Object.fromEntries(([
     { stamina: 10, strength: 10, aggression: 10, intelligence: 10 },
     { time: ['night'], weather: ['storm'], spot: ['secret'], weight: 0.4, baitPref: ['celestial'], minLevel: 40, needsSpecialBait: true, ceiling: 0.0001 },
     'Its scales are said to be maps of worlds that have not been born yet. One in a hundred thousand casts. Maybe one in a lifetime.'),
+
+  // ============================================================
+  //  ROSTER EXPANSION — new species across the wider biomes
+  //  (reuse existing body models; traits assigned below)
+  // ============================================================
+  // ---------- more Pond Fish ----------
+  F('bluegill', 'Bluegill', 'pond', 'Common', 'minnow',
+    { body: 0x5a7a8a, belly: 0xe8e0a8, fin: 0x3a5a6a, accent: 0xf2c14e },
+    [0.1, 0.6], [10, 20], 'small', 1.6, 70,
+    { stamina: 3, strength: 2, aggression: 3, intelligence: 2 },
+    { time: ['day', 'dusk'], spot: ['pond'], weight: 90, baitPref: ['worm', 'cricket'] },
+    'A pugnacious little panfish with a temper three sizes too big for it.'),
+  F('mirror_carp', 'Mirror Carp', 'pond', 'Uncommon', 'carp',
+    { body: 0xb0b4c0, belly: 0xe8ecf4, fin: 0x8a8e9a, accent: 0xd0d4e0, glow: 0xc8d0e8 },
+    [1.2, 5.5], [32, 66], 'large', 0.9, 300,
+    { stamina: 6, strength: 5, aggression: 3, intelligence: 5 },
+    { time: ['dawn', 'day', 'dusk'], weather: ['cloudy', 'clear'], spot: ['pond'], weight: 34, baitPref: ['bread', 'kelp_extract'] },
+    'Scattered mirror-scales throw the sky back at you. Wary, patient, and hard to fool twice.'),
+  F('frost_minnow', 'Frost Minnow', 'pond', 'Uncommon', 'minnow',
+    { body: 0xbfe0f0, belly: 0xf4fbff, fin: 0x8ac0e0, accent: 0xe0f4ff, glow: 0xbfe8ff },
+    [0.1, 0.7], [9, 18], 'small', 2.0, 260,
+    { stamina: 4, strength: 3, aggression: 4, intelligence: 4 },
+    { time: ['dawn'], weather: ['fog', 'cloudy'], spot: ['pond', 'river'], weight: 40, baitPref: ['glowworm', 'grub'] },
+    'A sliver of living frost. It only shoals up when the dawn air bites.'),
+  F('shadow_koi', 'Shadow Koi', 'pond', 'Rare', 'koi',
+    { body: 0x2a2a4a, belly: 0x4a4a7a, fin: 0x8a6aff, accent: 0xb18ae8, glow: 0x6a4aff },
+    [2.5, 8.5], [50, 90], 'large', 1.4, 880,
+    { stamina: 7, strength: 6, aggression: 5, intelligence: 8 },
+    { time: ['night'], spot: ['pond'], weight: 14, baitPref: ['glowworm', 'bread'], minLevel: 6 },
+    'A temple koi that swam too long in moonless water. Its gold went to black, but it kept the cunning.'),
+
+  // ---------- more River Fish ----------
+  F('rainbow_trout', 'Rainbow Trout', 'river', 'Common', 'trout',
+    { body: 0x8a9a8a, belly: 0xf0eedd, fin: 0xe85a8a, accent: 0x5ad8c8 },
+    [0.4, 2.2], [20, 44], 'small', 2.3, 95,
+    { stamina: 4, strength: 4, aggression: 5, intelligence: 4 },
+    { time: ['dawn', 'day', 'dusk'], spot: ['river'], weight: 88, baitPref: ['cricket', 'worm'] },
+    'A flank like an oil-slick rainbow. Fights three times its size and knows it.'),
+  F('steelhead', 'Steelhead', 'river', 'Uncommon', 'trout',
+    { body: 0x9aa6b4, belly: 0xeef2f8, fin: 0x6a7a8a, accent: 0xc0ccd8 },
+    [1.0, 4.0], [32, 64], 'medium', 2.5, 320,
+    { stamina: 6, strength: 6, aggression: 6, intelligence: 5 },
+    { time: ['dawn', 'dusk'], weather: ['rain', 'cloudy'], spot: ['river'], weight: 40, baitPref: ['minnow_lure', 'cricket'] },
+    'A sea-run trout of hammered chrome. It runs downstream like it owes the ocean money.'),
+  F('glacier_salmon', 'Glacier Salmon', 'river', 'Rare', 'salmon',
+    { body: 0x9ad0e8, belly: 0xeafaff, fin: 0x5a9ad8, accent: 0xbfeaff, glow: 0xaee0ff },
+    [2.5, 9.0], [50, 92], 'large', 2.1, 900,
+    { stamina: 7, strength: 7, aggression: 6, intelligence: 6 },
+    { time: ['dawn'], weather: ['fog', 'cloudy'], spot: ['river'], weight: 20, baitPref: ['glowworm', 'cricket'], minLevel: 9 },
+    'Spawned under shelf-ice, cold enough to fog the line. It hits like a calving glacier.'),
+  F('magma_trout', 'Magma Trout', 'river', 'Elite', 'trout',
+    { body: 0xe8541e, belly: 0xffc88a, fin: 0xf2c14e, accent: 0xff8a3a, glow: 0xff6a2a },
+    [3.0, 10.0], [56, 100], 'large', 2.8, 2200,
+    { stamina: 8, strength: 8, aggression: 8, intelligence: 6 },
+    { time: ['dusk', 'night'], weather: ['clear'], spot: ['secret'], weight: 10, baitPref: ['electrozap', 'dragon'], minLevel: 17 },
+    'It lives where the river runs over the deep fire. The water around it shimmers and the line smokes.'),
+
+  // ---------- more Predator Fish ----------
+  F('bluefin_tuna', 'Bluefin Tuna', 'predator', 'Rare', 'salmon',
+    { body: 0x1a4a7a, belly: 0xd0dce8, fin: 0xf2c14e, accent: 0x3a8ad9 },
+    [6.0, 22.0], [80, 170], 'large', 3.0, 1050,
+    { stamina: 8, strength: 8, aggression: 7, intelligence: 5 },
+    { time: ['day', 'dawn'], weather: ['clear'], spot: ['secret'], weight: 22, baitPref: ['minnow_lure', 'chum_bucket'], minLevel: 12 },
+    'A torpedo of warm-blooded muscle. Hook one and your reel screams before you do.'),
+  F('reef_shark', 'Reef Shark', 'predator', 'Elite', 'pike',
+    { body: 0x6a7a8a, belly: 0xe8ecf0, fin: 0x4a5a6a, accent: 0x9aa6b4 },
+    [8.0, 26.0], [110, 240], 'massive', 2.6, 2400,
+    { stamina: 9, strength: 9, aggression: 9, intelligence: 6 },
+    { time: ['day', 'dusk', 'night'], weather: ['clear', 'cloudy'], spot: ['secret'], weight: 12, baitPref: ['chum_bucket', 'minnow_lure'], minLevel: 18 },
+    'It smells the blood of a bad cast from across the cove. All teeth and bad intentions.'),
+  F('barracuda', 'Barracuda', 'predator', 'Elite', 'pike',
+    { body: 0x8a9a8a, belly: 0xe0e6d8, fin: 0x5a6a5a, accent: 0xc8d0c0 },
+    [3.0, 11.0], [70, 140], 'large', 2.9, 2100,
+    { stamina: 7, strength: 8, aggression: 9, intelligence: 7 },
+    { time: ['day', 'dusk'], spot: ['secret'], weight: 14, baitPref: ['minnow_lure'], minLevel: 16 },
+    'A chrome dagger that strikes faster than the eye tracks. It hunts flash and motion.'),
+  F('electric_eel', 'Electric Eel', 'predator', 'Elite', 'eel',
+    { body: 0x3a3a1a, belly: 0xf2e14e, fin: 0xffe14a, accent: 0xfff0a8, glow: 0xffe14a },
+    [2.0, 8.0], [80, 160], 'large', 1.8, 2300,
+    { stamina: 8, strength: 7, aggression: 8, intelligence: 8 },
+    { time: ['night'], weather: ['storm', 'rain'], spot: ['secret', 'river'], weight: 11, baitPref: ['electrozap'], minLevel: 19 },
+    'Grab the line wrong and you will feel its opinion of you all the way to your teeth.'),
+  F('gulper_eel', 'Gulper Eel', 'predator', 'Mythical', 'eel',
+    { body: 0x14101e, belly: 0x2a1a3a, fin: 0x8a3aff, accent: 0xc86aff, glow: 0x8a3aff },
+    [4.0, 14.0], [120, 220], 'massive', 1.5, 6600,
+    { stamina: 9, strength: 9, aggression: 8, intelligence: 9 },
+    { time: ['night'], spot: ['secret'], weight: 5, baitPref: ['dragon', 'glowworm'], minLevel: 27 },
+    'Almost all mouth and hunger. It can swallow prey larger than itself — and resents the limit.'),
+
+  // ---------- more Exotic Fish ----------
+  F('jellyfish_drifter', 'Jellyfish Drifter', 'exotic', 'Uncommon', 'moon',
+    { body: 0xd8b0f0, belly: 0xf4e8ff, fin: 0xb88ae0, accent: 0xeed8ff, glow: 0xd0a8ff },
+    [0.3, 2.0], [18, 44], 'medium', 0.7, 340,
+    { stamina: 5, strength: 3, aggression: 2, intelligence: 7 },
+    { time: ['night', 'dusk'], spot: ['secret', 'pond'], weight: 30, baitPref: ['glowworm'], minLevel: 8 },
+    'Not technically a fish, but it bites the lure and glows, so the Encyclopedia lets it slide.'),
+  F('lanternfish', 'Lanternfish', 'exotic', 'Rare', 'prism',
+    { body: 0x1a2a4a, belly: 0x2a3a5a, fin: 0x6affd8, accent: 0xf2e14e, glow: 0x8affe0 },
+    [0.5, 3.0], [16, 40], 'small', 1.7, 860,
+    { stamina: 6, strength: 5, aggression: 5, intelligence: 8 },
+    { time: ['night'], spot: ['secret'], weight: 18, baitPref: ['glowworm', 'electrozap'], minLevel: 14 },
+    'It carries its own cold light into the dark. Whole shoals of them turn the deep into a drowned sky.'),
+  F('ember_prism', 'Ember Prism', 'exotic', 'Elite', 'prism',
+    { body: 0xff6a2a, belly: 0xffd8a8, fin: 0xf2c14e, accent: 0xff3a6a, glow: 0xff8a2a },
+    [1.2, 4.5], [26, 56], 'medium', 2.0, 2500,
+    { stamina: 7, strength: 6, aggression: 7, intelligence: 8 },
+    { time: ['dusk', 'night'], weather: ['clear'], spot: ['secret'], weight: 9, baitPref: ['celestial', 'electrozap'], minLevel: 20 },
+    'A prism fish that swam too near the volcanic vents. Now it refracts firelight instead of sun.'),
+  F('mirror_ray', 'Mirror Ray', 'exotic', 'Elite', 'ray',
+    { body: 0xc0c8d8, belly: 0xeef2fa, fin: 0x8a9ab0, accent: 0xd8e0ee, glow: 0xcdd8ee },
+    [4.0, 13.0], [90, 160], 'large', 1.3, 2550,
+    { stamina: 8, strength: 7, aggression: 5, intelligence: 9 },
+    { time: ['day'], weather: ['clear'], spot: ['secret'], weight: 9, baitPref: ['celestial'], minLevel: 21 },
+    'Its back is a flawless mirror; from below it simply is the sky. You hook it mostly by accident.'),
+  F('void_moonfish', 'Void Moonfish', 'exotic', 'Mythical', 'moon',
+    { body: 0x10101e, belly: 0x2a2a4a, fin: 0x6a6aff, accent: 0xb18ae8, glow: 0x4a3aff },
+    [4.0, 12.0], [44, 84], 'large', 1.5, 6800,
+    { stamina: 9, strength: 7, aggression: 6, intelligence: 10 },
+    { time: ['night'], weather: ['fog'], spot: ['secret'], weight: 4, baitPref: ['celestial', 'glowworm'], minLevel: 28 },
+    'A moonfish turned inside-out by the abyss. It reflects no light at all — only the absence of it.'),
+  F('solar_ray', 'Solar Ray', 'exotic', 'Legendary', 'ray',
+    { body: 0xf2c14e, belly: 0xfff0c0, fin: 0xff8a2a, accent: 0xffe14a, glow: 0xffd25a },
+    [12.0, 34.0], [120, 210], 'massive', 1.6, 23500,
+    { stamina: 10, strength: 9, aggression: 8, intelligence: 10 },
+    { time: ['day'], weather: ['clear'], spot: ['secret'], weight: 0.9, baitPref: ['celestial'], minLevel: 33, needsSpecialBait: true },
+    'The day-sky\'s answer to the Celestial Ray — a disc of pure noon that only breaches under a cloudless sun.'),
+
+  // ---------- more Ancient Fish ----------
+  F('armored_gar', 'Armored Gar', 'ancient', 'Rare', 'fossil',
+    { body: 0x4a5a3a, belly: 0xb0b888, fin: 0x2a3a1a, accent: 0x6a7a4a },
+    [3.0, 11.0], [60, 130], 'large', 1.2, 920,
+    { stamina: 8, strength: 8, aggression: 6, intelligence: 4 },
+    { time: ['day', 'dusk', 'night'], weather: ['fog', 'cloudy'], spot: ['secret', 'river'], weight: 22, baitPref: ['minnow_lure', 'worm'], minLevel: 11 },
+    'A living spear sheathed in interlocking bone plates. It has not needed to change in a hundred million years.'),
+  F('cave_catfish', 'Blind Cave Catfish', 'ancient', 'Elite', 'catfish',
+    { body: 0xd8c8b8, belly: 0xf0e8dc, fin: 0xb0a090, accent: 0xe8dccc },
+    [4.0, 15.0], [70, 140], 'massive', 0.7, 2300,
+    { stamina: 9, strength: 8, aggression: 4, intelligence: 8 },
+    { time: ['day', 'night'], spot: ['secret'], weight: 13, baitPref: ['grub', 'worm'], minLevel: 16 },
+    'Eyeless, ghost-pale, born to water that has never seen the sun. It feels your lure as a tremor in the dark.'),
+  F('magma_leviathan', 'Magma Leviathan', 'ancient', 'Mythical', 'leviathan',
+    { body: 0x3a1010, belly: 0xff6a2a, fin: 0x1a0808, accent: 0xff3a1a, glow: 0xff5a1a },
+    [12.0, 32.0], [100, 180], 'massive', 1.7, 7300,
+    { stamina: 10, strength: 10, aggression: 9, intelligence: 7 },
+    { time: ['night'], weather: ['storm', 'clear'], spot: ['secret'], weight: 4, baitPref: ['dragon', 'celestial'], minLevel: 29 },
+    'It sleeps in the magma chambers and surfaces molten. The water boils where it breaches.'),
+  F('frost_serpent', 'Frost Serpent', 'ancient', 'Legendary', 'serpent',
+    { body: 0x6ab0d8, belly: 0xeafaff, fin: 0xf2c14e, accent: 0xbfeaff, glow: 0xaee0ff },
+    [16.0, 44.0], [170, 300], 'massive', 1.7, 23000,
+    { stamina: 10, strength: 10, aggression: 9, intelligence: 9 },
+    { time: ['dawn'], weather: ['fog'], spot: ['secret'], weight: 1.1, baitPref: ['celestial', 'dragon'], minLevel: 35, needsSpecialBait: true },
+    'A serpent of living glacier that wound the frozen river into its coils. It surfaces only in the cold first light.'),
+  F('abyssal_dragonfish', 'Abyssal Dragonfish', 'ancient', 'Legendary', 'dragonfish',
+    { body: 0x0a0814, belly: 0x2a1a3a, fin: 0x8a3aff, accent: 0x4affd8, glow: 0x6a2aff },
+    [22.0, 60.0], [200, 360], 'massive', 2.0, 26000,
+    { stamina: 10, strength: 10, aggression: 10, intelligence: 10 },
+    { time: ['night'], weather: ['storm', 'fog'], spot: ['secret'], weight: 0.8, baitPref: ['celestial', 'dragon'], minLevel: 38, needsSpecialBait: true },
+    'The Worldscale\'s drowned cousin, grown vast in the lightless vault. It lures prey with a single cold star and swallows the rest.'),
 ] as SpeciesDef[]).map(s => [s.id, s]));
+
+// ============================================================
+//  PERSONALITY + BIOME ASSIGNMENT
+//  Kept out-of-line so the species table stays terse. Anything not
+//  listed falls back to a sensible auto-derivation from its stats,
+//  so future species "just work" without a trait entry.
+// ============================================================
+const SPECIES_TRAITS: Record<string, { personality?: PersonalityId; biome?: BiomeId; signature?: BeatType[] }> = {
+  // — originals —
+  silver_minnow:    { personality: 'passive',     biome: 'lake' },
+  pond_carp:        { personality: 'passive',     biome: 'lake' },
+  golden_koi:       { personality: 'intelligent', biome: 'moonlit' },
+  emerald_carp:     { personality: 'energetic',   biome: 'mangrove' },
+  royal_dragon_koi: { personality: 'intelligent', biome: 'moonlit', signature: ['tap', 'hold', 'left', 'right', 'tap'] },
+  swift_trout:      { personality: 'energetic',   biome: 'river' },
+  redfin_trout:     { personality: 'energetic',   biome: 'river' },
+  crystal_salmon:   { personality: 'energetic',   biome: 'river', signature: ['tap', 'hold', 'tap'] },
+  thunder_salmon:   { personality: 'aggressive',  biome: 'storm', signature: ['tap', 'hold', 'tap'] },
+  emperor_salmon:   { personality: 'boss',        biome: 'river' },
+  pike:             { personality: 'aggressive',  biome: 'lake' },
+  razor_pike:       { personality: 'aggressive',  biome: 'mangrove' },
+  shadow_pike:      { personality: 'frenzied',    biome: 'abyss' },
+  bonejaw_pike:     { personality: 'boss',        biome: 'abyss' },
+  abyss_pike:       { personality: 'boss',        biome: 'abyss' },
+  moonfish:         { personality: 'intelligent', biome: 'moonlit' },
+  starfish_eel:     { personality: 'intelligent', biome: 'deepsea' },
+  prism_fish:       { personality: 'energetic',   biome: 'ocean' },
+  aurora_swimmer:   { personality: 'intelligent', biome: 'frozen' },
+  celestial_ray:    { personality: 'boss',        biome: 'deepsea' },
+  fossil_fin:       { personality: 'passive',     biome: 'deepsea' },
+  elder_catfish:    { personality: 'aggressive',  biome: 'lake' },
+  leviathan_fry:    { personality: 'frenzied',    biome: 'deepsea' },
+  titan_serpent:    { personality: 'boss',        biome: 'river' },
+  worldscale_dragonfish: { personality: 'boss',   biome: 'volcanic' },
+  // — expansion —
+  bluegill:          { personality: 'passive',     biome: 'lake' },
+  mirror_carp:       { personality: 'intelligent', biome: 'lake' },
+  frost_minnow:      { personality: 'energetic',   biome: 'frozen' },
+  shadow_koi:        { personality: 'intelligent', biome: 'moonlit' },
+  rainbow_trout:     { personality: 'energetic',   biome: 'river' },
+  steelhead:         { personality: 'energetic',   biome: 'river' },
+  glacier_salmon:    { personality: 'aggressive',  biome: 'frozen' },
+  magma_trout:       { personality: 'frenzied',    biome: 'volcanic' },
+  bluefin_tuna:      { personality: 'frenzied',    biome: 'ocean', signature: ['left', 'right', 'tap', 'hold'] },
+  reef_shark:        { personality: 'aggressive',  biome: 'ocean', signature: ['tap', 'left', 'right', 'tap', 'tap', 'tap'] },
+  barracuda:         { personality: 'frenzied',    biome: 'ocean' },
+  electric_eel:      { personality: 'aggressive',  biome: 'storm' },
+  gulper_eel:        { personality: 'boss',        biome: 'deepsea' },
+  jellyfish_drifter: { personality: 'passive',     biome: 'ocean' },
+  lanternfish:       { personality: 'intelligent', biome: 'deepsea' },
+  ember_prism:       { personality: 'aggressive',  biome: 'volcanic' },
+  mirror_ray:        { personality: 'intelligent', biome: 'ocean' },
+  void_moonfish:     { personality: 'intelligent', biome: 'abyss' },
+  solar_ray:         { personality: 'boss',        biome: 'ocean' },
+  armored_gar:       { personality: 'aggressive',  biome: 'mangrove' },
+  cave_catfish:      { personality: 'intelligent', biome: 'abyss' },
+  magma_leviathan:   { personality: 'boss',        biome: 'volcanic' },
+  frost_serpent:     { personality: 'boss',        biome: 'frozen' },
+  abyssal_dragonfish:{ personality: 'boss',        biome: 'abyss' },
+};
+
+function derivePersonality(sp: SpeciesDef): PersonalityId {
+  if (rarityRank(sp.rarity) >= 4) return 'boss';           // Mythical & Legendary fight as bosses
+  const f = sp.fight;
+  if (f.intelligence >= 8) return 'intelligent';
+  if (f.aggression >= 9) return 'frenzied';
+  if (f.aggression >= 6) return 'aggressive';
+  if (f.aggression + f.strength >= 8) return 'energetic';
+  return 'passive';
+}
+function deriveBiome(sp: SpeciesDef): BiomeId {
+  const spot = sp.spawn.spot?.[0];
+  if (spot === 'river') return 'river';
+  if (spot === 'secret') return 'abyss';
+  return 'lake';
+}
+
+// resolve traits on every species, in place
+for (const sp of Object.values(FISH)) {
+  const t = SPECIES_TRAITS[sp.id];
+  sp.personality = sp.personality ?? t?.personality ?? derivePersonality(sp);
+  sp.biome = sp.biome ?? t?.biome ?? deriveBiome(sp);
+  if (!sp.signature && t?.signature) sp.signature = t.signature;
+}
+
+/** The resolved fight personality for a species. */
+export const personalityOf = (sp: SpeciesDef): PersonalityDef => PERSONALITIES[sp.personality ?? derivePersonality(sp)];
+/** The resolved biome a species belongs to. */
+export const biomeOf = (sp: SpeciesDef): BiomeDef => BIOMES[sp.biome ?? deriveBiome(sp)];
 
 export const ALL_FISH = Object.values(FISH);
 export const fishByFamily = (fam: FamilyId): SpeciesDef[] => ALL_FISH.filter(f => f.family === fam);
@@ -458,7 +784,7 @@ export const FISH_ACHIEVEMENTS: FishAchievement[] = [
   { id: 'hundred_fish', name: 'Old Salt', desc: 'Catch 100 fish.', icon: '🦑', check: fs => fs.totalCaught >= 100 },
   { id: 'family_pond', name: 'Pond Scholar', desc: 'Discover every Pond Fish.', icon: '🪷', check: fs => fishByFamily('pond').every(f => fs.discovered[f.id]) },
   { id: 'family_river', name: 'River Scholar', desc: 'Discover every River Fish.', icon: '🌊', check: fs => fishByFamily('river').every(f => fs.discovered[f.id]) },
-  { id: 'collector', name: 'Master Collector', desc: 'Discover all 25 species.', icon: '📖', check: fs => ALL_FISH.every(f => fs.discovered[f.id]) },
+  { id: 'collector', name: 'Master Collector', desc: `Discover all ${ALL_FISH.length} species.`, icon: '📖', check: fs => ALL_FISH.every(f => fs.discovered[f.id]) },
   { id: 'first_rare', name: 'A Glint Below', desc: 'Land a Rare fish.', icon: '🟦', check: fs => Object.entries(fs.discovered).some(([id]) => rarityRank(FISH[id]?.rarity ?? 'Common') >= 2) },
   { id: 'first_legend', name: 'Touched by Legend', desc: 'Land a Legendary fish.', icon: '🌈', check: fs => fs.legendaryCount >= 1 },
   { id: 'streak5', name: 'On a Roll', desc: 'Reach a 5-catch streak.', icon: '🔥', check: fs => fs.bestStreak >= 5 },
@@ -540,7 +866,7 @@ export const FISHING_BOUNTIES: FishBounty[] = [
   { id: 'fq_exotic', giver: 'Researcher Wren', desc: 'Discover any Exotic Fish.', reward: { shards: 1200 }, check: fs => fishByFamily('exotic').some(f => fs.discovered[f.id]) },
   { id: 'fq_ancient', giver: 'Researcher Wren', desc: 'Discover any Ancient Fish.', reward: { shards: 1500, bait: 'dragon', baitQty: 2 }, check: fs => fishByFamily('ancient').some(f => fs.discovered[f.id]) },
   { id: 'fq_legend', giver: 'Old Man River', desc: 'Land a Legendary fish.', reward: { shards: 5000, bait: 'celestial', baitQty: 1 }, check: fs => fs.legendaryCount >= 1 },
-  { id: 'fq_collect', giver: 'Researcher Wren', desc: 'Discover all 25 species.', reward: { shards: 12000 }, check: fs => ALL_FISH.every(f => fs.discovered[f.id]) },
+  { id: 'fq_collect', giver: 'Researcher Wren', desc: `Discover all ${ALL_FISH.length} species.`, reward: { shards: 12000 }, check: fs => ALL_FISH.every(f => fs.discovered[f.id]) },
   { id: 'fq_lines', giver: 'Old Bait Pete', desc: 'Own at least 3 specialized lines.', reward: { shards: 500 }, check: fs => (fs.ownedLines ?? []).length >= 3 },
   { id: 'fq_titan', giver: 'Captain Finwick', desc: 'Catch the Titan River Serpent.', reward: { shards: 6000 }, check: fs => !!fs.discovered['titan_serpent'] },
   { id: 'fq_abyss', giver: 'Old Man River', desc: 'Catch the Abyss Pike.', reward: { shards: 6000 }, check: fs => !!fs.discovered['abyss_pike'] },
@@ -744,6 +1070,7 @@ export interface ScoreInput {
   lineId?: string;
   fightGrade?: string;
   gradeMult?: number;
+  rhythmBonusPoints?: number;
 }
 
 export function computeScore(inp: ScoreInput): ScoreBreakdown {
@@ -768,7 +1095,8 @@ export function computeScore(inp: ScoreInput): ScoreBreakdown {
   if (inp.legendaryEncounter) special += 3000;
   if (inp.newDailyRecord) special += 750;
   
-  const baseTotal = rarity + size + time + distance + perfectHook + combo + discovery + special;
+  const rhythmBonus = inp.rhythmBonusPoints ?? 0;
+  const baseTotal = rarity + size + time + distance + perfectHook + combo + discovery + special + rhythmBonus;
   const mult = inp.gradeMult ?? 1.0;
   const total = Math.round(baseTotal * mult);
   
@@ -782,6 +1110,9 @@ export function computeScore(inp: ScoreInput): ScoreBreakdown {
     { key: 'discovery', label: 'Discovery Bonus', value: discovery },
     { key: 'special', label: 'Special Event Bonus', value: special },
   ];
+  if (rhythmBonus > 0) {
+    labels.push({ key: 'rhythmBonus', label: 'Rhythm Special Beats & Chain', value: rhythmBonus });
+  }
   if (inp.fightGrade) {
     labels.push({ key: 'grade', label: `Fight Rank ${inp.fightGrade} (×${mult.toFixed(2)})`, value: total - baseTotal });
   }

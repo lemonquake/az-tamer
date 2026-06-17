@@ -95,10 +95,11 @@ export interface CatchSummaryData {
   location: string; rodName: string; baitName: string; timeLabel: string;
   fightGrade: string;
   gradeMult: number;
-  perfectLeansCount: number;
-  wrongLeansCount: number;
-  specialMovesCountered: number;
-  totalSpecialMoves: number;
+  perfectHits: number;
+  greatHits: number;
+  goodHits: number;
+  misses: number;
+  maxCombo: number;
 }
 
 function rollNumber(node: HTMLElement, target: number, durMs: number, onDone: () => void): void {
@@ -180,10 +181,12 @@ export function showCatchSummary(data: CatchSummaryData): Promise<'again' | 'qui
           <span>🎣 ${data.rodName}</span>
           <span>🪱 ${data.baitName}</span>
           ${data.streak >= 2 ? `<span class="streak">🔥 ${data.streak} Streak</span>` : ''}
-          <div class="fight-details-row">
-            <span>Lean Counters: <b>${data.perfectLeansCount.toFixed(1)}s</b></span>
-            <span>Wrong Leans: <b>${data.wrongLeansCount.toFixed(1)}s</b></span>
-            <span>Moves Intercepted: <b>${data.specialMovesCountered} / ${data.totalSpecialMoves}</b></span>
+          <div class="fight-details-row" style="flex-wrap:wrap;gap:4px 12px">
+            <span>Perfects: <b style="color:#ff7ad8">${data.perfectHits}</b></span>
+            <span>Greats: <b style="color:#5ab8e8">${data.greatHits}</b></span>
+            <span>Goods: <b style="color:#5ad88a">${data.goodHits}</b></span>
+            <span>Misses: <b style="color:#ff5a6a">${data.misses}</b></span>
+            <span>Max Combo: <b style="color:#ff9f43">🔥 ${data.maxCombo}</b></span>
           </div>
         </div>
         <div class="fso-scores">${rowsHtml}</div>
@@ -611,7 +614,7 @@ function tabCodex(fs: FishingState): TabBody {
     return `<div class="codex-fam"><h4>${FAMILIES[fam].name} <span class="sub">${FAMILIES[fam].blurb}</span></h4><div class="codex-grid">${cards}</div></div>`;
   }).join('');
   return {
-    html: `<div class="codex-head sub">Species discovered: <b style="color:var(--ui-gold)">${discoveredCount} / 25</b></div><div class="sub" style="margin-top:-6px;margin-bottom:12px;color:var(--ui-blue)">Click any discovered fish to inspect its 3D model!</div>${sections}`,
+    html: `<div class="codex-head sub">Species discovered: <b style="color:var(--ui-gold)">${discoveredCount} / ${ALL_FISH.length}</b></div><div class="sub" style="margin-top:-6px;margin-bottom:12px;color:var(--ui-blue)">Click any discovered fish to inspect its 3D model!</div>${sections}`,
     wire(root) {
       root.querySelectorAll<HTMLElement>('.codex-card[data-fish]').forEach(card => {
         card.onclick = () => {

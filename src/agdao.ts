@@ -92,7 +92,7 @@ export class AgdaoIsland {
   constructor(private player: Player, private spawnAt: 'pier' | 'cave' = 'pier') {}
 
   get view() {
-    return { scene: this.scene, camera: this.camera, update: (dt: number) => this.update(dt) };
+    return { scene: this.scene, camera: this.camera, update: (dt: number) => this.update(dt), owner: this };
   }
 
   // ================= terrain =================
@@ -310,7 +310,7 @@ export class AgdaoIsland {
     this.colliders.push({ pos: new THREE.Vector3(x, 0, z), r: 0.3 });
     let light: THREE.PointLight | null = null;
     if (withLight) {
-      light = new THREE.PointLight(0xff9a4e, 6, 7);
+      light = new THREE.PointLight(0xff9a4e, 8, 7);
       light.position.set(x, y + 2.1, z);
       this.scene.add(light);
     }
@@ -319,7 +319,7 @@ export class AgdaoIsland {
       const f = 0.85 + Math.sin(this.t * 11 + ph) * 0.12 + Math.sin(this.t * 23 + ph * 2) * 0.06;
       flame.scale.set(f, 0.8 + f * 0.35, f);
       // torchlight carries further once the sun is down
-      if (light) light.intensity = 6 * f * (0.55 + worldClock.night * 0.95);
+      if (light) light.intensity = 8 * f * worldClock.night;
     });
   }
 
@@ -439,14 +439,16 @@ export class AgdaoIsland {
       this.colliders.push({ pos: new THREE.Vector3(x, 0, z), r: 1.4 });
     }
 
-    // torches around the village + along the pier path
+    // torches around the village + along the pier path, shrine, and falls
     const torchSpots: [number, number][] = [
       [-3, 12], [3.5, 5], [-3.5, 4.5], [3, 12.5],          // plaza ring (lit)
       [-1.8, 22], [1.8, 28], [-1.8, 33],                   // pier path (lit)
-      [10, 5], [-13, 9],                                   // outskirts (unlit flames only)
+      [10, 5], [-13, 9],                                   // outskirts
       [-19, -2], [-24, -14], [-13, -22],                   // gate & cliff path
+      [-4.5, 3.2], [-7.5, 3.2],                            // Shrine flanking torches
+      [7.0, -9.0],                                         // Falls pool flanking torch
     ];
-    torchSpots.forEach(([x, z], i) => this.torch(x, z, i < 8));
+    torchSpots.forEach(([x, z]) => this.torch(x, z, true));
 
     this.markers.push({ x: 0, z: 14, label: 'Village', color: '#e8c47a', kind: 'poi' });
   }
@@ -595,6 +597,10 @@ export class AgdaoIsland {
     this.colliders.push({ pos: new THREE.Vector3(x, 0, z), r: 2.6 });
     this.label3d('⚡ The Stormheart\'s Rest', '#f2d23a', new THREE.Vector3(x, y + 10, z), 4.6);
     this.markers.push({ x, z, label: 'The Bluff', color: '#f2d23a', kind: 'building' });
+
+    // Torches flanking the cabin entrance
+    this.torch(25.2, -27.5, true);
+    this.torch(30.8, -27.5, true);
     // stray current crawls the rod every few seconds
     let arcT = 2;
     this.envTick.push(dt => {
@@ -1256,7 +1262,7 @@ export class AgdaoIsland {
     // minimap
     drawAreaMap($('minimap') as unknown as HTMLCanvasElement, {
       shape: 'circle', radius: 46,
-      markers: this.markers,
+      markers: this.markers.filter(m => m.kind !== 'npc'),
       player: { x: t.x, z: t.z, rot: this.tamer.rotation.y },
       title: `🏝️ Agdao Island — ${worldClock.label}`,
       playerState: this.player,

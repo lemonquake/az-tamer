@@ -8,7 +8,7 @@ import * as THREE from 'three';
 import { DUNGEONS, REGIONS, SPECIES, TYPE_CSS, type DungeonDef } from './data';
 import { Player } from './state';
 import { makeTamer, updateVoxelHuman, globeTexture, skyGradient, leafTexture, plankTexture } from './models';
-import { AGDAO_LORE, SALMONAN_LORE } from './lore';
+import { AGDAO_LORE, SALMONAN_LORE, HYUJON_LORE } from './lore';
 import { updateHUD, showInteractHint, showHotkeys, isDialogueOpen, isMenuOpen, openPauseMenu, openPanel, choose, say, type PanelKind } from './ui';
 import { drawAreaMap, hideAreaMap, type MapMarker } from './townmap';
 import { updateTamerAppearance } from './clothes';
@@ -19,9 +19,10 @@ const R = 30;                       // globe radius
 const CITY_COORDS: [number, number] = [22, 0];
 const AGDAO_COORDS: [number, number] = [-6, -44];
 const SALMONAN_COORDS: [number, number] = [8, 62];
+const HYUJON_COORDS: [number, number] = [45, 12];   // far north of Olivar
 
 /** Where the overworld can send the player. */
-export type OverworldDest = DungeonDef | 'agdao' | 'salmonan' | { travel: string } | null;
+export type OverworldDest = DungeonDef | 'agdao' | 'salmonan' | 'hyujon' | { travel: string } | null;
 
 function dirFromLatLon(lat: number, lon: number): THREE.Vector3 {
   const la = THREE.MathUtils.degToRad(lat), lo = THREE.MathUtils.degToRad(lon);
@@ -35,6 +36,7 @@ interface Marker {
   quest: boolean;
   agdao?: boolean;             // the tropical island travel marker
   salmonan?: boolean;          // the river-valley town travel marker
+  hyujon?: boolean;            // the forgotten tech-city travel marker
 }
 
 export class Overworld {
@@ -115,6 +117,9 @@ export class Overworld {
       // New Salmonan — the valley opens with Act V (the Foretales arc)
       if (this.player.flags['salmonan_unlocked']) this.addSalmonanMarker(SALMONAN_COORDS);
       else this.addCloudCluster(dirFromLatLon(...SALMONAN_COORDS), 5, 0.9);
+      // Hyujon — the forgotten tech-city of the North
+      if (this.player.flags['dragon_tear_quest_unlocked'] || this.player.quests['story_hyujon'] === 'active' || this.player.quests['story_hyujon'] === 'done') this.addHyujonMarker(HYUJON_COORDS);
+      else this.addCloudCluster(dirFromLatLon(...HYUJON_COORDS), 5, 0.9);
     }
     // ambient cloud cover over the unexplored world
     for (let i = 0; i < 26; i++) {
@@ -340,6 +345,57 @@ export class Overworld {
     this.markers.push({ group: g, def: null, dir, quest, salmonan: true });
   }
 
+  /** A dark tech-city diorama: rusted spires, flickering neon traces. */
+  private addHyujonMarker(coords: [number, number]): void {
+    const dir = dirFromLatLon(...coords);
+    const g = new THREE.Group();
+    const quest = this.player.quests['story_hyujon'] === 'active';
+
+    // Rusted tech-bases
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.8, 0.2, 16),
+      new THREE.MeshStandardMaterial({ color: 0x1f1f28, roughness: 0.9 }));
+    base.position.y = 0.1;
+    g.add(base);
+
+    // Abandoned rusted cylinders (spires)
+    const towerMat = new THREE.MeshStandardMaterial({ color: 0x3e3530, metalness: 0.8, roughness: 0.75 });
+    for (const [tx, tz, th, tr] of [[0.4, 0.4, 1.5, 0.25], [-0.5, -0.4, 1.9, 0.3], [0.6, -0.5, 1.1, 0.2]]) {
+      const spire = new THREE.Mesh(new THREE.CylinderGeometry(tr * 0.8, tr, th, 8), towerMat);
+      spire.position.set(tx, 0.1 + th / 2, tz);
+      g.add(spire);
+    }
+
+    // A flickering cyan wire running across
+    const wireMat = new THREE.MeshStandardMaterial({ color: 0x11ffcc, emissive: 0x11ffcc, emissiveIntensity: 0.8, roughness: 0.2 });
+    const wire = new THREE.Mesh(new THREE.TorusGeometry(0.8, 0.04, 6, 16), wireMat);
+    wire.rotation.x = Math.PI / 2;
+    wire.position.set(0, 0.22, 0);
+    wire.name = 'legendpulse';
+    g.add(wire);
+
+    if (quest) {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(2.6, 0.07, 8, 32),
+        new THREE.MeshBasicMaterial({ color: 0x11ffcc, transparent: true, opacity: 0.8 }));
+      ring.rotation.x = Math.PI / 2;
+      ring.position.y = 0.1;
+      ring.name = 'questring';
+      const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.5, 7, 12, 1, true),
+        new THREE.MeshBasicMaterial({ color: 0x11ffcc, transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false }));
+      beam.position.y = 3.6;
+      beam.name = 'questbeam';
+      g.add(ring, beam);
+    }
+    const halo = new THREE.PointLight(0x11ffcc, quest ? 14 : 7, 8);
+    halo.position.y = 1.8;
+    halo.name = 'halo';
+    g.add(halo);
+
+    g.position.copy(dir).multiplyScalar(R);
+    g.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+    this.globe.add(g);
+    this.markers.push({ group: g, def: null, dir, quest, hyujon: true });
+  }
+
   private addCloudCluster(dir: THREE.Vector3, puffs: number, opacity: number, ambient = false): void {
     const cluster = new THREE.Group();
     const mat = new THREE.MeshStandardMaterial({ color: 0xf2f4fa, transparent: true, opacity, roughness: 1, depthWrite: false });
@@ -373,6 +429,22 @@ export class Overworld {
         <div class="row"><span class="sub">First Bond</span><b>~700 years ago</b></div>
         <div class="row"><span class="sub">Resident Guild</span><b>Circle of the First Fire</b></div>
         <div class="sub" style="margin-top:8px">The islanders are friendly — and they notice everything. Ask around.</div>`;
+      panel.classList.add('show');
+      return;
+    }
+    if (m.hyujon) {
+      showInteractHint('Press <b>E</b> — travel to the Forgotten Tech-City of Hyujon');
+      if (panel.dataset.current === 'hyujon' && panel.classList.contains('show')) return;
+      panel.dataset.current = 'hyujon';
+      panel.classList.toggle('quest', m.quest);
+      panel.innerHTML = `
+        ${m.quest ? '<div class="quest-badge">★ QUEST</div>' : ''}
+        <h3>🏙️ ${HYUJON_LORE.name}</h3>
+        <div class="sub" style="margin-bottom:8px">${HYUJON_LORE.desc}</div>
+        <div class="row"><span class="sub">Known as</span><b>${HYUJON_LORE.epithet}</b></div>
+        <div class="row"><span class="sub">Status</span><b>dark, abandoned</b></div>
+        <div class="row"><span class="sub">Key Resident</span><b>Doctor Clyde</b></div>
+        <div class="sub" style="margin-top:8px">Power surges flash in the shadows of this silent city. Explore with caution.</div>`;
       panel.classList.add('show');
       return;
     }
@@ -491,8 +563,8 @@ export class Overworld {
       const len = Math.hypot(w.x, w.z) || 1;
       mapMarkers.push({
         x: (w.x / len) * a, z: (w.z / len) * a,
-        label: m.agdao ? '🏝️ Agdao Island' : m.salmonan ? '🏞️ New Salmonan' : m.def ? m.def.name : '🏠 Haven City',
-        color: m.agdao ? '#4ee4b8' : m.salmonan ? '#f2c14e' : m.def ? (m.quest ? '#e85a6a' : '#5ab8e8') : '#c9a24a',
+        label: m.agdao ? '🏝️ Agdao Island' : m.salmonan ? '🏞️ New Salmonan' : m.hyujon ? '🏙️ Hyujon City' : m.def ? m.def.name : '🏠 Haven City',
+        color: m.agdao ? '#4ee4b8' : m.salmonan ? '#f2c14e' : m.hyujon ? '#11ffcc' : m.def ? (m.quest ? '#e85a6a' : '#5ab8e8') : '#c9a24a',
         kind: m.def ? 'poi' : 'building',
         quest: m.quest,
       });
@@ -537,6 +609,9 @@ export class Overworld {
     if (this.player.flags['salmonan_unlocked']) {
       entries.push({ label: '🏞️ New Salmonan — the Valley of Loud Kitchens', go: () => this.finish('salmonan') });
     }
+    if (this.player.flags['dragon_tear_quest_unlocked'] || this.player.quests['story_hyujon'] === 'active' || this.player.quests['story_hyujon'] === 'done') {
+      entries.push({ label: '🏙️ Forgotten Tech-City of Hyujon', go: () => this.finish('hyujon') });
+    }
     const pick = await choose('Region Atlas', 'The world is wider than one horizon. Travel where?', [
       ...entries.map(e => e.label), 'Stay here',
     ]);
@@ -549,7 +624,7 @@ export class Overworld {
     this.keys.add(k);
     if (isDialogueOpen() || isMenuOpen() || this.busy) return;
     if ((k === 'e' || k === 'enter') && this.nearest) {
-      this.finish(this.nearest.agdao ? 'agdao' : this.nearest.salmonan ? 'salmonan' : this.nearest.def);
+      this.finish(this.nearest.agdao ? 'agdao' : this.nearest.salmonan ? 'salmonan' : this.nearest.hyujon ? 'hyujon' : this.nearest.def);
     }
     else if (k === 'p') this.openPanelGuarded('player');
     else if (k === 'i') this.openPanelGuarded('inventory');

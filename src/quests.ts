@@ -19,7 +19,7 @@
 // that story: to Historian Veyl, to Agdao, to Greggy the
 // Stormheart, and to Aljay's daughters, Azrin and Azrael.
 // ============================================================
-import { ITEMS } from './data';
+import { ITEMS, expForLevel } from './data';
 import type { Player } from './state';
 
 export interface QuestReward { shards?: number; items?: [string, number][]; }
@@ -127,6 +127,60 @@ const STORY_QUESTS: QuestDef[] = [
     onComplete: p => { p.flags['arc1_done'] = true; p.flags['salmonan_unlocked'] = true; },
     reward: { shards: 5000, items: [['hp_gem', 1], ['atk_gem', 1], ['elixir', 2]] },
   }),
+  M({
+    id: 'story_getup', kind: 'story', chapter: 8, icon: '🧥', requires: 'story_echoes',
+    title: 'A Proper Get Up', giver: 'Mayor Airah', location: 'Haven City — Aurelian Hall',
+    brief: 'Mayor Airah looked you over and shook her head. "You\'ve silenced the spire, yes, but if you\'re representing Haven in the capital, you need a proper get up. The university default look won\'t do for where you\'re going. Visit Madame Celeste\'s Boutique here in Haven, or the prestige Atelier in Terra City if you have the shards. Buy and equip a new cap, shirt, and pants, then return to me."',
+    objective: 'Equip a new cap, shirt, and pants (different from your starting outfit) and speak to Mayor Airah',
+    hint: 'Buy new clothes at the Boutique in Haven Town or the Boutique in Terra City, equip them from the Boutique mirror/counter, and return to Mayor Airah.',
+    check: p => p.equippedClothes.hat !== 'default_cap' && p.equippedClothes.shirt !== 'default_shirt' && p.equippedClothes.pants !== 'default_pants',
+    reward: { shards: 1000 },
+  }),
+  M({
+    id: 'story_christine', kind: 'story', chapter: 9, icon: '🏙️', requires: 'story_getup',
+    title: 'The Mayor of Terra City', giver: 'Mayor Airah', location: 'Terra City — North-West',
+    brief: 'With your new style approved, Mayor Airah handed you a sealed proposal. "Much better. Now, take the Aetherline to Terra City. You must present this proposal to Mayor Christine. You can find her in the new civic building in the North-West side of Terra City. She\'s a fun one, a bit of joker, and she happens to be the cousin of Aljay the Dawnflame. She can grant us access to the ancient dungeon we need."',
+    objective: 'Deliver Mayor Airah\'s proposal to Mayor Christine in Terra City',
+    hint: 'Take the Pod to Terra City, go to the large 3-floor building in the North-West, climb to the top floor, and speak with Mayor Christine.',
+    check: p => !!p.flags['met_christine'],
+    onComplete: p => {
+      p.flags['dragon_tear_quest_unlocked'] = true;
+    },
+    reward: { shards: 1500 },
+  }),
+  M({
+    id: 'story_hyujon', kind: 'story', chapter: 10, icon: '🏙️', requires: 'story_christine',
+    title: 'The Forgotten Tech-City', giver: 'Mayor Christine', location: 'Hyujon',
+    brief: 'With the ancient dungeon unsealed, Mayor Christine points you north to the dark, forgotten tech-city of Hyujon. Find Doctor Clyde—Aljay\'s old friend—in his abandoned laboratory on the west side, and learn what he knows about Ghandra and the Aether Line.',
+    objective: 'Speak with Doctor Clyde in his laboratory in Hyujon',
+    hint: 'Travel to the Forgotten Tech-City of Hyujon on the overworld map, find Doctor Clyde\'s laboratory on the West side, and speak with him.',
+    check: p => !!p.flags['met_clyde'],
+    reward: { shards: 1500 },
+  }),
+  M({
+    id: 'story_drowned_terminal', kind: 'story', chapter: 11, icon: '🏰', requires: 'story_hyujon',
+    title: 'The Lantern of the North', giver: 'Marshal Kovar', location: 'Hyujon',
+    brief: 'Doctor Clyde told you that the 3rd Harmonik notes are locked in the Drowned Terminal under Hyujon. However, the terminal is flooded and locked down. You must meet Marshal Ines Kovar and Archivist Tem in the city plaza, unlock the Drowned Terminal, defeat Vormaela\'s Echo, and retrieve the notes.',
+    objective: 'Conquer the Drowned Terminal and retrieve the 3rd Harmonik',
+    hint: 'Interrogate the defector in the harbor cells, help Tem scan the crater, input the override code at Marshal Kovar, then clear the Drowned Terminal dungeon.',
+    check: p => (p.dungeonClears['drowned_terminal'] ?? 0) >= 1,
+    progress: p => [Math.min(1, p.dungeonClears['drowned_terminal'] ?? 0), 1],
+    onComplete: p => {
+      p.flags['clyde_3rd_harmonik'] = true;
+      p.addItem('third_harmonik');
+      p.addItem('tems_backup');
+    },
+    reward: { shards: 4500, items: [['prism_gem', 1]] },
+  }),
+  M({
+    id: 'story_aether_evo', kind: 'story', chapter: 12, icon: '📜', requires: 'story_drowned_terminal',
+    title: 'The 3rd Harmonik', giver: 'Doctor Clyde', location: 'Haven City — Sanctum',
+    brief: 'Doctor Clyde handed you the "3rd Harmonik", a complex compilation of notes detailing Ghandra\'s frequencies. Take these notes to the Aurelian Fusion Laboratory (the Sanctum) in Haven Town to study how to unlock "Aether Evo" for your Guardians.',
+    objective: 'Deliver the 3rd Harmonik notes to the Haven City Sanctum',
+    hint: 'Go back to Haven City, enter the Sanctum, and present Doctor Clyde\'s notes to the Sanctum Keeper or Fusion server.',
+    check: p => !!p.flags['aether_evo_unlocked'],
+    reward: { shards: 2000, items: [['prism_gem', 1]] },
+  }),
 
   // ============ ACT V — THE FORETALES (the Anomalies Saga, Part Four) ============
   // After Ivan Lawrence's name is cleared from New Salmonan's relay
@@ -140,7 +194,7 @@ const STORY_QUESTS: QuestDef[] = [
   // TODO(acts II–IV): re-anchor `requires` to 'story_ivan' (Ch XXI)
   // once the intervening chapters are implemented.
   M({
-    id: 'story_veilfall', kind: 'story', chapter: 22, icon: '📡', requires: 'story_echoes',
+    id: 'story_veilfall', kind: 'story', chapter: 13, icon: '📡', requires: 'story_aether_evo',
     title: 'The Veil, Falling', giver: 'Ivan Lawrence', location: 'New Salmonan',
     brief: 'Thirty-six hours. That\'s how long the truth got to breathe. Then every broadcast crystal on four continents lit up with the same calm anchors and the same swelling music: "THE LAWRENCE TAPES — A FORGERY?" The valley that watched the real broadcast go out from its own battered tower now watches the world be told it never happened. Ivan isn\'t even angry. "This is the machine, friend. I just never thought I\'d get to show somebody the gears while they turn." Find the gears: the override stamp in Esta\'s relay logs, the festival crystal Auntie Dalisay\'s nephew recorded LIVE before the aired version was rewritten — and the Foretales stringer who has been sketching the mural and asking the children questions.',
     objective: 'Gather three proofs of the Foretales override in New Salmonan, then bring them to Ivan',
@@ -151,7 +205,7 @@ const STORY_QUESTS: QuestDef[] = [
     reward: { shards: 6000, items: [['override_ledger', 1], ['elixir', 2]] },
   }),
   M({
-    id: 'story_mirrorhouse', kind: 'story', chapter: 23, icon: '🪞', requires: 'story_veilfall',
+    id: 'story_mirrorhouse', kind: 'story', chapter: 14, icon: '🪞', requires: 'story_veilfall',
     title: 'The Mirrorhouse', giver: 'Ivan Lawrence', location: 'The Mirrorhouse, above New Salmonan',
     brief: 'Every story the eastern valleys have read for sixteen years passed through one building: a relay-bastion of black glass on the ridge upriver, humming day and night. The locals call it the Mirrorhouse, because whatever you carry up that road, the world is shown something else. Esta\'s logs say the Lawrence rewrite was stamped THERE — same override signature, FT-PRIME, that wiped a certain someone\'s records once. Ivan walks you to the ridge stair and stops at the first step, fists shaking, smiling anyway. "Nine years I couldn\'t look at this building. Go in. Find the master spool — the one they print TOMORROW from. And tamer… check the date on the directive about my match-fixing. I want to know how long before my fall they wrote it."',
     objective: 'Conquer the Mirrorhouse and extract the Continuity Reel',
@@ -378,6 +432,28 @@ const SIDE_QUESTS: QuestDef[] = [
     objective: 'Catch 1 fish of any size',
     check: p => p.fishing.totalCaught >= 1,
     reward: { shards: 150, items: [['soda', 1]] },
+  }),
+  M({
+    id: 'side_essa', kind: 'side', requires: 'story_agdao',
+    title: "Granny Essa's Question", giver: 'Granny Essa', location: 'Haven Town — Plaza',
+    brief: 'Granny Essa sitting by the Haven Town fountain has a curious question about the legendary tamer, Greggy the Stormheart: "How many battles has Greggy won?" She hints that left-clicking an NPC will bring up their Guild ID and service record. To find the answer, you must travel to Agdao Island, find Greggy on his bluff, and inspect his card.',
+    objective: 'Type the exact number of battles Greggy has won for Granny Essa',
+    check: p => !!p.flags['essa_question_answered'],
+    onComplete: p => {
+      // Reward: all Guardians in active party level up by 1 instantly
+      p.party.forEach(g => {
+        if (g.level < g.levelCap) {
+          const before = g.stats;
+          g.level++;
+          g.exp = expForLevel(g.level);
+          if (g.level % 5 === 0) g.techPoints++;
+          const after = g.stats;
+          g.hp = Math.min(after.hp, g.hp + (after.hp - before.hp));
+          g.sp = Math.min(after.sp, g.sp + (after.sp - before.sp));
+        }
+      });
+    },
+    reward: { shards: 500 },
   }),
 ];
 

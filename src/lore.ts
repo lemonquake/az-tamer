@@ -79,6 +79,13 @@ export const SALMONAN_LORE = {
   mural: 'Aljay, Greggy and Onnel saved this valley countless times in the war years — flood, siege, and once, famously, a wedding. The town repaints their mural by the river gate every spring, and the painters argue every spring about whether Greggy\'s grin is wide enough.',
 };
 
+// ---------------- Hyujon — the forgotten tech-city of the North ----------------
+export const HYUJON_LORE = {
+  name: 'Hyujon',
+  epithet: 'The Forgotten Tech-City',
+  desc: 'A dark, silent ruin of old-empire circuits, crumbling towers and rusted relays. A few grieving residents wander its streets, remembering the glorious city it once was. Doctor Clyde\'s laboratory sits on the west side, hidden in the shadows.',
+};
+
 // ---------------- FORETALES — the machine that writes the world ----------------
 // The world's great broadcast-and-broadsheet network. After the
 // Sponsors fell, the Reliquary Ledger's "reputation management"

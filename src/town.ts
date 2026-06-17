@@ -224,6 +224,7 @@ export class Town {
       get scene() { return self.mode === 'interior' && self.interiorScene ? self.interiorScene : self.streetScene; },
       camera: this.camera,
       update: (dt: number) => this.update(dt),
+      owner: this,
     };
   }
 
@@ -2760,12 +2761,77 @@ export class Town {
         'See the daughters by the fountain? Aljay used to wait on this exact bench when the Houses kept him late. Some families just belong to this plaza.',
         'My knees forecast better than the stargazer. Rain in two days. The lamplighters already know; they trim the wicks short before a wet week.',
       ], true);
-    idler({ top: 0xd9a14a, hair: 0xc8c8d0, cap: null, hairstyle: 'buns' },
-      0, 4.6, Math.PI, 'Granny Essa', [
-        'I feed the gulls at noon, the fish at one, and the gossip mill all day long. Busy retirement.',
-        'That windmill ground the flour for my wedding bread, dear. And my mother\'s. Hills remember what people forget.',
-        'You walk like you carry half the world. Put it on the bench a moment. The bench doesn\'t mind. Benches never do.',
-      ], true);
+    const essaHandler = async () => {
+      const p = this.player;
+      const st = questState(p, 'side_essa');
+      if (st === 'locked') {
+        await say('Granny Essa', "I feed the gulls at noon, the fish at one, and the gossip mill all day long. Busy retirement.");
+        return;
+      }
+      if (st === 'done') {
+        await say('Granny Essa', "You're a sharp one, dear. Greggy always was a bit of a showoff, but he had the record to prove it.");
+        return;
+      }
+      if (st === 'available') {
+        await conversation([
+          ['Granny Essa', "Well, hello there, young tamer. You look like you've been traveling far. Tell me, have you met Greggy yet? That old thunderhead on Agdao Island?"],
+          ['Granny Essa', "He and my late husband used to argue about who won more matches in their youth. I've forgotten the exact number, but it's written right there on his service record."],
+          ['Granny Essa', "Oh, you didn't know? Left-clicking any NPC brings up their identity card. If they're in a guild, you can view their full Service Record on the back of their card. It lists all their achievements and details."],
+        ]);
+        const pick = await choose('Granny Essa', "Can you check how many battles Greggy the Stormheart has won?", [
+          "Accept quest", "Maybe later"
+        ]);
+        if (pick === 0) {
+          acceptQuest(p, 'side_essa');
+          toast("Side quest started: Granny Essa's Question", 'gold');
+          p.save();
+        }
+        return;
+      }
+      if (st === 'active' || st === 'ready') {
+        await conversation([
+          ['Granny Essa', "Do you have the answer, dear? How many battles has Greggy the Stormheart won? Remember, you can left-click him on Agdao Island to view his Guild Card and check the back of it."],
+        ]);
+        const answer = window.prompt("Granny Essa asks: How many battles has Greggy won?");
+        if (answer === null) {
+          await say('Granny Essa', "No rush, dear. Take your time and check his card on Agdao Island.");
+          return;
+        }
+        const cleanAnswer = answer.trim().replace(/,/g, '');
+        if (cleanAnswer === '1509') {
+          p.flags['essa_question_answered'] = true;
+          p.save();
+          
+          await conversation([
+            ['Granny Essa', "1,509! Yes, that was the number! Oh, he'll be insufferable if he knows I remembered. But a promise is a promise."],
+            ['Granny Essa', "Here, let me give your Guardians a little blessing. They look like they've been working hard."],
+          ]);
+          
+          const summary = completeQuest(p, 'side_essa');
+          toast("Quest complete: Granny Essa's Question!", 'gold');
+          if (summary) toast(`Received ${summary}`, 'gold');
+          toast("All Guardians in your active party leveled up by 1!", "gold");
+          updateHUD(p, 'Haven City');
+        } else {
+          await say('Granny Essa', "No, that doesn't sound right. Check his Guild Card on Agdao Island again, dear. Make sure to click 'View Guild Card' and check the back.");
+        }
+      }
+    };
+
+    const essaGroup = makeVoxelHuman({ top: 0xd9a14a, hair: 0xc8c8d0, cap: null, hairstyle: 'buns' });
+    const ex = 0, ez = 4.6;
+    essaGroup.position.set(ex, this.groundH(ex, ez), ez);
+    essaGroup.rotation.y = Math.PI;
+    setVoxelSeated(essaGroup, true, 0.5);
+    tagNpc(essaGroup, 'Granny Essa');
+    s.add(essaGroup);
+    this.staticNpcs.push(essaGroup);
+    this.streetColliders.push({ pos: new THREE.Vector3(ex, 0, ez), r: 0.5 });
+    this.streetInteractables.push({
+      pos: new THREE.Vector3(ex, 0, ez), radius: 1.7,
+      label: `Press <b>E</b> — chat with Granny Essa`,
+      handler: essaHandler,
+    });
 
     // ---- gossip by the market lane ----
     pair(
@@ -5265,6 +5331,66 @@ export class Town {
       label: 'Press <b>E</b> — present yourself to Mayor Airah',
       handler: async () => {
         airah.rotation.y = Math.atan2(this.tamer.position.x - airah.position.x, this.tamer.position.z - airah.position.z);
+        
+        // --- STORY QUEST: story_getup / story_christine flow ---
+        const getupState = questState(p, 'story_getup');
+        const christineState = questState(p, 'story_christine');
+
+        if (getupState === 'available') {
+          await conversation([
+            ['Mayor Airah', `Ah, ${p.tamerName}. You returned from the Stormspire. Silence at last — Greggy sent a petrel with the details, and I've noted your name in the archives. You did well.`],
+            ['Mayor Airah', `But now we face a greater challenge. The seal is weakening. To proceed, we need access to the secret ancient Dungeon in Terra City. I have a proposal for Mayor Christine, but...`],
+            ['Mayor Airah', `First, look at yourself, child. That basic university training uniform? You're going to Terra City to meet the Mayor! You need a proper get up.`],
+            ['Mayor Airah', `I recommend you visit Madame Celeste's Boutique here in Haven. Or, if you want something truly premium and slick, visit the prestige Aetherline Atelier Boutique in Terra City — though it's much more expensive!`],
+            ['Mayor Airah', `Go buy a new cap, shirt, and pants. Equip them, and show me you can dress like a tamer who carries the future of Olivar. Then we will talk business.`],
+          ]);
+          acceptQuest(p, 'story_getup');
+          toast(`Main quest started: A Proper Get Up`, 'gold');
+          p.save();
+          return;
+        }
+
+        if (getupState === 'active' || getupState === 'ready') {
+          const hasEquippedNew = p.equippedClothes.hat !== 'default_cap' && 
+                                p.equippedClothes.shirt !== 'default_shirt' && 
+                                p.equippedClothes.pants !== 'default_pants';
+          
+          if (!hasEquippedNew) {
+            await conversation([
+              ['Mayor Airah', `You're still wearing the starting uniform. Run along to Madame Celeste's Boutique here in Haven or the Atelier in Terra City.`],
+              ['Mayor Airah', `Remember, I need you to equip a new cap, shirt, and pants!`],
+            ]);
+            return;
+          } else {
+            await conversation([
+              ['Mayor Airah', `Oh! Now THAT is a proper get up. Sleek, comfortable, and you carry yourself with the pride of a champion. Madame Celeste or the Terra artisans did a fine job.`],
+              ['Mayor Airah', `Now, here is the proposal for Mayor Christine. Take the Aetherline to Terra City.`],
+              ['Mayor Airah', `You will find Mayor Christine in her new civic building in the North-West side of Terra City. It's a grand building with 3 floors of rooms, and she sits at the very top.`],
+              ['Mayor Airah', `She's a fun one, a real joker — and she happens to be the cousin of Aljay the Dawnflame. She has the authority to grant you access to the ancient dungeon for the "Dragon's Tear" gem we need.`],
+              ['Mayor Airah', `Deliver this to her. And keep that get up clean!`],
+            ]);
+            const summary = completeQuest(p, 'story_getup');
+            toast(`Quest complete: A Proper Get Up!`, 'gold');
+            if (summary) toast(`Received ${summary}`, 'gold');
+            
+            acceptQuest(p, 'story_christine');
+            toast(`Main quest started: The Mayor of Terra City`, 'gold');
+            p.save();
+            updateHUD(p, 'Haven City');
+            return;
+          }
+        }
+
+        if (christineState === 'active' || christineState === 'ready') {
+          await say('Mayor Airah', `Mayor Christine's office is at the top floor of the new civic building in North-West Terra City. Bring her my proposal, and tell her I said hello.`);
+          return;
+        }
+
+        if (christineState === 'done') {
+          await say('Mayor Airah', `So Christine accepted the proposal? Excellent. The ancient dungeon is open to you. Bring back the "Dragon's Tear" so we can upgrade your Crawler's Main Board.`);
+          return;
+        }
+
         if (!p.flags['met_mayor']) {
           await conversation([
             ['Mayor Airah', `So you’re ${p.tamerName}. Yes — I keep a list of the graduates worth the ink, and you climbed onto it the hard way. Welcome to my Hall. Sit if you like; stand if you’re the standing sort. Most heroes are.`],
@@ -6343,6 +6469,29 @@ export class Town {
 
   private async visitSanctum(): Promise<void> {
     const p = this.player;
+    const aetherQuest = questState(p, 'story_aether_evo');
+
+    if (aetherQuest === 'active' || aetherQuest === 'ready') {
+      await conversation([
+        ['Sanctum Keeper', 'Welcome back, tamer. Rest by the spring... wait, what is that parchment you are holding?'],
+        ['Sanctum Keeper', 'Doctor Clyde\'s notes? The "3rd Harmonik"! Let me place this in the central server reactor.'],
+        ['Quantum Server', 'Analysing frequency notes... 3rd Harmonik loaded. Phase inversion patterns detected. Recalibrating fusion matrices... Aether-Evo pathways unlocked.'],
+        ['Sanctum Keeper', 'Astonishing! The notes show Ghandra\'s elemental fields can be inverted to trigger "Aether-Evo" for your Guardians. This explains how legends like Firgara and Vulfenix were born.'],
+        ['Sanctum Keeper', 'We can now research negative element frequency evolutions right here. Thank you, tamer.'],
+      ]);
+
+      p.removeItem('third_harmonik', 1);
+      p.flags['aether_evo_unlocked'] = true;
+
+      const summary = completeQuest(p, 'story_aether_evo');
+      toast("Quest complete: The 3rd Harmonik!", 'gold');
+      if (summary) toast(`Received ${summary}`, 'gold');
+      toast("🔓 Aether-Evo study unlocked at the Sanctum!", "gold");
+      p.save();
+      updateHUD(p, 'Haven City');
+      return;
+    }
+
     await say('Sanctum Keeper', 'Rest, weary travelers. The spring restores all.');
     p.healAll();
     toast('Party fully healed. Crawler restocked.', 'gold');
@@ -6838,12 +6987,29 @@ export class Town {
           wlk.target = this.nextWanderTarget(wlk.grp.position);
         } else {
           dir.normalize();
-          const nextX = wlk.grp.position.x + dir.x * 1.7 * dt;
-          const nextZ = wlk.grp.position.z + dir.z * 1.7 * dt;
-          const blocked = this.streetColliders.some(c => Math.hypot(nextX - c.pos.x, nextZ - c.pos.z) < c.r + 0.25) ||
-                          Math.hypot(nextX - this.tamer.position.x, nextZ - this.tamer.position.z) < 0.85;
+          const curX = wlk.grp.position.x;
+          const curZ = wlk.grp.position.z;
+          const nextX = curX + dir.x * 1.7 * dt;
+          const nextZ = curZ + dir.z * 1.7 * dt;
+          const blocked = this.streetColliders.some(c => {
+            const nextDist = Math.hypot(nextX - c.pos.x, nextZ - c.pos.z);
+            const limit = c.r + 0.25;
+            if (nextDist < limit) {
+              const curDist = Math.hypot(curX - c.pos.x, curZ - c.pos.z);
+              return nextDist < curDist;
+            }
+            return false;
+          }) || (() => {
+            const nextDist = Math.hypot(nextX - this.tamer.position.x, nextZ - this.tamer.position.z);
+            if (nextDist < 0.85) {
+              const curDist = Math.hypot(curX - this.tamer.position.x, curZ - this.tamer.position.z);
+              return nextDist < curDist;
+            }
+            return false;
+          })();
           if (blocked) {
             wlk.pause = 0.8;
+            wlk.target = this.nextWanderTarget(wlk.grp.position);
           } else {
             wlk.grp.position.set(nextX, this.groundH(nextX, nextZ), nextZ);
             wlk.grp.rotation.y = Math.atan2(dir.x, dir.z);
@@ -6865,8 +7031,18 @@ export class Town {
         } else {
           dir.normalize();
           const nx = p.x + dir.x * 2.1 * dt, nz = p.z + dir.z * 2.1 * dt;
-          if (this.streetColliders.some(c => Math.hypot(nx - c.pos.x, nz - c.pos.z) < c.r + 0.2)) {
+          const blocked = this.streetColliders.some(c => {
+            const nextDist = Math.hypot(nx - c.pos.x, nz - c.pos.z);
+            const limit = c.r + 0.2;
+            if (nextDist < limit) {
+              const curDist = Math.hypot(p.x - c.pos.x, p.z - c.pos.z);
+              return nextDist < curDist;
+            }
+            return false;
+          });
+          if (blocked) {
             pet.pause = 1.2;
+            pet.target = this.nextWanderTarget(p);
           } else {
             p.set(nx, this.groundH(nx, nz), nz);
             pet.rig.group.rotation.y = Math.atan2(dir.x, dir.z);
@@ -7074,10 +7250,7 @@ export class Town {
     if (this.mode === 'street') {
       drawAreaMap(cv, {
         shape: 'circle', radius: Town.WALL_R + 1,
-        markers: [
-          ...this.streetMarkers,
-          ...this.walkers.map(wk => ({ x: wk.grp.position.x, z: wk.grp.position.z, color: '#d8d8e8', kind: 'npc' as const })),
-        ],
+        markers: this.streetMarkers.filter(m => m.kind !== 'npc'),
         player: { x: t.x, z: t.z, rot: this.tamer.rotation.y },
         title: `Haven City — ${worldClock.label}`,
         playerState: this.player,

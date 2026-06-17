@@ -1383,7 +1383,7 @@ export class NewSalmonan {
     // minimap
     drawAreaMap($('minimap') as unknown as HTMLCanvasElement, {
       shape: 'circle', radius: 46,
-      markers: this.markers,
+      markers: this.markers.filter(m => m.kind !== 'npc'),
       player: { x: t.x, z: t.z, rot: this.tamer.rotation.y },
       title: `🏞️ New Salmonan — ${worldClock.label}`,
       playerState: this.player,
