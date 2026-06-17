@@ -891,7 +891,7 @@ export class Fishing {
     this.perfectStreak = 0;
     this.updateComboDisplay();
     const line = LINES[this.fs.equippedLine] ?? LINES.basic_mono;
-    this.tension += 0.04 * line.tensionRateBonus;
+    this.tension += 0.02 * line.tensionRateBonus;
     this.camShake = Math.max(this.camShake, 0.2);
     this.stumble = Math.max(this.stumble, 0.5);
     if (lane >= 0) this.flashReceptor(lane, '#ff5a6a');
@@ -964,15 +964,15 @@ export class Fishing {
       this.specialScoreBonus += pointsEarned;
 
       // stamina damage
-      let staminaDmg = (rating === 'perfect' ? 0.09 : rating === 'great' ? 0.06 : 0.032) * holdMul;
+      let staminaDmg = (rating === 'perfect' ? 0.15 : rating === 'great' ? 0.10 : 0.055) * holdMul;
       staminaDmg *= chainMult;
       if (beat.subType === 'fire') staminaDmg *= 2.0;
       this.fishStamina = Math.max(0, this.fishStamina - staminaDmg);
 
       // reel progress
-      let inc = (rating === 'perfect' ? (0.072 + rod.reelPower * 0.014) :
-                 rating === 'great' ? (0.046 + rod.reelPower * 0.01) :
-                 (0.024 + rod.reelPower * 0.005)) * holdMul;
+      let inc = (rating === 'perfect' ? (0.13 + rod.reelPower * 0.025) :
+                 rating === 'great' ? (0.08 + rod.reelPower * 0.015) :
+                 (0.045 + rod.reelPower * 0.008)) * holdMul;
       inc *= chainMult;
       if (this.fishStamina <= 0) inc *= 1.8;
       this.reelProgress += inc;
@@ -982,7 +982,7 @@ export class Fishing {
       this.playerStamina = Math.min(1.0, this.playerStamina + staminaGain);
 
       // tension recovery
-      let tensionDec = (rating === 'perfect' ? 0.06 : rating === 'great' ? 0.03 : 0.0);
+      let tensionDec = (rating === 'perfect' ? 0.09 : rating === 'great' ? 0.045 : 0.02);
       if (beat.subType === 'tension') tensionDec = 0.35;
       this.tension = Math.max(0, this.tension - tensionDec);
 
@@ -1058,9 +1058,9 @@ export class Fishing {
         setTimeout(() => expl.remove(), 400);
       }
     } else {
-      this.tension += 0.11 * line.tensionRateBonus;
-      this.reelProgress = Math.max(0, this.reelProgress - 0.04);
-      this.playerStamina = Math.max(0, this.playerStamina - 0.12);
+      this.tension += 0.075 * line.tensionRateBonus;
+      this.reelProgress = Math.max(0, this.reelProgress - 0.02);
+      this.playerStamina = Math.max(0, this.playerStamina - 0.08);
       if (this.playerStamina <= 0) this.exhaustedTimer = 1.4;
       this.camShake = Math.max(this.camShake, 0.5);
       this.flashReceptor(beat.lane, '#ff5a6a');
@@ -1592,7 +1592,7 @@ export class Fishing {
 
     // 2. The fish is ALWAYS pulling — tension constantly creeps up, harder for tougher fish
     const pull = 0.5 + fish.fight.strength * 0.06 + fish.fight.aggression * 0.03 + (this.bossPhase - 1) * 0.25;
-    this.tension += pull * 0.045 * dt * line.tensionRateBonus;
+    this.tension += pull * 0.03 * dt * line.tensionRateBonus;
     // a little natural give from the rod/line
     this.tension = Math.max(0, this.tension - (0.018 + rod.lineStrength * 0.01 * line.strengthBonus) * dt);
 
