@@ -15,6 +15,7 @@ import {
   stoneTexture, makeStreetLamp, makeTree
 } from './models';
 import { HOUSES, SPECIES } from './data';
+import { DAUGHTERS } from './lore';
 
 export type CineKind = 'academy' | 'camp' | 'library' | 'bluff' | 'fountain' | 'porch' | 'pledge' | 'pond';
 
@@ -696,10 +697,30 @@ export class Cinematic {
     const tree4 = makeTree('oak', 555);
     tree4.position.set(7.5, 0, 4.0);
     s.add(tree4);
-
     // 7. Characters (Azrin, Azrael, Hero)
-    const azrin = this.person({ top: 0xd86a2a, hair: 0xd8ab2a, bottom: 0x222222, cap: null }, -1.6, -0.9, 0.8);
-    const azrael = this.person({ top: 0x323e5a, hair: 0x333333, bottom: 0x444444, cap: null }, -2.4, -2.4, 0.8);
+    const azrinDef = DAUGHTERS[0];
+    const azraelDef = DAUGHTERS[1];
+
+    const azrin = this.person({
+      skin: 0xe0a87a,
+      hair: azrinDef.look.hair,
+      top: azrinDef.look.top,
+      bottom: azrinDef.look.bottom,
+      shoes: 0x2a2430,
+      cap: null,
+      hairstyle: azrinDef.look.hairstyle,
+    }, -1.6, -0.9, 0.8);
+
+    const azrael = this.person({
+      skin: 0xe0a87a,
+      hair: azraelDef.look.hair,
+      top: azraelDef.look.top,
+      bottom: azraelDef.look.bottom,
+      shoes: 0x2a2430,
+      cap: null,
+      hairstyle: azraelDef.look.hairstyle,
+    }, -2.4, -2.4, 0.8);
+
     const hero = this.person({ top: 0x2a5ad8, bottom: 0x32384e, cap: 0xd84a3a }, 1.2, -0.6, -1.2);
 
     const heroToAzrin = Math.atan2(azrin.position.x - hero.position.x, azrin.position.z - hero.position.z);
