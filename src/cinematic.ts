@@ -34,6 +34,7 @@ export class Cinematic {
   private people: THREE.Group[] = [];
   private rigs: any[] = [];
   private t = 0;
+  private instantTransition = false;
 
   constructor(kind: CineKind, extraId?: string) {
     if (kind === 'academy') this.buildAcademy();
@@ -55,18 +56,29 @@ export class Cinematic {
     return { scene: this.scene, camera: this.camera, update: (dt: number) => this.update(dt) };
   }
 
-  /** Glide the camera to a named shot. */
-  shot(name: string): void {
+  /** Glide or cut the camera to a named shot. */
+  shot(name: string, instant = true): void {
     const s = this.shots[name];
-    if (s) this.goal = s;
+    if (s) {
+      this.goal = s;
+      if (instant) {
+        this.instantTransition = true;
+      }
+    }
   }
 
   update(dt: number): void {
     this.t += dt;
     // glide + a gentle handheld sway
     const sway = new THREE.Vector3(Math.sin(this.t * 0.5) * 0.12, Math.sin(this.t * 0.33) * 0.08, 0);
-    this.camera.position.lerp(this.goal.pos.clone().add(sway), Math.min(1, dt * 2.2));
-    this.lookCur.lerp(this.goal.look, Math.min(1, dt * 2.6));
+    if (this.instantTransition) {
+      this.camera.position.copy(this.goal.pos.clone().add(sway));
+      this.lookCur.copy(this.goal.look);
+      this.instantTransition = false;
+    } else {
+      this.camera.position.lerp(this.goal.pos.clone().add(sway), Math.min(1, dt * 2.2));
+      this.lookCur.lerp(this.goal.look, Math.min(1, dt * 2.6));
+    }
     this.camera.lookAt(this.lookCur);
 
     this.people.forEach(p => updateVoxelHuman(p, false, dt));

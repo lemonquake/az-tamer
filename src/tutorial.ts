@@ -303,6 +303,15 @@ export async function runBasicsTutorial(player: Player, getPos: () => { x: numbe
  * graduate through the capital's anatomy.
  */
 export async function runCityTutorial(player: Player, replay = false): Promise<void> {
+  const town = (window as any).__town?.town;
+  if (town && typeof town.runHavenCityTourCinematic === 'function') {
+    await town.runHavenCityTourCinematic();
+    if (!replay) {
+      player.flags['tut_city'] = true;
+      player.save();
+    }
+    return;
+  }
   if (!replay && player.flags['tut_city']) return;
   const M = 'Guide Mara';
   await runTutorial('FIELD MANUAL · II — HAVEN CITY', [

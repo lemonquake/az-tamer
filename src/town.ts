@@ -122,6 +122,7 @@ export class Town {
   private streetScene = new THREE.Scene();
   private interiorScene: THREE.Scene | null = null;
   camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 120);
+  private camOverride: { pos: THREE.Vector3; look: THREE.Vector3 } | null = null;
   private tamer = makeTamer();
   private keys = new Set<string>();
   private busy = false;
@@ -6874,29 +6875,34 @@ export class Town {
       }
     }
 
-    // camera follow — right-drag orbits, then drifts home after 10 idle seconds
     const t = this.tamer.position;
-    let camGoal: THREE.Vector3;
-    if (this.mode === 'street') {
-      camGoal = new THREE.Vector3(t.x, t.y + 7.5, t.z + 9);
-    } else if (this.intCamRig === 'tower') {
-      // a genuine follow-cam for the multi-storey hall: it tracks the player
-      // across the whole floor AND rides smoothly up/down the stairs with
-      // them, while staying inside the footprint and just under the ceiling.
-      const { w, d } = this.intRoom;
-      const cx = THREE.MathUtils.clamp(t.x, -w / 2 + 2.4, w / 2 - 2.4);
-      const cz = THREE.MathUtils.clamp(t.z + 6.6, -d / 2 + 2.4, d / 2 - 0.6);
-      camGoal = new THREE.Vector3(cx, t.y + 4.3, cz);
-      // cull the storeys above the player so their slabs never obstruct the view
-      const curFloor = this.intFloorOf(t.y);
-      for (let i = 0; i < this.intUpperFloors.length; i++) this.intUpperFloors[i].visible = curFloor >= i + 1;
+    if (this.camOverride) {
+      this.camera.position.copy(this.camOverride.pos);
+      this.camera.lookAt(this.camOverride.look);
     } else {
-      camGoal = new THREE.Vector3(t.x * 0.5, this.intCamH + t.y * 0.9, t.z + this.intCamD);
+      // camera follow — right-drag orbits, then drifts home after 10 idle seconds
+      let camGoal: THREE.Vector3;
+      if (this.mode === 'street') {
+        camGoal = new THREE.Vector3(t.x, t.y + 7.5, t.z + 9);
+      } else if (this.intCamRig === 'tower') {
+        // a genuine follow-cam for the multi-storey hall: it tracks the player
+        // across the whole floor AND rides smoothly up/down the stairs with
+        // them, while staying inside the footprint and just under the ceiling.
+        const { w, d } = this.intRoom;
+        const cx = THREE.MathUtils.clamp(t.x, -w / 2 + 2.4, w / 2 - 2.4);
+        const cz = THREE.MathUtils.clamp(t.z + 6.6, -d / 2 + 2.4, d / 2 - 0.6);
+        camGoal = new THREE.Vector3(cx, t.y + 4.3, cz);
+        // cull the storeys above the player so their slabs never obstruct the view
+        const curFloor = this.intFloorOf(t.y);
+        for (let i = 0; i < this.intUpperFloors.length; i++) this.intUpperFloors[i].visible = curFloor >= i + 1;
+      } else {
+        camGoal = new THREE.Vector3(t.x * 0.5, this.intCamH + t.y * 0.9, t.z + this.intCamD);
+      }
+      worldOrbit.update(dt);
+      const lookT = new THREE.Vector3(t.x, t.y + (this.intCamRig === 'tower' ? 1.5 : 1), t.z);
+      this.camera.position.lerp(worldOrbit.orbited(camGoal, lookT), Math.min(1, dt * 4));
+      this.camera.lookAt(lookT);
     }
-    worldOrbit.update(dt);
-    const lookT = new THREE.Vector3(t.x, t.y + (this.intCamRig === 'tower' ? 1.5 : 1), t.z);
-    this.camera.position.lerp(worldOrbit.orbited(camGoal, lookT), Math.min(1, dt * 4));
-    this.camera.lookAt(lookT);
 
     // ---- day/night cycle (shared world clock) ----
     let daylight = 1, night = 0;
@@ -8328,6 +8334,151 @@ export class Town {
 
       render();
     });
+    this.busy = false;
+    updateHUD(this.player, 'Haven City');
+  }
+
+  public async runHavenCityTourCinematic(): Promise<void> {
+    this.busy = true;
+
+    // 1. Welcome to Haven City (Fountain/Plaza view)
+    this.camOverride = {
+      pos: new THREE.Vector3(0, 9, 12),
+      look: new THREE.Vector3(0, 1.2, 0)
+    };
+    await say('Guide Mara', `Hold, graduate! Welcome to <b>Haven City</b> — heart of the Tamer Guilds, capital of Olivar!`);
+    await say('Guide Mara', `I'm Mara, your Guild Guide. Let me give you a quick, proper tour of the capital's landmarks before you head out.`);
+
+    // 2. The 5 Houses (Terrace view)
+    this.camOverride = {
+      pos: new THREE.Vector3(0, 15, -18),
+      look: new THREE.Vector3(0, 4, -31)
+    };
+    await say('Guide Mara', `Looking North, up the Grand Stairs: the <b>terrace of the five Grand Houses</b>. Your house hall is up here, where House Masters distribute official orders.`);
+
+    // Cut inside the player's House (or a default house like pyrelight)
+    const houseDef = HOUSES.find(h => h.id === this.player.houseId) || HOUSES[0];
+    await this.enterHouse(houseDef);
+    this.camOverride = {
+      pos: new THREE.Vector3(0, 5, this.intRoom.d / 2 + 3.2),
+      look: new THREE.Vector3(0, 1.5, 0)
+    };
+    await say('Guide Mara', `Inside your House Hall, you'll find fellow tamers, Attendants, and a warm hearth. Keep an eye out for special quests here!`);
+    
+    // Exit back to street
+    this.exitHouse();
+
+    // 3. Madame Celeste's Boutique
+    // Exterior cut
+    this.camOverride = {
+      pos: new THREE.Vector3(-14, 5.2, -1.8),
+      look: new THREE.Vector3(-14, 1.4, -7)
+    };
+    await say('Guide Mara', `To the West, you'll find Madame Celeste's <b>Boutique Shop</b>, the premier salon for tamers.`);
+
+    // Interior cut
+    await this.enterService('boutique');
+    this.camOverride = {
+      pos: new THREE.Vector3(0, 2.4, -0.2),
+      look: new THREE.Vector3(0, 1.2, -3.4) // Look at Celeste
+    };
+    await say('Madame Celeste', `Welcome, darling! Step up to the Aurel Atelier. Try on everything, and if you want a complete style makeover, the studio is on the house!`);
+    
+    // Exit back to street
+    this.exitHouse();
+
+    // 4. Pina's Provisions
+    // Exterior cut
+    this.camOverride = {
+      pos: new THREE.Vector3(-14, 5.2, 12.2),
+      look: new THREE.Vector3(-14, 1.4, 7)
+    };
+    await say('Guide Mara', `Down the west lane is <b>Pina's Provisions</b>, supplying tamers with essential items.`);
+
+    // Interior cut
+    await this.enterService('shop');
+    this.camOverride = {
+      pos: new THREE.Vector3(0, 2.4, -0.2),
+      look: new THREE.Vector3(0, 1.2, -3.4) // Look at Pina
+    };
+    await say('Pina', `Need to stock up? I carry everything from healing potions to rare gems. Check my wares whenever your inventory runs low.`);
+    
+    // Exit back to street
+    this.exitHouse();
+
+    // 5. Dax's Garage (Crawler Shop)
+    // Exterior cut
+    this.camOverride = {
+      pos: new THREE.Vector3(14, 5.2, 12.2),
+      look: new THREE.Vector3(14, 1.4, 7)
+    };
+    await say('Guide Mara', `Across on the east lane, you'll find <b>Dax's Garage</b>, the hub for all things Crawler-related.`);
+
+    // Interior cut
+    await this.enterService('garage');
+    this.camOverride = {
+      pos: new THREE.Vector3(-1.2, 2.4, 1.8),
+      look: new THREE.Vector3(-1.2, 1.2, -1.2) // Look at Dax
+    };
+    await say('Engineer Dax', `Hey there! Need Crawler modifications? Bring me shards and parts, and we'll have your engine roaring and custom painted in no time.`);
+    
+    // Exit back to street
+    this.exitHouse();
+
+    // 6. Sanctum for Fusion
+    // Exterior cut
+    this.camOverride = {
+      pos: new THREE.Vector3(0, 5.2, 23.2),
+      look: new THREE.Vector3(0, 1.4, 18)
+    };
+    await say('Guide Mara', `Straight south is the <b>Aurelian Fusion Laboratory</b> and Healing Sanctum. It is completely free to rest your Guardians here.`);
+
+    // Interior cut
+    await this.enterService('sanctum');
+    this.camOverride = {
+      pos: new THREE.Vector3(0, 3.2, 2.8),
+      look: new THREE.Vector3(0, 1.5, -2) // Look at Fusion Reactor
+    };
+    await say('Guide Mara', `This is the heart of the laboratory: the **Central Fusion Reactor**. Here, you can perform Guardian Fusions to weave two essences together!`);
+    await say('Guide Mara', `Fusing evolved Guardians allows you to achieve deity-class fusions and other special evolutions that novice templates cannot handle.`);
+
+    this.camOverride = {
+      pos: new THREE.Vector3(4.2, 2.2, 5.2),
+      look: new THREE.Vector3(4.2, 1.2, 3.2) // Look at Aide Lumen
+    };
+    await say('Aide Lumen', `Professor Alex's fusion matrix splicing is fully calibrated. Please select parent Guardians carefully, as fusion is permanent and irreversible.`);
+    
+    // Exit back to street
+    this.exitHouse();
+
+    // 7. Docks & Fishing, Skyport, Dungeons
+    this.camOverride = {
+      pos: new THREE.Vector3(-26, 12, 18),
+      look: new THREE.Vector3(-26, 1.5, 30) // Look at Pond/fishing docks
+    };
+    await say('Guide Mara', `To the North-West, you can go fishing near the docks of the Great Pond! Just find an active ripple and cast your line.`);
+
+    this.camOverride = {
+      pos: new THREE.Vector3(-28, 9, 2),
+      look: new THREE.Vector3(-38, 2.2, 0) // Look at Skyport causeway/Pod
+    };
+    await say('Guide Mara', `To the West is the **Skyport**. Hop into the floating Pod whenever the Academy calls you back.`);
+
+    this.camOverride = {
+      pos: new THREE.Vector3(26, 9, 2),
+      look: new THREE.Vector3(36, 2.2, 0) // Look towards the Expedition Gate / East
+    };
+    await say('Guide Mara', `And to the East is the **Expedition Gate**, leading to the MOSSDEEP BURROWS and the overworld. Keep your Sigil ready.`);
+
+    // 8. End of Tour: Cut back to player
+    this.camOverride = {
+      pos: new THREE.Vector3(0, 3.6, 10.8),
+      look: new THREE.Vector3(0, 1.0, 6.8)
+    };
+    await say('Guide Mara', `That's the layout! Check your Journal with <b>J</b>, save your progress in the menu, and have a wonderful stay in Haven City!`);
+
+    // Clean up
+    this.camOverride = null;
     this.busy = false;
     updateHUD(this.player, 'Haven City');
   }
