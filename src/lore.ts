@@ -122,6 +122,37 @@ export const TERRA_LORE = {
   bigThree: 'For twenty years the World Championships have belonged to three foreigners — Aljay the Dawnflame, Greggy the Stormheart, Onnel the Worldroot — twenty-two titles between them, all from Olivar across the strait. Terra grumbles that it is not even fair, and means it; Terra also fills the Worldring to the rafters to watch them, and means that more. The rivalry runs in Terra the way the tide runs: deep, loud, and never quite settled.',
 };
 
+// ---------------- the Worldring Circuit — the competitive season ----------------
+// Five ascending strata that run on the Age-of-Embers calendar, from
+// the weekly Ringnights of Haven to the World Championship in the
+// Worldring of Terra. The whole structure is already written into the
+// Universal Rank ladder (ranks.ts): a first bracket survived, seeded
+// not drawn, quarterfinals feared, a finals-night regular, a crown.
+export interface TournamentTierLore { tier: string; venue: string; text: string; }
+export const TOURNAMENT_LORE = {
+  name: 'The Worldring Circuit',
+  epithet: 'Where Champions Are Made',
+  /** the spine of the whole thing */
+  creed: 'Your Universal Rank moves on Tournament Points and nothing else — not battles, not captures, not clears. Only sanctioned placements. And no EXP is ever awarded in the Ring: a sanctioned match proves the team you built, it does not grind levels. You cannot grind the crown.',
+  /** the five strata, low to high */
+  tiers: [
+    { tier: 'Local — the Ringnights', venue: 'town coliseums (Haven, and lesser rings across the world)',
+      text: 'The weekly open bracket. Low stakes, low points, and the only place an unknown becomes a name by Saturday. Every legend signed its first page on a Ringnight.' },
+    { tier: 'Seeding — the Turmal Seasonal', venue: 'Turmal Above, the terraced sky-city',
+      text: 'The loudest open circuit outside the Grand Coliseum, run under the curtained boxes of the Sponsors. Your placements here set your SEED into the Playoffs. Seeded, not drawn.' },
+    { tier: 'Regional — the Continental Crowns', venue: 'Olivar · Veyra · Tharkand · Noruun',
+      text: 'The Intercontinental titles the Leodones daughters fill their shelves from. Win a continent and you have a ticket pointed at the Worldring.' },
+    { tier: 'Playoffs — the Gauntlet of Seeds', venue: 'the Grand Coliseum, Haven City',
+      text: 'Top seeds only, single-elimination, the field drawn from the Known Names themselves. Quarterfinals into semifinals into finals-night. No second chances.' },
+    { tier: 'Championship — the World Championship', venue: 'the Worldring, Terra City',
+      text: 'The crown. The ancient home of the title, returned now the Pod line hums again. Twenty-two titles to the Big Three; their daughters guard the throne. Ten thousand voices and a crown of light for the last tamer standing.' },
+  ] as TournamentTierLore[],
+  /** the spectacle layer that breaks up the season */
+  specials: 'Beyond the five strata: Foretales Exhibitions (spectacle bouts the news-machine scripts before they happen), Aurelia\'s Cup on the Cradle-beach of Agdao, the Sealwatch Invitational held each time the Ghandra seal measures weaker, grudge matches against named rivals, and — for a standing World Champion alone — the Legends\' Gauntlet against the nine Aether Guardians of the Big Three.',
+  /** how the calendar drives it */
+  calendar: 'The horns sound three days out. Foretales\' crystals announce each bracket; sign-up opens a three-day window at the Coliseum. Register, prep at your own pace, then tell the attendant you are ready — and the world turns to finals-night.',
+};
+
 // ---------------- the Guilds of the world ----------------
 // The five Grand Houses of Olivar are one famous chapter among
 // hundreds of Guilds bound by the Compact. These are the ones any

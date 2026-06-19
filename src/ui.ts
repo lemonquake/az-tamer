@@ -15,6 +15,8 @@ import { evoTreeHTML, wireEvoTree } from './evotree';
 import { checkAchievements, achievementsHTML } from './achievements';
 import { sfx, toggleMute, isMuted, getMusicVolume, getSoundVolume, setMusicVolume, setSoundVolume } from './audio';
 import { openTutorialReplayMenu, runGuardianTutorial, isTutorialOpen } from './tutorial';
+import { weekdayName, time12, fullDateLabel } from './calendar';
+import { getTournamentAlert } from './tournaments';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
 
@@ -288,7 +290,43 @@ export function updateHUD(player: Player, zone: string, extra?: { floor?: number
     cardBusy = false;
   });
 }
-export function hideHUD(): void { $('hud').style.display = 'none'; showHotkeys(false); }
+export function hideHUD(): void { $('hud').style.display = 'none'; showHotkeys(false); updateWorldStatus(); }
+
+/**
+ * The Calendar chip and the flashing Tournament banner — persistent overlay
+ * elements (not part of the HUD rebuild), so the clock ticks live and the
+ * sign-up alert keeps flashing. Driven by a 1s interval from main.ts.
+ */
+export function updateWorldStatus(): void {
+  const host = document.getElementById('app') ?? document.body;
+  let chip = document.getElementById('cal-chip');
+  if (!chip) { chip = document.createElement('div'); chip.id = 'cal-chip'; host.appendChild(chip); }
+  let banner = document.getElementById('trn-banner');
+  if (!banner) {
+    banner = document.createElement('div'); banner.id = 'trn-banner';
+    banner.onclick = () => toast('🏟️ Head to the Grand Coliseum and speak to Attendant Lyssa to register.', 'gold');
+    host.appendChild(banner);
+  }
+
+  const hudVisible = $('hud').style.display !== 'none';
+  const player = getActivePlayer();
+  if (!hudVisible || !player) { chip.style.display = 'none'; banner.style.display = 'none'; return; }
+
+  chip.style.display = 'flex';
+  chip.title = fullDateLabel();
+  const chipHtml = `<span class="cal-day">🗓️ ${weekdayName()}</span><span class="cal-dot">•</span><span class="cal-time">${time12()}</span>`;
+  if (chip.innerHTML !== chipHtml) chip.innerHTML = chipHtml;
+
+  const alert = getTournamentAlert(player);
+  if (alert) {
+    banner.style.display = 'block';
+    if (banner.textContent !== alert.text) banner.textContent = alert.text;
+    const cls = alert.flashing ? 'flash' : '';
+    if (banner.className !== cls) banner.className = cls;
+  } else {
+    banner.style.display = 'none';
+  }
+}
 
 let lastHotkeysParams: { on: boolean; dungeon: boolean; regions: boolean } = { on: false, dungeon: false, regions: false };
 

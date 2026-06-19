@@ -419,8 +419,37 @@ export interface GuildPerks {
   tacticalSynergy: number;// 0-5
 }
 
+/** Per-save tournament career: what you've entered, won, and who you've beaten. */
+export interface TournamentProgress {
+  /** Event the player has registered for (null = none); fires on `registeredDay`. */
+  registeredEventId: string | null;
+  registeredDay: number;
+  /** Last calendar day we flashed a "sign-ups open" alert — keeps toasts from repeating. */
+  signupSeenDay: number;
+  /** tierId → championships won, and → times entered. */
+  wins: Record<string, number>;
+  entries: Record<string, number>;
+  /** Titles earned, e.g. "Haven Ringnight Champion". */
+  titles: string[];
+  /** tierId → best placement reached (1 = champion, 2 = finalist, …). */
+  bestPlacement: Record<string, number>;
+  /** World Championships lifted at the Worldring. */
+  worldTitles: number;
+  /** Known-Name champions the player has beaten in a sanctioned bracket. */
+  defeated: string[];
+}
+
+export function defaultTournamentProgress(): TournamentProgress {
+  return {
+    registeredEventId: null, registeredDay: -1, signupSeenDay: -1,
+    wins: {}, entries: {}, titles: [], bestPlacement: {}, worldTitles: 0, defeated: [],
+  };
+}
+
 export interface PlayerSave {
   tamerName: string; shards: number;
+  calendarDay?: number;
+  tournament?: TournamentProgress;
   party: GuardianSave[]; reserve: GuardianSave[];
   inventory: Record<string, number>;
   crawler: CrawlerSaveData;
@@ -462,6 +491,10 @@ export class Player {
   dungeonClears: Record<string, number> = {};
   /** Rank currency — earned ONLY by placing in sanctioned tournaments. */
   tournamentPoints = 0;
+  /** Days elapsed since the campaign began — the Calendar's date counter (0 = Monday). */
+  calendarDay = 0;
+  /** Tournament career: registrations, titles, who you've beaten. */
+  tournament: TournamentProgress = defaultTournamentProgress();
   profilePic: string | null = null;   // custom portrait (data URL)
   cardNo = '';                        // guild member number, assigned on joining
   quests: Record<string, 'active' | 'done'> = {};
@@ -546,6 +579,8 @@ export class Player {
       houseId: this.houseId, battlesWon: this.battlesWon,
       capturesMade: this.capturesMade, dungeonClears: { ...this.dungeonClears },
       tournamentPoints: this.tournamentPoints,
+      calendarDay: this.calendarDay,
+      tournament: JSON.parse(JSON.stringify(this.tournament)),
       savedAt: Date.now(),
       profilePic: this.profilePic, cardNo: this.cardNo, quests: { ...this.quests },
       equippedClothes: { ...this.equippedClothes },
@@ -611,6 +646,10 @@ export class Player {
       p.battlesWon = d.battlesWon ?? 0; p.capturesMade = d.capturesMade ?? 0;
       p.dungeonClears = d.dungeonClears ?? {};
       p.tournamentPoints = d.tournamentPoints ?? 0;
+      p.calendarDay = d.calendarDay ?? 0;
+      p.tournament = d.tournament
+        ? { ...defaultTournamentProgress(), ...d.tournament }
+        : defaultTournamentProgress();
       p.profilePic = d.profilePic ?? null;
       p.cardNo = d.cardNo ?? '';
       p.quests = d.quests ?? {};

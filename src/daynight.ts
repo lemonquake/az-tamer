@@ -41,15 +41,27 @@ class WorldClock {
   /** 0 = midnight, 0.5 = noon. */
   t = 0.34;
   private persistTimer = 0;
+  /** Listeners fired once for every midnight the clock crosses (drives the Calendar). */
+  private rolloverCbs: Array<() => void> = [];
 
   constructor() {
     const saved = parseFloat(localStorage.getItem(STORE_KEY) ?? '');
     if (!Number.isNaN(saved)) this.t = ((saved % 1) + 1) % 1;
   }
 
+  /** Register a callback fired each time the clock rolls past midnight (t wraps 1 → 0). */
+  onRollover(cb: () => void): void { this.rolloverCbs.push(cb); }
+
   /** Tick the clock forward. Call once per frame from whichever outdoor map is active. */
   advance(dt: number): void {
-    this.t = (this.t + dt / DAY_LENGTH) % 1;
+    const raw = this.t + dt / DAY_LENGTH;
+    const crossed = Math.floor(raw);        // whole midnights stepped over this frame
+    this.t = raw - crossed;
+    for (let i = 0; i < crossed; i++) {
+      for (const cb of this.rolloverCbs) {
+        try { cb(); } catch { /* a bad listener must never stall the world clock */ }
+      }
+    }
     this.persistTimer += dt;
     if (this.persistTimer > 5) {
       this.persistTimer = 0;
@@ -68,6 +80,15 @@ class WorldClock {
   get label(): string {
     const hh = Math.floor(this.t * 24), mm = Math.floor((this.t * 24 % 1) * 60);
     return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+  }
+
+  /** "7:30 AM" — the 12-hour clock the Calendar HUD shows. */
+  get label12(): string {
+    const total = Math.floor(this.t * 24 * 60);
+    let hh = Math.floor(total / 60); const mm = total % 60;
+    const ap = hh < 12 ? 'AM' : 'PM';
+    hh %= 12; if (hh === 0) hh = 12;
+    return `${hh}:${String(mm).padStart(2, '0')} ${ap}`;
   }
 }
 

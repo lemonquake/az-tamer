@@ -18,6 +18,7 @@ import {
   HAIRSTYLES, SKIN_TONES, HAIR_COLORS, type GuardianRig, type TreeKind, type CrawlerLook,
 } from './models';
 import { LEGENDS, WORLD_CIRCUIT, LEGEND_GUARDIANS, DAUGHTERS, AIRAH, ALJAY_HIDEOUTS } from './lore';
+import { openColiseumRegistration, showCircuitStandings, talkToStatkeeper } from './tournaments';
 import { CRAWLER_SLOTS, CRAWLER_SLOT_INFO, PAINT_JOBS, ELEMENT_CSS, type CrawlerSlot } from './data';
 import {
   say, conversation, choose, askName, toast, updateHUD, showInteractHint, showHotkeys,
@@ -3823,16 +3824,11 @@ export class Town {
       pos: new THREE.Vector3(0, 0, -1.6), radius: 1.9,
       label: 'Press <b>E</b> — Tournament Registration',
       handler: async () => {
-        const pick = await choose('Attendant Lyssa',
-          'Welcome to the Grand Coliseum of Haven City — rebuilt at twice its old size, and still not big enough on finals night! What would you like to know?',
-          ['Register for the Tournament', 'Ask about the Ring', 'Ask about the Hall of Legends', 'Nothing, thanks']);
-        if (pick === 0) {
-          await say('Attendant Lyssa', 'Registration is not yet open — the brackets, the prize vault and the broadcast crystals are still being prepared. And remember how the ladder works now: your Universal Rank moves on TOURNAMENT POINTS alone. Win brackets — here, at the Turmal Seasonal, on any sanctioned circuit — and the rank follows. Nothing else counts. When the horns sound across Haven City, come straight to me. I\'ll hold a slot for you.');
-          toast('🏟️ The Grand Tournament opens soon — Tournament Points await!', 'gold');
-        } else if (pick === 1) {
-          await say('Attendant Lyssa', 'The Ring seats twenty thousand now and the sound of a final can be heard from the city walls. It stays sealed between tournaments — the two guards up there take their job VERY seriously.');
-        } else if (pick === 2) {
-          await say('Attendant Lyssa', 'The gold wall, east side. Aljay — eight championships. Greggy — nine, the longest reign in history. Onnel — five. And the Ascendancy in the north-west quarter is brand new — Aether-marble, studio crystals, all nine Guardians under spotlight. Climb the stairs and pay your respects. Everyone does.');
+        this.busy = true;
+        try {
+          await openColiseumRegistration(this.player);
+        } finally {
+          this.busy = false;
         }
       },
     });
@@ -3856,8 +3852,22 @@ export class Town {
       this.intColliders.push({ pos: new THREE.Vector3(-w / 2 + 0.6, 0, 2), r: 1.2 });
       this.intInteractables.push({
         pos: new THREE.Vector3(-w / 2 + 1.6, 0, 2), radius: 2.6,
-        label: 'Press <b>E</b> — study the World Circuit standings',
-        handler: () => this.openWorldCircuitBoard(),
+        label: 'Press <b>E</b> — study the Circuit Standings (updated weekly)',
+        handler: async () => { this.busy = true; try { await showCircuitStandings(this.player); } finally { this.busy = false; } },
+      });
+
+      // ---- the Circuit Statkeeper — posts the standings anew each week ----
+      const statkeeper = makeVoxelHuman({ top: 0xf2c14e, hair: 0x3a3a4a, cap: 0x2a3248, hairstyle: 'classic' });
+      statkeeper.position.set(-w / 2 + 3.4, 0, -1.2);
+      statkeeper.rotation.y = Math.PI / 2.4;
+      tagNpc(statkeeper, 'Circuit Statkeeper');
+      s.add(statkeeper);
+      this.intNpcs.push(statkeeper);
+      this.intColliders.push({ pos: statkeeper.position.clone().setY(0), r: 0.55 });
+      this.intInteractables.push({
+        pos: statkeeper.position.clone().setY(0), radius: 1.6,
+        label: 'Press <b>E</b> — ask the Statkeeper about the standings',
+        handler: async () => { this.busy = true; try { await talkToStatkeeper(this.player); } finally { this.busy = false; } },
       });
       // the crowd that never leaves the standings
       const circuitFans: { x: number; z: number; top: number; line: string }[] = [

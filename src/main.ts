@@ -7,7 +7,9 @@ import { DUNGEONS, HOUSES, type DungeonDef, expForLevel } from './data';
 import { Player, Guardian, SAVE_SLOTS } from './state';
 import { RANKS } from './ranks';
 import { makeRenderer, updateTweens, updateRigs } from './models';
-import { say, conversation, choose, askName, toast, fadeIn, fadeOut, hideHUD, updateHUD, playStorySequence, isDialogueOpen, isMenuOpen, refreshHUD, openOptionsMenu, executeCheatFlow } from './ui';
+import { say, conversation, choose, askName, toast, fadeIn, fadeOut, hideHUD, updateHUD, playStorySequence, isDialogueOpen, isMenuOpen, refreshHUD, updateWorldStatus, openOptionsMenu, executeCheatFlow } from './ui';
+import { initCalendar } from './calendar';
+import { initTournaments } from './tournaments';
 import { Battle, type BattleOptions, type BattleResult } from './battle';
 import { DungeonRun, type DungeonOutcome } from './dungeon';
 import { Town } from './town';
@@ -117,6 +119,11 @@ let player: Player;
 (window as any).__getActivePlayer = () => player;
 (window as any).__runCinematicScene = runCinematicScene;
 (window as any).__runFishing = runFishing;
+// the Coliseum's tournament engine drives battles through this bridge
+(window as any).__runBattle = (specs: { speciesId: string; level: number }[], opts: BattleOptions) => runBattle(specs, opts);
+(window as any).__refreshHUD = refreshHUD;
+// live calendar clock + flashing tournament banner
+setInterval(() => { try { updateWorldStatus(); } catch { /* overlay must never crash the loop */ } }, 1000);
 
 async function runBattle(specs: { speciesId: string; level: number }[], opts: BattleOptions): Promise<BattleResult> {
   const prev = activeView;
@@ -747,6 +754,7 @@ async function boot(): Promise<void> {
     const loaded = Player.load();
     if (loaded) {
       player = loaded;
+      initCalendar(); initTournaments();
       toast(`Welcome back, ${player.tamerName}!`, 'gold');
       if (!player.flags['exam_done']) await academyExam();
       if (!player.flags['university_done']) await runUniversity(!!player.flags['arrived_city']);
@@ -757,6 +765,7 @@ async function boot(): Promise<void> {
   }
 
   player = new Player();
+  initCalendar(); initTournaments();
   playMusic('university');
 
   // opening cinematic — the academy registration hall, at the holo-terminal

@@ -111,6 +111,10 @@ export interface BattleOptions {
   theme?: 'cavern' | 'vault' | 'storm';
   arena?: string;            // dungeon id — flavors the arena beyond the base theme
   firstStrike?: boolean;     // crawler cannon stun: enemies skip round 1
+  // ---- sanctioned-tournament rules ----
+  noExp?: boolean;           // EXP is disabled in the Ring — you fight with the team you built
+  noLoot?: boolean;          // no per-match shards/drops; the bracket pays the prize
+  winLine?: string;          // custom victory subtitle (e.g. "Quarterfinal — you advance!")
 }
 
 interface EnemySpec { speciesId: string; level: number; }
@@ -2088,12 +2092,15 @@ export class Battle {
       shards += Math.floor(e.g.level * (4 + Math.random() * 5));
     }
     if (this.opts.boss) { exp = Math.floor(exp * 1.6); shards = Math.floor(shards * 2.5); }
+    // sanctioned tournaments: no EXP in the Ring, and the bracket — not the match — pays out
+    if (this.opts.noExp) exp = 0;
+    if (this.opts.noLoot) shards = 0;
     this.player.shards += shards;
     this.player.battlesWon++;
 
-    // a foe may drop an item
+    // a foe may drop an item (never in a sanctioned match)
     let dropName: string | null = null;
-    if (Math.random() < 0.45) {
+    if (!this.opts.noLoot && Math.random() < 0.45) {
       const drops = ['tonic', 'berry', 'cell', 'soda', 'plating', 'honey_roll'];
       const drop = drops[Math.floor(Math.random() * drops.length)];
       if (this.player.addItem(drop)) dropName = ITEMS[drop].name;
@@ -2101,11 +2108,11 @@ export class Battle {
 
     // award EXP, capturing before/after so the screen can show the climb
     const winners = this.player.party.filter(g => !g.fainted && !g.isTemp);
-    const share = winners.length ? Math.floor(exp / Math.max(1, Math.ceil(winners.length * 0.75))) : 0;
+    const share = (this.opts.noExp || !winners.length) ? 0 : Math.floor(exp / Math.max(1, Math.ceil(winners.length * 0.75)));
     const results: GuardianResult[] = winners.map(g => {
       const beforeLevel = g.level, beforeExp = g.exp;
-      g.gainExp(share);
-      return { g, beforeLevel, afterLevel: g.level, beforeExp, gained: share, newTechs: this.newlyAvailableTechs(g, beforeLevel) };
+      if (share > 0) g.gainExp(share);
+      return { g, beforeLevel, afterLevel: g.level, beforeExp, gained: share, newTechs: share > 0 ? this.newlyAvailableTechs(g, beforeLevel) : [] };
     });
 
     playMusic('battle_win');
@@ -2180,7 +2187,11 @@ export class Battle {
 
   // ---------- victory summary ----------
   private async showVictorySummary(shards: number, share: number, dropName: string | null, results: GuardianResult[]): Promise<void> {
-    const reward = `
+    const reward = this.opts.noExp ? `
+      <div class="vc-reward-row">
+        <div class="vc-reward"><div class="v" style="color:var(--ui-gold)">🏟️</div><div class="k">Sanctioned Match</div></div>
+        <div class="vc-reward"><div class="v exp" style="color:var(--ui-dim)">— EXP —</div><div class="k">No EXP in the Ring</div></div>
+      </div>` : `
       <div class="vc-reward-row">
         <div class="vc-reward"><div class="v gold">◆ ${shards}</div><div class="k">Shards</div></div>
         <div class="vc-reward"><div class="v exp">+${share}</div><div class="k">EXP each</div></div>
@@ -2210,12 +2221,16 @@ export class Battle {
         </div>`;
     }).join('') || '<div class="vc-sub">No EXP earned this battle.</div>';
 
+    const guardianBlock = this.opts.noExp
+      ? `<div class="vc-sub">⚔️ Sanctioned tournament rules — <b>no EXP is awarded in the Ring</b>. You fight with the team you built; the bracket measures it.</div>`
+      : guardianRows;
+
     const body = `
       <h2 class="vc-title">✦ VICTORY ✦</h2>
-      <p class="vc-sub">${this.opts.boss ? 'A mighty foe has fallen!' : 'The wild Guardians are defeated!'}</p>
+      <p class="vc-sub">${this.opts.winLine ?? (this.opts.boss ? 'A mighty foe has fallen!' : 'The wild Guardians are defeated!')}</p>
       ${reward}
       <div class="vc-section-title">Guardians</div>
-      ${guardianRows}
+      ${guardianBlock}
       <div class="vc-section-title">Battle Report</div>
       ${this.buildReportHtml()}`;
 
