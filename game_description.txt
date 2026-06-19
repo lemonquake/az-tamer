@@ -1,0 +1,65 @@
+================================================================================
+                                   AZ TAMER
+                    A Monster-Taming Dungeon RPG & Battler
+================================================================================
+
+OVERVIEW:
+---------
+AZ Tamer is a rich monster-taming RPG set in the Age of Embers, a world where 
+humans and elemental entities called Guardians form deep, mutual bonds. Players 
+explore various towns and dungeons, build their dream team of Guardians, fish in 
+deep lagoons, and climb the ranks of the prestigious Worldring Circuit to 
+become the World Champion.
+
+WORLD & LORE:
+-------------
+* The First Dawn (~3,000 Years Ago): 
+  The Veil between the physical world and Ghandra thinned, allowing Guardians—
+  beings of living elemental energy—to cross into the world.
+  
+* The First Bond (~700 Years Ago): 
+  On Agdao Island, a fisher-girl named Aurelia saved a storm-wounded Guardian, 
+  marking the first true bond based on trust rather than force.
+  
+* The Guild Compact (~400 Years Ago): 
+  Tamers formed Guilds and signed the Compact to protect Guardians from chains, 
+  ensuring all bonds are born of mutual trust.
+  
+* The Legion War (~15 Years Ago): 
+  Three legendary Tamers (Aljay, Greggy, and Onnel) sealed the Corrupted Legion 
+  back in the folded dimension of Ghandra. Today, that seal is weakening...
+
+THE FOUR CONTINENTS:
+--------------------
+* Olivar: The Capital region, home to Haven City and the Leodones University.
+* Veyra: The western sea-continent of a thousand harbors and mist-shrouded ruins.
+* Tharkand: The eastern desert of red dunes and humming, ancient war-engines.
+* Noruun: The frozen south, where ancient Ice Guardians sleep under glaciers.
+
+CORE GAMEPLAY MECHANICS:
+------------------------
+1. Guardian Team Building:
+   Collect and bond with a variety of Guardians across different elements 
+   (Tide, Blaze, Verdant, Volt, Umbra, Gale) and evolution stages (Adept, 
+   Elite, Apex, Legendary, Aether).
+
+2. Tactical Turn-Based Combat:
+   Engage in challenging battles where elemental typing, party synergy, and 
+   move sets dictate victory. Sanctioned circuit matches award no EXP, meaning 
+   your placement relies entirely on the strength and synergy of the team you built.
+
+3. The Worldring Circuit:
+   Register and participate in structured tournament tiers starting from Haven 
+   City's Weekly Opens, climbing through the Turmal Seasonals, Continental Crowns, 
+   the Playoffs, and ultimately the World Championship at Terra City's Worldring.
+   Rank up your Universal Rank based purely on Tournament Points earned in the Ring.
+
+4. Deep Fishing Minigame:
+   Utilize different fishing rods and lures to catch a vast selection of fish species 
+   in locations like Agdao Island's turquoise lagoons and New Salmonan's rivers.
+
+5. Customization:
+   Unlock achievements, change clothes, select custom portrait designs, and explore 
+   distinct locations like the tech-ruins of Hyujon and the peaceful valleys of 
+   New Salmonan.
+================================================================================
