@@ -9,14 +9,14 @@
 import * as THREE from 'three';
 import {
   TECHS, ITEMS, TYPE_CSS, TYPE_COLORS, TYPE_ELEMENT, expForLevel,
-  elementsOf, elementMult, ELEMENT_ICONS, type Technique, type GType, type Element, getSpeciesPassive, type TechStatusEffect as ActiveStatus, type TechKind
+  elementsOf, elementMult, ELEMENT_ICONS, type Technique, type GType, type Element, getSpeciesPassive, type TechStatusEffect as ActiveStatus, type TechKind, isBig3Legend, formRank
 } from './data';
 import { sfx, playMusic } from './audio';
 import { Guardian, Player } from './state';
 import {
-  makeGuardian, disposeRig, tween, wait, Ease, makeFloatingDamageText, setTimeScale,
+  makeGuardian, disposeRig, tween, wait, Ease, makeFloatingDamageText, makeCriticalText, setTimeScale,
   stoneTexture, skyGradient, canvasTex, caveRockTexture, drownedBrickTexture,
-  stormPanelTexture, stormSeamEmissive, type GuardianRig,
+  stormPanelTexture, stormSeamEmissive, getRenderer, type GuardianRig,
 } from './models';
 import { VFX } from './vfx';
 import { say, choose, toast, askName, setStoryInBattle } from './ui';
@@ -81,6 +81,7 @@ interface Unit {
   wild: boolean;
   cardEl?: HTMLElement;
   statuses: ActiveStatus[];
+  cooldowns: Record<string, number>;   // techId → turns remaining before it can be used again
 }
 
 /** A replayable player order — what a Guardian did, so Auto-Action can redo it. */
@@ -179,8 +180,31 @@ export class Battle {
   private autoMode = false;
   private speedMul = 1;
   private autoKeyHandler?: (e: KeyboardEvent) => void;
+  private prepared = false;
 
   constructor(private player: Player, private enemySpecs: EnemySpec[], private opts: BattleOptions) {}
+
+  /**
+   * Build the arena, spawn every combatant, and pre-compile all shaders.
+   * Call this BEFORE fading the battle in — every expensive GPU step then
+   * happens over the black transition instead of stuttering the first frames
+   * (or the first technique). Idempotent; run() calls it if it wasn't already.
+   */
+  async prepare(): Promise<void> {
+    if (this.prepared) return;
+    this.buildArena();
+    this.player.party.forEach((g, i) => this.units.push(this.spawnUnit(g, 'player', i)));
+    this.enemySpecs.forEach((e, i) => {
+      const g = new Guardian(e.speciesId, e.level);
+      this.units.push(this.spawnUnit(g, 'enemy', i));
+    });
+    this.renderCards();
+    // Compile every material now (rigs, arena, and all VFX programs) at the
+    // real scene light count, so combat never hitches on a first-draw compile.
+    const r = getRenderer();
+    if (r) await this.fx.prewarm(r, this.camera);
+    this.prepared = true;
+  }
 
   get view(): BattleView {
     return { scene: this.scene, camera: this.camera, update: (dt) => this.updateView(dt) };
@@ -620,6 +644,7 @@ export class Battle {
       bond: 0, favor: 0.8 + Math.random() * 0.6,
       wild: side === 'enemy' && !!this.opts.wild,
       statuses: [],
+      cooldowns: {},
     };
     if (g.fainted) { rig.group.visible = false; }
     else {
@@ -959,9 +984,11 @@ export class Battle {
 
   private async hitReact(def: Unit, dmg: number, eff: number, crit: boolean, from?: THREE.Vector3): Promise<void> {
     const pct = dmg / def.g.stats.hp;
-    const color = crit ? '#ffd24e' : eff > 1 ? '#ff6a5a' : eff < 1 ? '#8b93b8' : '#ffffff';
-    const scale = crit || pct > 0.25 ? 1.6 : pct > 0.15 ? 1.25 : 1;
+    const color = crit ? '#ff2a2a' : eff > 1 ? '#ff6a5a' : eff < 1 ? '#8b93b8' : '#ffffff';
+    const scale = crit ? 2.0 : pct > 0.25 ? 1.6 : pct > 0.15 ? 1.25 : 1;
     const pos = def.rig.group.position.clone(); pos.y += 1.8;
+    // A critical hit gets an animated, blood-spattered "CRITICAL!" banner above the number.
+    if (crit) makeCriticalText(this.scene, def.rig.group.position.clone().setY(3.05));
     makeFloatingDamageText(this.scene, pos, `${dmg}`, color, scale);
     this.fx.flashMaterials(def.rig.body, eff > 1 ? 0xff6a3a : 0xffffff);
     this.fx.glow(this.chest(def), 0xffffff, { scale: 0.8 + pct * 2.2, life: 0.2 });
@@ -1063,6 +1090,24 @@ export class Battle {
     return finalDmg;
   }
 
+  // ---------- cooldowns ----------
+  /** Turns left before `u` may use `tech` again (0 = ready). Only signature/cooldown arts track this. */
+  private cooldownLeft(u: Unit, tech: Technique): number {
+    if (!tech.cooldown) return 0;
+    return u.cooldowns?.[tech.id] ?? 0;
+  }
+  /** A tech the unit can actually pick this turn — enough SP and off cooldown. */
+  private techReady(u: Unit, tech: Technique): boolean {
+    return u.g.sp >= tech.spCost && this.cooldownLeft(u, tech) === 0;
+  }
+  /** Put a tech on cooldown after use. +1 so the start-of-turn tick still leaves a full N-turn wait. */
+  private startCooldown(u: Unit, tech: Technique): void {
+    if (tech.cooldown && tech.cooldown > 0) {
+      if (!u.cooldowns) u.cooldowns = {};
+      u.cooldowns[tech.id] = tech.cooldown + 1;
+    }
+  }
+
   // ---------- damage ----------
   /**
    * HP-proportional damage model. A neutral hit with a starter technique
@@ -1070,7 +1115,7 @@ export class Battle {
    * Nothing short of a critical super-effective ultimate can pass 70% —
    * one-shots are impossible by construction.
    */
-  private computeDamage(att: Unit, def: Unit, tech: Technique): { dmg: number; eff: number; crit: boolean } {
+  private computeDamage(att: Unit, def: Unit, tech: Technique): { dmg: number; eff: number; crit: boolean; outclassed: boolean } {
     const as = att.g.stats, ds = def.g.stats;
     const atkStatusMult = this.getStatusMultiplier(att, 'atk');
     const defStatusMult = this.getStatusMultiplier(def, 'def');
@@ -1083,13 +1128,26 @@ export class Battle {
     const attEl = TYPE_ELEMENT[tech.type];
     const eff = elementMult(attEl, elementsOf(def.g));
     const stab = elementsOf(att.g).includes(attEl) ? 1.15 : 1;
-    const crit = Math.random() < 0.08;
+    // The Big Three's bonded lights strike on another tier — and crit far more often.
+    const attIsLegend = isBig3Legend(att.g.species.id);
+    const crit = Math.random() < (attIsLegend ? 0.16 : 0.08);
     const variance = 0.9 + Math.random() * 0.2;
     const pressure = atkStat / (atkStat + defStat * 1.15);   // 0.5 at parity
     let pct = (tech.power / 90) * pressure * eff * stab * variance;
     pct *= 1.5; // increase all damage output by 50%
+    if (attIsLegend) pct *= 1.25;        // legendary might — every blow hits noticeably harder
+    if (tech.signature) pct *= 1.2;      // a unique signature art bites deeper still
     if (crit) pct *= 1.5;
     if (def.guarding) pct *= 0.45;
+
+    // Form-Block: a lower-form attacker is OUT-CLASSED — the defender shrugs
+    // off 5% of the damage per form rank it stands above the attacker (capped
+    // at 40%). Stacks on top of element effectiveness. Beginners chip uselessly
+    // at higher forms; an evolved Guardian barely feels a wild novice; and an
+    // Aether boss (rank 8) attacking your party gets NO reduction — full force.
+    const formGap = Math.max(0, formRank(def.g.species) - formRank(att.g.species));
+    const formBlock = Math.min(0.40, 0.05 * formGap);
+    pct *= (1 - formBlock);
 
     // Apply Blind debuff (reduces damage output by 20%)
     if (att.statuses && att.statuses.some(st => st.effect === 'blind')) {
@@ -1147,15 +1205,19 @@ export class Battle {
       }
     }
 
-    pct = Math.min(0.7, pct); // hard ceiling — never a one-shot
-    return { dmg: Math.max(1, Math.floor(ds.hp * pct)), eff, crit };
+    // Hard ceiling — never a true one-shot, but legends (and especially their
+    // signature arts) get to break the ordinary 70% bound.
+    const cap = tech.signature ? 0.92 : attIsLegend ? 0.82 : 0.7;
+    pct = Math.min(cap, pct);
+    return { dmg: Math.max(1, Math.floor(ds.hp * pct)), eff, crit, outclassed: formBlock > 0 };
   }
 
-  private effText(eff: number, crit: boolean): string {
+  private effText(eff: number, crit: boolean, outclassed = false): string {
     let s = '';
     if (crit) s += ' <span style="color:var(--ui-gold)">Critical!</span>';
     if (eff > 1) s += ' <span style="color:var(--ui-red)">Devastating!</span>';
     else if (eff < 1) s += ' <span style="color:var(--ui-dim)">…resisted.</span>';
+    if (outclassed) s += ' <span style="color:var(--ui-dim)">…out-classed.</span>';
     return s;
   }
 
@@ -1166,9 +1228,19 @@ export class Battle {
   // ---------- technique execution ----------
   private async execTech(att: Unit, tech: Technique, target: Unit | null): Promise<void> {
     att.g.sp = Math.max(0, att.g.sp - tech.spCost);
+    this.startCooldown(att, tech);
     const color = TYPE_COLORS[tech.type];
     const who = att.side === 'enemy' ? `Wild ${att.g.nickname}` : att.g.nickname;
-    this.log(`<b style="color:${TYPE_CSS[tech.type]}">${who}</b> uses <b>${tech.name}</b>!`);
+    if (tech.signature) {
+      this.log(`<b style="color:var(--ui-gold)">✦ ${who} unleashes their signature — ${tech.name}! ✦</b>`);
+      sfx('charge');
+      this.fx.flash(this.chest(att), TYPE_COLORS[tech.type], { intensity: 30, life: 0.5 });
+      this.fx.ring(att.rig.group.position, TYPE_COLORS[tech.type], { maxR: 2.6, life: 0.7 });
+      this.fx.shake(0.18, 0.4);
+      await wait(280);
+    } else {
+      this.log(`<b style="color:${TYPE_CSS[tech.type]}">${who}</b> uses <b>${tech.name}</b>!`);
+    }
 
     if (tech.effect === 'heal') {
       const tgt = target ?? att;
@@ -1274,13 +1346,13 @@ export class Battle {
       const tgt = targets[0];
       const home = att.rig.group.position.clone();
       await this.meleeRush(att, tgt, color);
-      const { dmg, eff, crit } = this.computeDamage(att, tgt, tech);
+      const { dmg, eff, crit, outclassed } = this.computeDamage(att, tgt, tech);
       const finalDmg = await this.inflictDamage(tgt, dmg, 'tech', tech.kind);
       this.recordHit(att, tgt, finalDmg);
       totalDmg += finalDmg;
       this.elementalImpact(tgt, tech.type, big || crit);
       if (tech.effect === 'drain') this.drainFX(att, tgt, finalDmg);
-      this.log(`<b>${who}</b> uses <b>${tech.name}</b>!${this.effText(eff, crit)}`);
+      this.log(`<b>${who}</b> uses <b>${tech.name}</b>!${this.effText(eff, crit, outclassed)}`);
       await this.hitReact(tgt, finalDmg, eff, crit, att.rig.group.position);
       await this.afterHitEffects(att, tgt, finalDmg);
       await this.meleeReturn(att, home);
@@ -1294,13 +1366,13 @@ export class Battle {
       }
       for (const tgt of targets) {
         if (tgt.g.fainted) continue;
-        const { dmg, eff, crit } = this.computeDamage(att, tgt, tech);
+        const { dmg, eff, crit, outclassed } = this.computeDamage(att, tgt, tech);
         const finalDmg = await this.inflictDamage(tgt, dmg, 'tech', tech.kind);
         this.recordHit(att, tgt, finalDmg);
         totalDmg += finalDmg;
         this.elementalImpact(tgt, tech.type, big || crit);
         if (tech.effect === 'drain') this.drainFX(att, tgt, finalDmg);
-        this.log(`<b>${who}</b> uses <b>${tech.name}</b>!${this.effText(eff, crit)}`);
+        this.log(`<b>${who}</b> uses <b>${tech.name}</b>!${this.effText(eff, crit, outclassed)}`);
         await this.hitReact(tgt, finalDmg, eff, crit, att.rig.group.position);
         await this.afterHitEffects(att, tgt, finalDmg);
         if (targets.length > 1) await wait(80);
@@ -1477,12 +1549,16 @@ export class Battle {
     await this.meleeRush(att, target, color);
     const as = att.g.stats, ds = target.g.stats;
     const variance = 0.9 + Math.random() * 0.2;
-    const crit = Math.random() < 0.06;
+    const attIsLegend = isBig3Legend(att.g.species.id);
+    const crit = Math.random() < (attIsLegend ? 0.14 : 0.06);
     const pressure = (as.atk * att.mods.atk) / (as.atk * att.mods.atk + ds.def * target.mods.def * 1.15);
     let pct = 0.30 * pressure * variance;   // a plain strike ≈ 12–18% at parity
+    if (attIsLegend) pct *= 1.25;           // legendary might carries into plain strikes too
     if (crit) pct *= 1.5;
     if (target.guarding) pct *= 0.45;
-    const dmg = Math.max(1, Math.floor(ds.hp * Math.min(0.45, pct)));
+    // Form-Block: out-classed attackers hit softer (5% per form-rank gap, cap 40%).
+    pct *= (1 - Math.min(0.40, 0.05 * Math.max(0, formRank(target.g.species) - formRank(att.g.species))));
+    const dmg = Math.max(1, Math.floor(ds.hp * Math.min(attIsLegend ? 0.55 : 0.45, pct)));
     const finalDmg = await this.inflictDamage(target, dmg, 'strike');
     this.recordHit(att, target, finalDmg);
     att.g.sp = Math.min(as.sp, att.g.sp + Math.max(2, Math.floor(as.sp * 0.08))); // striking builds SP
@@ -1691,10 +1767,17 @@ export class Battle {
       if (act === 'tech') {
         const techs = u.g.techniques;
         const ti = await this.menu([
-          ...techs.map(t => ({
-            label: `<span style="color:${TYPE_CSS[t.type]}">${t.name}</span> <span class="sub">${t.spCost} SP · Pow ${t.power} · ${t.target}</span>`,
-            disabled: u.g.sp < t.spCost,
-          })),
+          ...techs.map(t => {
+            const cdLeft = this.cooldownLeft(u, t);
+            const sig = t.signature ? `<span style="color:var(--ui-gold)">✦</span> ` : '';
+            const cdTag = cdLeft > 0
+              ? ` <span style="color:var(--ui-red)">🕒 ${cdLeft}</span>`
+              : (t.cooldown ? ` <span class="sub">🕒 ${t.cooldown}t</span>` : '');
+            return {
+              label: `${sig}<span style="color:${TYPE_CSS[t.type]}">${t.name}</span> <span class="sub">${t.spCost} SP · Pow ${t.power} · ${t.target}</span>${cdTag}`,
+              disabled: u.g.sp < t.spCost || cdLeft > 0,
+            };
+          }),
           { key: 'back', label: '← Back', cls: 'danger' },
         ]);
         if (ti >= techs.length) continue;
@@ -1834,7 +1917,7 @@ export class Battle {
       }
       case 'tech': {
         const tech = u.g.techniques.find(t => t.id === a.tech.id);
-        if (!tech || u.g.sp < tech.spCost) return this.fallbackStrike();
+        if (!tech || !this.techReady(u, tech)) return this.fallbackStrike();
         if (tech.target === 'one') {
           const t = a.target && !a.target.g.fainted ? a.target : this.weakestEnemy();
           return t ? { kind: 'tech', tech, target: t } : this.fallbackStrike();
@@ -2010,7 +2093,7 @@ export class Battle {
       return;
     }
 
-    const techs = u.g.techniques.filter(t => u.g.sp >= t.spCost);
+    const techs = u.g.techniques.filter(t => this.techReady(u, t));
 
     // 2. Provoke check: forces attack on the provoker
     let provokedBy: Unit | null = null;
@@ -2085,7 +2168,7 @@ export class Battle {
   // new techniques → befriended wild Guardians.
   // ============================================================
   private async grantRewards(): Promise<void> {
-    const stageMult: Record<string, number> = { Novice: 1, Adept: 1.8, Elite: 3.2, Apex: 5.5, Legendary: 8, Aether: 12 };
+    const stageMult: Record<string, number> = { Novice: 1, Adept: 1.8, Elite: 3.2, Apex: 5.5, Split: 8, Special: 11, Terra: 15, Transcendent: 20, Aether: 26, Legendary: 8 };
     let exp = 0, shards = 0;
     for (const e of this.units.filter(x => x.side === 'enemy')) {
       exp += Math.floor(e.g.level * 9 * (stageMult[e.g.species.stage] ?? 1));
@@ -2508,7 +2591,7 @@ export class Battle {
 
   // ---------- main loop ----------
   async run(): Promise<BattleResult> {
-    this.buildArena();
+    await this.prepare(); // builds arena + units + compiles shaders (a no-op if main already prepped it behind the fade)
     $('battle-ui').style.display = 'block';
     $('battle-auto').style.display = 'none';
     $('victory-screen').style.display = 'none';
@@ -2529,13 +2612,6 @@ export class Battle {
       else if (e.key === 'f' || e.key === 'F') { e.preventDefault(); this.cycleSpeed(); }
     };
     window.addEventListener('keydown', this.autoKeyHandler);
-
-    this.player.party.forEach((g, i) => this.units.push(this.spawnUnit(g, 'player', i)));
-    this.enemySpecs.forEach((e, i) => {
-      const g = new Guardian(e.speciesId, e.level);
-      this.units.push(this.spawnUnit(g, 'enemy', i));
-    });
-    this.renderCards();
 
     // boss entrance: the camera pulls in from a dread distance while the seal flares
     if (this.opts.boss) {
@@ -2582,6 +2658,11 @@ export class Battle {
       for (const u of queue) {
         if (u.g.fainted) continue;
         if (!this.alive('enemy').length || !this.alive('player').length) break;
+
+        // Tick down this unit's tech cooldowns at the start of its turn.
+        for (const k in u.cooldowns) {
+          if (u.cooldowns[k] > 0) u.cooldowns[k]--;
+        }
 
         // Check Stun / Paralyze / skip turn
         if (u.statuses && u.statuses.some(s => s.effect === 'stun' || (s.effect === 'paralyze' && Math.random() < 0.25))) {

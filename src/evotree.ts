@@ -21,7 +21,12 @@ interface EvoChain { type: GType; nodes: { sp: SpeciesDef; lvFromPrev: number | 
 /** Build every evolution chain, walking forward from each root form. */
 function buildChains(p: Player): EvoChain[] {
   const evolvedInto = new Set<string>();
-  Object.values(SPECIES).forEach(s => { if (s.evolvesTo) evolvedInto.add(s.evolvesTo.species); });
+  // ascension targets continue the main chain; Split alts (extraEvolvesTo) stay
+  // as their own short roots, matching how the existing extra-evos are shown.
+  Object.values(SPECIES).forEach(s => {
+    if (s.evolvesTo) evolvedInto.add(s.evolvesTo.species);
+    if (s.ascendsTo) evolvedInto.add(s.ascendsTo.species);
+  });
   const chains: EvoChain[] = [];
   for (const root of Object.values(SPECIES)) {
     if (evolvedInto.has(root.id) || BOSS_IDS.has(root.id)) continue;
@@ -29,10 +34,18 @@ function buildChains(p: Player): EvoChain[] {
     const nodes: EvoChain['nodes'] = [{ sp: root, lvFromPrev: null }];
     let cur = root;
     const guard = new Set([root.id]);
-    while (cur.evolvesTo && !guard.has(cur.evolvesTo.species)) {
-      const next = SPECIES[cur.evolvesTo.species];
+    // Walk the linear evolvesTo chain, then keep climbing the ascension ladder
+    // (Split → Special → Terra → Transcendence → Aether) via ascendsTo.
+    while (true) {
+      const step = (cur.evolvesTo && !guard.has(cur.evolvesTo.species))
+        ? { species: cur.evolvesTo.species, level: cur.evolvesTo.level }
+        : (cur.ascendsTo && !guard.has(cur.ascendsTo.species))
+          ? { species: cur.ascendsTo.species, level: cur.ascendsTo.level ?? null }
+          : null;
+      if (!step) break;
+      const next = SPECIES[step.species];
       if (!next) break;
-      nodes.push({ sp: next, lvFromPrev: cur.evolvesTo.level });
+      nodes.push({ sp: next, lvFromPrev: step.level });
       guard.add(next.id);
       cur = next;
     }
@@ -109,6 +122,17 @@ export function evoTreeHTML(p: Player): string {
       Forms in your care glow gold. <b class="goldcol">${ownedCount}/${total}</b> forms collected.
     </div>
     ${damageTableHTML()}
+    <details class="el-details" style="margin-top:6px">
+      <summary>🪜 Forms & the Form-Block — why a beginner can't dent a god</summary>
+      <div class="sub" style="margin:6px 0">Every Guardian has a <b>form rank</b> (0–8), set by how far it has evolved:
+      Novice → Adept → Elite → Apex → <b style="color:#ffd24e">Split</b> (branches into two) →
+      <b style="color:#ffd24e">Special</b> → <b style="color:#ffd24e">Terra</b> →
+      <b style="color:#ffd24e">Transcendence</b> → <b style="color:${ELEMENT_CSS.Aether}">Aether</b>
+      (the boss tier — the Big Three's Nine stand here as 8th-form legends).
+      When a lower-form Guardian attacks a higher one it is <i>out-classed</i>: the defender shrugs off
+      <b>5% of the damage per form it stands above the attacker</b> (up to 40%), <i>on top of</i> the elemental table above.
+      So a beginner barely scratches an Apex — and an Aether boss takes full force on everything it touches.</div>
+    </details>
     <div class="evo-scroll">`;
 
   let lastType: GType | null = null;

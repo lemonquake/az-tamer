@@ -10,7 +10,7 @@
 // ============================================================
 import * as THREE from 'three';
 import { tween, Ease } from './models';
-import { RARITY, type SpeciesDef, type FishBody, type RodDef, type BaitDef, type ShadowSize, SHADOW_SCALE } from './fishingdata';
+import { RARITY, rarityRank, type SpeciesDef, type FishBody, type RodDef, type BaitDef, type ShadowSize, SHADOW_SCALE } from './fishingdata';
 
 const mat = (color: number, opts: Partial<THREE.MeshStandardMaterialParameters> = {}) =>
   new THREE.MeshStandardMaterial({ color, roughness: 0.55, metalness: 0.15, ...opts });
@@ -452,7 +452,7 @@ export function makeFishShadow(sp: SpeciesDef): THREE.Group {
   const g = new THREE.Group();
   const scale = SHADOW_SCALE[sp.shadow];
   const rk = RARITY[sp.rarity];
-  const rare = ['Rare', 'Elite', 'Mythical', 'Legendary'].includes(sp.rarity);
+  const rrank = rarityRank(sp.rarity);
 
   // base silhouette — a stretched dark blob shaped by body type
   const long = ['pike', 'eel', 'serpent', 'dragonfish', 'catfish', 'leviathan', 'salmon', 'trout'].includes(sp.body);
@@ -460,29 +460,96 @@ export function makeFishShadow(sp: SpeciesDef): THREE.Group {
   const lenX = (long ? 1.9 : wide ? 1.0 : 1.4) * scale;
   const lenZ = (wide ? 1.6 : 0.5) * scale;
 
-  const shadowMat = new THREE.MeshBasicMaterial({ color: 0x081018, transparent: true, opacity: 0.42, depthWrite: false });
-  const blob = new THREE.Mesh(new THREE.CircleGeometry(0.5, 22), shadowMat);
-  blob.rotation.x = -Math.PI / 2;
-  blob.scale.set(lenX, lenZ, 1);
-  g.add(blob);
-  // a tail hint
-  const tail = new THREE.Mesh(new THREE.CircleGeometry(0.28, 3), shadowMat);
+  // keep the silhouette in its own group so it can "perk up" (scale/darken)
+  // when a fish grows interested in the bait without disturbing the aura FX.
+  const bodyGrp = new THREE.Group(); bodyGrp.name = 'shadowBody';
+  const baseDarkO = 0.44;
+  const mats: THREE.MeshBasicMaterial[] = [];
+  const dark = () => { const m = new THREE.MeshBasicMaterial({ color: 0x060d16, transparent: true, opacity: baseDarkO, depthWrite: false }); mats.push(m); return m; };
+  const blob = new THREE.Mesh(new THREE.CircleGeometry(0.5, 24), dark());
+  blob.rotation.x = -Math.PI / 2; blob.scale.set(lenX, lenZ, 1);
+  const tail = new THREE.Mesh(new THREE.CircleGeometry(0.28, 3), dark());
   tail.rotation.x = -Math.PI / 2; tail.position.x = -lenX * 0.55; tail.scale.set(scale, lenZ * 1.4, 1);
-  g.add(tail);
+  // a denser inner core so big fish read as solid mass
+  const core = new THREE.Mesh(new THREE.CircleGeometry(0.34, 18), dark());
+  core.rotation.x = -Math.PI / 2; core.position.set(lenX * 0.05, 0.012, 0); core.scale.set(lenX * 0.66, lenZ * 0.78, 1);
+  bodyGrp.add(blob, tail, core);
+  g.add(bodyGrp);
 
-  if (rare) {
+  // ---- rarity "tells" ----
+  // Rare+ : a coloured under-glow that pulses
+  if (rrank >= 2) {
     const glowColor = sp.rarity === 'Legendary' ? 0xffd25a : (sp.colors.glow ?? sp.colors.accent);
     const glow = new THREE.Mesh(
-      new THREE.CircleGeometry(0.6, 24),
-      new THREE.MeshBasicMaterial({ color: glowColor, transparent: true, opacity: sp.rarity === 'Legendary' ? 0.3 : 0.16, depthWrite: false, blending: THREE.AdditiveBlending }),
+      new THREE.CircleGeometry(0.6, 26),
+      new THREE.MeshBasicMaterial({ color: glowColor, transparent: true, opacity: rrank >= 4 ? 0.24 : 0.15, depthWrite: false, blending: THREE.AdditiveBlending }),
     );
-    glow.rotation.x = -Math.PI / 2; glow.position.y = -0.02; glow.scale.set(lenX * 1.3, lenZ * 1.6, 1);
+    glow.rotation.x = -Math.PI / 2; glow.position.y = -0.018; glow.scale.set(lenX * 1.35, lenZ * 1.7, 1);
     glow.name = 'rareGlow';
     g.add(glow);
   }
+  // Elite+ : a slow rotating aura ring — the "special" tell
+  if (rrank >= 3) {
+    const ringColor = sp.rarity === 'Legendary' ? 0xffe14a : (sp.colors.glow ?? sp.colors.accent);
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(0.6, 0.72, 36),
+      new THREE.MeshBasicMaterial({ color: ringColor, transparent: true, opacity: 0.2, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }),
+    );
+    ring.rotation.x = -Math.PI / 2; ring.position.y = -0.008; ring.scale.set(lenX * 1.05, lenX * 1.05, 1);
+    ring.name = 'auraRing';
+    g.add(ring);
+  }
+  // Mythical/Legendary : orbiting sparkles like a fallen constellation
+  if (rrank >= 4) {
+    const sg = new THREE.Group(); sg.name = 'sparkleGroup';
+    const col = sp.colors.glow ?? sp.colors.accent;
+    const n = sp.rarity === 'Legendary' ? 6 : 4;
+    for (let i = 0; i < n; i++) {
+      const s = new THREE.Mesh(
+        new THREE.CircleGeometry(0.06, 8),
+        new THREE.MeshBasicMaterial({ color: i % 2 ? 0xffffff : col, transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending }),
+      );
+      s.rotation.x = -Math.PI / 2;
+      const a = (i / n) * Math.PI * 2, rad = lenX * 0.85;
+      s.position.set(Math.cos(a) * rad, 0.02, Math.sin(a) * rad * 0.7);
+      s.userData = { a, rad };
+      sg.add(s);
+    }
+    g.add(sg);
+  }
+
   g.userData.rarity = sp.rarity;
+  g.userData.rrank = rrank;
   g.userData.color = rk.color;
+  g.userData.mats = mats;
+  g.userData.baseDarkO = baseDarkO;
   return g;
+}
+
+/**
+ * Animate a shadow's rarity "tells" every frame. `interest` (0..1) is how
+ * drawn the fish is to the bait — interested fish darken, swell a touch and
+ * rise toward the surface while their aura/sparkles brighten and quicken.
+ */
+export function pulseShadow(grp: THREE.Group, t: number, interest = 0): void {
+  const mats = grp.userData.mats as THREE.MeshBasicMaterial[] | undefined;
+  if (mats) { const o = (grp.userData.baseDarkO ?? 0.44) + interest * 0.3 + Math.sin(t * 2) * 0.02; for (const m of mats) m.opacity = o; }
+  const body = grp.getObjectByName('shadowBody');
+  if (body) body.scale.setScalar(1 + interest * 0.13 + Math.sin(t * 3) * 0.015);
+  const glow = grp.getObjectByName('rareGlow') as THREE.Mesh | null;
+  if (glow) { const base = grp.userData.rarity === 'Legendary' ? 0.3 : 0.16; (glow.material as THREE.MeshBasicMaterial).opacity = (base + interest * 0.42) * (0.6 + 0.4 * Math.sin(t * 2.4)); }
+  const ring = grp.getObjectByName('auraRing') as THREE.Mesh | null;
+  if (ring) { ring.rotation.z = t * (0.5 + interest * 1.4); (ring.material as THREE.MeshBasicMaterial).opacity = 0.16 + interest * 0.34 + Math.sin(t * 3) * 0.05; }
+  const sg = grp.getObjectByName('sparkleGroup') as THREE.Group | null;
+  if (sg) {
+    const spin = t * (0.8 + interest * 1.8);
+    sg.children.forEach((c, i) => {
+      const u = c.userData as { a: number; rad: number };
+      const a = u.a + spin;
+      c.position.x = Math.cos(a) * u.rad; c.position.z = Math.sin(a) * u.rad * 0.7;
+      (c as THREE.Mesh & { material: THREE.MeshBasicMaterial }).material.opacity = 0.45 + 0.55 * Math.abs(Math.sin(t * 4 + i));
+    });
+  }
 }
 
 // ============================================================

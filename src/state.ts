@@ -4,13 +4,28 @@
 import {
   SPECIES, TECHS, ITEMS, CRAWLER_PARTS, expForLevel, getSpeciesPassive,
   type SpeciesDef, type Stats, type StatKey, type Technique, type CrawlerPart,
-  HOUSES, TYPE_ELEMENT, elementsOf, type Element,
+  HOUSES, TYPE_ELEMENT, elementsOf, type Element, isBig3Legend, formRank,
 } from './data';
 import { DEFAULT_APPEARANCE, type Appearance } from './models';
 import { defaultFishingState, normalizeFishingState, type FishingState } from './fishingdata';
 
 let uidCounter = 1;
 export const uid = () => `g${Date.now().toString(36)}${(uidCounter++).toString(36)}`;
+
+// Form-rank (0..8) → stat multipliers [hp/atk/def/wis, sp/spd] and level caps.
+// Monotonic: the more times a Guardian has evolved, the stronger it grows.
+const STAGE_STAT_MULT: [number, number][] = [
+  [1.00, 1.00], // 0 Novice
+  [1.15, 1.10], // 1 Adept
+  [1.45, 1.25], // 2 Elite
+  [1.85, 1.45], // 3 Apex
+  [2.35, 1.70], // 4 Split
+  [2.95, 2.00], // 5 Special
+  [3.65, 2.35], // 6 Terra
+  [4.45, 2.75], // 7 Transcendent
+  [5.40, 3.20], // 8 Aether
+];
+const LEVEL_CAP_BY_RANK = [16, 27, 40, 60, 70, 80, 88, 94, 99];
 
 // ---------------- Guardian ----------------
 export interface GuardianCustomization {
@@ -68,18 +83,11 @@ export class Guardian {
     this.bonus = { hp: 0, sp: 0, atk: 0, def: 0, spd: 0, wis: 0 };
     this.elements = [...elementsOf(speciesId)];
     
-    // Set level cap based on species stage
-    if (this.species.stage === 'Novice') {
-      this.levelCap = 12 + Math.floor(Math.random() * 5); // 12-16
-    } else if (this.species.stage === 'Adept') {
-      this.levelCap = 27;
-    } else if (this.species.stage === 'Elite') {
-      this.levelCap = 40;
-    } else if (this.species.stage === 'Apex') {
-      this.levelCap = 60;
-    } else {
-      this.levelCap = 99;
-    }
+    // Set level cap based on form rank (Novice keeps a little random variety)
+    const _rank = formRank(this.species);
+    this.levelCap = _rank === 0
+      ? 12 + Math.floor(Math.random() * 5) // 12-16
+      : (LEVEL_CAP_BY_RANK[_rank] ?? 99);
     
     // Default starting techniques
     this.learnedTechs = this.species.techs
@@ -102,27 +110,9 @@ export class Guardian {
     const calc = (k: StatKey) => Math.floor((s.base[k] + s.growth[k] * l + this.bonus[k]) * mult);
     const baseStats = { hp: calc('hp'), sp: calc('sp'), atk: calc('atk'), def: calc('def'), spd: calc('spd'), wis: calc('wis') };
     
-    // Evolution stage multipliers:
-    // Evolving once (Adept), twice (Elite), three times (Apex), four times (Legendary/Aether)
-    let hpAtkDefWisMult = 1.0;
-    let otherMult = 1.0;
-    
-    if (s.stage === 'Adept') {
-      hpAtkDefWisMult = 1.15;
-      otherMult = 1.1;
-    } else if (s.stage === 'Elite') {
-      hpAtkDefWisMult = 1.45; // Significantly stronger HP/Atk/Def/Wis for twice-evolved
-      otherMult = 1.25;
-    } else if (s.stage === 'Apex') {
-      hpAtkDefWisMult = 1.85;
-      otherMult = 1.45;
-    } else if (s.stage === 'Legendary') {
-      hpAtkDefWisMult = 2.4;
-      otherMult = 1.7;
-    } else if (s.stage === 'Aether') {
-      hpAtkDefWisMult = 2.7;
-      otherMult = 1.9;
-    }
+    // Form-rank stat multipliers — monotonic by how many times evolved:
+    // Novice 1.0 → Apex 1.85 → Split 2.35 → … → Aether 5.40 (hp/atk/def/wis).
+    const [hpAtkDefWisMult, otherMult] = STAGE_STAT_MULT[formRank(s)] ?? STAGE_STAT_MULT[0];
     
     baseStats.hp = Math.floor(baseStats.hp * hpAtkDefWisMult);
     baseStats.atk = Math.floor(baseStats.atk * hpAtkDefWisMult);
@@ -133,15 +123,15 @@ export class Guardian {
     baseStats.spd = Math.floor(baseStats.spd * otherMult);
     
     // Legendary Guardians of the Big Three (Aljay, Greggy, Onnel):
-    const isBig3Legend = [
-      'firgara', 'onthrofa', 'vulfenix', // Aljay's
-      'raijura', 'voltherion', 'fulgrath', // Greggy's
-      'verdalune', 'gaiathorn', 'nyxroot'  // Onnel's
-    ].includes(this.speciesId);
-    if (isBig3Legend) {
+    if (isBig3Legend(this.speciesId)) {
       baseStats.hp = Math.floor(baseStats.hp * 1.5); // Extra 50% HP
       baseStats.atk = Math.floor(baseStats.atk * 1.5); // Extra 50% Attack
       baseStats.def = Math.floor(baseStats.def * 1.5); // Extra 50% Defense
+    }
+    // Boss-tier Aether world-enders are walls: extra HP & Attack heft.
+    if (s.isBoss) {
+      baseStats.hp = Math.floor(baseStats.hp * 1.25);
+      baseStats.atk = Math.floor(baseStats.atk * 1.25);
     }
 
     // Apply Guild Perk stat boost if element matches active guild element
@@ -238,15 +228,7 @@ export class Guardian {
     if (!keepNick) this.nickname = this.species.name;
 
     // Dynamically increase level cap based on new evolution stage
-    if (this.species.stage === 'Adept') {
-      this.levelCap = Math.max(this.levelCap, 27);
-    } else if (this.species.stage === 'Elite') {
-      this.levelCap = Math.max(this.levelCap, 40);
-    } else if (this.species.stage === 'Apex') {
-      this.levelCap = Math.max(this.levelCap, 60);
-    } else if (this.species.stage === 'Legendary' || this.species.stage === 'Aether') {
-      this.levelCap = Math.max(this.levelCap, 99);
-    }
+    this.levelCap = Math.max(this.levelCap, LEVEL_CAP_BY_RANK[formRank(this.species)] ?? 99);
 
     (['atk', 'def', 'spd', 'wis'] as StatKey[]).forEach(k => {
       this.bonus[k] += Math.floor(old[k] * 0.12);
@@ -265,16 +247,37 @@ export class Guardian {
     this.speciesId = evo.species;
     if (!keepNick) this.nickname = this.species.name;
 
-    if (this.species.stage === 'Adept') {
-      this.levelCap = Math.max(this.levelCap, 27);
-    } else if (this.species.stage === 'Elite') {
-      this.levelCap = Math.max(this.levelCap, 40);
-    } else if (this.species.stage === 'Apex') {
-      this.levelCap = Math.max(this.levelCap, 60);
-    } else if (this.species.stage === 'Legendary' || this.species.stage === 'Aether') {
-      this.levelCap = Math.max(this.levelCap, 99);
-    }
+    this.levelCap = Math.max(this.levelCap, LEVEL_CAP_BY_RANK[formRank(this.species)] ?? 99);
 
+    (['atk', 'def', 'spd', 'wis'] as StatKey[]).forEach(k => {
+      this.bonus[k] += Math.floor(old[k] * 0.12);
+    });
+    this.bonus.hp += Math.floor(old.hp * 0.08);
+    this.bonus.sp += Math.floor(old.sp * 0.08);
+    this.hp = this.stats.hp;
+    this.sp = this.stats.sp;
+  }
+
+  /** The ascension (Special/Terra/Transcendent/Aether) target this Guardian
+   *  is high-enough level for. Item/flag requirements are checked by the
+   *  caller (the Ascension lab/forge), which also consumes the catalyst. */
+  get pendingAscensionTarget(): SpeciesDef | null {
+    const a = this.species.ascendsTo;
+    if (!a) return null;
+    if (a.level && this.level < a.level) return null;
+    return SPECIES[a.species] ?? null;
+  }
+
+  /** Perform a high-tier ascension. Mirrors extraEvolve(): carries the +20%
+   *  evolution stat bonus forward and raises the level cap to the new rank. */
+  advancedEvolve(): void {
+    const a = this.species.ascendsTo;
+    if (!a) return;
+    const keepNick = this.nickname !== this.species.name;
+    const old = this.stats;
+    this.speciesId = a.species;
+    if (!keepNick) this.nickname = this.species.name;
+    this.levelCap = Math.max(this.levelCap, LEVEL_CAP_BY_RANK[formRank(this.species)] ?? 99);
     (['atk', 'def', 'spd', 'wis'] as StatKey[]).forEach(k => {
       this.bonus[k] += Math.floor(old[k] * 0.12);
     });

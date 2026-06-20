@@ -5,6 +5,7 @@
 // and disposes geometry/materials the moment an effect dies.
 // ============================================================
 import * as THREE from 'three';
+import { perf } from './perf';
 
 type Ticker = (dt: number) => boolean; // return false when the effect is finished
 
@@ -50,8 +51,39 @@ export class VFX {
   /** transient FOV punch-in (degrees); decays automatically */
   fovKick = 0;
 
+  private readonly scene: THREE.Scene;
+  // Persistent flash-light pool. These lights live in the scene for the WHOLE
+  // battle at intensity 0 — flash() ramps one instead of adding a new light.
+  // That keeps the scene's light count CONSTANT, so Three never has to
+  // recompile every lit material mid-combat (the old #1 cause of the first-
+  // technique lag spike). Pool size is fixed at construction.
+  private lights: THREE.PointLight[] = [];
+  private lightCursor = 0;
+
   constructor(scene: THREE.Scene) {
+    this.scene = scene;
     scene.add(this.root);
+
+    const n = Math.max(0, perf.maxLights);
+    for (let i = 0; i < n; i++) {
+      const L = new THREE.PointLight(0xffffff, 0, 10);
+      L.userData.ramp = null; // { age, life, peak }
+      this.root.add(L);
+      this.lights.push(L);
+    }
+    // one persistent ticker decays every pooled light — no per-flash ticker,
+    // no two flashes fighting over the same light.
+    if (n > 0) {
+      this.ambient(dt => {
+        for (const L of this.lights) {
+          const r = L.userData.ramp as { age: number; life: number; peak: number } | null;
+          if (!r) { if (L.intensity !== 0) L.intensity = 0; continue; }
+          r.age += dt;
+          if (r.age >= r.life) { L.userData.ramp = null; L.intensity = 0; }
+          else L.intensity = r.peak * (1 - r.age / r.life);
+        }
+      });
+    }
   }
 
   update(dt: number): void {
@@ -98,7 +130,8 @@ export class VFX {
 
   /** Radial particle explosion. */
   burst(pos: THREE.Vector3, color: number, opts: BurstOpts = {}): void {
-    const { count = 26, speed = 3, up = 1.2, size = 0.14, life = 0.6, gravity = -5, drag = 0.5, spread = 1 } = opts;
+    const { speed = 3, up = 1.2, size = 0.14, life = 0.6, gravity = -5, drag = 0.5, spread = 1 } = opts;
+    const count = perf.scaleCount(opts.count ?? 26);
     const positions = new Float32Array(count * 3);
     const vel: number[] = [];
     for (let i = 0; i < count; i++) {
@@ -141,7 +174,8 @@ export class VFX {
 
   /** Particles converge inward onto a point — dark magic, charge-ups. */
   implode(pos: THREE.Vector3, color: number, opts: { count?: number; radius?: number; life?: number; size?: number } = {}): Promise<void> {
-    const { count = 30, radius = 1.5, life = 0.4, size = 0.13 } = opts;
+    const { radius = 1.5, life = 0.4, size = 0.13 } = opts;
+    const count = perf.scaleCount(opts.count ?? 30);
     const positions = new Float32Array(count * 3);
     const start: number[] = [];
     for (let i = 0; i < count; i++) {
@@ -211,19 +245,22 @@ export class VFX {
     });
   }
 
-  /** Decaying point light flash. */
+  /** Decaying flash. Reuses a pooled light so the scene's light count stays
+   *  constant (no per-cast shader recompile). With a 0-light budget (lowest
+   *  quality tier) the additive glow sprite stands in for the illumination. */
   flash(pos: THREE.Vector3, color: number, opts: { intensity?: number; dist?: number; life?: number } = {}): void {
     const { intensity = 26, dist = 10, life = 0.3 } = opts;
-    const light = new THREE.PointLight(color, intensity, dist);
+    if (this.lights.length === 0) {
+      this.glow(pos, color, { scale: 1.2, life: Math.min(0.25, life) });
+      return;
+    }
+    const light = this.lights[this.lightCursor];
+    this.lightCursor = (this.lightCursor + 1) % this.lights.length;
+    light.color.setHex(color);
+    light.distance = dist;
     light.position.copy(pos);
-    this.root.add(light);
-    let age = 0;
-    this.tickers.push(dt => {
-      age += dt;
-      light.intensity = intensity * Math.max(0, 1 - age / life);
-      if (age >= life) { this.root.remove(light); light.dispose(); return false; }
-      return true;
-    });
+    light.intensity = intensity;
+    light.userData.ramp = { age: 0, life, peak: intensity };
   }
 
   /** Additive glow sprite that swells and fades — the white-hot core of an impact. */
@@ -360,7 +397,8 @@ export class VFX {
 
   /** Spikes (stone, vines, ice…) erupt from the ground in a ring, then sink back. */
   spikes(pos: THREE.Vector3, color: number, opts: { count?: number; height?: number; life?: number; radius?: number } = {}): void {
-    const { count = 6, height = 1.1, life = 0.55, radius = 0.55 } = opts;
+    const { height = 1.1, life = 0.55, radius = 0.55 } = opts;
+    const count = perf.scaleCount(opts.count ?? 6);
     const group = new THREE.Group();
     const mat = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.5, roughness: 0.5 });
     const spikes: THREE.Mesh[] = [];
@@ -425,7 +463,8 @@ export class VFX {
 
   /** Motes orbiting in a spiral — up for buffs/heals, down for debuffs. */
   spiral(pos: THREE.Vector3, color: number, opts: { up?: boolean; dur?: number; radius?: number; height?: number; count?: number } = {}): void {
-    const { up = true, dur = 0.85, radius = 0.55, height = 1.7, count = 10 } = opts;
+    const { up = true, dur = 0.85, radius = 0.55, height = 1.7 } = opts;
+    const count = perf.scaleCount(opts.count ?? 10);
     const positions = new Float32Array(count * 3);
     const phase: number[] = [];
     for (let i = 0; i < count; i++) phase.push((i / count) * Math.PI * 2);
@@ -544,6 +583,43 @@ export class VFX {
     });
   }
 
+  /**
+   * Compile every effect's GPU shader program up-front. Call this behind a
+   * fade-to-black or loading screen — it spawns one of each primitive far
+   * off-screen so renderer.compile()/compileAsync() walks all their materials
+   * (and the scene's lit materials, at the real light count). This is what
+   * kills the multi-hundred-millisecond hitch the first time each technique
+   * fires. compileAsync uses KHR_parallel_shader_compile where available, so
+   * it links programs without blocking the main thread.
+   */
+  async prewarm(renderer: THREE.WebGLRenderer, camera: THREE.Camera): Promise<void> {
+    const a = new THREE.Vector3(0, -9999, 0);
+    const b = new THREE.Vector3(2, -9999, 0);
+    // one of every material signature the VFX system can produce
+    this.burst(a, 0xffffff, { count: 4, life: 0.2 });
+    this.implode(a, 0xffffff, { count: 4, life: 0.2 });
+    this.ring(a, 0xffffff, { life: 0.2 });
+    this.glow(a, 0xffffff, { life: 0.2 });
+    this.bolt(a, b, 0xffffff, { life: 0.2 });
+    this.spikes(a, 0xffffff, { count: 2, life: 0.2 });
+    this.spiral(a, 0xffffff, { dur: 0.2, count: 4 });
+    this.pillar(a, 0xffffff, { life: 0.2 });
+    void this.projectile(a, b, 0xffffff, { dur: 0.15 });
+    void this.crescent(a, b, 0xffffff, { dur: 0.15 });
+    void this.wave(a, b, 0xffffff, { dur: 0.15 });
+    this.flash(a, 0xffffff, { life: 0.2 });
+
+    try {
+      const r = renderer as unknown as { compileAsync?: (s: THREE.Object3D, c: THREE.Camera) => Promise<unknown> };
+      if (typeof r.compileAsync === 'function') await r.compileAsync(this.scene, camera);
+      else renderer.compile(this.scene, camera);
+    } catch {
+      try { renderer.compile(this.scene, camera); } catch { /* best-effort warmup */ }
+    }
+    // a throwaway render flushes any remaining lazy GPU uploads (textures, VAOs)
+    try { renderer.render(this.scene, camera); } catch { /* ignore */ }
+  }
+
   /** Remove everything this VFX instance ever added and free GPU resources. */
   dispose(): void {
     this.tickers.length = 0;
@@ -567,3 +643,19 @@ const Ease = {
   outBack: (x: number) => 1 + 2.7 * Math.pow(x - 1, 3) + 1.7 * Math.pow(x - 1, 2),
   inQuad: (x: number) => x * x,
 };
+
+/**
+ * Warm the renderer's program cache once at boot (behind the loader), so the
+ * first scene transition — and dungeon effects, which also use VFX — never pay
+ * the first-draw shader-compile cost. Battles additionally prewarm their own
+ * scene (with the correct light count) in Battle.prepare().
+ */
+export async function prewarmVFXGlobal(renderer: THREE.WebGLRenderer): Promise<void> {
+  const scene = new THREE.Scene();
+  scene.add(new THREE.AmbientLight(0xffffff, 1));
+  const cam = new THREE.PerspectiveCamera(50, 1, 0.1, 100);
+  cam.position.set(0, 0, 5);
+  const fx = new VFX(scene);
+  await fx.prewarm(renderer, cam);
+  fx.dispose();
+}

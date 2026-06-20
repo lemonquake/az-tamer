@@ -29,6 +29,7 @@ import { worldOrbit } from './camorbit';
 import { tagNpc, attachNpcPicker } from './npccard';
 import { sfx } from './audio';
 import { questState, acceptQuest, completeQuest } from './quests';
+import { perf } from './perf';
 
 const minimapCanvas = () => document.getElementById('minimap') as HTMLCanvasElement;
 
@@ -166,15 +167,22 @@ export class TerraCity {
   // slowly-turning storefront mannequins modelling the Atelier's prestige FX gear
   private displayRigs: { rig: THREE.Group; spin: number }[] = [];
 
-  // forward-renderer light budget — only the nearest few point lights stay lit
-  private static readonly MAX_POINT_LIGHTS = 10;
+  // forward-renderer light budget — only the nearest perf.lightBudget point
+  // lights stay lit, and the ranking is throttled to when the player moves.
   private static readonly WALL_R = 44;
   private litScene: THREE.Scene | null = null;
   private scenePointLights: THREE.PointLight[] = [];
+  private lightRankTimer = 0;
+  private lastRankX = Infinity;
+  private lastRankZ = Infinity;
+  // cached animated glow props — avoids a full-scene traverse every frame.
+  private glowProps: THREE.Object3D[] = [];
+  private glowScene: THREE.Scene | null = null;
+  private dynTagged = false; // one-time: mark animated decor so the static batcher skips it
 
   private resolveExit: (() => void) | null = null;
 
-  constructor(private player: Player, private firstArrival = false) {}
+  constructor(private player: Player, private firstArrival = false) { this.streetScene.userData.bigMap = true; }
 
   get view() {
     const self = this;
@@ -1356,6 +1364,16 @@ export class TerraCity {
   private update(dt: number): void {
     if (!this.resolveExit) return;
 
+    // Tag animated decor as dynamic ONCE so the static batcher skips it.
+    // (Patrollers/mannequins are voxel rigs with a userData root; glow props
+    // are named — both already skipped. Drones are the one anonymous mover.)
+    if (!this.dynTagged) {
+      this.dynTagged = true;
+      this.drones.forEach(d => { d.grp.userData.dynamic = true; });
+      this.patrollers.forEach(p => { p.grp.userData.dynamic = true; });
+      this.displayRigs.forEach(d => { d.rig.userData.dynamic = true; });
+    }
+
     const speed = 5.2;
     let dx = 0, dz = 0;
     if (!isDialogueOpen() && !isMenuOpen() && !this.busy) {
@@ -1418,23 +1436,39 @@ export class TerraCity {
     this.camera.position.lerp(worldOrbit.orbited(camGoal, lookT), Math.min(1, dt * 4));
     this.camera.lookAt(lookT);
 
-    // ---- point-light budget ----
+    // ---- point-light budget (nearest perf.lightBudget stay lit) ----
     const scene = this.mode === 'interior' && this.interiorScene ? this.interiorScene : this.streetScene;
     if (scene !== this.litScene) {
       this.litScene = scene;
       this.scenePointLights = [];
       scene.traverse(o => { if ((o as THREE.PointLight).isPointLight) this.scenePointLights.push(o as THREE.PointLight); });
+      this.lastRankX = this.lastRankZ = Infinity; // force a re-rank for the new scene
     }
-    if (this.scenePointLights.length > TerraCity.MAX_POINT_LIGHTS) {
+    const budget = perf.lightBudget;
+    if (this.scenePointLights.length > budget) {
       const tp = this.tamer.position;
-      const ranked = this.scenePointLights
-        .map(l => { const e = l.matrixWorld.elements; return { l, score: Math.hypot(e[12] - tp.x, e[14] - tp.z) }; })
-        .sort((a, b) => a.score - b.score);
-      ranked.forEach((r, i) => { r.l.visible = i < TerraCity.MAX_POINT_LIGHTS; });
+      this.lightRankTimer -= dt;
+      const moved = Math.hypot(tp.x - this.lastRankX, tp.z - this.lastRankZ) > 1.5;
+      if (moved || this.lightRankTimer <= 0) {
+        this.lightRankTimer = 0.4;
+        this.lastRankX = tp.x; this.lastRankZ = tp.z;
+        const ranked = this.scenePointLights
+          .map(l => { const e = l.matrixWorld.elements; return { l, score: Math.hypot(e[12] - tp.x, e[14] - tp.z) }; })
+          .sort((a, b) => a.score - b.score);
+        ranked.forEach((r, i) => { r.l.visible = i < budget; });
+      }
     }
 
     // ---- animated glow props (same name-driven dialect as Haven City) ----
-    scene.traverse(o => {
+    // Cache the prop list per scene so we never re-traverse the whole graph.
+    if (scene !== this.glowScene) {
+      this.glowScene = scene;
+      this.glowProps = [];
+      scene.traverse(o => {
+        if (o.name === 'legendpulse' || o.name === 'aetherfloat' || o.name === 'portal' || o.name === 'podhover') this.glowProps.push(o);
+      });
+    }
+    for (const o of this.glowProps) {
       if (o.name === 'legendpulse') {
         const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial;
         if (m?.emissive) m.emissiveIntensity = 0.85 + Math.sin(now * 0.0026 + o.position.x * 1.7 + o.position.z * 1.3) * 0.45;
@@ -1448,7 +1482,7 @@ export class TerraCity {
         o.rotation.x = Math.sin(now * 0.0009) * 0.012;
         o.rotation.z = Math.sin(now * 0.0011 + 1.7) * 0.01;
       }
-    });
+    }
 
     // ---- minimap ----
     const cv = minimapCanvas();
@@ -1552,6 +1586,7 @@ export class TerraCity {
 
     if (this.firstArrival && !this.player.flags['terra_visited']) {
       this.player.flags['terra_visited'] = true;
+      this.player.addItem('terra_catalyst', 1);   // first Terra Catalyst — unlocks Terra Evolution at the Ascension Lab
       this.player.save();
       this.busy = true;
       await conversation([
@@ -1559,6 +1594,7 @@ export class TerraCity {
         ['', `${TERRA_LORE.name}. ${TERRA_LORE.epithet}. A whole metropolis wired into a single bright nerve: glass towers veined in copper, plazas stitched with running light, the great dark ring of the Worldring crowning the north.`],
         ['Stationmaster Kel', `You came through the POD. After fifteen years, the Olivar line is truly back. Welcome to Terra City, tamer — the city Haven thought it lost. As you can see…`],
         ['Stationmaster Kel', `…we got better. Walk the Circuit-Crown. Eat where the light is warm. And when you stand at the Worldring gates, remember: that\'s where the World Championships come home this year. Mind the live traces — and welcome.`],
+        ['Stationmaster Kel', `One more thing — take this. A Terra Catalyst, cut from the worldstone under our feet. Bring a Special-form Guardian to Professor Alex's Ascension Lab and it'll show you what Terra can make of it.`],
       ]);
       this.busy = false;
     }

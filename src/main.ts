@@ -24,6 +24,9 @@ import { Cinematic, CineKind } from './cinematic';
 import { syncStoryQuests } from './quests';
 import { initAudio, toggleMute, playMusic } from './audio';
 import { initMobileControls } from './mobile';
+import { perf } from './perf';
+import { prewarmVFXGlobal } from './vfx';
+import { mergeStaticScene } from './batch';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
 
@@ -66,8 +69,24 @@ interface View {
 const canvas = document.createElement('canvas');
 canvas.className = 'game-canvas';
 $('app').prepend(canvas);
+perf.init();                      // detect device tier BEFORE the renderer reads AA / pixel-ratio
 const renderer = makeRenderer(canvas);
+void prewarmVFXGlobal(renderer);  // warm the shader cache up-front (behind the title/loader)
 (window as unknown as Record<string, unknown>).__renderer = renderer; // debug handle (see window.__town)
+
+// lightweight FPS / quality overlay — toggle with the backtick (`) key
+const fpsHud = document.createElement('div');
+fpsHud.id = 'fps-hud';
+fpsHud.style.cssText = 'position:fixed;top:6px;left:8px;z-index:99999;font:600 12px/1.4 ui-monospace,monospace;color:#9effa0;background:rgba(0,0,0,.5);padding:3px 8px;border-radius:6px;pointer-events:none;white-space:nowrap;display:none';
+document.body.appendChild(fpsHud);
+if (localStorage.getItem('perfHud') === '1') fpsHud.style.display = 'block';
+window.addEventListener('keydown', e => {
+  if (e.key === '`' && !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLTextAreaElement)) {
+    const on = fpsHud.style.display === 'none';
+    fpsHud.style.display = on ? 'block' : 'none';
+    localStorage.setItem('perfHud', on ? '1' : '0');
+  }
+});
 
 export let activeView: View | null = null;
 export const setView = (v: View | null) => { activeView = v; };
@@ -97,18 +116,32 @@ window.addEventListener('resize', () => {
 });
 
 let last = performance.now();
+let hudT = 0;
+let shadowFrame = 0;
 function frame(now: number): void {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
+  perf.sample(dt); // adaptive quality governor — holds the 60–100 FPS target
   updateTweens(dt);
   updateRigs(dt);
   if (activeView) {
+    perf.optimizeScene(activeView.scene); // one-time per scene: strip cube-map shadows, clamp shadow res
+    // shadows refresh on a cadence (autoUpdate is off) — ~20 Hz instead of per-frame
+    if (renderer.shadowMap.enabled && ++shadowFrame >= 3) { shadowFrame = 0; renderer.shadowMap.needsUpdate = true; }
     try {
-      activeView.update(dt);
+      activeView.update(dt); // runs first so each map can tag its dynamic props before batching
+      // batch static decor into a handful of draw calls on the big maps (flagged via userData.bigMap)
+      if ((activeView.scene as THREE.Object3D).userData?.bigMap) {
+        if (mergeStaticScene(activeView.scene) > 0) renderer.shadowMap.needsUpdate = true; // the merged mesh must re-cast
+      }
       renderer.render(activeView.scene, activeView.camera);
     } catch (err) {
       console.error('frame error:', err); // never let one bad frame kill the game loop
     }
+  }
+  if (fpsHud.style.display !== 'none') {
+    hudT += dt;
+    if (hudT > 0.25) { hudT = 0; fpsHud.textContent = perf.debugLabel(); }
   }
   requestAnimationFrame(frame);
 }
@@ -140,6 +173,7 @@ async function runBattle(specs: { speciesId: string; level: number }[], opts: Ba
   
   const battle = new Battle(player, specs, opts);
   setView(battle.view);
+  await battle.prepare(); // build arena + units + compile every shader while the screen is still black
   await fadeIn();
   const result = await battle.run();
   await fadeOut();

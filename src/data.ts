@@ -4,8 +4,45 @@
 // ============================================================
 
 export type GType = 'Blaze' | 'Tide' | 'Verdant' | 'Volt' | 'Gale' | 'Umbra';
-export type Stage = 'Novice' | 'Adept' | 'Elite' | 'Apex' | 'Legendary' | 'Aether';
-export const STAGES: Stage[] = ['Novice', 'Adept', 'Elite', 'Apex', 'Legendary', 'Aether'];
+
+// ---- The Form ladder ----------------------------------------------------
+// A Guardian's `stage` is its FORM. Forms are ranked 0..8: the more a
+// Guardian has evolved, the higher its rank, the stronger it is, and the
+// more it out-classes lesser forms in battle (see formRank / the Form-Block
+// rule in battle.ts). The five top tiers are the new evolution kinds:
+//   Split (branches into 2) → Special → Terra → Transcendence → Aether.
+// 'Legendary' is a legacy alias kept only so old references compile; it maps
+// to rank 8 alongside Aether.
+export type EvoKind = 'Split' | 'Special' | 'Terra' | 'Transcendent' | 'Aether';
+export type Stage =
+  | 'Novice' | 'Adept' | 'Elite' | 'Apex'
+  | 'Split' | 'Special' | 'Terra' | 'Transcendent' | 'Aether'
+  | 'Legendary';
+/** Rank-ordered ladder — `STAGES.indexOf(stage)` IS the form rank (0..8). */
+export const STAGES: Stage[] = ['Novice', 'Adept', 'Elite', 'Apex', 'Split', 'Special', 'Terra', 'Transcendent', 'Aether'];
+
+export const STAGE_RANK: Record<Stage, number> = {
+  Novice: 0, Adept: 1, Elite: 2, Apex: 3,
+  Split: 4, Special: 5, Terra: 6, Transcendent: 7, Aether: 8,
+  Legendary: 8, // legacy alias
+};
+/** How a Guardian reaches a form — shown in the Atlas / ascension lab. */
+export const STAGE_KIND_LABEL: Record<Stage, string> = {
+  Novice: 'Base form', Adept: '1st Evolution', Elite: '2nd Evolution', Apex: '3rd Evolution',
+  Split: 'Split Evolution', Special: 'Special Evolution', Terra: 'Terra Evolution',
+  Transcendent: 'Transcendence', Aether: 'Aether Evolution', Legendary: 'Aether Evolution',
+};
+
+/**
+ * Numeric form rank (0..8) for a stage, a species, or anything carrying a
+ * `stage`. The Big Three's Nine are forced to rank 8 (8th-evolution legends)
+ * regardless of how their species def is tagged.
+ */
+export function formRank(s: Stage | SpeciesDef | { stage: Stage; id?: string }): number {
+  if (typeof s === 'string') return STAGE_RANK[s] ?? 0;
+  if (s && (s as SpeciesDef).id && isBig3Legend((s as SpeciesDef).id)) return 8;
+  return STAGE_RANK[s.stage] ?? 0;
+}
 
 // Attacker -> Defender damage multiplier (default 1.0)
 export const TYPE_CHART: Record<GType, Partial<Record<GType, number>>> = {
@@ -56,17 +93,24 @@ export const ELEMENT_ICONS: Record<Element, string> = {
  * Aether is special: it strikes everything hard and resists everything —
  * only Light and Dark touch it at full strength.
  */
+// A diverse, opinionated chart. Each element has a real identity:
+//   • Hard counters at 0.25 — Electric is GROUNDED by Rock; Ice MELTS to Fire.
+//   • Devastating 2.0 super-hits (Fire→Nature/Ice, Water→Fire, Nature→Water,
+//     Electric→Water, Ice→Nature) and the mutual Light↔Dark 2.0 rivalry.
+//   • Most elements resist their own kind (0.5) — same-element duels grind.
+//   • Aether smashes everything (1.5); only Light & Dark pierce its hide (1.25),
+//     everything else chips it for 0.75.
 export const ELEMENT_CHART: Record<Element, Partial<Record<Element, number>>> = {
-  Fire:     { Nature: 1.5, Ice: 1.5, Water: 0.5, Rock: 0.75, Fire: 0.75, Aether: 0.75 },
-  Water:    { Fire: 1.5, Rock: 1.25, Nature: 0.5, Water: 0.75, Aether: 0.75 },
-  Nature:   { Water: 1.5, Rock: 1.25, Fire: 0.5, Ice: 0.75, Nature: 0.75, Aether: 0.75 },
-  Electric: { Water: 1.5, Space: 1.25, Nature: 0.5, Rock: 0.5, Electric: 0.75, Aether: 0.75 },
-  Rock:     { Fire: 1.25, Ice: 1.25, Electric: 1.25, Water: 0.75, Nature: 0.75, Rock: 0.75, Aether: 0.75 },
-  Ice:      { Nature: 1.5, Space: 1.25, Fire: 0.5, Ice: 0.75, Rock: 0.75, Aether: 0.75 },
-  Light:    { Dark: 1.5, Space: 1.25, Light: 0.5, Aether: 1.0 },
-  Dark:     { Light: 1.5, Space: 1.25, Dark: 0.5, Aether: 1.0 },
-  Space:    { Electric: 1.25, Ice: 1.25, Dark: 1.25, Rock: 0.75, Space: 0.75, Aether: 0.75 },
-  Aether:   { Fire: 1.25, Water: 1.25, Nature: 1.25, Electric: 1.25, Rock: 1.25, Ice: 1.25, Light: 1.25, Dark: 1.25, Space: 1.25, Aether: 1.0 },
+  Fire:     { Nature: 2.0, Ice: 2.0, Rock: 1.25, Water: 0.5, Fire: 0.5, Aether: 0.75 },
+  Water:    { Fire: 2.0, Rock: 1.5, Nature: 0.5, Water: 0.5, Electric: 0.75, Aether: 0.75 },
+  Nature:   { Water: 2.0, Rock: 1.5, Electric: 1.25, Fire: 0.5, Ice: 0.5, Nature: 0.5, Aether: 0.75 },
+  Electric: { Water: 2.0, Space: 1.5, Ice: 1.25, Rock: 0.25, Nature: 0.5, Electric: 0.5, Aether: 0.75 },
+  Rock:     { Electric: 1.75, Fire: 1.5, Ice: 1.5, Space: 1.25, Water: 0.5, Nature: 0.5, Rock: 0.75, Aether: 0.75 },
+  Ice:      { Nature: 2.0, Space: 1.5, Electric: 1.25, Fire: 0.25, Rock: 0.5, Ice: 0.5, Water: 0.75, Aether: 0.75 },
+  Light:    { Dark: 2.0, Space: 1.5, Aether: 1.25, Light: 0.5, Rock: 0.75, Fire: 0.75 },
+  Dark:     { Light: 2.0, Space: 1.5, Nature: 1.25, Aether: 1.25, Dark: 0.5, Fire: 0.75 },
+  Space:    { Electric: 1.5, Ice: 1.5, Dark: 1.5, Rock: 1.25, Light: 0.5, Space: 0.5, Aether: 0.75 },
+  Aether:   { Fire: 1.5, Water: 1.5, Nature: 1.5, Electric: 1.5, Rock: 1.5, Ice: 1.5, Space: 1.5, Light: 1.25, Dark: 1.25, Aether: 1.0 },
 };
 
 /** Each legacy technique school channels one element. */
@@ -219,6 +263,14 @@ export const SPECIES_ELEMENTS: Record<string, Element[]> = {
   gloomwing: ['Dark', 'Space'], shadowwing: ['Dark', 'Space'], voidgoyle: ['Dark', 'Space'], apocalypsebat: ['Dark', 'Space', 'Electric'],
   duskkitty: ['Dark', 'Ice'], umbraknell: ['Dark', 'Ice'], shadowstalker: ['Dark', 'Ice'], voidreaper: ['Dark', 'Ice', 'Space'],
   crypttot: ['Dark', 'Rock'], tombgolem: ['Dark', 'Rock'], cairnwarden: ['Dark', 'Rock'], obeliskarch: ['Dark', 'Rock', 'Light'],
+  // ---- High-tier ascensions (Split alts → Special → Terra → Transcendence → Aether) ----
+  // Top tiers carry Aether, which resists most elements and is pierced only by Light/Dark.
+  magmaroth: ['Fire', 'Rock'], heliarch: ['Fire', 'Light', 'Space'], pyrethon: ['Fire', 'Light', 'Rock'], aurelflare: ['Fire', 'Light', 'Aether'], solmageddon: ['Fire', 'Aether', 'Light'],
+  maelgheist: ['Water', 'Dark'], tidewraith: ['Water', 'Ice', 'Dark'], oceanarch: ['Water', 'Ice', 'Light'], abyssophar: ['Water', 'Dark', 'Aether'], maremortis: ['Water', 'Aether', 'Ice'],
+  thornmaw: ['Nature', 'Dark'], sylvanarch: ['Nature', 'Light', 'Space'], terravine: ['Nature', 'Rock', 'Light'], genesophar: ['Nature', 'Light', 'Aether'], worldwither: ['Nature', 'Aether', 'Dark'],
+  voltgolem: ['Electric', 'Rock'], stormarch: ['Electric', 'Light', 'Space'], galvanyx: ['Electric', 'Space', 'Rock'], voltranscend: ['Electric', 'Light', 'Aether'], dynastorm: ['Electric', 'Aether', 'Space'],
+  cyclonaut: ['Space', 'Electric'], aeronarch: ['Space', 'Light'], stratoterra: ['Space', 'Rock', 'Light'], cosmovault: ['Space', 'Ice', 'Aether'], voidtempest: ['Space', 'Aether', 'Dark'],
+  nyxmaw: ['Dark', 'Ice'], umbrarch: ['Dark', 'Space', 'Light'], tenebraterra: ['Dark', 'Rock', 'Space'], voidsovereign: ['Dark', 'Space', 'Aether'], nihilumbra: ['Dark', 'Aether', 'Space'],
 };
 
 /** Elements of a species (falls back to its technique school's element). Supports Guardian / Unit objects. */
@@ -240,7 +292,9 @@ export function elementsOf(speciesIdOrGuardian: any): Element[] {
 export function elementMult(attack: Element, defenders: Element[]): number {
   let m = 1;
   for (const d of defenders) m *= ELEMENT_CHART[attack]?.[d] ?? 1.0;
-  return Math.max(0.4, Math.min(2.5, m));
+  // Widened range: multi-element stacking can reach a brutal 3.0 or be
+  // hard-resisted down to 0.25 — far more swingy than the old [0.4, 2.5].
+  return Math.max(0.25, Math.min(3.0, m));
 }
 
 /** Small inline element chips (icons + colors) for HTML UIs. */
@@ -258,10 +312,54 @@ export const STAT_NAMES: Record<StatKey, string> = {
 };
 
 export function expForLevel(level: number): number {
-  // total exp required to BE at `level`
+  // total exp required to BE at `level`.
+  //
+  // Two-phase curve, tuned so the early game flies by and the late game is a
+  // steady grind rather than the old power curve (^1.85) that made 40+ feel
+  // impossible:
+  //   • Levels 1→30  — a gentle ramp. Each level-up costs 18 + 6·(i−1), so the
+  //     first ~25 levels come fast and the player is battle-ready quickly.
+  //   • Levels 30+   — a CONSTANT base (200) plus a slow linear uptrend
+  //     (+14 per level). The per-level cost keeps creeping up forever, but only
+  //     linearly, so high-level Guardians stay reachable and tough fights past
+  //     Lv 40–50 (which pay far more EXP) are the encouraged way to climb.
   if (level <= 1) return 0;
-  return Math.floor(14 * Math.pow(level - 1, 1.85) + 26 * (level - 1));
+  const L = level - 1;                       // level-ups completed to reach `level`
+  if (level <= 30) {
+    // Σ(18 + 6·(i−1)) for i=1..L  =  18L + 3L(L−1)
+    return Math.floor(18 * L + 3 * L * (L - 1));
+  }
+  const base30 = 18 * 29 + 3 * 29 * 28;      // EXP to reach Lv 30 = 2958
+  const n = level - 30;                       // level-ups past 30
+  // Σ(200 + 14k) for k=0..n−1  =  200n + 7n(n−1)
+  return Math.floor(base30 + 200 * n + 7 * n * (n - 1));
 }
+
+// ---------------- The Big Three's Legendary Nine ----------------
+// Aljay the Dawnflame, Greggy the Stormheart and Onnel the Worldroot each
+// walked into Ghandra with three bonded lights. These nine Aether Guardians
+// stand a tier above everything else: bonus stats (in state.ts), a higher
+// damage ceiling, and a unique signature art apiece (see SIGNATURE_TECH).
+export const BIG3_LEGEND_IDS = [
+  'firgara', 'onthrofa', 'vulfenix', // Aljay's
+  'raijura', 'voltherion', 'fulgrath', // Greggy's
+  'verdalune', 'gaiathorn', 'nyxroot', // Onnel's
+] as const;
+export function isBig3Legend(speciesId: string): boolean {
+  return (BIG3_LEGEND_IDS as readonly string[]).includes(speciesId);
+}
+/** speciesId → the id of that legend's exclusive signature technique. */
+export const SIGNATURE_TECH: Record<string, string> = {
+  firgara: 'daybreak_severance',
+  onthrofa: 'eclipse_of_hours',
+  vulfenix: 'rosefire_requiem',
+  raijura: 'thunderclap_genesis',
+  voltherion: 'dynamo_overload',
+  fulgrath: 'fulgurant_coil',
+  verdalune: 'lunar_bloom',
+  gaiathorn: 'worldgarden_collapse',
+  nyxroot: 'abyssal_taproot',
+};
 
 // ---------------- Techniques ----------------
 export type TechKind = 'phys' | 'art';
@@ -286,6 +384,8 @@ export interface Technique {
   power: number; spCost: number; effect: TechEffect; target: TechTarget; desc: string;
   statusChance?: number;
   statusEffect?: TechStatusEffect;
+  cooldown?: number;     // turns the user must wait before re-using (0/undefined = always ready)
+  signature?: boolean;   // a Big-Three legend's unique art — unlearnable by others, breaks the normal damage ceiling
 }
 
 const T = (id: string, name: string, type: GType, kind: TechKind, power: number, spCost: number,
@@ -304,6 +404,23 @@ const T_status = (
   statusEffect: {
     id: statusId, name: statusName, type: statusType, duration, effect: statusEff, value: statusVal, icon: statusIcon, desc: statusDesc
   }
+});
+
+/** A Big-Three legend's exclusive signature art: damage + cooldown + (optional) inflicted status. */
+const T_sig = (
+  id: string, name: string, type: GType, kind: TechKind, power: number, spCost: number,
+  target: TechTarget, cooldown: number, desc: string,
+  status?: { id: string; name: string; type: 'buff' | 'debuff'; duration: number; effect: TechStatusEffect['effect']; value: number; icon: string; desc: string; chance: number }
+): Technique => ({
+  id, name, type, kind, power, spCost, effect: 'damage', target, desc,
+  cooldown, signature: true,
+  ...(status ? {
+    statusChance: status.chance,
+    statusEffect: {
+      id: status.id, name: status.name, type: status.type, duration: status.duration,
+      effect: status.effect, value: status.value, icon: status.icon, desc: status.desc,
+    },
+  } : {}),
 });
 
 export const TECHS: Record<string, Technique> = Object.fromEntries([
@@ -359,6 +476,13 @@ export const TECHS: Record<string, Technique> = Object.fromEntries([
   // Aether-stage signature arts
   T('aether_flare', 'Aether Flare', 'Blaze', 'art', 105, 36, 'damage', 'all', 'The light that existed before fire. All foes are bathed in dawn made weapon.'),
   T('dawn_rebirth', 'Dawn Rebirth', 'Blaze', 'art', 80, 30, 'heal', 'all', 'A sunrise sung backwards — allies are mended by the memory of morning.'),
+  // ---- Aether world-boss ultimates (one per element; the new top-tier roster's signature AoE) ----
+  T('sol_annihilation', 'Sol Annihilation', 'Blaze', 'art', 112, 36, 'damage', 'all', 'The final flare of a dying sun, poured over the whole field.'),
+  T('tidal_apocalypse', 'Tidal Apocalypse', 'Tide', 'art', 112, 36, 'damage', 'all', 'An ocean raised vertical and dropped on the world at once.'),
+  T('world_ender', 'World-Ender', 'Verdant', 'art', 112, 36, 'damage', 'all', 'The forest reclaims everything — roots erupt through every foe.'),
+  T('storm_god_wrath', 'Stormgod\'s Wrath', 'Volt', 'art', 112, 36, 'damage', 'all', 'Every cloud in the sky discharges into the same instant.'),
+  T('void_maelstrom', 'Void Maelstrom', 'Gale', 'art', 112, 36, 'damage', 'all', 'A whirlpool of folded space that swallows the battlefield whole.'),
+  T('oblivion_eclipse', 'Oblivion Eclipse', 'Umbra', 'art', 112, 36, 'damage', 'all', 'The last eclipse — the one the sun does not come back from.'),
 
   // Blaze status moves
   T_status('magma_spit', 'Magma Spit', 'Blaze', 'art', 20, 5, 'damage', 'one', 'Spits superheated magma that corrodes armor.',
@@ -491,6 +615,38 @@ export const TECHS: Record<string, Technique> = Object.fromEntries([
     'curse', 'Cursed', 'debuff', 3, 'curse', 0.05, '🔮', 'Cursed: cannot heal and takes +100% DoT damage.', 0.9),
   T_status('apocalypse_tech', 'Apocalypse', 'Umbra', 'art', 95, 32, 'damage', 'all', 'Brings about the end, marking all foes with doom.',
     'doom', 'Doomed', 'debuff', 4, 'doom', 0.3, '💀', 'Will take 30% of max HP as damage.', 1.0),
+
+  // ===== Signature arts of the Big Three's Legendary Nine =====
+  // One per legend. Devastating power, ruinous SP cost, and a 3-turn cooldown.
+  // They alone are flagged `signature`, which lets their damage break the ceiling
+  // every other move is bound by. No other Guardian can ever learn them.
+  T_sig('daybreak_severance', 'Daybreak Severance', 'Blaze', 'phys', 165, 58, 'one', 3,
+    "Firgara lifts Daybreak until the blade cups a whole sunrise, then brings the morning down in one ruinous arc. Aljay's first bond — and his alone.",
+    { id: 'burn', name: 'Burned', type: 'debuff', duration: 3, effect: 'dot', value: 0.08, icon: '🔥', desc: 'Taking fire damage over time.', chance: 0.9 }),
+  T_sig('eclipse_of_hours', 'Eclipse of Hours', 'Gale', 'art', 150, 64, 'one', 3,
+    'Onthrofa folds the next minute shut. For the target, time simply stops — and the storm that was already falling arrives all at once.',
+    { id: 'stun', name: 'Time-Locked', type: 'debuff', duration: 2, effect: 'stun', value: 0, icon: '⏳', desc: 'Frozen out of time — struggles to act.', chance: 0.5 }),
+  T_sig('rosefire_requiem', 'Rosefire Requiem', 'Blaze', 'art', 156, 60, 'all', 3,
+    'The rose-fire phoenix sings the note it has held since Ghandra, and the whole field blooms into petals of white flame.',
+    { id: 'burn', name: 'Burned', type: 'debuff', duration: 3, effect: 'dot', value: 0.07, icon: '🔥', desc: 'Taking fire damage over time.', chance: 0.8 }),
+  T_sig('thunderclap_genesis', 'Thunderclap Genesis', 'Volt', 'art', 154, 60, 'all', 3,
+    'The first thunderclap Greggy ever heard, given back to the world all at once. Raijura does not strike the sky — it becomes it.',
+    { id: 'paralyze', name: 'Paralyzed', type: 'debuff', duration: 3, effect: 'paralyze', value: -0.2, icon: '⚡', desc: 'Speed reduced, 25% chance to skip turn.', chance: 0.7 }),
+  T_sig('dynamo_overload', 'Dynamo Overload', 'Volt', 'phys', 168, 58, 'one', 3,
+    'Voltherion dumps the captive star at its core into a single grounded fist. The coil screams. The target stops doing anything at all.',
+    { id: 'paralyze', name: 'Paralyzed', type: 'debuff', duration: 3, effect: 'paralyze', value: -0.25, icon: '⚡', desc: 'Speed reduced, 25% chance to skip turn.', chance: 0.85 }),
+  T_sig('fulgurant_coil', 'Fulgurant Coil', 'Volt', 'art', 160, 60, 'one', 3,
+    'The lightning that struck once in the dark of Ghandra and chose to stay now coils the target head to tail and discharges everything.',
+    { id: 'paralyze', name: 'Paralyzed', type: 'debuff', duration: 3, effect: 'paralyze', value: -0.2, icon: '⚡', desc: 'Speed reduced, 25% chance to skip turn.', chance: 0.8 }),
+  T_sig('lunar_bloom', 'Lunar Bloom', 'Verdant', 'art', 152, 62, 'all', 3,
+    'Verdalune opens every petal it owns under a moon only Onnel can see. The garden that answers is not gentle.',
+    { id: 'entangled', name: 'Entangled', type: 'debuff', duration: 3, effect: 'spd', value: -0.2, icon: '🕸️', desc: 'Speed reduced by 20%.', chance: 0.8 }),
+  T_sig('worldgarden_collapse', 'Worldgarden Collapse', 'Verdant', 'phys', 170, 60, 'one', 3,
+    'Gaiathorn lets the living garden on its back grow a century in a heartbeat — then drops the whole forest on a single foe.',
+    { id: 'poison', name: 'Poisoned', type: 'debuff', duration: 4, effect: 'dot', value: 0.07, icon: '☠️', desc: 'Taking poison damage over time.', chance: 0.85 }),
+  T_sig('abyssal_taproot', 'Abyssal Taproot', 'Verdant', 'art', 158, 62, 'one', 3,
+    'The root that anchored the seal on Ghandra reaches up through the dark and takes hold. What it grips, it curses.',
+    { id: 'curse', name: 'Cursed', type: 'debuff', duration: 3, effect: 'curse', value: 0.05, icon: '🔮', desc: 'Cursed: cannot heal and takes +100% DoT damage.', chance: 0.8 }),
 ].map(t => [t.id, t]));
 
 // ---------------- Species ----------------
@@ -503,7 +659,12 @@ export interface SpeciesDef {
   techs: { level: number; tech: string }[];
   evolvesTo?: { species: string; level: number };
   extraEvolvesTo?: { species: string; level: number };
+  /** High-tier ascension (Special/Terra/Transcendent/Aether). Gated by level
+   *  and/or a catalyst item and/or a story flag — never auto-triggers; the
+   *  player opts in at Professor Alex's lab or the Terra Ascension Forge. */
+  ascendsTo?: { species: string; kind: EvoKind; level?: number; item?: string; flag?: string };
   isFusion?: boolean;
+  isBoss?: boolean;       // boss-tier (extra stat heft); Aether world bosses
   archetype: Archetype;
   palette: { primary: number; secondary: number; accent: number };
   desc: string;
@@ -540,11 +701,13 @@ export const SPECIES: Record<string, SpeciesDef> = Object.fromEntries(([
     base: stats(150, 52, 58, 38, 36, 34), growth: stats(12, 4, 5, 3.4, 3, 3),
     techs: [{ level: 1, tech: 'inferno_maw' }, { level: 1, tech: 'sun_cataclysm' }, { level: 48, tech: 'blaze_rally' }],
     evolvesTo: { species: 'solarex', level: 40 },
+    extraEvolvesTo: { species: 'magmaroth', level: 40 },
     palette: { primary: 0x8a2410, secondary: 0xf2433a, accent: 0xffd24e },
     desc: 'A legendary dragon of the volcanoes, dreaming of dawn and eternal fire.', captureBase: 0.06, scale: 1.7 }),
-  S({ id: 'solarex', name: 'Solarex', type: 'Blaze', stage: 'Legendary', archetype: 'beast',
+  S({ id: 'solarex', name: 'Solarex', type: 'Blaze', stage: 'Split', archetype: 'beast',
     base: stats(240, 80, 86, 56, 52, 50), growth: stats(15, 5, 6, 4, 3.8, 3.8),
     techs: [{ level: 1, tech: 'inferno_maw' }, { level: 1, tech: 'sun_cataclysm' }, { level: 40, tech: 'sol_eruption' }],
+    ascendsTo: { species: 'heliarch', kind: 'Special', level: 52 },
     palette: { primary: 0xff8c00, secondary: 0xffd700, accent: 0xffffff },
     desc: 'A celestial lion wreathed in stellar fire, born from the heart of a dying star. Its steps burn with starlight.', captureBase: 0, scale: 1.95 }),
 
@@ -572,11 +735,13 @@ export const SPECIES: Record<string, SpeciesDef> = Object.fromEntries(([
     base: stats(160, 60, 44, 40, 30, 48), growth: stats(12, 4.6, 4, 3.6, 2.8, 4.4),
     techs: [{ level: 1, tech: 'tidal_crush' }, { level: 1, tech: 'abyss_maelstrom' }, { level: 48, tech: 'spring_mend' }],
     evolvesTo: { species: 'leviathorn', level: 40 },
+    extraEvolvesTo: { species: 'maelgheist', level: 40 },
     palette: { primary: 0x102e7a, secondary: 0x2a7dd9, accent: 0x8ad4ff },
     desc: 'Sovereign of the drowned dark. Its silence is a kind of mercy.', captureBase: 0.06, scale: 1.7 }),
-  S({ id: 'leviathorn', name: 'Leviathorn', type: 'Tide', stage: 'Legendary', archetype: 'serpent',
+  S({ id: 'leviathorn', name: 'Leviathorn', type: 'Tide', stage: 'Split', archetype: 'serpent',
     base: stats(250, 90, 68, 60, 48, 66), growth: stats(15, 5.5, 5, 4.2, 3.5, 5.2),
     techs: [{ level: 1, tech: 'tidal_crush' }, { level: 1, tech: 'abyss_maelstrom' }, { level: 40, tech: 'deluge_tempest' }],
+    ascendsTo: { species: 'tidewraith', kind: 'Special', level: 52 },
     palette: { primary: 0x00008b, secondary: 0x00ffff, accent: 0xffffff },
     desc: 'A mythical ocean dragon capable of creating tidal waves with a flick of its tail, drawing energy from abyssal depths.', captureBase: 0, scale: 1.95 }),
 
@@ -604,11 +769,13 @@ export const SPECIES: Record<string, SpeciesDef> = Object.fromEntries(([
     base: stats(180, 50, 48, 52, 22, 38), growth: stats(13, 4.2, 4.2, 4.6, 2.4, 3.6),
     techs: [{ level: 1, tech: 'elder_wrath' }, { level: 1, tech: 'bramble_cage' }, { level: 48, tech: 'bloom_ward' }],
     evolvesTo: { species: 'yggdranox', level: 40 },
+    extraEvolvesTo: { species: 'thornmaw', level: 40 },
     palette: { primary: 0x1a4e1a, secondary: 0x4e9a3a, accent: 0xf2c14e },
     desc: 'Old as the first forest. Its rings record every age of the world.', captureBase: 0.06, scale: 1.8 }),
-  S({ id: 'yggdranox', name: 'Yggdranox', type: 'Verdant', stage: 'Legendary', archetype: 'brute',
+  S({ id: 'yggdranox', name: 'Yggdranox', type: 'Verdant', stage: 'Split', archetype: 'brute',
     base: stats(280, 75, 72, 78, 36, 58), growth: stats(17, 5, 5.2, 5.5, 3, 4.5),
     techs: [{ level: 1, tech: 'elder_wrath' }, { level: 1, tech: 'bramble_cage' }, { level: 40, tech: 'nature_judgment' }],
+    ascendsTo: { species: 'sylvanarch', kind: 'Special', level: 52 },
     palette: { primary: 0x006400, secondary: 0x8fbc8f, accent: 0xffd700 },
     desc: 'The physical manifestation of the world tree\'s wrath, crushing anything in its path with immovable wood and vines.', captureBase: 0, scale: 2.0 }),
 
@@ -636,11 +803,13 @@ export const SPECIES: Record<string, SpeciesDef> = Object.fromEntries(([
     base: stats(145, 58, 52, 32, 46, 42), growth: stats(11, 4.4, 4.6, 3, 4.4, 4),
     techs: [{ level: 1, tech: 'storm_lance' }, { level: 1, tech: 'thunder_dominion' }, { level: 48, tech: 'overcharge' }],
     evolvesTo: { species: 'raidenjin', level: 40 },
+    extraEvolvesTo: { species: 'voltgolem', level: 40 },
     palette: { primary: 0x8a7510, secondary: 0xf2d23a, accent: 0x2a7dd9 },
     desc: 'The first thunderclap, given wings. Skies clear where it passes.', captureBase: 0.06, scale: 1.65 }),
-  S({ id: 'raidenjin', name: 'Raidenjin', type: 'Volt', stage: 'Legendary', archetype: 'avian',
+  S({ id: 'raidenjin', name: 'Raidenjin', type: 'Volt', stage: 'Split', archetype: 'avian',
     base: stats(230, 88, 78, 48, 68, 62), growth: stats(14, 5.5, 5.5, 3.8, 5.5, 4.8),
     techs: [{ level: 1, tech: 'storm_lance' }, { level: 1, tech: 'thunder_dominion' }, { level: 40, tech: 'volt_singularity' }],
+    ascendsTo: { species: 'stormarch', kind: 'Special', level: 52 },
     palette: { primary: 0xffd700, secondary: 0x4169e1, accent: 0x4b0082 },
     desc: 'The sovereign of thunderstorms, casting bolts of divine lightning from the high clouds, moving faster than the wind.', captureBase: 0, scale: 1.9 }),
 
@@ -668,11 +837,13 @@ export const SPECIES: Record<string, SpeciesDef> = Object.fromEntries(([
     base: stats(148, 56, 50, 30, 50, 38), growth: stats(11, 4.2, 4.5, 2.8, 4.8, 3.8),
     techs: [{ level: 1, tech: 'razor_cyclone' }, { level: 1, tech: 'sky_sunder' }, { level: 48, tech: 'tailwind' }],
     evolvesTo: { species: 'zephyrax', level: 40 },
+    extraEvolvesTo: { species: 'cyclonaut', level: 40 },
     palette: { primary: 0x1a6e60, secondary: 0x4ec4b0, accent: 0xffd24e },
     desc: 'Monarch of the upper sky. Maps mark its roosts as "no-fly".', captureBase: 0.06, scale: 1.65 }),
-  S({ id: 'zephyrax', name: 'Zephyrax', type: 'Gale', stage: 'Legendary', archetype: 'avian',
+  S({ id: 'zephyrax', name: 'Zephyrax', type: 'Gale', stage: 'Split', archetype: 'avian',
     base: stats(235, 84, 76, 45, 74, 58), growth: stats(14, 5.2, 5.4, 3.5, 6, 4.5),
     techs: [{ level: 1, tech: 'razor_cyclone' }, { level: 1, tech: 'sky_sunder' }, { level: 40, tech: 'tempest_gale' }],
+    ascendsTo: { species: 'aeronarch', kind: 'Special', level: 52 },
     palette: { primary: 0x87ceeb, secondary: 0x40e0d0, accent: 0xffd700 },
     desc: 'A magnificent storm-bird that rules the high troposphere, commanding massive hurricanes and slicing air currents.', captureBase: 0, scale: 1.9 }),
 
@@ -700,11 +871,13 @@ export const SPECIES: Record<string, SpeciesDef> = Object.fromEntries(([
     base: stats(152, 58, 50, 36, 38, 46), growth: stats(11.5, 4.4, 4.5, 3.2, 3.8, 4.4),
     techs: [{ level: 1, tech: 'void_fang' }, { level: 1, tech: 'eclipse_requiem' }, { level: 48, tech: 'umbral_drain' }],
     evolvesTo: { species: 'chthonix', level: 40 },
+    extraEvolvesTo: { species: 'nyxmaw', level: 40 },
     palette: { primary: 0x2a1050, secondary: 0x6a2ac0, accent: 0xc43a7a },
     desc: 'The shadow cast by nothing. Scholars argue whether it exists at all.', captureBase: 0.06, scale: 1.7 }),
-  S({ id: 'chthonix', name: 'Chthonix', type: 'Umbra', stage: 'Legendary', archetype: 'serpent',
+  S({ id: 'chthonix', name: 'Chthonix', type: 'Umbra', stage: 'Split', archetype: 'serpent',
     base: stats(242, 88, 75, 54, 56, 68), growth: stats(14.5, 5.5, 5.4, 4, 4.5, 5.2),
     techs: [{ level: 1, tech: 'void_fang' }, { level: 1, tech: 'eclipse_requiem' }, { level: 40, tech: 'void_extinction' }],
+    ascendsTo: { species: 'umbrarch', kind: 'Special', level: 52 },
     palette: { primary: 0x1f0b35, secondary: 0x4b0082, accent: 0xff00ff },
     desc: 'A dark beast from the deepest abyss, swallowing light and shadows alike, wrapping the battlefield in absolute void.', captureBase: 0, scale: 1.95 }),
 
@@ -773,7 +946,7 @@ export const SPECIES: Record<string, SpeciesDef> = Object.fromEntries(([
     evolvesTo: { species: 'ignisar', level: 36 },
     palette: { primary: 0x8a2e10, secondary: 0xe85a2a, accent: 0xffd24e },
     desc: 'A dragon with a caldera for a heart. Mountains learn to flinch.', captureBase: 0.05, scale: 1.7 }),
-  S({ id: 'ignisar', name: 'Ignisar', type: 'Blaze', stage: 'Legendary', archetype: 'beast',
+  S({ id: 'ignisar', name: 'Ignisar', type: 'Blaze', stage: 'Special', archetype: 'beast',
     base: stats(235, 82, 80, 52, 58, 64), growth: stats(14, 5.4, 5.8, 4, 4.6, 5),
     techs: [{ level: 1, tech: 'inferno_maw' }, { level: 1, tech: 'sun_cataclysm' }, { level: 42, tech: 'sol_eruption' }],
     evolvesTo: { species: 'solphyra', level: 50 },
@@ -863,7 +1036,7 @@ export const SPECIES: Record<string, SpeciesDef> = Object.fromEntries(([
     evolvesTo: { species: 'sylvaeon', level: 42 },
     palette: { primary: 0x2a4416, secondary: 0x5a9a3a, accent: 0xf2c14e },
     desc: 'It rules a forest the way a heart rules a body — unseen, unarguable.', captureBase: 0.05, scale: 1.75 }),
-  S({ id: 'sylvaeon', name: 'Sylvaeon', type: 'Verdant', stage: 'Legendary', archetype: 'beast',
+  S({ id: 'sylvaeon', name: 'Sylvaeon', type: 'Verdant', stage: 'Special', archetype: 'beast',
     base: stats(262, 80, 74, 66, 50, 60), growth: stats(15.5, 5.3, 5.3, 5, 4.2, 4.9),
     techs: [{ level: 1, tech: 'elder_wrath' }, { level: 1, tech: 'bloom_ward' }, { level: 44, tech: 'nature_judgment' }],
     palette: { primary: 0x3a8a4a, secondary: 0xc8f2a8, accent: 0xffe9a8 },
@@ -980,7 +1153,7 @@ export const SPECIES: Record<string, SpeciesDef> = Object.fromEntries(([
     evolvesTo: { species: 'erebusilk', level: 44 },
     palette: { primary: 0x221442, secondary: 0x5a3a8a, accent: 0xe85a9a },
     desc: 'Half here, half elsewhere. Its cocoon stage lasted a century and a half.', captureBase: 0.05, scale: 1.65 }),
-  S({ id: 'erebusilk', name: 'Erebusilk', type: 'Umbra', stage: 'Legendary', archetype: 'serpent',
+  S({ id: 'erebusilk', name: 'Erebusilk', type: 'Umbra', stage: 'Special', archetype: 'serpent',
     base: stats(248, 86, 72, 56, 58, 70), growth: stats(14.8, 5.6, 5.2, 4.2, 4.6, 5.4),
     techs: [{ level: 1, tech: 'eclipse_requiem' }, { level: 1, tech: 'umbral_drain' }, { level: 46, tech: 'void_extinction' }],
     palette: { primary: 0x140a2e, secondary: 0x4a2a8a, accent: 0xff7ad0 },
@@ -1002,47 +1175,47 @@ export const SPECIES: Record<string, SpeciesDef> = Object.fromEntries(([
   // ===== THE CORRUPTED LEGION =====
   // Nine four-element generals sealed in Ghandra fifteen years ago by
   // Aljay, Greggy and Onnel. Their armies wait for the seal to fail.
-  S({ id: 'ashkarath', name: 'Ashkarath', type: 'Blaze', stage: 'Legendary', archetype: 'brute',
+  S({ id: 'ashkarath', name: 'Ashkarath', type: 'Blaze', stage: 'Transcendent', archetype: 'brute',
     base: stats(300, 90, 92, 64, 50, 60), growth: stats(16, 5.5, 6.2, 4.4, 4, 4.8),
     techs: [{ level: 1, tech: 'inferno_maw' }, { level: 1, tech: 'sun_cataclysm' }, { level: 1, tech: 'sol_eruption' }],
     palette: { primary: 0x3a1410, secondary: 0xe84a1a, accent: 0x9a5af2 },
     desc: 'General of Cinders. Its army burned a corridor through Ghandra wide enough to march a city through — until Aljay\'s phoenix turned its own fire against it.', captureBase: 0, scale: 2.1 }),
-  S({ id: 'vormaela', name: 'Vormaela', type: 'Tide', stage: 'Legendary', archetype: 'serpent',
+  S({ id: 'vormaela', name: 'Vormaela', type: 'Tide', stage: 'Transcendent', archetype: 'serpent',
     base: stats(310, 95, 80, 68, 52, 74), growth: stats(16.5, 5.8, 5.6, 4.6, 4, 5.4),
     techs: [{ level: 1, tech: 'abyss_maelstrom' }, { level: 1, tech: 'tidal_crush' }, { level: 1, tech: 'deluge_tempest' }],
     palette: { primary: 0x0a1a3a, secondary: 0x2a7dd9, accent: 0xb05ae8 },
     desc: 'The Tide-Empress of the Drowned Choir. Her tides answer no moon — only her grief, and her grief is bottomless.', captureBase: 0, scale: 2.1 }),
-  S({ id: 'bramblehex', name: 'Bramblehex', type: 'Verdant', stage: 'Legendary', archetype: 'brute',
+  S({ id: 'bramblehex', name: 'Bramblehex', type: 'Verdant', stage: 'Transcendent', archetype: 'brute',
     base: stats(330, 85, 84, 80, 38, 62), growth: stats(17.5, 5.4, 5.8, 5.4, 3.4, 4.9),
     techs: [{ level: 1, tech: 'elder_wrath' }, { level: 1, tech: 'bramble_cage' }, { level: 1, tech: 'nature_judgment' }],
     palette: { primary: 0x1a2a10, secondary: 0x6a8a3a, accent: 0xc44a7a },
     desc: 'The Rotwarden. Everything it touches grows — wrong. Onnel wept while sealing it; they had been grown from the same grove, long ago.', captureBase: 0, scale: 2.15 }),
-  S({ id: 'voltrazar', name: 'Voltrazar', type: 'Volt', stage: 'Legendary', archetype: 'avian',
+  S({ id: 'voltrazar', name: 'Voltrazar', type: 'Volt', stage: 'Transcendent', archetype: 'avian',
     base: stats(290, 100, 88, 58, 72, 70), growth: stats(15.5, 6, 6, 4.2, 5.4, 5.2),
     techs: [{ level: 1, tech: 'thunder_dominion' }, { level: 1, tech: 'storm_lance' }, { level: 1, tech: 'volt_singularity' }],
     palette: { primary: 0x2a240a, secondary: 0xf2d23a, accent: 0x9a5af2 },
     desc: 'The Storm-Tyrant of the Iron Tempest. Greggy grounded it with a hand-built coil and a grin. It has not forgiven either.', captureBase: 0, scale: 2.05 }),
-  S({ id: 'gorrundax', name: 'Gorrundax', type: 'Verdant', stage: 'Legendary', archetype: 'shell',
+  S({ id: 'gorrundax', name: 'Gorrundax', type: 'Verdant', stage: 'Transcendent', archetype: 'shell',
     base: stats(360, 70, 78, 96, 28, 50), growth: stats(18.5, 4.8, 5.5, 6, 2.8, 4.2),
     techs: [{ level: 1, tech: 'elder_wrath' }, { level: 1, tech: 'bramble_cage' }, { level: 1, tech: 'dread_howl' }],
     palette: { primary: 0x2e2a26, secondary: 0x8a7a5a, accent: 0xe85a3a },
     desc: 'The Mountain-Eater. The Gravelborn Horde tunneled beneath continents; three mountain ranges in Tharkand are actually its cast-off shells.', captureBase: 0, scale: 2.3 }),
-  S({ id: 'cryomara', name: 'Cryomara', type: 'Tide', stage: 'Legendary', archetype: 'sprite',
+  S({ id: 'cryomara', name: 'Cryomara', type: 'Tide', stage: 'Transcendent', archetype: 'sprite',
     base: stats(280, 105, 76, 66, 58, 84), growth: stats(15, 6.2, 5.4, 4.6, 4.4, 5.8),
     techs: [{ level: 1, tech: 'abyss_maelstrom' }, { level: 1, tech: 'mist_veil' }, { level: 1, tech: 'deluge_tempest' }],
     palette: { primary: 0xc8e8f2, secondary: 0x5a8ab8, accent: 0x9a5af2 },
     desc: 'Queen of the Still. Where the Silent Glacier marched, nothing moved again — not water, not wind, not time. Noruun\'s auroras are her dreaming.', captureBase: 0, scale: 1.95 }),
-  S({ id: 'luxavor', name: 'Luxavor', type: 'Blaze', stage: 'Legendary', archetype: 'avian',
+  S({ id: 'luxavor', name: 'Luxavor', type: 'Blaze', stage: 'Transcendent', archetype: 'avian',
     base: stats(285, 100, 86, 60, 66, 78), growth: stats(15.5, 6, 5.9, 4.3, 4.9, 5.5),
     techs: [{ level: 1, tech: 'sun_cataclysm' }, { level: 1, tech: 'aether_flare' }, { level: 1, tech: 'sol_eruption' }],
     palette: { primary: 0xf2ead0, secondary: 0xd9a93a, accent: 0x6a2ac0 },
     desc: 'The False Dawn. Its Blinding Host marched beneath a counterfeit sunrise, and whole armies knelt to it before realizing their mistake.', captureBase: 0, scale: 2.05 }),
-  S({ id: 'nyxghul', name: 'Nyxghul', type: 'Umbra', stage: 'Legendary', archetype: 'serpent',
+  S({ id: 'nyxghul', name: 'Nyxghul', type: 'Umbra', stage: 'Transcendent', archetype: 'serpent',
     base: stats(320, 95, 90, 70, 60, 80), growth: stats(17, 5.8, 6.1, 4.8, 4.5, 5.6),
     techs: [{ level: 1, tech: 'eclipse_requiem' }, { level: 1, tech: 'void_fang' }, { level: 1, tech: 'void_extinction' }],
     palette: { primary: 0x0e081a, secondary: 0x4a2a8a, accent: 0xe8d9a8 },
     desc: 'The Hollow Crown — first and worst of the nine. Aljay\'s broom-handle duel with it is reenacted by children on every continent; the real one lasted three days and broke a mountain.', captureBase: 0, scale: 2.2 }),
-  S({ id: 'zerathuul', name: 'Zerathuul', type: 'Gale', stage: 'Legendary', archetype: 'serpent',
+  S({ id: 'zerathuul', name: 'Zerathuul', type: 'Gale', stage: 'Transcendent', archetype: 'serpent',
     base: stats(295, 100, 84, 62, 76, 76), growth: stats(16, 6, 5.8, 4.4, 5.6, 5.4),
     techs: [{ level: 1, tech: 'sky_sunder' }, { level: 1, tech: 'razor_cyclone' }, { level: 1, tech: 'tempest_gale' }],
     palette: { primary: 0x1a1a32, secondary: 0x7a8af2, accent: 0xf25aa8 },
@@ -1068,47 +1241,47 @@ export const SPECIES: Record<string, SpeciesDef> = Object.fromEntries(([
   // ===== Legends' Nine =====
   S({ id: 'firgara', name: 'Firgara', type: 'Blaze', stage: 'Aether', archetype: 'brute',
     base: stats(130, 40, 42, 30, 26, 28), growth: stats(11, 3.6, 4.0, 3.0, 2.4, 2.6),
-    techs: [{ level: 1, tech: 'ember_snap' }, { level: 20, tech: 'flame_burst' }, { level: 40, tech: 'inferno_maw' }],
+    techs: [{ level: 1, tech: 'inferno_maw' }, { level: 1, tech: 'sun_cataclysm' }, { level: 1, tech: 'daybreak_severance' }],
     palette: { primary: 0xc8202a, secondary: 0xe8b84a, accent: 0xff9ad2 },
     desc: 'Aljay\'s first bond — a crimson dragonoid knight in mirror-bright scale, bearing Daybreak, a greatsword of living flame.', captureBase: 0, scale: 2.025 }),
   S({ id: 'onthrofa', name: 'Onthrofa', type: 'Gale', stage: 'Aether', archetype: 'sprite',
     base: stats(110, 55, 34, 28, 32, 36), growth: stats(9, 4.5, 3.0, 2.6, 3.2, 3.4),
-    techs: [{ level: 1, tech: 'tempest_gale' }, { level: 20, tech: 'razor_cyclone' }, { level: 40, tech: 'sky_sunder' }],
+    techs: [{ level: 1, tech: 'sky_sunder' }, { level: 1, tech: 'tempest_gale' }, { level: 1, tech: 'eclipse_of_hours' }],
     palette: { primary: 0x8a4af2, secondary: 0x2a1a5a, accent: 0xff9ad2 },
     desc: 'A violet being of folded distance and borrowed hours, wreathed in the slow clockwork of Space and Time.', captureBase: 0, scale: 1.8 }),
   S({ id: 'vulfenix', name: 'Vulfenix', type: 'Blaze', stage: 'Aether', archetype: 'avian',
     base: stats(120, 45, 38, 26, 30, 32), growth: stats(10, 4.0, 3.6, 2.4, 2.8, 3.0),
-    techs: [{ level: 1, tech: 'ember_snap' }, { level: 20, tech: 'flame_burst' }, { level: 40, tech: 'inferno_maw' }],
+    techs: [{ level: 1, tech: 'inferno_maw' }, { level: 1, tech: 'aether_flare' }, { level: 1, tech: 'rosefire_requiem' }],
     palette: { primary: 0xff5aa8, secondary: 0x2a1a2e, accent: 0xffd8ec },
     desc: 'The rose-fire phoenix that lit Aljay\'s way through Ghandra\'s dark — and has not landed since.', captureBase: 0, scale: 1.95 }),
   S({ id: 'raijura', name: 'Raijura', type: 'Volt', stage: 'Aether', archetype: 'avian',
     base: stats(118, 48, 40, 26, 32, 30), growth: stats(9.8, 4.2, 3.8, 2.4, 3.0, 2.8),
-    techs: [{ level: 1, tech: 'storm_lance' }, { level: 20, tech: 'numbing_field' }, { level: 40, tech: 'thunder_dominion' }],
+    techs: [{ level: 1, tech: 'storm_lance' }, { level: 1, tech: 'thunder_dominion' }, { level: 1, tech: 'thunderclap_genesis' }],
     palette: { primary: 0xf2d23a, secondary: 0xe8ecff, accent: 0xff9ad2 },
     desc: 'A storm-roc hatched from the first thunderclap Greggy ever heard.', captureBase: 0, scale: 1.35 }),
   S({ id: 'voltherion', name: 'Voltherion', type: 'Volt', stage: 'Aether', archetype: 'brute',
     base: stats(132, 40, 44, 32, 24, 26), growth: stats(11.2, 3.6, 4.2, 3.2, 2.2, 2.4),
-    techs: [{ level: 1, tech: 'storm_lance' }, { level: 20, tech: 'numbing_field' }, { level: 40, tech: 'thunder_dominion' }],
+    techs: [{ level: 1, tech: 'storm_lance' }, { level: 1, tech: 'thunder_dominion' }, { level: 1, tech: 'dynamo_overload' }],
     palette: { primary: 0x4a5468, secondary: 0xf2d23a, accent: 0x7a8af2 },
     desc: 'A walking dynamo wound around a captive star, wearing a custom grounding coil.', captureBase: 0, scale: 1.3 }),
   S({ id: 'fulgrath', name: 'Fulgrath', type: 'Volt', stage: 'Aether', archetype: 'serpent',
     base: stats(114, 52, 36, 26, 34, 32), growth: stats(9.5, 4.4, 3.4, 2.4, 3.2, 3.0),
-    techs: [{ level: 1, tech: 'storm_lance' }, { level: 20, tech: 'numbing_field' }, { level: 40, tech: 'thunder_dominion' }],
+    techs: [{ level: 1, tech: 'storm_lance' }, { level: 1, tech: 'numbing_field' }, { level: 1, tech: 'fulgurant_coil' }],
     palette: { primary: 0x1a1a2e, secondary: 0xf2d23a, accent: 0xb14aff },
     desc: 'Lightning that struck once in the dark of Ghandra and decided to stay.', captureBase: 0, scale: 1.25 }),
   S({ id: 'verdalune', name: 'Verdalune', type: 'Verdant', stage: 'Aether', archetype: 'sprite',
     base: stats(124, 50, 36, 28, 28, 34), growth: stats(10.4, 4.2, 3.4, 2.6, 2.6, 3.2),
-    techs: [{ level: 1, tech: 'bramble_whip' }, { level: 20, tech: 'giga_drain' }, { level: 40, tech: 'forest_fury' }],
+    techs: [{ level: 1, tech: 'forest_wrath_tech' }, { level: 1, tech: 'bramble_cage' }, { level: 1, tech: 'lunar_bloom' }],
     palette: { primary: 0x4ec45e, secondary: 0xf2e8b8, accent: 0xff9ad2 },
     desc: 'A moonlit spirit-bloom that opens only for Onnel. Five championship rings grew from its petals.', captureBase: 0, scale: 1.2 }),
   S({ id: 'gaiathorn', name: 'Gaiathorn', type: 'Verdant', stage: 'Aether', archetype: 'shell',
     base: stats(142, 36, 38, 36, 20, 28), growth: stats(12.2, 3.2, 3.6, 3.6, 1.8, 2.6),
-    techs: [{ level: 1, tech: 'bramble_whip' }, { level: 20, tech: 'giga_drain' }, { level: 40, tech: 'forest_fury' }],
+    techs: [{ level: 1, tech: 'elder_wrath' }, { level: 1, tech: 'bramble_cage' }, { level: 1, tech: 'worldgarden_collapse' }],
     palette: { primary: 0x5a3e22, secondary: 0x4ec45e, accent: 0x7a8af2 },
     desc: 'A great shelled wanderer with a living garden on its back.', captureBase: 0, scale: 1.35 }),
   S({ id: 'nyxroot', name: 'Nyxroot', type: 'Verdant', stage: 'Aether', archetype: 'brute',
     base: stats(134, 42, 40, 30, 24, 30), growth: stats(11.4, 3.8, 3.8, 3.0, 2.2, 2.8),
-    techs: [{ level: 1, tech: 'bramble_whip' }, { level: 20, tech: 'giga_drain' }, { level: 40, tech: 'forest_fury' }],
+    techs: [{ level: 1, tech: 'elder_wrath' }, { level: 1, tech: 'bramble_cage' }, { level: 1, tech: 'abyssal_taproot' }],
     palette: { primary: 0x241e32, secondary: 0x4ec45e, accent: 0xb14aff },
     desc: 'The root that reaches where light gives up. It anchored the seal on Ghandra.', captureBase: 0, scale: 1.3 }),
 
@@ -1885,6 +2058,194 @@ export const SPECIES: Record<string, SpeciesDef> = Object.fromEntries(([
     techs: [{ level: 1, tech: 'void_fang' }, { level: 1, tech: 'eclipse_requiem' }, { level: 32, tech: 'void_extinction' }],
     palette: { primary: 0x1e1a26, secondary: 0x36324a, accent: 0x9a5af2 },
     desc: 'A towering monolith brute inscribed with purple runes.', captureBase: 0, scale: 1.85 }),
+
+  // ============================================================
+  // HIGH-TIER ASCENSIONS — the evolution kinds beyond Apex:
+  //   Split (branches into 2) → Special → Terra → Transcendence → Aether (boss).
+  // The Split capstones (Solarex, Leviathorn, …) are tagged above; these are
+  // the alternate Split branch + the four ascension forms per line. Reached at
+  // Professor Alex's lab / the Terra Ascension Forge with catalyst items.
+  // ============================================================
+
+  // ---- BLAZE: Infernyx ↘ Magmaroth (split alt) ; Solarex → Heliarch → Pyrethon → Aurelflare → Solmageddon
+  S({ id: 'magmaroth', name: 'Magmaroth', type: 'Blaze', stage: 'Split', archetype: 'brute',
+    base: stats(282, 72, 86, 66, 40, 46), growth: stats(16, 4.6, 5.4, 4.2, 3.0, 3.4),
+    techs: [{ level: 1, tech: 'inferno_maw' }, { level: 1, tech: 'eruption_strike' }, { level: 45, tech: 'sol_eruption' }],
+    palette: { primary: 0x6a1e0e, secondary: 0xff5a1e, accent: 0x2a1410 },
+    desc: 'Infernyx\'s other road — a mountain that learned to walk, its back a cracked caldera that never cools.', captureBase: 0, scale: 2.0 }),
+  S({ id: 'heliarch', name: 'Heliarch', type: 'Blaze', stage: 'Special', archetype: 'beast',
+    base: stats(302, 96, 100, 70, 60, 66), growth: stats(16, 5.4, 5.8, 4.2, 4.0, 4.2),
+    techs: [{ level: 1, tech: 'sun_cataclysm' }, { level: 1, tech: 'sol_eruption' }, { level: 1, tech: 'aether_flare' }],
+    ascendsTo: { species: 'pyrethon', kind: 'Terra', level: 62, item: 'terra_catalyst', flag: 'terra_visited' },
+    palette: { primary: 0xff9a1e, secondary: 0xffe06a, accent: 0xffffff },
+    desc: 'A solar lion ascended — its mane a corona, each stride scoring a line of dawn across the dark.', captureBase: 0, scale: 2.05 }),
+  S({ id: 'pyrethon', name: 'Pyrethon', type: 'Blaze', stage: 'Terra', archetype: 'brute',
+    base: stats(346, 106, 122, 86, 66, 76), growth: stats(18, 6.0, 6.6, 4.8, 4.4, 4.8),
+    techs: [{ level: 1, tech: 'sol_eruption' }, { level: 1, tech: 'aether_flare' }, { level: 1, tech: 'supernova' }],
+    ascendsTo: { species: 'aurelflare', kind: 'Transcendent', level: 80, item: 'transcend_sigil' },
+    palette: { primary: 0xd23a1a, secondary: 0xffb43a, accent: 0xb0865a },
+    desc: 'Re-forged in the world-furnaces of Terra City; living magma sheathed in plates of worldstone.', captureBase: 0, scale: 2.15 }),
+  S({ id: 'aurelflare', name: 'Aurelflare', type: 'Blaze', stage: 'Transcendent', archetype: 'avian',
+    base: stats(404, 120, 146, 100, 82, 92), growth: stats(20, 6.6, 7.4, 5.4, 5.2, 5.4),
+    techs: [{ level: 1, tech: 'aether_flare' }, { level: 1, tech: 'supernova' }, { level: 1, tech: 'sol_annihilation' }],
+    ascendsTo: { species: 'solmageddon', kind: 'Aether', level: 90, item: 'aether_shard' },
+    palette: { primary: 0xff6a3a, secondary: 0xffd8a0, accent: 0xff9ad2 },
+    desc: 'It has burned away everything that was not light. What remains is a phoenix of transcendent dawn.', captureBase: 0, scale: 2.0 }),
+  S({ id: 'solmageddon', name: 'Solmageddon', type: 'Blaze', stage: 'Aether', archetype: 'brute', isBoss: true,
+    base: stats(474, 136, 174, 120, 92, 106), growth: stats(22, 7.2, 8.4, 6.2, 5.8, 6.0),
+    techs: [{ level: 1, tech: 'aether_flare' }, { level: 1, tech: 'supernova' }, { level: 1, tech: 'sol_annihilation' }],
+    palette: { primary: 0xff3a1a, secondary: 0xffc83a, accent: 0xff9ad2 },
+    desc: 'A walking apocalypse of fire — the death a star chooses when it refuses to fade quietly.', captureBase: 0, scale: 2.45 }),
+
+  // ---- TIDE: Abyssarch ↘ Maelgheist ; Leviathorn → Tidewraith → Oceanarch → Abyssophar → Maremortis
+  S({ id: 'maelgheist', name: 'Maelgheist', type: 'Tide', stage: 'Split', archetype: 'serpent',
+    base: stats(266, 88, 70, 58, 56, 72), growth: stats(15, 5.2, 5.0, 4.0, 4.2, 5.0),
+    techs: [{ level: 1, tech: 'abyss_maelstrom' }, { level: 1, tech: 'abyssal_drown' }, { level: 45, tech: 'deluge_tempest' }],
+    palette: { primary: 0x0a1e4a, secondary: 0x2a5a9e, accent: 0x9a5af2 },
+    desc: 'Abyssarch\'s drowned road — a wraith-serpent woven from black water and the silence beneath the trench.', captureBase: 0, scale: 2.0 }),
+  S({ id: 'tidewraith', name: 'Tidewraith', type: 'Tide', stage: 'Special', archetype: 'serpent',
+    base: stats(298, 100, 92, 70, 64, 80), growth: stats(16, 5.6, 5.4, 4.2, 4.6, 5.2),
+    techs: [{ level: 1, tech: 'abyss_maelstrom' }, { level: 1, tech: 'deluge_tempest' }, { level: 1, tech: 'abyssal_drown' }],
+    ascendsTo: { species: 'oceanarch', kind: 'Terra', level: 62, item: 'terra_catalyst', flag: 'terra_visited' },
+    palette: { primary: 0x103a8a, secondary: 0x3a9df2, accent: 0xc8f0ff },
+    desc: 'The drowned king crowned at last — every tide bends toward it like a courtier.', captureBase: 0, scale: 2.05 }),
+  S({ id: 'oceanarch', name: 'Oceanarch', type: 'Tide', stage: 'Terra', archetype: 'serpent',
+    base: stats(344, 108, 112, 88, 70, 92), growth: stats(18, 6.2, 6.2, 5.0, 5.0, 5.8),
+    techs: [{ level: 1, tech: 'deluge_tempest' }, { level: 1, tech: 'abyssal_drown' }, { level: 1, tech: 'ice_spear' }],
+    ascendsTo: { species: 'abyssophar', kind: 'Transcendent', level: 80, item: 'transcend_sigil' },
+    palette: { primary: 0x0a5ab0, secondary: 0x6ad0f2, accent: 0xeafaff },
+    desc: 'Terra City\'s tide-engineers raised a whole drowned ocean into a single body of crystalline water.', captureBase: 0, scale: 2.2 }),
+  S({ id: 'abyssophar', name: 'Abyssophar', type: 'Tide', stage: 'Transcendent', archetype: 'serpent',
+    base: stats(402, 122, 134, 102, 82, 108), growth: stats(20, 6.8, 6.8, 5.6, 5.6, 6.4),
+    techs: [{ level: 1, tech: 'abyssal_drown' }, { level: 1, tech: 'deluge_tempest' }, { level: 1, tech: 'tidal_apocalypse' }],
+    ascendsTo: { species: 'maremortis', kind: 'Aether', level: 90, item: 'aether_shard' },
+    palette: { primary: 0x081a3a, secondary: 0x2a8ad9, accent: 0xff9ad2 },
+    desc: 'It has transcended the sea and become the pressure of the deep itself — cold, patient, absolute.', captureBase: 0, scale: 2.15 }),
+  S({ id: 'maremortis', name: 'Maremortis', type: 'Tide', stage: 'Aether', archetype: 'serpent', isBoss: true,
+    base: stats(470, 138, 158, 124, 92, 124), growth: stats(22, 7.4, 7.6, 6.2, 6.0, 7.0),
+    techs: [{ level: 1, tech: 'abyssal_drown' }, { level: 1, tech: 'tidal_apocalypse' }, { level: 1, tech: 'deluge_tempest' }],
+    palette: { primary: 0x020a2a, secondary: 0x1a6ad0, accent: 0xff9ad2 },
+    desc: 'The dead sea given will — a leviathan of drowned starlight that ends worlds by simply rising.', captureBase: 0, scale: 2.5 }),
+
+  // ---- VERDANT: Eldergrove ↘ Thornmaw ; Yggdranox → Sylvanarch → Terravine → Genesophar → Worldwither
+  S({ id: 'thornmaw', name: 'Thornmaw', type: 'Verdant', stage: 'Split', archetype: 'brute',
+    base: stats(290, 70, 78, 76, 36, 58), growth: stats(17, 4.8, 5.2, 5.4, 3.0, 4.4),
+    techs: [{ level: 1, tech: 'elder_wrath' }, { level: 1, tech: 'bramble_cage' }, { level: 45, tech: 'nature_judgment' }],
+    palette: { primary: 0x1e3a14, secondary: 0x6a2a2a, accent: 0x9a5af2 },
+    desc: 'Eldergrove\'s carnivorous road — a maw-of-thorns grove that hunts what wanders too close.', captureBase: 0, scale: 2.05 }),
+  S({ id: 'sylvanarch', name: 'Sylvanarch', type: 'Verdant', stage: 'Special', archetype: 'beast',
+    base: stats(300, 96, 92, 78, 60, 78), growth: stats(16, 5.4, 5.2, 4.8, 4.2, 4.8),
+    techs: [{ level: 1, tech: 'elder_wrath' }, { level: 1, tech: 'nature_judgment' }, { level: 1, tech: 'bramble_cage' }],
+    ascendsTo: { species: 'terravine', kind: 'Terra', level: 62, item: 'terra_catalyst', flag: 'terra_visited' },
+    palette: { primary: 0x2a8a3a, secondary: 0xe8f0a0, accent: 0xfff0c8 },
+    desc: 'The forest given a single body and a single will — a radiant stag-spirit crowned in dawnleaf.', captureBase: 0, scale: 2.05 }),
+  S({ id: 'terravine', name: 'Terravine', type: 'Verdant', stage: 'Terra', archetype: 'brute',
+    base: stats(352, 106, 116, 102, 64, 84), growth: stats(19, 6.0, 6.2, 5.6, 4.4, 5.2),
+    techs: [{ level: 1, tech: 'nature_judgment' }, { level: 1, tech: 'elder_wrath' }, { level: 1, tech: 'earthquake_tech' }],
+    ascendsTo: { species: 'genesophar', kind: 'Transcendent', level: 80, item: 'transcend_sigil' },
+    palette: { primary: 0x3a6a1a, secondary: 0xb0865a, accent: 0xffe06a },
+    desc: 'Rooted into Terra City\'s bedrock and pulled free again — a titan of worldstone and unkillable vine.', captureBase: 0, scale: 2.25 }),
+  S({ id: 'genesophar', name: 'Genesophar', type: 'Verdant', stage: 'Transcendent', archetype: 'shell',
+    base: stats(414, 118, 132, 122, 74, 100), growth: stats(21, 6.4, 6.6, 6.2, 5.0, 5.8),
+    techs: [{ level: 1, tech: 'nature_judgment' }, { level: 1, tech: 'elder_wrath' }, { level: 1, tech: 'world_ender' }],
+    ascendsTo: { species: 'worldwither', kind: 'Aether', level: 90, item: 'aether_shard' },
+    palette: { primary: 0x1a4e1a, secondary: 0xe8d28a, accent: 0xff9ad2 },
+    desc: 'A shelled world-garden that carries an entire biome on its back, blooming and dying in a single breath.', captureBase: 0, scale: 2.35 }),
+  S({ id: 'worldwither', name: 'Worldwither', type: 'Verdant', stage: 'Aether', archetype: 'brute', isBoss: true,
+    base: stats(480, 132, 168, 132, 84, 110), growth: stats(23, 7.0, 8.0, 6.6, 5.6, 6.2),
+    techs: [{ level: 1, tech: 'nature_judgment' }, { level: 1, tech: 'world_ender' }, { level: 1, tech: 'elder_wrath' }],
+    palette: { primary: 0x102e10, secondary: 0x5a2a6a, accent: 0xff9ad2 },
+    desc: 'The world-tree\'s shadow self — it does not grow life, it composts it. Continents go to seed in its wake.', captureBase: 0, scale: 2.55 }),
+
+  // ---- VOLT: Fulgurex ↘ Voltgolem ; Raidenjin → Stormarch → Galvanyx → Voltranscend → Dynastorm
+  S({ id: 'voltgolem', name: 'Voltgolem', type: 'Volt', stage: 'Split', archetype: 'brute',
+    base: stats(262, 78, 80, 72, 50, 48), growth: stats(15, 5.0, 5.2, 4.6, 4.0, 3.6),
+    techs: [{ level: 1, tech: 'storm_lance' }, { level: 1, tech: 'thunder_dominion' }, { level: 45, tech: 'volt_singularity' }],
+    palette: { primary: 0x3a3a18, secondary: 0xf2d23a, accent: 0x2a5a9e },
+    desc: 'Fulgurex\'s grounded road — a colossus of fused lightning-glass that walks like rolling thunder.', captureBase: 0, scale: 2.05 }),
+  S({ id: 'stormarch', name: 'Stormarch', type: 'Volt', stage: 'Special', archetype: 'avian',
+    base: stats(290, 100, 96, 64, 78, 76), growth: stats(15, 5.6, 5.6, 4.0, 5.0, 4.8),
+    techs: [{ level: 1, tech: 'thunder_dominion' }, { level: 1, tech: 'volt_singularity' }, { level: 1, tech: 'storm_lance' }],
+    ascendsTo: { species: 'galvanyx', kind: 'Terra', level: 62, item: 'terra_catalyst', flag: 'terra_visited' },
+    palette: { primary: 0xf2d23a, secondary: 0xfff0a0, accent: 0xeafaff },
+    desc: 'The first thunderclap crowned — a storm-roc whose wingbeats rewrite the weather for a hundred leagues.', captureBase: 0, scale: 2.0 }),
+  S({ id: 'galvanyx', name: 'Galvanyx', type: 'Volt', stage: 'Terra', archetype: 'beast',
+    base: stats(338, 110, 118, 80, 86, 86), growth: stats(17, 6.2, 6.4, 4.6, 5.4, 5.2),
+    techs: [{ level: 1, tech: 'volt_singularity' }, { level: 1, tech: 'thunder_dominion' }, { level: 1, tech: 'plasma_blast' }],
+    ascendsTo: { species: 'voltranscend', kind: 'Transcendent', level: 80, item: 'transcend_sigil' },
+    palette: { primary: 0xc8a81e, secondary: 0xf2e06e, accent: 0xb0865a },
+    desc: 'Wound through Terra City\'s great dynamo and pulled out still spinning — a beast that is mostly captured storm.', captureBase: 0, scale: 2.15 }),
+  S({ id: 'voltranscend', name: 'Voltranscend', type: 'Volt', stage: 'Transcendent', archetype: 'avian',
+    base: stats(394, 124, 140, 96, 102, 98), growth: stats(19, 6.8, 7.2, 5.2, 6.2, 5.8),
+    techs: [{ level: 1, tech: 'volt_singularity' }, { level: 1, tech: 'thunder_dominion' }, { level: 1, tech: 'storm_god_wrath' }],
+    ascendsTo: { species: 'dynastorm', kind: 'Aether', level: 90, item: 'aether_shard' },
+    palette: { primary: 0xfff04a, secondary: 0xffffff, accent: 0xff9ad2 },
+    desc: 'Lightning that learned it did not need a sky. It strikes from everywhere and nowhere at once.', captureBase: 0, scale: 2.05 }),
+  S({ id: 'dynastorm', name: 'Dynastorm', type: 'Volt', stage: 'Aether', archetype: 'avian', isBoss: true,
+    base: stats(456, 138, 168, 110, 120, 110), growth: stats(21, 7.4, 8.2, 5.8, 6.8, 6.2),
+    techs: [{ level: 1, tech: 'volt_singularity' }, { level: 1, tech: 'storm_god_wrath' }, { level: 1, tech: 'thunder_dominion' }],
+    palette: { primary: 0xffe01a, secondary: 0x4a5cff, accent: 0xff9ad2 },
+    desc: 'A god-storm wearing the shape of a bird. To stand beneath it is to be the lightning rod of the world.', captureBase: 0, scale: 2.45 }),
+
+  // ---- GALE: Tempestrix ↘ Cyclonaut ; Zephyrax → Aeronarch → Stratoterra → Cosmovault → Voidtempest
+  S({ id: 'cyclonaut', name: 'Cyclonaut', type: 'Gale', stage: 'Split', archetype: 'avian',
+    base: stats(252, 84, 74, 50, 86, 58), growth: stats(14, 5.2, 5.2, 3.6, 5.4, 4.4),
+    techs: [{ level: 1, tech: 'sky_sunder' }, { level: 1, tech: 'razor_cyclone' }, { level: 45, tech: 'tempest_gale' }],
+    palette: { primary: 0x14403a, secondary: 0x4ec4b0, accent: 0x7a8af2 },
+    desc: 'Tempestrix\'s far-roaming road — a sky-corsair that rides the jetstream between continents and never lands.', captureBase: 0, scale: 2.0 }),
+  S({ id: 'aeronarch', name: 'Aeronarch', type: 'Gale', stage: 'Special', archetype: 'avian',
+    base: stats(284, 100, 90, 62, 96, 74), growth: stats(15, 5.6, 5.4, 4.0, 5.6, 4.8),
+    techs: [{ level: 1, tech: 'sky_sunder' }, { level: 1, tech: 'tempest_gale' }, { level: 1, tech: 'razor_cyclone' }],
+    ascendsTo: { species: 'stratoterra', kind: 'Terra', level: 62, item: 'terra_catalyst', flag: 'terra_visited' },
+    palette: { primary: 0x6ad0f2, secondary: 0xffffff, accent: 0xfff0c8 },
+    desc: 'Monarch of the upper sky enthroned — its wings span the seam where atmosphere becomes space.', captureBase: 0, scale: 2.05 }),
+  S({ id: 'stratoterra', name: 'Stratoterra', type: 'Gale', stage: 'Terra', archetype: 'avian',
+    base: stats(330, 110, 110, 80, 102, 84), growth: stats(17, 6.2, 6.0, 5.0, 6.0, 5.2),
+    techs: [{ level: 1, tech: 'tempest_gale' }, { level: 1, tech: 'sky_sunder' }, { level: 1, tech: 'hurricane_slash_tech' }],
+    ascendsTo: { species: 'cosmovault', kind: 'Transcendent', level: 80, item: 'transcend_sigil' },
+    palette: { primary: 0x3a8ad0, secondary: 0xb0865a, accent: 0xeafaff },
+    desc: 'Terra City anchored a hurricane to a mountain and this is what flew off the peak — sky given ballast.', captureBase: 0, scale: 2.2 }),
+  S({ id: 'cosmovault', name: 'Cosmovault', type: 'Gale', stage: 'Transcendent', archetype: 'sprite',
+    base: stats(388, 124, 128, 92, 110, 104), growth: stats(19, 6.8, 6.6, 5.4, 6.4, 6.0),
+    techs: [{ level: 1, tech: 'sky_sunder' }, { level: 1, tech: 'tempest_gale' }, { level: 1, tech: 'void_maelstrom' }],
+    ascendsTo: { species: 'voidtempest', kind: 'Aether', level: 90, item: 'aether_shard' },
+    palette: { primary: 0x2a3a8a, secondary: 0x9ad0ff, accent: 0xff9ad2 },
+    desc: 'It has risen past the last cloud into the cold vault of space and brought the silence back down with it.', captureBase: 0, scale: 2.1 }),
+  S({ id: 'voidtempest', name: 'Voidtempest', type: 'Gale', stage: 'Aether', archetype: 'avian', isBoss: true,
+    base: stats(452, 138, 152, 108, 128, 118), growth: stats(21, 7.4, 7.4, 5.8, 7.0, 6.6),
+    techs: [{ level: 1, tech: 'void_maelstrom' }, { level: 1, tech: 'sky_sunder' }, { level: 1, tech: 'tempest_gale' }],
+    palette: { primary: 0x0a1230, secondary: 0x5a8af2, accent: 0xff9ad2 },
+    desc: 'A storm of folded space and dead starlight. Where it passes, the sky forgets which way is down.', captureBase: 0, scale: 2.45 }),
+
+  // ---- UMBRA: Umbrelisk ↘ Nyxmaw ; Chthonix → Umbrarch → Tenebraterra → Voidsovereign → Nihilumbra
+  S({ id: 'nyxmaw', name: 'Nyxmaw', type: 'Umbra', stage: 'Split', archetype: 'serpent',
+    base: stats(258, 86, 78, 56, 58, 70), growth: stats(15, 5.2, 5.2, 3.8, 4.4, 5.0),
+    techs: [{ level: 1, tech: 'void_fang' }, { level: 1, tech: 'eclipse_requiem' }, { level: 45, tech: 'void_extinction' }],
+    palette: { primary: 0x140a28, secondary: 0x4a2a8a, accent: 0x9adff2 },
+    desc: 'Umbrelisk\'s devouring road — a frost-shadow serpent whose bite leaves a cold that never thaws.', captureBase: 0, scale: 2.0 }),
+  S({ id: 'umbrarch', name: 'Umbrarch', type: 'Umbra', stage: 'Special', archetype: 'serpent',
+    base: stats(296, 100, 94, 70, 64, 80), growth: stats(16, 5.6, 5.4, 4.2, 4.6, 5.2),
+    techs: [{ level: 1, tech: 'eclipse_requiem' }, { level: 1, tech: 'void_extinction' }, { level: 1, tech: 'void_fang' }],
+    ascendsTo: { species: 'tenebraterra', kind: 'Terra', level: 62, item: 'terra_catalyst', flag: 'terra_visited' },
+    palette: { primary: 0x3a1a6a, secondary: 0x8a4ae0, accent: 0xf2e8b8 },
+    desc: 'The shadow cast by nothing, crowned — it wears a halo of stolen light it refuses to give back.', captureBase: 0, scale: 2.05 }),
+  S({ id: 'tenebraterra', name: 'Tenebraterra', type: 'Umbra', stage: 'Terra', archetype: 'brute',
+    base: stats(346, 108, 116, 90, 66, 88), growth: stats(18, 6.2, 6.4, 5.0, 4.8, 5.6),
+    techs: [{ level: 1, tech: 'void_extinction' }, { level: 1, tech: 'eclipse_requiem' }, { level: 1, tech: 'doom_gaze' }],
+    ascendsTo: { species: 'voidsovereign', kind: 'Transcendent', level: 80, item: 'transcend_sigil' },
+    palette: { primary: 0x241038, secondary: 0x5a2ab0, accent: 0xb0865a },
+    desc: 'Quarried from the dark beneath Terra City\'s deepest vault — a brute of compressed night and worldstone.', captureBase: 0, scale: 2.2 }),
+  S({ id: 'voidsovereign', name: 'Voidsovereign', type: 'Umbra', stage: 'Transcendent', archetype: 'serpent',
+    base: stats(402, 122, 138, 100, 80, 106), growth: stats(20, 6.8, 7.0, 5.6, 5.4, 6.2),
+    techs: [{ level: 1, tech: 'void_extinction' }, { level: 1, tech: 'eclipse_requiem' }, { level: 1, tech: 'oblivion_eclipse' }],
+    ascendsTo: { species: 'nihilumbra', kind: 'Aether', level: 90, item: 'aether_shard' },
+    palette: { primary: 0x12081f, secondary: 0x6a2ac0, accent: 0xff9ad2 },
+    desc: 'It has transcended shadow and become absence itself — a sovereign of the space where light has never been.', captureBase: 0, scale: 2.15 }),
+  S({ id: 'nihilumbra', name: 'Nihilumbra', type: 'Umbra', stage: 'Aether', archetype: 'serpent', isBoss: true,
+    base: stats(468, 138, 166, 118, 90, 120), growth: stats(22, 7.4, 8.0, 6.2, 5.8, 6.8),
+    techs: [{ level: 1, tech: 'oblivion_eclipse' }, { level: 1, tech: 'void_extinction' }, { level: 1, tech: 'eclipse_requiem' }],
+    palette: { primary: 0x050310, secondary: 0x4a1aa0, accent: 0xff9ad2 },
+    desc: 'The last dark — the one that waits after every star. It does not hunger; it simply ends.', captureBase: 0, scale: 2.5 }),
 ] as SpeciesDef[]).map(s => [s.id, s]));
 
 // ---------------- Items ----------------
@@ -1937,6 +2298,10 @@ export const ITEMS: Record<string, ItemDef> = Object.fromEntries([
   I('storm_amber', 'Storm-Touched Amber', 'relic', 0, 0, 'Fossil resin from the Thunderfen Mire with a living spark sealed inside. Historian Veyl at the University would trade a great deal to study one.'),
   I('sea_chart', 'Aurelian Sea-Chart', 'relic', 0, 0, 'Historian Veyl\'s hand-corrected chart of the western sea. Agdao Island — the Cradle of Tamers — is inked at its heart. Your overworld map now knows the way.'),
   I('stormheart_coil', 'Stormheart Coil', 'relic', 0, 0, 'A grounding coil wound by Greggy the Stormheart himself. It hums faintly when held toward the center of the world.'),
+  // ascension catalysts — fuel the high-tier evolutions (Terra / Transcendence / Aether)
+  I('terra_catalyst', 'Terra Catalyst', 'relic', 0, 0, 'A core of crystallized world-stone, quarried only in Terra City. A Guardian in its Special form can draw on it to undergo Terra Evolution.'),
+  I('transcend_sigil', 'Transcendence Sigil', 'relic', 0, 0, 'A sigil that holds the memory of every form a Guardian has ever worn. It lets a Terra-evolved Guardian of Lv80+ shed its mortal shape and Transcend.'),
+  I('aether_shard', 'Aether Shard', 'relic', 0, 0, 'A mote of the raw stuff the Big Three\'s Nine are made of. A Transcendent Guardian can shatter one to ascend — once — into an Aether form.'),
   // Act V — the Foretales arc
   I('override_ledger', 'Override Ledger', 'relic', 0, 0, 'Three proofs bound in river-twine: Esta\'s relay logs stamped FT-PRIME, Dalisay\'s unedited festival crystal, and a Foretales stringer\'s assignment book. Together they say one thing: the news is written before it happens.'),
   I('continuity_reel', 'The Continuity Reel', 'relic', 0, 0, 'The Mirrorhouse\'s master spool — sixteen years of front pages filed BEFORE the events they report. The last frame is a standing directive on the Big Three: "GLAZE. DO NOT TOUCH. NOT YET. SOON."'),
@@ -2115,6 +2480,19 @@ export const DUNGEONS: DungeonDef[] = [
     pool: ['frostfin', 'coralkit', 'reefrider', 'pearlance', 'jellymote', 'abyssarch', 'seaturt', 'frostfin', 'wavepup'],
     boss: 'vormaela', bossLevel: 36, rewardShards: 4500,
     desc: 'Hyujon\'s flooded mag-rail underworks. Rusted rails, drowned machinery, and the Communion Tideling-Mother Vormaela\'s Echo lurking in the deep.', coords: [52, 12], quest: true },
+  // ENDGAME — Aether trials, opened once a Tamer has walked Terra City. The
+  // bosses here are uncatchable Aether-tier world-enders (captureBase 0); the
+  // wild pool holds high Split/Special forms worth hunting on the way down.
+  { id: 'emberthrone', name: 'The Emberthrone', floors: 5, levelRange: [70, 84], theme: 'cavern',
+    pool: ['magmaroth', 'vulkragon', 'pyrelisk', 'coalossus', 'lavaserpent', 'heliarch'],
+    boss: 'solmageddon', bossLevel: 92, rewardShards: 14000, unlockFlag: 'terra_visited',
+    drop: { item: 'transcend_sigil', chance: 1.0, max: 1 },
+    desc: 'A throne of magma in the grave of a dead star. Something vast is waking in the heat — and it is not glad of company.', coords: [-46, -10], quest: true },
+  { id: 'lastdark', name: 'The Last Dark', floors: 5, levelRange: [74, 88], theme: 'vault',
+    pool: ['nyxmaw', 'umbraknell', 'voidgoyle', 'shadowstalker', 'sarcophang', 'umbrarch'],
+    boss: 'nihilumbra', bossLevel: 95, rewardShards: 16000, unlockFlag: 'terra_visited',
+    drop: { item: 'aether_shard', chance: 1.0, max: 1 },
+    desc: 'Beyond the deepest vault, a door opens onto nothing at all. The cold here remembers the first night, before there were stars to lose.', coords: [-60, 150], quest: true },
 ];
 
 export const SHOP_STOCK = ['tonic', 'tonic_plus', 'soda', 'soda_plus', 'soda_max', 'berry', 'honey_roll', 'star_treat', 'aether_confit', 'revive_leaf', 'revive_bloom', 'cell', 'cell_plus', 'cell_max', 'plating', 'plating_plus', 'elixir'];

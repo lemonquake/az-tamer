@@ -29,6 +29,7 @@ import { worldOrbit } from './camorbit';
 import { tagNpc, crowdName, attachNpcPicker } from './npccard';
 import { runBasicsTutorial, isTutorialOpen } from './tutorial';
 import { runCinematicScene } from './main';
+import { perf } from './perf';
 
 const ROOM_TITLES: Record<string, string> = {
   lobby: 'University — Grand Lobby', cafeteria: 'University — Cafeteria',
@@ -165,6 +166,15 @@ export class University {
 
   private rooms = new Map<RoomId, RoomData>();
   private current: RoomId = 'lobby';
+  // per-frame perf: cache point lights + ambient props per room so update()
+  // never re-traverses the whole room graph, and cap visible lights by tier.
+  private litScene: THREE.Scene | null = null;
+  private scenePointLights: THREE.PointLight[] = [];
+  private lightRankTimer = 0;
+  private lastRankX = Infinity;
+  private lastRankZ = Infinity;
+  private ambientScene: THREE.Scene | null = null;
+  private ambientProps: THREE.Object3D[] = [];
   // lobby guidance beacons — Officers' Hall until pledged, then the Grand Doors out
   private officersBeacon: BeaconRig | null = null;
   private doorsBeacon: BeaconRig | null = null;
@@ -2253,9 +2263,38 @@ export class University {
     this.camera.position.lerp(worldOrbit.orbited(camGoal, lookT), Math.min(1, dt * 4));
     this.camera.lookAt(lookT);
 
-    // ambient animation
+    // ---- point-light budget (nearest perf.lightBudget stay lit) ----
+    if (r.scene !== this.litScene) {
+      this.litScene = r.scene;
+      this.scenePointLights = [];
+      r.scene.traverse(o => { if ((o as THREE.PointLight).isPointLight) this.scenePointLights.push(o as THREE.PointLight); });
+      this.lastRankX = this.lastRankZ = Infinity;
+    }
+    const budget = perf.lightBudget;
+    if (this.scenePointLights.length > budget) {
+      const tp = this.tamer.position;
+      this.lightRankTimer -= dt;
+      const moved = Math.hypot(tp.x - this.lastRankX, tp.z - this.lastRankZ) > 1.5;
+      if (moved || this.lightRankTimer <= 0) {
+        this.lightRankTimer = 0.4;
+        this.lastRankX = tp.x; this.lastRankZ = tp.z;
+        const ranked = this.scenePointLights
+          .map(l => { const e = l.matrixWorld.elements; return { l, score: Math.hypot(e[12] - tp.x, e[14] - tp.z) }; })
+          .sort((a, b) => a.score - b.score);
+        ranked.forEach((rk, i) => { rk.l.visible = i < budget; });
+      }
+    }
+
+    // ambient animation — iterate a cached prop list, not a full-scene traverse
     const now = performance.now();
-    r.scene.traverse(o => {
+    if (r.scene !== this.ambientScene) {
+      this.ambientScene = r.scene;
+      this.ambientProps = [];
+      r.scene.traverse(o => {
+        if (o.name === 'flame' || o.name === 'steam' || o.name === 'spinglobe' || o.name === 'wisp' || o.name === 'holo' || o.name === 'dronefloat' || o.name === 'scanline') this.ambientProps.push(o);
+      });
+    }
+    for (const o of this.ambientProps) {
       if (o.name === 'flame') o.scale.y = 1 + Math.sin(now * 0.008 + o.position.x * 3) * 0.18;
       if (o.name === 'steam') {
         o.position.y = 1.75 + Math.sin(now * 0.003 + o.position.x) * 0.08;
@@ -2278,7 +2317,7 @@ export class University {
       if (o.name === 'scanline') {
         o.position.y = 0.6 + ((now * 0.0007 + ((o.userData.ph as number) ?? 0)) % 1) * 2.2;
       }
-    });
+    }
 
     // ---- labeled room minimap ----
     const stripLabel = (label: string) =>

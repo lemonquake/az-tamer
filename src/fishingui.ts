@@ -84,6 +84,8 @@ export function announceRank(message: string, kind: 'gold' | 'rainbow' = 'gold')
 //  THE ANIMATED SCORE LOG
 // ============================================================
 export interface CatchSummaryData {
+  player: Player;
+  fs: FishingState;
   sp: SpeciesDef;
   weightKg: number; lengthCm: number;
   score: ScoreBreakdown;
@@ -201,6 +203,8 @@ export function showCatchSummary(data: CatchSummaryData): Promise<'again' | 'qui
         </div>
         <div class="fso-actions" style="display:none">
           <button class="ui-btn primary" id="fso-again">🎣 Cast Again</button>
+          <button class="ui-btn" id="fso-board">🏆 Leaderboard</button>
+          <button class="ui-btn" id="fso-book">📖 Fish Book</button>
           <button class="ui-btn" id="fso-quit">🚪 Quit Fishing</button>
         </div>
         <div class="fso-skip">click to speed up ▸</div>
@@ -239,6 +243,15 @@ export function showCatchSummary(data: CatchSummaryData): Promise<'again' | 'qui
       requestAnimationFrame(() => { rewards.classList.add('show'); actions.classList.add('show'); });
       (overlay.querySelector('#fso-again') as HTMLElement).onclick = () => { cleanup(); resolve('again'); };
       (overlay.querySelector('#fso-quit') as HTMLElement).onclick = () => { cleanup(); resolve('quit'); };
+      // open a hub tab on top of the summary, then return to it for the final choice
+      const openHub = async (tab: HubTab, title: string) => {
+        sfx('open');
+        overlay.style.display = 'none';
+        await openFishHub(data.player, data.fs, { tab, canBuy: false, title });
+        overlay.style.display = 'flex';
+      };
+      (overlay.querySelector('#fso-board') as HTMLElement).onclick = () => { void openHub('board', '🏆 Leaderboard'); };
+      (overlay.querySelector('#fso-book') as HTMLElement).onclick = () => { void openHub('codex', '📖 Fish Book'); };
     };
 
     const cleanup = () => { sfx('confirm'); overlay.classList.add('out'); setTimeout(() => overlay.remove(), 300); };

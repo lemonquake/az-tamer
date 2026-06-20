@@ -37,6 +37,7 @@ import { runCinematicScene } from './main';
 import { worldOrbit } from './camorbit';
 import { worldClock, DayNightRig } from './daynight';
 import { tagNpc, attachNpcPicker } from './npccard';
+import { perf } from './perf';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
 
@@ -130,9 +131,11 @@ export class NewSalmonan {
   private riverTex: THREE.Texture | null = null;
   private dayNight: DayNightRig | null = null;
   // light budget: the forward renderer pays for every visible point light in
-  // every shader — only the nearest few stay lit each frame (see town.ts)
-  private static readonly MAX_POINT_LIGHTS = 8;
+  // every shader — only the nearest perf.lightBudget stay lit (see town.ts)
   private scenePointLights: THREE.PointLight[] = [];
+  private lightRankTimer = 0;
+  private lastRankX = Infinity;
+  private lastRankZ = Infinity;
   private clouds: THREE.Group[] = [];
   private dragonflies: { grp: THREE.Group; anchor: THREE.Vector3; phase: number; wingL: THREE.Object3D; wingR: THREE.Object3D }[] = [];
   private envTick: ((dt: number) => void)[] = [];
@@ -1307,15 +1310,22 @@ export class NewSalmonan {
     if (this.scenePointLights.length === 0) {
       this.scene.traverse(o => { if ((o as THREE.PointLight).isPointLight) this.scenePointLights.push(o as THREE.PointLight); });
     }
-    if (this.scenePointLights.length > NewSalmonan.MAX_POINT_LIGHTS) {
+    const budget = perf.lightBudget;
+    if (this.scenePointLights.length > budget) {
       const tp = this.tamer.position;
-      this.scenePointLights
-        .map(l => {
-          const e = l.matrixWorld.elements;
-          return { l, score: Math.hypot(e[12] - tp.x, e[14] - tp.z) };
-        })
-        .sort((a2, b2) => a2.score - b2.score)
-        .forEach((r, i) => { r.l.visible = i < NewSalmonan.MAX_POINT_LIGHTS; });
+      this.lightRankTimer -= dt;
+      const moved = Math.hypot(tp.x - this.lastRankX, tp.z - this.lastRankZ) > 1.5;
+      if (moved || this.lightRankTimer <= 0) {
+        this.lightRankTimer = 0.4;
+        this.lastRankX = tp.x; this.lastRankZ = tp.z;
+        this.scenePointLights
+          .map(l => {
+            const e = l.matrixWorld.elements;
+            return { l, score: Math.hypot(e[12] - tp.x, e[14] - tp.z) };
+          })
+          .sort((a2, b2) => a2.score - b2.score)
+          .forEach((r, i) => { r.l.visible = i < budget; });
+      }
     }
 
     const speed = 5.2;

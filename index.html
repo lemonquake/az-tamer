@@ -1564,9 +1564,10 @@
     .fso-rewards.show { opacity:1; transform:none; }
     .fso-rewards .rw { font-size:14px; } .fso-rewards b { color:var(--ui-gold); }
     .fso-rewards .lvlup { color:var(--ui-green); font-weight:800; margin-left:6px; }
-    .fso-actions { display:flex; gap:12px; justify-content:center; margin-top:16px; opacity:0; transition:opacity 0.4s; }
+    .fso-actions { display:flex; flex-wrap:wrap; gap:10px; justify-content:center; margin-top:16px; opacity:0; transition:opacity 0.4s; }
     .fso-actions.show { opacity:1; }
-    .fso-actions .ui-btn { font-size:16px; padding:12px 22px; text-align:center; }
+    .fso-actions .ui-btn { font-size:15px; padding:11px 18px; text-align:center; }
+    .fso-actions .ui-btn.primary { flex-basis:100%; font-size:16px; }
     .fso-skip { text-align:center; font-size:11px; color:var(--ui-dim); margin-top:10px; }
     .confetti { position:absolute; width:9px; height:14px; border-radius:2px; z-index:2; animation: confettiFall 1.5s ease-in forwards; }
 

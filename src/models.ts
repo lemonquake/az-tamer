@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { SPECIES, TYPE_COLORS, CRAWLER_PARTS, PAINT_JOBS, type Archetype, type CrawlerSlot, type PaintJob } from './data';
 import { BESPOKE, type BespokeBuild } from './bestiary';
 import type { GuardianCustomization } from './state';
+import { perf } from './perf';
 
 // ---------------- tween system ----------------
 type TweenFn = (t: number) => void;
@@ -1283,8 +1284,9 @@ export function makeGuardian(speciesId: string, custom?: GuardianCustomization):
     }
   }
 
-  // Aether-stage beings carry a radiant double-halo and orbit motes
-  if (def.stage === 'Aether') {
+  // Top-tier ascensions (Terra / Transcendence / Aether) carry a radiant
+  // double-halo and orbiting motes — a visible mark of a form beyond Apex.
+  if (def.stage === 'Aether' || def.stage === 'Transcendent' || def.stage === 'Terra') {
     const auraMat = new THREE.MeshStandardMaterial({
       color: def.palette.accent, emissive: glow, emissiveIntensity: 2.2, roughness: 0.05,
       transparent: true, opacity: 0.9,
@@ -2338,21 +2340,28 @@ export function updateVoxelHuman(g: THREE.Group, walking: boolean, dt: number): 
 }
 
 // ---------------- shared scene helpers ----------------
+let _renderer: THREE.WebGLRenderer | null = null;
+/** The one live renderer (set by makeRenderer). Battle scenes need it to pre-compile shaders. */
+export function getRenderer(): THREE.WebGLRenderer | null { return _renderer; }
+
 export function makeRenderer(canvas: HTMLCanvasElement): THREE.WebGLRenderer {
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  // AA is decided once, here — it can't be toggled without recreating the GL
+  // context, so it's keyed off the detected tier. Pixel ratio / shadows are
+  // owned by the perf governor and retuned live via perf.attachRenderer().
+  const renderer = new THREE.WebGLRenderer({
+    canvas,
+    antialias: perf.wantAA(),
+    powerPreference: 'high-performance',
+    stencil: false,
+  });
   renderer.setSize(window.innerWidth, window.innerHeight);
-  
-  const isLow = localStorage.getItem('graphicsMode') === 'low';
-  if (isLow) {
-    renderer.shadowMap.enabled = false;
-    renderer.setPixelRatio(1.0);
-  } else {
-    renderer.shadowMap.enabled = true;
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  }
-  
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  // Shadows are refreshed on a cadence (see the frame loop), not every frame —
+  // the city scenes are near-static, so a per-frame shadow re-render is wasted.
+  renderer.shadowMap.autoUpdate = false;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
+  perf.attachRenderer(renderer); // sets pixelRatio + shadows from the current quality level
+  _renderer = renderer;
   return renderer;
 }
 
@@ -2390,5 +2399,89 @@ export function makeFloatingDamageText(scene: THREE.Scene, pos: THREE.Vector3, t
     scene.remove(sprite);
     sprite.material.map?.dispose();
     sprite.material.dispose();
+  });
+}
+
+/**
+ * An over-the-top, blood-spattered "CRITICAL!" banner that slams in above the
+ * damage number on a critical hit: a fiery-to-blood gradient, jagged black
+ * outline, dripping gore and a punchy overshoot-with-shake animation.
+ */
+export function makeCriticalText(scene: THREE.Scene, pos: THREE.Vector3): void {
+  const c = document.createElement('canvas');
+  c.width = 512; c.height = 224;
+  const ctx = c.getContext('2d')!;
+  const text = 'CRITICAL!';
+  const cx = 256, baseY = 112;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+
+  // --- blood drips hanging beneath the letters (drawn first, behind the text) ---
+  ctx.fillStyle = '#6b0000';
+  const drips: [number, number, number][] = [
+    [-156, 50, 9], [-72, 32, 7], [12, 64, 10], [98, 36, 8], [168, 54, 9],
+  ];
+  for (const [dx, len, w] of drips) {
+    const x = cx + dx, y = baseY + 8;
+    ctx.beginPath();
+    ctx.moveTo(x - w, y);
+    ctx.quadraticCurveTo(x, y + len * 0.6, x, y + len);
+    ctx.quadraticCurveTo(x, y + len * 0.6, x + w, y);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(x, y + len, w * 0.85, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // --- the word: heavy jagged outline, then a dawn-to-blood gradient fill ---
+  ctx.font = '900 104px "Arial Black", "Trebuchet MS", sans-serif';
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = 18; ctx.strokeStyle = '#2b0000';
+  ctx.strokeText(text, cx, baseY);
+  ctx.lineWidth = 8; ctx.strokeStyle = '#000';
+  ctx.strokeText(text, cx, baseY);
+  const grad = ctx.createLinearGradient(0, baseY - 84, 0, baseY + 12);
+  grad.addColorStop(0, '#ffe14d');
+  grad.addColorStop(0.38, '#ff4d3a');
+  grad.addColorStop(1, '#a30000');
+  ctx.fillStyle = grad;
+  ctx.fillText(text, cx, baseY);
+
+  // --- spatter ---
+  ctx.fillStyle = 'rgba(150,0,0,0.85)';
+  const spatter: [number, number, number][] = [
+    [54, 40, 5], [452, 52, 6], [120, 168, 4], [402, 176, 5], [256, 26, 4], [320, 166, 3], [196, 30, 3],
+  ];
+  for (const [sx, sy, r] of spatter) {
+    ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2); ctx.fill();
+  }
+
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
+  const sprite = new THREE.Sprite(mat);
+  sprite.renderOrder = 999;
+  sprite.position.copy(pos);
+  scene.add(sprite);
+
+  const baseW = 4.3, baseH = baseW * (c.height / c.width); // keep aspect ratio
+  const startY = pos.y;
+  tween(1.2, t => {
+    // punch-in with an overshoot bump, then settle
+    let s: number;
+    if (t < 0.18) s = t / 0.18;
+    else if (t < 0.32) s = 1 + Math.sin((t - 0.18) / 0.14 * Math.PI) * 0.24;
+    else s = 1;
+    // an angry shake that decays over the first third
+    const shake = t < 0.35 ? (1 - t / 0.35) : 0;
+    sprite.position.set(pos.x + Math.sin(t * 70) * 0.13 * shake, startY + Math.max(0, t - 0.6) * 0.9, pos.z);
+    sprite.material.rotation = Math.sin(t * 52) * 0.05 * shake;
+    sprite.material.opacity = t < 0.72 ? 1 : Math.max(0, 1 - (t - 0.72) / 0.28);
+    sprite.scale.set(baseW * s, baseH * s, 1);
+  }).then(() => {
+    scene.remove(sprite);
+    mat.map?.dispose();
+    mat.dispose();
   });
 }

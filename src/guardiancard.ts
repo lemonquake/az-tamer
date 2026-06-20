@@ -30,7 +30,7 @@ const hex = (n: number) => `#${n.toString(16).padStart(6, '0')}`;
 
 /** Reference level used when viewing a species entry (no owned instance). */
 function referenceLevel(sp: SpeciesDef): number {
-  return { Novice: 5, Adept: 18, Elite: 28, Apex: 42, Legendary: 55, Aether: 60 }[sp.stage] ?? 5;
+  return { Novice: 5, Adept: 18, Elite: 28, Apex: 42, Split: 55, Special: 68, Terra: 80, Transcendent: 90, Aether: 95, Legendary: 55 }[sp.stage] ?? 5;
 }
 
 function evolvesFrom(speciesId: string): { sp: SpeciesDef; level: number }[] {

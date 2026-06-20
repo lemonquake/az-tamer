@@ -4,7 +4,7 @@
 // sanctum, bounty board, dungeon gate
 // ============================================================
 import * as THREE from 'three';
-import { HOUSES, DUNGEONS, ITEMS, SHOP_STOCK, GEM_STOCK, CRAWLER_PARTS, SPECIES, ELEMENTS, ELEMENT_ICONS, elementsOf, type DungeonDef, type HouseDef, type Element } from './data';
+import { HOUSES, DUNGEONS, ITEMS, SHOP_STOCK, GEM_STOCK, CRAWLER_PARTS, SPECIES, ELEMENTS, ELEMENT_ICONS, elementsOf, STAGE_KIND_LABEL, type DungeonDef, type HouseDef, type Element, type SpeciesDef, type EvoKind } from './data';
 import { Player, Guardian, type GuardianCustomization, type ParentSnapshot } from './state';
 import {
   makeTamer, makeVoxelHuman, updateVoxelHuman, updateTamerFX, setVoxelSeated, makeGuardian, disposeRig, makeCrawler, disposeCrawler,
@@ -34,6 +34,7 @@ import { tagNpc, crowdName, attachNpcPicker } from './npccard';
 import { runCityTutorial, isTutorialOpen } from './tutorial';
 import { worldClock, DayNightRig } from './daynight';
 import { sfx, playMusic } from './audio';
+import { perf } from './perf';
 import { runCinematicScene } from './main';
 import { openFishingShop, openFishingBoard, type FishingSpotInfo } from './fishing';
 import { cDesk, cFountain, cReadingDesk, cColumnSconces, cHangingBanner, cTelescope, cPainting } from './aurelian_hall_helpers';
@@ -212,12 +213,23 @@ export class Town {
 
   // light budget: the forward renderer evaluates every visible point light
   // in every material's shader, so the street's ~46 lamps/braziers/glows
-  // tank the frame rate. Only the nearest few stay lit each frame.
-  private static readonly MAX_POINT_LIGHTS = 10;
+  // tank the frame rate. Only the nearest perf.lightBudget stay lit, and the
+  // ranking is throttled (it only matters when the player has moved).
   private litScene: THREE.Scene | null = null;
   private scenePointLights: THREE.PointLight[] = [];
+  private lightRankTimer = 0;
+  private lastRankX = Infinity;
+  private lastRankZ = Infinity;
+  // cached day/night fixtures — populated once per street so the per-frame
+  // update never re-traverses the whole scene graph.
+  private dnLamps: THREE.PointLight[] = [];
+  private dnOrbs: THREE.Mesh[] = [];
+  private dnWindows: THREE.Mesh[] = [];
+  private dnCached = false;
+  private dnLastNight = -1;
+  private dynTagged = false; // one-time: mark animated decor so the static batcher skips it
 
-  constructor(private player: Player, private firstArrival: boolean, private deps: TownDeps = {}) {}
+  constructor(private player: Player, private firstArrival: boolean, private deps: TownDeps = {}) { this.streetScene.userData.bigMap = true; }
 
   get view() {
     const self = this;
@@ -6878,30 +6890,17 @@ export class Town {
     if (!this.resolveExit) return;
     if (!this.sun) return; // a frame can render before run() builds the street
 
-    (window as any).debugTimer = ((window as any).debugTimer || 0) + dt;
-    if ((window as any).debugTimer >= 2.0) {
-      (window as any).debugTimer = 0;
-      try {
-        const serializeObj = (c: THREE.Object3D): any => {
-          return {
-            name: c.name,
-            type: c.type,
-            pos: { x: c.position.x, y: c.position.y, z: c.position.z },
-            visible: c.visible,
-            children: c.children.map(serializeObj)
-          };
-        };
-        const info = {
-          mode: this.mode,
-          tamerPos: { x: this.tamer.position.x, y: this.tamer.position.y, z: this.tamer.position.z },
-          intSceneChildren: this.interiorScene ? this.interiorScene.children.map(serializeObj) : null,
-          intGroundH_val: this.intGroundH ? this.intGroundH(this.tamer.position.x, this.tamer.position.z) : null,
-        };
-        fetch('http://localhost:4899/', {
-          method: 'POST',
-          body: JSON.stringify(info, null, 2)
-        }).catch(() => {});
-      } catch (e) {}
+    // Tag animated street decor as dynamic ONCE (after the street is built) so
+    // the static batcher in main's loop never welds a moving prop in place.
+    // Named props (legendpulse, podhover…), voxel NPCs (userData root) and
+    // transparent motes (fireflies, leaves) are already skipped automatically.
+    if (!this.dynTagged) {
+      this.dynTagged = true;
+      this.clouds.forEach(c => { c.userData.dynamic = true; });
+      this.ducks.forEach(d => { d.grp.userData.dynamic = true; });
+      this.birds.forEach(b => { b.grp.userData.dynamic = true; });
+      this.butterflies.forEach(b => { b.grp.userData.dynamic = true; });
+      if (this.windmillHub) this.windmillHub.userData.dynamic = true;
     }
 
     this.guideTimer -= dt;
@@ -7096,39 +7095,57 @@ export class Town {
       this.dayNight.update(dt);
       daylight = worldClock.daylight;
       night = worldClock.night;
-      this.streetScene.traverse(o => {
-        if (o.name === 'streetlamp') (o as THREE.PointLight).intensity = 11 * night;
-        if (o.name === 'lampOrb') {
-          ((o as THREE.Mesh).material as THREE.MeshStandardMaterial).emissiveIntensity = 0.15 + 1.25 * night;
-        }
-        if (o.name === 'nightwindow') {
-          ((o as THREE.Mesh).material as THREE.MeshStandardMaterial).emissiveIntensity = 0.08 + 1.1 * night;
-        }
-      });
+      // Cache the day/night fixtures once, then drive them from the cached
+      // lists instead of re-traversing the whole street graph every frame.
+      if (!this.dnCached) {
+        this.streetScene.traverse(o => {
+          if (o.name === 'streetlamp') this.dnLamps.push(o as THREE.PointLight);
+          else if (o.name === 'lampOrb') this.dnOrbs.push(o as THREE.Mesh);
+          else if (o.name === 'nightwindow') this.dnWindows.push(o as THREE.Mesh);
+        });
+        this.dnCached = true;
+      }
+      // `night` changes very slowly — only write when it has actually moved.
+      if (Math.abs(night - this.dnLastNight) > 0.01) {
+        this.dnLastNight = night;
+        for (const l of this.dnLamps) l.intensity = 11 * night;
+        for (const o of this.dnOrbs) (o.material as THREE.MeshStandardMaterial).emissiveIntensity = 0.15 + 1.25 * night;
+        for (const o of this.dnWindows) (o.material as THREE.MeshStandardMaterial).emissiveIntensity = 0.08 + 1.1 * night;
+      }
     }
 
     // ambient prop animation
     const scene = this.mode === 'interior' && this.interiorScene ? this.interiorScene : this.streetScene;
 
-    // ---- point-light budget ----
+    // ---- point-light budget (only the nearest perf.lightBudget stay lit) ----
     // Re-collect when the active scene changes (street ↔ interior).
     if (scene !== this.litScene) {
       this.litScene = scene;
       this.scenePointLights = [];
       scene.traverse(o => { if ((o as THREE.PointLight).isPointLight) this.scenePointLights.push(o as THREE.PointLight); });
+      this.lastRankX = this.lastRankZ = Infinity; // force a re-rank for the new scene
     }
-    if (this.scenePointLights.length > Town.MAX_POINT_LIGHTS) {
+    const budget = perf.lightBudget;
+    if (this.scenePointLights.length > budget) {
+      // Re-rank only when the player has moved enough to change the nearest
+      // set (or on a slow throttle) — not every frame. The visible COUNT stays
+      // constant (always `budget`), so the shader programs compile only once.
       const tp = this.tamer.position;
-      const ranked = this.scenePointLights
-        .map(l => {
-          const e = l.matrixWorld.elements;
-          // dark lights (daytime street lamps) only fill leftover slots —
-          // the slot count stays constant so the shaders compile once.
-          const penalty = l.intensity <= 0.05 ? 1e4 : 0;
-          return { l, score: Math.hypot(e[12] - tp.x, e[14] - tp.z) + penalty };
-        })
-        .sort((a, b) => a.score - b.score);
-      ranked.forEach((r, i) => { r.l.visible = i < Town.MAX_POINT_LIGHTS; });
+      this.lightRankTimer -= dt;
+      const moved = Math.hypot(tp.x - this.lastRankX, tp.z - this.lastRankZ) > 1.5;
+      if (moved || this.lightRankTimer <= 0) {
+        this.lightRankTimer = 0.4;
+        this.lastRankX = tp.x; this.lastRankZ = tp.z;
+        const ranked = this.scenePointLights
+          .map(l => {
+            const e = l.matrixWorld.elements;
+            // dark lights (daytime street lamps) only fill leftover slots.
+            const penalty = l.intensity <= 0.05 ? 1e4 : 0;
+            return { l, score: Math.hypot(e[12] - tp.x, e[14] - tp.z) + penalty };
+          })
+          .sort((a, b) => a.score - b.score);
+        ranked.forEach((r, i) => { r.l.visible = i < budget; });
+      }
     }
 
     const now = performance.now();
@@ -7772,42 +7789,70 @@ export class Town {
     this.busy = true;
     await new Promise<void>(resolve => {
       const p = this.player;
-      const candidates = [...p.party, ...p.reserve].filter(g => g.species.extraEvolvesTo !== undefined && g.level >= g.species.extraEvolvesTo.level);
-      
-      if (candidates.length === 0) {
-        say('Professor Alex', "I don't see any Novice starter Guardians in your party or reserve that meet the level 15 threshold for Extra Evolution. Train them further, tamer.").then(() => {
-          resolve();
-        });
+
+      // Two kinds of advanced metamorphosis live here:
+      //   • Split branch (extraEvolvesTo) — level-gated alternate evolution.
+      //   • Ascension (ascendsTo) — Special/Terra/Transcendent/Aether, gated by
+      //     level + an optional catalyst item + an optional story flag.
+      interface Cand { g: Guardian; kind: 'Split' | EvoKind; target: SpeciesDef; ready: boolean; need: string; }
+      const cands: Cand[] = [];
+      for (const g of [...p.party, ...p.reserve]) {
+        const ex = g.species.extraEvolvesTo;
+        if (ex && SPECIES[ex.species] && g.level >= ex.level) {
+          cands.push({ g, kind: 'Split', target: SPECIES[ex.species], ready: true, need: '' });
+        }
+        const a = g.species.ascendsTo;
+        if (a && SPECIES[a.species]) {
+          const needs: string[] = [];
+          if (a.level && g.level < a.level) needs.push(`Lv.${a.level}+`);
+          if (a.item && p.itemCount(a.item) < 1) needs.push(ITEMS[a.item]?.name ?? a.item);
+          if (a.flag && !p.flags[a.flag]) needs.push(a.flag === 'terra_visited' ? 'walk Terra City' : a.flag);
+          cands.push({ g, kind: a.kind, target: SPECIES[a.species], ready: needs.length === 0, need: needs.join(' · ') });
+        }
+      }
+
+      if (cands.length === 0) {
+        say('Professor Alex', "None of your Guardians are ready to branch or ascend yet. A Split needs an Apex Guardian at Lv.40; the higher ascensions — Special, Terra, Transcendence, Aether — need the right form, the levels, and the proper catalyst. Keep climbing, tamer.").then(() => resolve());
         return;
       }
 
       const render = () => {
-        const rows = candidates.map(g => {
-          const targetSpecies = SPECIES[g.species.extraEvolvesTo!.species];
+        const rows = cands.map((c, i) => {
+          const kindLabel = c.kind === 'Split' ? 'Split Evolution' : STAGE_KIND_LABEL[c.target.stage];
+          const action = c.ready
+            ? `<button class="ui-btn gold" data-evolve="${i}">${c.kind === 'Split' ? 'Engage Metamorphosis' : 'Ascend'}</button>`
+            : `<span class="sub" style="color:var(--ui-dim);max-width:150px;text-align:right">Needs: ${c.need}</span>`;
           return `<div class="list-row">
             <div style="flex:1">
-              <b>${g.nickname}</b> <span class="sub">(Lv.${g.level} ${g.species.name})</span>
-              <div class="sub" style="color:var(--ui-gold)">Evolves to: <b>${targetSpecies.name}</b> (Lv.15+)</div>
+              <b>${c.g.nickname}</b> <span class="sub">(Lv.${c.g.level} ${c.g.species.name})</span>
+              <div class="sub" style="color:var(--ui-gold)">${kindLabel} → <b>${c.target.name}</b></div>
             </div>
-            <button class="ui-btn gold" data-evolve="${g.id}">Engage Metamorphosis</button>
+            ${action}
           </div>`;
         }).join('');
 
         const el = openScreen(`
-          <h3>🧬 Professor Alex — Extra Evolution Lab</h3>
-          <div class="sub" style="margin-bottom:12px">Select an eligible Novice starter Guardian to evolve along its extra-evolution branch path.</div>
+          <h3>🧬 Professor Alex — Evolution & Ascension Lab</h3>
+          <div class="sub" style="margin-bottom:12px">Branch a Guardian along its Split path, or push it past its limits: Special, Terra, Transcendence, and — for the worthy few — Aether.</div>
           <div style="max-height:360px;overflow-y:auto">${rows}</div>
           <div style="display:flex;justify-content:flex-end;margin-top:14px">
             <button class="ui-btn primary" id="evo-close">Cancel</button>
           </div>`);
 
         el.querySelectorAll<HTMLElement>('[data-evolve]').forEach(b => b.onclick = () => {
-          const g = candidates.find(x => x.id === b.dataset.evolve!)!;
+          const c = cands[parseInt(b.dataset.evolve!, 10)];
+          if (!c || !c.ready) return;
           sfx('charge');
-          const oldName = g.nickname;
-          g.extraEvolve();
+          const oldName = c.g.nickname;
+          if (c.kind === 'Split') {
+            c.g.extraEvolve();
+          } else {
+            const a = c.g.species.ascendsTo;
+            if (a?.item) p.removeItem(a.item, 1);
+            c.g.advancedEvolve();
+          }
           p.save();
-          toast(`${oldName} evolved into ${g.species.name}!`, 'gold');
+          toast(`${oldName} ${c.kind === 'Split' ? 'evolved' : 'ascended'} into ${c.g.species.name}!`, 'gold');
           closeMenu();
           resolve();
         });

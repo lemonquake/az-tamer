@@ -20,7 +20,7 @@ import { say, conversation, choose, toast, fadeIn, fadeOut, hideHUD } from './ui
 import { playMusic, sfx, type SfxName } from './audio';
 import {
   makeWater, makeFish, makeFishShadow, makeRod, makeBobber, swimFish, makeSplash, makeRipple, disposeFish,
-  makeCastingReticle,
+  makeCastingReticle, pulseShadow,
   type WaterHandle,
 } from './fishingmodels';
 import {
@@ -75,6 +75,13 @@ interface Shadow {
   grp: THREE.Group; sp: SpeciesDef;
   angle: number; r: number; speed: number; depth: number;
   cx: number; cz: number;
+  // ---- bait-interest behaviour ----
+  mood: 'idle' | 'curious' | 'approach' | 'flee';
+  interest: number;        // smoothed 0..1 (drives the visual "tells")
+  interestTarget: number;  // where interest is easing toward
+  millAngle: number;       // angle while circling the bobber
+  dir: number;             // circling direction (+1 / -1)
+  fleeTimer: number;       // seconds left bolting away from a wrong bait
 }
 
 export interface FishingSpotInfo {
@@ -187,6 +194,12 @@ export class Fishing {
   private reelCrank = 0;             // reel-hand crank phase
   private reelCrankVel = 0;          // crank speed (spikes on a reel hit)
   private bodyNeutral = 1;           // 1 = relaxed stance, 0 = full fighting stance
+
+  // A/D line dragging — sweep the bait left/right while it sits in the water
+  private dragVel = 0;               // lateral velocity of the bait
+  private dragLeanTarget = 0;        // -1 left … +1 right, set from held keys
+  private dragLeanSmooth = 0;        // smoothed body/rod sweep for the drag pose
+  private dragWakeTimer = 0;         // throttles the dragging wake ripples
 
   // resolvers for the async phase machine
   private castResolve: (() => void) | null = null;
@@ -494,6 +507,8 @@ export class Fishing {
       speed: sp.speed * (0.15 + this.rnd() * 0.1),
       depth: -0.35 - this.rnd() * 0.25,
       cx, cz,
+      mood: 'idle', interest: 0, interestTarget: 0,
+      millAngle: this.rnd() * Math.PI * 2, dir: this.rnd() < 0.5 ? -1 : 1, fleeTimer: 0,
     };
     grp.position.set(cx, sh.depth, cz);
     this.scene.add(grp);
@@ -512,6 +527,65 @@ export class Fishing {
       castQuality,
       targetSpecies: target,
     };
+  }
+
+  // ============================================================
+  //  BAIT INTEREST  — does this shadow want what you're offering?
+  // ============================================================
+  /**
+   * 0..1 chance a given species is tempted by the currently-equipped bait.
+   * Driven by the rarity gap between bait and fish: a humble worm thrills a
+   * minnow but a Legendary won't glance at it, while a Celestial Lure makes
+   * the rarest monsters circle. Preferred baits, luck lines and time bonuses
+   * all nudge it up; rarer fish are inherently warier.
+   */
+  private baitAppeal(sp: SpeciesDef): number {
+    const bait = BAITS[this.fs.equippedBait] ?? BAITS.worm;
+    const line = LINES[this.fs.equippedLine] ?? LINES.basic_mono;
+    const fishR = rarityRank(sp.rarity);
+    const baitR = rarityRank(bait.rarity);
+    let appeal = 0.58 + (baitR - fishR) * 0.16 + bait.rareBoost * 0.34 + (line.luckBonus - 1) * 0.5;
+    if (sp.spawn.baitPref?.includes(bait.id)) appeal += 0.34;
+    if (bait.timeBonus?.includes(timeOfDay(worldClock.t))) appeal += 0.1;
+    appeal -= fishR * 0.05;
+    return Math.max(0.04, Math.min(0.98, appeal));
+  }
+
+  /**
+   * The bait just splashed down — wake the nearby shadows. Interested fish
+   * turn and start circling the bobber; fish far too rare for this bait bolt
+   * away. Picks the keenest shadow as the inspector if the cast didn't land
+   * right on one.
+   */
+  private reactShadowsToBait(): void {
+    const bait = BAITS[this.fs.equippedBait] ?? BAITS.worm;
+    const baitR = rarityRank(bait.rarity);
+    const bx = this.bobberAnchor.x, bz = this.bobberAnchor.z;
+    let topAppeal = 0; let topSp: SpeciesDef | null = null;
+    for (const sh of this.shadows) {
+      if (sh === this.targetShadow) { sh.mood = 'approach'; sh.interestTarget = 1; sh.millAngle = Math.atan2(sh.grp.position.z - bz, sh.grp.position.x - bx); continue; }
+      const d = Math.hypot(sh.grp.position.x - bx, sh.grp.position.z - bz);
+      if (d > 14) { sh.mood = 'idle'; sh.interestTarget = 0; continue; }
+      const a = this.baitAppeal(sh.sp);
+      const proximityW = d < 6 ? 1 : d < 10 ? 0.72 : 0.42;
+      if (this.rnd() < a * proximityW) {
+        sh.mood = a > 0.62 ? 'approach' : 'curious';
+        sh.interestTarget = a;
+        sh.dir = this.rnd() < 0.5 ? -1 : 1;
+        sh.millAngle = Math.atan2(sh.grp.position.z - bz, sh.grp.position.x - bx);
+        if (a > topAppeal) { topAppeal = a; topSp = sh.sp; }
+      } else if (rarityRank(sh.sp.rarity) >= baitR + 2 && d < 10) {
+        sh.mood = 'flee'; sh.fleeTimer = 1.0 + this.rnd() * 0.9; sh.interestTarget = 0;
+      } else {
+        sh.mood = 'idle'; sh.interestTarget = 0;
+      }
+    }
+    // exciting tell when a strong shadow commits to the bait
+    if (topSp && rarityRank(topSp.rarity) >= 3) {
+      const rd = RARITY[topSp.rarity];
+      this.triggerFloatyText(`${rd.badge} A ${topSp.rarity} shadow circles your bait…`, rd.color);
+      sfx('charge');
+    }
   }
 
   // ============================================================
@@ -593,40 +667,73 @@ export class Fishing {
     if (lamp) (lamp.material as THREE.MeshStandardMaterial).emissiveIntensity = 0.2 + night * 1.0;
     if (lampLight) lampLight.intensity = night * 1.4;
 
-    // shadows drift
+    // shadows — drift, react to bait, circle in or bolt away
+    const bobActive = this.bobber.visible && (this.phase === 'wait' || this.phase === 'bite' || this.phase === 'cast' || this.phase === 'hook');
+    const bx = this.bobberAnchor.x, bz = this.bobberAnchor.z;
     for (const sh of this.shadows) {
+      // ease the visual interest toward its target every frame
+      sh.interest += (sh.interestTarget - sh.interest) * Math.min(1, dt * 2.5);
+
+      // the hooked fish locks to the bobber during bite/hook/fight
       if (sh === this.targetShadow && (this.phase === 'wait' || this.phase === 'bite' || this.phase === 'fight' || this.phase === 'hook')) {
         if (this.phase === 'fight') {
-          // Lock target shadow to bobber position during fight
           sh.grp.position.x = this.bobber.position.x;
           sh.grp.position.z = this.bobber.position.z;
           sh.grp.position.y = -0.15 + Math.sin(this.elapsed * 12) * 0.04;
-          
           let wiggle = Math.sin(this.elapsed * 22) * 0.4;
-          if (this.fishStruggleDir === 'left') {
-            wiggle += 0.8;
-          } else if (this.fishStruggleDir === 'right') {
-            wiggle -= 0.8;
-          }
-          const playerPos = new THREE.Vector3(this.tamer.position.x, 0.12, this.tamer.position.z - 0.4);
-          sh.grp.rotation.y = Math.atan2(playerPos.x - this.bobber.position.x, playerPos.z - this.bobber.position.z) + Math.PI + wiggle;
+          if (this.fishStruggleDir === 'left') wiggle += 0.8;
+          else if (this.fishStruggleDir === 'right') wiggle -= 0.8;
+          sh.grp.rotation.y = Math.atan2(this.tamer.position.x - this.bobber.position.x, this.tamer.position.z - this.bobber.position.z) + Math.PI + wiggle;
         } else if (this.phase === 'hook' || this.phase === 'bite') {
           sh.grp.position.x = this.bobber.position.x;
           sh.grp.position.z = this.bobber.position.z;
           sh.grp.position.y = -0.15;
           sh.grp.rotation.y = Math.atan2(this.tamer.position.x - this.bobber.position.x, this.tamer.position.z - this.bobber.position.z) + Math.PI;
         }
-        const rg = sh.grp.getObjectByName('rareGlow');
-        if (rg) ((rg as THREE.Mesh).material as THREE.MeshBasicMaterial).opacity = (sh.sp.rarity === 'Legendary' ? 0.3 : 0.16) * (0.6 + 0.4 * Math.sin(this.elapsed * 2));
+        pulseShadow(sh.grp, this.elapsed, 1);
         continue;
       }
-      sh.angle += sh.speed * dt;
-      sh.grp.position.x = sh.cx + Math.cos(sh.angle) * sh.r;
-      sh.grp.position.z = sh.cz + Math.sin(sh.angle) * sh.r * 0.6;
-      sh.grp.position.y = sh.depth + Math.sin(this.elapsed * 0.8 + sh.angle) * 0.06;
-      sh.grp.rotation.y = -sh.angle + Math.PI / 2;
-      const rg = sh.grp.getObjectByName('rareGlow');
-      if (rg) ((rg as THREE.Mesh).material as THREE.MeshBasicMaterial).opacity = (sh.sp.rarity === 'Legendary' ? 0.3 : 0.16) * (0.6 + 0.4 * Math.sin(this.elapsed * 2 + sh.angle));
+
+      if (sh.mood === 'flee') {
+        sh.fleeTimer -= dt;
+        let ax = sh.grp.position.x - bx, az = sh.grp.position.z - bz;
+        const L = Math.hypot(ax, az) || 1; ax /= L; az /= L;
+        sh.grp.position.x += ax * 3.4 * dt;
+        sh.grp.position.z += az * 3.4 * dt;
+        sh.grp.position.y = sh.depth - 0.05;
+        sh.grp.rotation.y = Math.atan2(ax, az) + Math.PI / 2;
+        if (sh.fleeTimer <= 0) { sh.mood = 'idle'; sh.cx = sh.grp.position.x; sh.cz = sh.grp.position.z; sh.interestTarget = 0; }
+      } else if (bobActive && (sh.mood === 'curious' || sh.mood === 'approach')) {
+        // circle the bait, tightening the orbit the keener the fish is
+        const tight = sh.mood === 'approach' ? 1.1 : 3.0;
+        const rad = 3.6 + (tight - 3.6) * sh.interest;
+        sh.millAngle += (0.5 + sh.interest * 1.2) * sh.dir * dt;
+        const tx = bx + Math.cos(sh.millAngle) * rad;
+        const tz = bz + Math.sin(sh.millAngle) * rad * 0.75;
+        const ox = sh.grp.position.x, oz = sh.grp.position.z;
+        const k = Math.min(1, dt * (1.2 + sh.interest * 1.6));
+        sh.grp.position.x = ox + (tx - ox) * k;
+        sh.grp.position.z = oz + (tz - oz) * k;
+        const ry = sh.depth + (-0.13 - sh.depth) * sh.interest * 0.8 + Math.sin(this.elapsed * 2 + sh.millAngle) * 0.03;
+        sh.grp.position.y += (ry - sh.grp.position.y) * Math.min(1, dt * 2);
+        if (Math.abs(tx - ox) + Math.abs(tz - oz) > 0.001) sh.grp.rotation.y = Math.atan2(tx - ox, tz - oz) + Math.PI / 2;
+      } else {
+        // idle wander on a gentle ellipse
+        sh.angle += sh.speed * dt;
+        const tx = sh.cx + Math.cos(sh.angle) * sh.r;
+        const tz = sh.cz + Math.sin(sh.angle) * sh.r * 0.6;
+        sh.grp.position.x += (tx - sh.grp.position.x) * Math.min(1, dt * 3);
+        sh.grp.position.z += (tz - sh.grp.position.z) * Math.min(1, dt * 3);
+        sh.grp.position.y += (sh.depth + Math.sin(this.elapsed * 0.8 + sh.angle) * 0.06 - sh.grp.position.y) * Math.min(1, dt * 3);
+        sh.grp.rotation.y = -sh.angle + Math.PI / 2;
+      }
+
+      // keep shadows inside the pond
+      const wx = sh.grp.position.x, wz = sh.grp.position.z + 4;
+      const rr = Math.hypot(wx, wz);
+      if (rr > 18) { sh.grp.position.x = wx * 18 / rr; sh.grp.position.z = -4 + wz * 18 / rr; }
+
+      pulseShadow(sh.grp, this.elapsed, sh.mood === 'flee' ? 0 : sh.interest);
     }
 
     // ambient life
@@ -728,11 +835,13 @@ export class Fishing {
         break;
       }
       case 'wait': {
+        this.applyLineDrag(dt);
         // gentle bob
         this.bobber.position.y = this.bobberAnchor.y + Math.sin(this.elapsed * 2.5) * 0.05;
         break;
       }
       case 'bite': {
+        this.applyLineDrag(dt);
         this.bobber.position.y = this.bobberAnchor.y - Math.abs(Math.sin(this.elapsed * 18)) * 0.18;
         break;
       }
@@ -754,6 +863,59 @@ export class Fishing {
     // keep the angler alive between casts — eases back to a relaxed stance
     if (this.phase === 'idle' || this.phase === 'wait' || this.phase === 'bite') {
       this.updateAnglerPose(dt);
+    }
+  }
+
+  /**
+   * Hold A/D once the bait is in the water to sweep the line left/right. The
+   * bait carves a wake across the surface and the angler leans his rod into
+   * the drag — and trailing the bait past an idle shadow can tease it into
+   * taking an interest.
+   */
+  private applyLineDrag(dt: number): void {
+    let input = 0;
+    if (this.keys.has('left')) input -= 1;
+    if (this.keys.has('right')) input += 1;
+    this.dragLeanTarget = input;
+
+    this.dragVel += input * dt * 7;
+    this.dragVel *= Math.pow(0.0007, dt);      // firm damping → stops when released
+    this.dragVel = Math.max(-2.6, Math.min(2.6, this.dragVel));
+    this.bobber.rotation.z = -this.dragVel * 0.18;   // tip the float into the pull
+    if (Math.abs(this.dragVel) < 0.002) return;
+
+    // clamp the sweep to the pond's width at the bait's distance from shore
+    const z = this.bobberAnchor.z;
+    const disc = 20 * 20 - (z + 4) * (z + 4);
+    if (disc <= 1) return;                            // no lateral room out here
+    const span = Math.sqrt(disc) - 0.6;
+    const nx = Math.max(-span, Math.min(span, this.bobberAnchor.x + this.dragVel * dt));
+    this.bobberAnchor.x = nx;
+    this.bobber.position.x = nx;
+
+    // a carving wake when moving with intent
+    this.dragWakeTimer -= dt;
+    if (Math.abs(this.dragVel) > 0.6 && this.dragWakeTimer <= 0) {
+      makeRipple(this.scene, nx - Math.sign(this.dragVel) * 0.25, 0.05, z, 0xcfe8ff, 0.7);
+      this.dragWakeTimer = 0.12;
+    }
+
+    // trailing the bait past a shadow piques its curiosity
+    for (const sh of this.shadows) {
+      if (sh === this.targetShadow || sh.mood === 'flee') continue;
+      const d = Math.hypot(sh.grp.position.x - nx, sh.grp.position.z - z);
+      if (d > 4.5) continue;
+      const a = this.baitAppeal(sh.sp);
+      if (sh.mood === 'idle') {
+        if (this.rnd() < a * dt * 2.4) {
+          sh.mood = 'curious'; sh.interestTarget = Math.max(sh.interestTarget, a * 0.8);
+          sh.dir = this.rnd() < 0.5 ? -1 : 1;
+          sh.millAngle = Math.atan2(sh.grp.position.z - z, sh.grp.position.x - nx);
+        }
+      } else {
+        sh.interestTarget = Math.min(1, sh.interestTarget + dt * 0.3);
+        if (sh.interestTarget > 0.62) sh.mood = 'approach';
+      }
     }
   }
 
@@ -1132,8 +1294,9 @@ export class Fishing {
       this.player.save();
       await conversation([
         ['Old Bait Pete', `Welcome to the Great Pond, ${this.player.tamerName}! Finest fishing in all of Haven City. Let me give you the quick of it.`],
-        ['Old Bait Pete', 'Watch the water — those dark shapes are FISH. Bigger shadow, bigger fish. A colored glow under the surface? That\'s something RARE. Cast near \'em.'],
-        ['Old Bait Pete', 'Press SPACE to set your cast power. Wait for a bite, then SPACE again to STRIKE — time it in the green to set the hook!'],
+        ['Old Bait Pete', 'Watch the water — those dark shapes are FISH. Bigger shadow, bigger fish. A coloured glow means RARE; a ring of sparkles means something Legendary is down there. Cast near \'em.'],
+        ['Old Bait Pete', 'Here\'s the secret: fish only fancy bait worth their while. A worm tempts a minnow, but the rare monsters won\'t look twice at it — bring richer bait and watch them circle in. The wrong bait and they bolt.'],
+        ['Old Bait Pete', 'Press SPACE to set your cast power. While the bait sits in the water, hold A or D to SWEEP the line side to side — trail it past a shadow to tease it into biting. Then SPACE to STRIKE in the green!'],
         ['Old Bait Pete', 'Then the real fight! Notes come racing down four lanes — hit them ON THE BEAT: A and D to counter its left/right runs, SPACE to reel, E to haul, and HOLD SPACE for the long power-pulls. Nail the timing for PERFECTs, chain COMBOS, and watch that tension bar — too many misses and SNAP goes the line!'],
         ['Old Bait Pete', 'Every fish fights different — a lazy carp, a frenzied tuna, a multi-stage leviathan. Land beauties to score big, climb the leaderboard and fill the Encyclopedia. Now — tight lines!'],
       ]);
@@ -1319,10 +1482,24 @@ export class Fishing {
   // ---------- PHASE 2: WAIT ----------
   private async doWait(): Promise<{ bite: boolean; fish?: SpeciesDef; reason?: string }> {
     this.phase = 'wait';
-    this.setPrompt('🎣 Waiting for a bite…');
+    this.setPrompt('🎣 Waiting for a bite… <b>A/D</b> to sweep the line');
+    // the bait has landed — wake the nearby shadows to it
+    this.reactShadowsToBait();
+    // if the cast didn't land on a shadow, let the keenest interested one bite
+    if (!this.targetShadow) {
+      let best: Shadow | null = null, bestD = Infinity;
+      for (const sh of this.shadows) {
+        if (sh.mood !== 'approach' && sh.mood !== 'curious') continue;
+        const d = Math.hypot(sh.grp.position.x - this.bobberAnchor.x, sh.grp.position.z - this.bobberAnchor.z);
+        if (d < bestD) { bestD = d; best = sh; }
+      }
+      if (best && bestD < 9) this.targetShadow = best;
+    }
     const ctx = this.context(this.targetShadow?.sp.id ?? null, this.castPower);
+    const interestedBonus = (this.targetShadow && (this.targetShadow.mood === 'approach' || this.targetShadow.mood === 'curious'))
+      ? 0.18 + this.targetShadow.interestTarget * 0.12 : 0;
     // perfect cast forces immediate inspection/approach
-    const approachChance = this.isPerfectAim ? 1.0 : (0.55 + (this.targetShadow ? 0.3 : 0) + ctx.bait.rareBoost * 0.1 + (ctx.bait.id === 'chum_bucket' ? 0.25 : 0));
+    const approachChance = this.isPerfectAim ? 1.0 : (0.52 + (this.targetShadow ? 0.3 : 0) + ctx.bait.rareBoost * 0.1 + interestedBonus + (ctx.bait.id === 'chum_bucket' ? 0.25 : 0));
     const baseWait = this.isPerfectAim ? 0.2 : (1.6 + this.rnd() * 2.8);
     const waitTime = baseWait / (0.7 + ctx.bait.rareBoost * 0.4 + (this.targetShadow ? 0.6 : 0));
 
@@ -1848,7 +2025,7 @@ export class Fishing {
     this.reelCrankVel *= Math.pow(0.02, dt);
 
     const haul = this.anglerHaul + this.haulImpulse * 0.5;
-    const tremor = this.tension > 0.55 ? Math.sin(this.elapsed * 38) * (this.tension - 0.5) * 0.12 : 0;
+    const tremor = (fighting && this.tension > 0.55) ? Math.sin(this.elapsed * 38) * (this.tension - 0.5) * 0.12 : 0;
     const lean = this.leanX;
 
     // pelvis — lean back hauling, drop & brace, lurch forward on a miss
@@ -1883,6 +2060,19 @@ export class Fishing {
       this.prevRodLean += (lean * 0.32 - this.prevRodLean) * Math.min(1, dt * 9);
       this.rod.rotation.x = -0.5 - f * (this.tension * 0.7 + haul * 0.3) - this.haulImpulse * 0.5 + tremor * 1.6;
       this.rod.rotation.z = 0.2 + f * this.prevRodLean;
+    }
+
+    // idle line-sweep — lean the body & rod into an A/D drag while waiting
+    this.dragLeanSmooth += (this.dragLeanTarget - this.dragLeanSmooth) * Math.min(1, dt * 8);
+    if (this.phase !== 'wait' && this.phase !== 'bite') this.dragLeanTarget *= Math.pow(0.05, dt);
+    if (!fighting && Math.abs(this.dragLeanSmooth) > 0.001) {
+      const dl = this.dragLeanSmooth;
+      if (torso) { torso.rotation.z = -dl * 0.16; torso.rotation.y = dl * 0.12; }
+      if (armR) { armR.rotation.z = dl * 0.55; armR.rotation.y = dl * 0.15; }
+      if (armL) armL.rotation.z = 0.2 + dl * 0.25;
+      if (this.rod) { this.rod.rotation.z = 0.2 + dl * 0.55; this.rod.rotation.x = -0.5 - Math.abs(dl) * 0.12; }
+      if (pelvis) pelvis.rotation.z = dl * 0.05;
+      if (head) head.rotation.y = dl * 0.18;
     }
   }
 
@@ -2129,6 +2319,7 @@ export class Fishing {
     this.player.save();
 
     const data: CatchSummaryData = {
+      player: this.player, fs,
       sp: fish, weightKg: size.weightKg, lengthCm: size.lengthCm, score,
       expGain, fishingLevel: afterLvl,
       expCur: fs.exp - fishingExpForLevel(afterLvl),
@@ -2340,6 +2531,12 @@ export class Fishing {
     this.bobber.visible = false;
     this.line.visible = false;
     this.targetShadow = null;
+    this.bobber.rotation.z = 0;
+    this.dragVel = 0; this.dragLeanTarget = 0;
+    // let the woken shadows lose interest and wander off again
+    for (const sh of this.shadows) {
+      if (sh.mood !== 'flee') { sh.mood = 'idle'; sh.interestTarget = 0; sh.cx = sh.grp.position.x; sh.cz = sh.grp.position.z; }
+    }
   }
 
   private timeout(secs: number): Promise<void> {
