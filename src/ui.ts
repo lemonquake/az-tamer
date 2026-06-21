@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import { ITEMS, CRAWLER_PARTS, CRAWLER_SLOTS, CRAWLER_SLOT_INFO, TYPE_CSS, STAT_NAMES, HOUSES, DUNGEONS, expForLevel, SPECIES, TECHS, elementChipsHTML, type StatKey, type CrawlerSlot, getSpeciesPassive } from './data';
 import { Player, Guardian, ParentSnapshot } from './state';
-import { makeGuardian, disposeRig, makeCrawler, disposeCrawler } from './models';
+import { makeGuardian, disposeRig, makeCrawler, disposeCrawler, updateTamerFX, SKIN_TONES, HAIR_COLORS, HAIRSTYLES } from './models';
 import { GUILD_LORE, avatarURL, guildIconURL, rankFor, questsDoneCount, makeCardNo } from './guilds';
 import { journalEntries, questProgress, questState, type QuestDef, type QuestState } from './quests';
 import { openGuildCard } from './guildcard';
@@ -17,7 +17,7 @@ import { sfx, toggleMute, isMuted, getMusicVolume, getSoundVolume, setMusicVolum
 import { openTutorialReplayMenu, runGuardianTutorial, isTutorialOpen } from './tutorial';
 import { weekdayName, time12, fullDateLabel } from './calendar';
 import { getTournamentAlert } from './tournaments';
-import { CLOTHES_DATABASE } from './clothes';
+import { CLOTHES_DATABASE, updateTamerAppearance } from './clothes';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
 
@@ -761,44 +761,18 @@ export function openMasterDebugMenu(player: Player): Promise<void> {
 
     updateSlotsDisplay();
 
-    // Populate closet selects
-    const closetSlots = ['hat', 'shirt', 'pants', 'gloves', 'backpack', 'shoes'] as const;
-    closetSlots.forEach(slot => {
-      const select = $<HTMLSelectElement>(`db-outfit-${slot}`);
-      select.innerHTML = '';
-      
-      if (slot === 'hat' || slot === 'backpack' || slot === 'gloves') {
-        const opt = document.createElement('option');
-        opt.value = 'none';
-        opt.textContent = 'None';
-        select.appendChild(opt);
-      }
-      
-      const items = Object.values(CLOTHES_DATABASE).filter(item => item.slot === slot);
-      items.sort((a, b) => a.name.localeCompare(b.name));
-      items.forEach(item => {
-        const opt = document.createElement('option');
-        opt.value = item.id;
-        opt.textContent = item.name;
-        select.appendChild(opt);
-      });
-      
-      select.value = player.equippedClothes[slot] || 'none';
-      
-      select.onchange = () => {
-        const val = select.value;
-        player.equippedClothes[slot] = val;
-        if (val !== 'none' && !player.ownedClothes.includes(val)) {
-          player.ownedClothes.push(val);
-        }
-        player.save(false);
-        refreshHUD();
-        const updater = (window as any).__updateActiveTamerAppearance;
-        if (updater) {
-          updater(player.equippedClothes, player.appearance);
-        }
-      };
-    });
+    // Wire up debug boutique button
+    $('db-boutique-btn').onclick = async () => {
+      modal.style.display = 'none';
+      debugMenuOpen = false;
+      window.removeEventListener('keydown', onKey, true);
+
+      await openDebugBoutique(player);
+
+      debugMenuOpen = true;
+      modal.style.display = 'flex';
+      window.addEventListener('keydown', onKey, true);
+    };
 
     // 1. Dropdown species changes
     for (let i = 0; i < 3; i++) {
@@ -1131,9 +1105,7 @@ export function openMasterDebugMenu(player: Player): Promise<void> {
       $('db-heal-all').onclick = null;
       $('db-techs-all').onclick = null;
       $('db-cap-99').onclick = null;
-      closetSlots.forEach(slot => {
-        $<HTMLSelectElement>(`db-outfit-${slot}`).onchange = null;
-      });
+      $('db-boutique-btn').onclick = null;
       
       debugMenuOpen = false;
       resolve();
@@ -2247,4 +2219,331 @@ export async function playStorySequence(lines: [string, string][], durationPerLi
     await new Promise(r => setTimeout(r, 800)); // gap between lines
   }
   storyActive = false;
+}
+
+function initDebugTamerPreview3D(
+  container: HTMLElement,
+  equipped: Record<string, string>,
+  appearance?: Parameters<typeof updateTamerAppearance>[2],
+): { update: (eq: Record<string, string>, app?: Parameters<typeof updateTamerAppearance>[2]) => void; focus: (part: 'full' | 'head') => void; dispose: () => void } {
+  const width = container.clientWidth || 260;
+  const height = container.clientHeight || 240;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  canvas.style.width = '100%';
+  canvas.style.height = '100%';
+  container.appendChild(canvas);
+
+  const scene = new THREE.Scene();
+  scene.background = null;
+
+  const camera = new THREE.PerspectiveCamera(42, width / height, 0.1, 10);
+  camera.position.set(0, 0.95, 2.5);
+  const VIEWS = {
+    full: { pos: new THREE.Vector3(0, 0.95, 2.5), look: new THREE.Vector3(0, 0.82, 0) },
+    head: { pos: new THREE.Vector3(0, 1.62, 1.6), look: new THREE.Vector3(0, 1.66, 0) },
+  };
+  const posGoal = VIEWS.full.pos.clone();
+  const lookGoal = VIEWS.full.look.clone();
+  const lookNow = lookGoal.clone();
+
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  renderer.setSize(width, height);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+  scene.add(new THREE.AmbientLight(0xffffff, 1.0));
+  const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
+  dirLight.position.set(2, 4, 3);
+  scene.add(dirLight);
+
+  const tamerGroup = new THREE.Group();
+  tamerGroup.position.set(0, 0.1, 0);
+  updateTamerAppearance(tamerGroup, equipped, appearance);
+  scene.add(tamerGroup);
+
+  let active = true;
+  let lastTime = performance.now();
+  let isDragging = false;
+  let previousPointerX = 0;
+
+  const onPointerDown = (e: PointerEvent) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    isDragging = true;
+    previousPointerX = e.clientX;
+    canvas.style.cursor = 'grabbing';
+    canvas.setPointerCapture(e.pointerId);
+  };
+
+  const onPointerMove = (e: PointerEvent) => {
+    if (!isDragging) return;
+    const deltaX = e.clientX - previousPointerX;
+    previousPointerX = e.clientX;
+    tamerGroup.rotation.y += deltaX * 0.015;
+  };
+
+  const onPointerUp = (e: PointerEvent) => {
+    if (isDragging) {
+      isDragging = false;
+      canvas.style.cursor = 'grab';
+      canvas.releasePointerCapture(e.pointerId);
+    }
+  };
+
+  canvas.style.cursor = 'grab';
+  canvas.addEventListener('pointerdown', onPointerDown);
+  canvas.addEventListener('pointermove', onPointerMove);
+  canvas.addEventListener('pointerup', onPointerUp);
+  canvas.addEventListener('pointercancel', onPointerUp);
+
+  function animate() {
+    if (!active) return;
+    requestAnimationFrame(animate);
+
+    const now = performance.now();
+    const dt = (now - lastTime) / 1000;
+    lastTime = now;
+
+    if (!isDragging) {
+      tamerGroup.rotation.y += dt * 0.4;
+    }
+    updateTamerFX(tamerGroup, dt);
+    const k = Math.min(1, dt * 6);
+    camera.position.lerp(posGoal, k);
+    lookNow.lerp(lookGoal, k);
+    camera.lookAt(lookNow);
+    renderer.render(scene, camera);
+  }
+  requestAnimationFrame(animate);
+
+  return {
+    update: (eq: Record<string, string>, app?: Parameters<typeof updateTamerAppearance>[2]) => {
+      updateTamerAppearance(tamerGroup, eq, app ?? appearance);
+    },
+    focus: (part: 'full' | 'head') => { const v = VIEWS[part] ?? VIEWS.full; posGoal.copy(v.pos); lookGoal.copy(v.look); },
+    dispose: () => {
+      active = false;
+      canvas.removeEventListener('pointerdown', onPointerDown);
+      canvas.removeEventListener('pointermove', onPointerMove);
+      canvas.removeEventListener('pointerup', onPointerUp);
+      canvas.removeEventListener('pointercancel', onPointerUp);
+      const prevFx = (tamerGroup.userData as { fxDispose?: () => void }).fxDispose;
+      if (prevFx) prevFx();
+      while (tamerGroup.children.length > 0) {
+        tamerGroup.remove(tamerGroup.children[0]);
+      }
+      renderer.dispose();
+      canvas.remove();
+    }
+  };
+}
+
+export async function openDebugBoutique(player: Player): Promise<void> {
+  return new Promise<void>(resolve => {
+    const SLOT_ICONS: Record<string, string> = { hat: '🎩', shirt: '👕', pants: '👖', gloves: '🧤', backpack: '🎒', shoes: '👟' };
+    type Tab = 'hat' | 'shirt' | 'pants' | 'gloves' | 'backpack' | 'shoes' | 'style';
+    let activeTab: Tab = 'shirt';
+
+    const previewState = { ...player.equippedClothes };
+    const previewApp = { ...player.appearance };
+
+    const el = openScreen(`
+      <h3 style="text-align:center;margin:0 0 8px">🛠️ Master Debug Closet — <span class="goldcol">FREE TAMER STUDIO</span></h3>
+      <div class="grid2">
+        <div>
+          <div id="boutique-tabs-container" class="panel-tabs" style="margin-bottom:8px"></div>
+          <div id="boutique-list-container" style="max-height:380px;overflow-y:auto;padding-right:4px;"></div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-start;background:rgba(0,0,0,0.35);border:1px solid var(--ui-border);border-radius:8px;padding:12px;">
+          <h4 style="margin-bottom:8px;color:var(--ui-gold);text-transform:uppercase;font-size:14px;letter-spacing:1px;">Fitting Room</h4>
+          <div id="tamer-preview-container" style="width:260px;height:250px;position:relative;overflow:hidden;background:rgba(6,8,16,0.55);border-radius:6px;border:1px solid #2c3666"></div>
+          <div class="sub" style="margin-top:6px;font-size:11px;color:var(--ui-dim)">LIVE 3D MIRROR · DRAG TO ROTATE</div>
+          <div id="boutique-outfit" style="width:100%;margin-top:10px;font-size:12px"></div>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;margin-top:14px">
+        <button class="ui-btn primary" id="boutique-close">Close Closet</button>
+      </div>`);
+
+    const container = el.querySelector('#tamer-preview-container') as HTMLElement;
+    const previewHandle = initDebugTamerPreview3D(container, previewState, previewApp);
+    const refreshPreview = () => previewHandle.update(previewState, previewApp);
+
+    const updateUI = () => {
+      previewHandle.focus(activeTab === 'hat' ? 'head' : 'full');
+
+      const slots: Tab[] = ['hat', 'shirt', 'pants', 'gloves', 'backpack', 'shoes'];
+      const tabsEl = el.querySelector('#boutique-tabs-container') as HTMLElement;
+      tabsEl.innerHTML = slots.map(slot =>
+        `<button class="ui-btn tab ${slot === activeTab ? 'primary' : ''}" data-tab-select="${slot}">${SLOT_ICONS[slot]} ${slot.toUpperCase()}</button>`
+      ).join('') + `<button class="ui-btn tab ${activeTab === 'style' ? 'primary' : ''}" data-tab-select="style" style="border-color:var(--ui-purple)">✨ STYLE</button>`;
+      tabsEl.querySelectorAll<HTMLElement>('[data-tab-select]').forEach(b => b.onclick = () => {
+        activeTab = b.dataset.tabSelect as Tab;
+        updateUI();
+      });
+
+      // mannequin readout
+      const outfitEl = el.querySelector('#boutique-outfit') as HTMLElement;
+      outfitEl.innerHTML = slots.map(slot => {
+        const id = previewState[slot];
+        const item = id && id !== 'none' ? CLOTHES_DATABASE[id] : null;
+        const changed = previewState[slot] !== player.equippedClothes[slot];
+        return `<div class="row" style="display:flex;justify-content:space-between">
+          <span class="sub">${SLOT_ICONS[slot]} ${slot}</span>
+          <b style="${changed ? 'color:var(--ui-gold)' : ''}">${item ? item.name : '—'}</b></div>`;
+      }).join('');
+
+      const listContainer = el.querySelector('#boutique-list-container') as HTMLElement;
+
+      if (activeTab === 'style') {
+        const skinSw = SKIN_TONES.map(t => `
+          <div class="swatch ${previewApp.skin === t.id ? 'sel' : ''}" data-skin="${t.id}" title="${t.name}">
+            <span class="swatch-dot" style="background:#${t.id.toString(16).padStart(6, '0')}"></span>
+            <span class="swatch-name">${t.name}</span>
+          </div>`).join('');
+        const hairSw = HAIR_COLORS.map(t => `
+          <div class="swatch ${previewApp.hair === t.id ? 'sel' : ''}" data-haircol="${t.id}" title="${t.name}">
+            <span class="swatch-dot" style="background:#${t.id.toString(16).padStart(6, '0')}"></span>
+            <span class="swatch-name">${t.name}</span>
+          </div>`).join('');
+        const styles = HAIRSTYLES.map(h => `
+          <div class="list-row" style="${previewApp.hairstyle === h.id ? 'border-color:var(--ui-gold);background:rgba(217,161,26,0.08);' : ''}" data-hairstyle="${h.id}">
+            <div style="flex:1"><b>${h.name}</b><div class="sub">${h.desc}</div></div>
+            ${previewApp.hairstyle === h.id ? '<span class="tag" style="background:var(--ui-gold);color:#0c1022">IN MIRROR</span>' : ''}
+          </div>`).join('');
+        const changed = previewApp.skin !== player.appearance.skin || previewApp.hair !== player.appearance.hair || previewApp.hairstyle !== player.appearance.hairstyle;
+        listContainer.innerHTML = `
+          <div class="sub" style="margin-bottom:6px">Style customization options. Everything is free, darling.</div>
+          <h3>Skin tone</h3><div class="swatch-row" style="margin-bottom:10px">${skinSw}</div>
+          <h3>Hair color</h3><div class="swatch-row" style="margin-bottom:10px">${hairSw}</div>
+          <h3>Hairstyle</h3>${styles}
+          ${changed ? '<button class="ui-btn gold" id="style-adopt" style="width:100%;margin-top:8px">Adopt this look</button>' : '<div class="sub" style="margin-top:8px">This is your current look.</div>'}`;
+        
+        listContainer.querySelectorAll<HTMLElement>('[data-skin]').forEach(b => b.onclick = () => {
+          previewApp.skin = parseInt(b.dataset.skin!);
+          refreshPreview(); updateUI();
+        });
+        listContainer.querySelectorAll<HTMLElement>('[data-haircol]').forEach(b => b.onclick = () => {
+          previewApp.hair = parseInt(b.dataset.haircol!);
+          refreshPreview(); updateUI();
+        });
+        listContainer.querySelectorAll<HTMLElement>('[data-hairstyle]').forEach(b => b.onclick = () => {
+          previewApp.hairstyle = b.dataset.hairstyle as any;
+          refreshPreview(); updateUI();
+        });
+        const adopt = listContainer.querySelector<HTMLElement>('#style-adopt');
+        if (adopt) adopt.onclick = () => {
+          player.appearance = { ...previewApp };
+          const updater = (window as any).__updateActiveTamerAppearance;
+          if (updater) updater(player.equippedClothes, player.appearance);
+          toast('A whole new you!', 'gold');
+          updateUI();
+        };
+        return;
+      }
+
+      const items = Object.values(CLOTHES_DATABASE).filter(item => item.slot === activeTab);
+      const canBeNone = ['hat', 'gloves', 'backpack'].includes(activeTab);
+      let rowsHtml = '';
+
+      if (canBeNone) {
+        const nonePreviewed = previewState[activeTab] === 'none' || !previewState[activeTab];
+        const noneEquipped = player.equippedClothes[activeTab] === 'none' || !player.equippedClothes[activeTab];
+        let actionBtn = '';
+        if (noneEquipped) actionBtn = '<span class="tag" style="background:var(--ui-green);color:#0c1022">EQUIPPED</span>';
+        else if (nonePreviewed) actionBtn = '<button class="ui-btn primary" data-wear-none="true">Wear None</button>';
+        else actionBtn = '<button class="ui-btn" data-preview-none="true">Try Remove</button>';
+        rowsHtml += `
+          <div class="list-row" style="${nonePreviewed ? 'border:1px solid var(--ui-green);background:rgba(78,196,94,0.1);' : ''}">
+            <div style="flex:1;cursor:pointer" data-preview-none="true">
+              <b>None</b>
+              <div class="sub">Bare ${activeTab === 'hat' ? 'head' : activeTab === 'gloves' ? 'hands' : 'back'}.</div>
+            </div>
+            <div>${actionBtn}</div>
+          </div>`;
+      }
+
+      rowsHtml += items.map(item => {
+        const equipped = player.equippedClothes[activeTab] === item.id;
+        const tryingOn = previewState[activeTab] === item.id;
+        let actionBtn = '';
+        if (equipped) {
+          actionBtn = `<button class="ui-btn danger" data-unequip="${item.id}">Remove</button>`;
+        } else {
+          actionBtn = tryingOn
+            ? `<button class="ui-btn primary" data-equip="${item.id}">Wear</button>`
+            : `<button class="ui-btn" data-try="${item.id}">Try On</button>`;
+        }
+        const dotColor = item.textureColor ?? (item.color !== undefined ? `#${item.color.toString(16).padStart(6, '0')}` : (item.fx?.color !== undefined ? `#${item.fx.color.toString(16).padStart(6, '0')}` : '#6a7290'));
+        const styleBadge = item.textureType ? `<span class="tag" style="background:var(--ui-border);color:var(--ui-text);margin-left:5px">${item.textureType.toUpperCase()}</span>` : '';
+        const ultraBadge = item.ultra ? '<span class="tag" style="background:linear-gradient(90deg,#f2c14e,#ff5aa8);color:#0c1022;margin-left:5px">★ ULTRA</span>' : (item.fx ? '<span class="tag" style="background:linear-gradient(90deg,#9a3aff,#ff5aa8);color:#fff;margin-left:5px">✨ FX</span>' : '');
+        const previewBadge = (tryingOn && !equipped) ? '<span class="tag" style="background:var(--ui-gold);color:#0c1022;margin-left:5px">IN MIRROR</span>' : '';
+        const equippedBadge = equipped ? '<span class="tag" style="background:var(--ui-green);color:#0c1022;margin-left:5px">EQUIPPED</span>' : '';
+        return `<div class="list-row" style="${tryingOn ? 'border:1px solid var(--ui-gold);background:rgba(217,161,26,0.1);' : ''}">
+          <span class="swatch-dot sq" style="background:${dotColor};flex-shrink:0"></span>
+          <div style="flex:1;cursor:pointer" data-row-select="${item.id}">
+            <b>${item.name}</b> ${styleBadge} ${ultraBadge} ${previewBadge} ${equippedBadge}
+            <div class="sub">${item.desc}</div>
+          </div>
+          <div style="margin-left:10px">${actionBtn}</div>
+        </div>`;
+      }).join('');
+
+      listContainer.innerHTML = rowsHtml;
+
+      const tryOn = (id: string) => {
+        previewState[activeTab] = id;
+        refreshPreview(); updateUI();
+      };
+      listContainer.querySelectorAll<HTMLElement>('[data-try]').forEach(b => b.onclick = e => { e.stopPropagation(); tryOn(b.dataset.try!); });
+      listContainer.querySelectorAll<HTMLElement>('[data-row-select]').forEach(r => r.onclick = () => tryOn(r.dataset.rowSelect!));
+      listContainer.querySelectorAll<HTMLElement>('[data-preview-none]').forEach(b => b.onclick = e => { e.stopPropagation(); tryOn('none'); });
+      
+      listContainer.querySelectorAll<HTMLElement>('[data-equip]').forEach(b => b.onclick = e => {
+        e.stopPropagation();
+        const item = CLOTHES_DATABASE[b.dataset.equip!];
+        player.equippedClothes[activeTab] = item.id;
+        if (!player.ownedClothes.includes(item.id)) {
+          player.ownedClothes.push(item.id);
+        }
+        player.save(false);
+        refreshHUD();
+        const updater = (window as any).__updateActiveTamerAppearance;
+        if (updater) updater(player.equippedClothes, player.appearance);
+        toast('Equipped.');
+        updateUI();
+      });
+      listContainer.querySelectorAll<HTMLElement>('[data-wear-none]').forEach(b => b.onclick = e => {
+        e.stopPropagation();
+        player.equippedClothes[activeTab] = 'none';
+        player.save(false);
+        refreshHUD();
+        const updater = (window as any).__updateActiveTamerAppearance;
+        if (updater) updater(player.equippedClothes, player.appearance);
+        toast('Unequipped.');
+        updateUI();
+      });
+      listContainer.querySelectorAll<HTMLElement>('[data-unequip]').forEach(b => b.onclick = e => {
+        e.stopPropagation();
+        player.equippedClothes[activeTab] = 'none';
+        if (previewState[activeTab] === b.dataset.unequip) previewState[activeTab] = 'none';
+        player.save(false);
+        refreshHUD();
+        const updater = (window as any).__updateActiveTamerAppearance;
+        if (updater) updater(player.equippedClothes, player.appearance);
+        toast('Unequipped.');
+        refreshPreview();
+        updateUI();
+      });
+    };
+    updateUI();
+
+    (el.querySelector('#boutique-close') as HTMLElement).onclick = () => {
+      previewHandle.dispose();
+      sfx('cancel');
+      closeMenu();
+      resolve();
+    };
+  });
 }
