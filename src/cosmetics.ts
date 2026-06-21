@@ -53,8 +53,8 @@ const glowM = (color: number, o = 0.5) =>
 const metalM = (color: number, rough = 0.28) =>
   new THREE.MeshStandardMaterial({ color, metalness: 0.92, roughness: rough });
 
-const darkM = (color = 0x1a2030) =>
-  new THREE.MeshStandardMaterial({ color, metalness: 0.6, roughness: 0.5 });
+const darkM = (color = 0x1a2030, roughness = 0.5) =>
+  new THREE.MeshStandardMaterial({ color, metalness: 0.6, roughness });
 
 // shared white radial-falloff sprite texture (tinted per-sprite via material.color)
 let _glowTex: THREE.Texture | null = null;
@@ -1289,6 +1289,839 @@ const buildCometStep: FxBuilder = (ctx) => {
   };
 };
 
+// ---- STANDARD HATS ----
+const buildWoolBeanie: FxBuilder = ({ add, spec, host }) => {
+  const color = spec.color ?? 0xd95a8a;
+  const dome = add(new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.28, 0.4), emis(color, 0.8)), host);
+  dome.position.set(0, 0.45, 0);
+  const puff = add(new THREE.Mesh(new THREE.SphereGeometry(0.06, 6, 6), emis(0xffffff, 1.0)), host);
+  puff.position.set(0, 0.61, 0);
+  return () => {};
+};
+
+const buildCamoHelmet: FxBuilder = ({ add, spec, host }) => {
+  const color = spec.color ?? 0x556b2f;
+  const helm = add(new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.3, 0.42), metalM(color, 0.6)), host);
+  helm.position.set(0, 0.44, 0);
+  const strap = add(new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.2, 0.43), metalM(0x2a2a2a)), host);
+  strap.position.set(0, 0.25, 0);
+  return () => {};
+};
+
+const buildCyberVisor: FxBuilder = ({ add, spec, host }) => {
+  const color = spec.color ?? 0x3a9df2;
+  const visor = add(new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.08, 0.36), darkM(0x0c1022)), host);
+  visor.position.set(0, 0.26, 0.06);
+  const screen = add(new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.06, 0.04), emis(color, 1.8)), visor);
+  screen.position.set(0, 0, 0.17);
+  return () => {};
+};
+
+const buildWizardHat: FxBuilder = ({ add, spec, host }) => {
+  const color = spec.color ?? 0x1a103c;
+  const brim = add(new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.02, 0.56), emis(color, 0.8)), host);
+  brim.position.set(0, 0.36, 0);
+  const cone = add(new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.5, 6), emis(color, 0.8)), host);
+  cone.position.set(-0.02, 0.6, -0.02); cone.rotation.x = -0.15; cone.rotation.z = 0.05;
+  const band = add(new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.04, 0.3), emis(0xf2c14e, 1.2)), host);
+  band.position.set(0, 0.39, 0);
+  return () => {};
+};
+
+const buildGoldenCrown: FxBuilder = ({ add, spec, host }) => {
+  const color = spec.color ?? 0xf2c14e;
+  const band = add(new THREE.Mesh(new THREE.TorusGeometry(0.19, 0.02, 6, 24), metalM(color, 0.15)), host);
+  band.position.set(0, 0.38, 0); band.rotation.x = Math.PI / 2;
+  const spikes: THREE.Mesh[] = [];
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2;
+    const spike = add(new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.1, 4), metalM(color, 0.15)), host);
+    spike.position.set(Math.cos(a) * 0.19, 0.44, Math.sin(a) * 0.19); spikes.push(spike);
+  }
+  return () => {};
+};
+
+const buildStrawSunhat: FxBuilder = ({ add, spec, host }) => {
+  const color = spec.color ?? 0xd9b85a;
+  const brim = add(new THREE.Mesh(new THREE.BoxGeometry(0.66, 0.02, 0.66), emis(color, 0.7)), host);
+  brim.position.set(0, 0.36, 0);
+  const top = add(new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.15, 0.36), emis(color, 0.7)), host);
+  top.position.set(0, 0.44, 0);
+  const band = add(new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.03, 0.38), emis(0xbf3a3a, 1.0)), host);
+  band.position.set(0, 0.38, 0);
+  return () => {};
+};
+
+const buildAviatorCap: FxBuilder = ({ add, spec, host }) => {
+  const color = spec.color ?? 0x4a2d18;
+  const cap = add(new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.3, 0.4), darkM(color)), host);
+  cap.position.set(0, 0.42, 0);
+  const flapL = add(new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.2, 0.12), darkM(color)), host);
+  flapL.position.set(0.2, 0.26, 0);
+  const flapR = add(new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.2, 0.12), darkM(color)), host);
+  flapR.position.set(-0.2, 0.26, 0);
+  return () => {};
+};
+
+const buildLegendCirclet: FxBuilder = ({ add, spec, host }) => {
+  const color = spec.color ?? 0xd9a11a;
+  const band = add(new THREE.Mesh(new THREE.TorusGeometry(0.19, 0.015, 6, 24), metalM(color, 0.1)), host);
+  band.position.set(0, 0.36, 0); band.rotation.x = Math.PI / 2;
+  const gem = add(new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 0.03), emis(0xff333a, 1.8)), host);
+  gem.position.set(0, 0.36, 0.19);
+  return () => {};
+};
+
+// ---- 10 NEW TERRA HATS ----
+const buildSteampunkTophat: FxBuilder = ({ add, spec, host }) => {
+  const color = spec.color ?? 0xd9a11a;
+  const brim = add(new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.02, 0.56), darkM(0x111116)), host);
+  brim.position.set(0, 0.36, 0);
+  const crown = add(new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.32, 0.38), darkM(0x111116)), host);
+  crown.position.set(0, 0.52, 0);
+  const band = add(new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.04, 0.4), metalM(color, 0.15)), host);
+  band.position.set(0, 0.38, 0);
+  const lens = add(new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.03, 8), metalM(color)), host);
+  lens.position.set(-0.1, 0.22, 0.17); lens.rotation.x = Math.PI / 2;
+  const glass = add(new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.035, 8), emis(0x33ffaa, 1.5)), lens);
+  return () => {};
+};
+
+const buildArchmageHat: FxBuilder = ({ add, spec, host }) => {
+  const color = spec.color ?? 0xead0ff;
+  const brim = add(new THREE.Mesh(new THREE.BoxGeometry(0.66, 0.02, 0.66), emis(0x221133, 0.6)), host);
+  brim.position.set(0, 0.36, 0);
+  const cone = add(new THREE.Mesh(new THREE.ConeGeometry(0.24, 0.6, 6), emis(0x221133, 0.6)), host);
+  cone.position.set(-0.04, 0.64, -0.04); cone.rotation.x = -0.22; cone.rotation.z = 0.08;
+  const moon = add(new THREE.Mesh(new THREE.TorusGeometry(0.08, 0.02, 4, 16), emis(color, 2.0)), host);
+  moon.position.set(0, 1.05, 0.08);
+  return (t) => { moon.rotation.y = t * 1.5; moon.position.y = 1.05 + Math.sin(t * 3) * 0.04; };
+};
+
+const buildChefToque: FxBuilder = ({ add, spec, host }) => {
+  const color = spec.color ?? 0xffffff;
+  const base = add(new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.14, 10), emis(color, 0.8)), host);
+  base.position.set(0, 0.42, 0);
+  const puff = add(new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.26, 10), emis(color, 0.8)), host);
+  puff.position.set(0, 0.6, 0);
+  return (t) => { puff.scale.set(1, 1 + Math.sin(t * 4) * 0.02, 1); };
+};
+
+const buildOniMask: FxBuilder = ({ add, spec, host }) => {
+  const color = spec.color ?? 0xff3333;
+  const mask = add(new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.22, 0.22), metalM(0xaa1111)), host);
+  mask.position.set(0.18, 0.26, 0.05); mask.rotation.y = 0.4; mask.rotation.z = -0.1;
+  const hornL = add(new THREE.Mesh(new THREE.ConeGeometry(0.02, 0.08, 4), metalM(0xd9a11a)), mask);
+  hornL.position.set(0.04, 0.14, 0.06); hornL.rotation.z = -0.35;
+  const hornR = add(new THREE.Mesh(new THREE.ConeGeometry(0.02, 0.08, 4), metalM(0xd9a11a)), mask);
+  hornR.position.set(0.04, 0.14, -0.06); hornR.rotation.z = 0.35;
+  const eyeL = add(new THREE.Mesh(new THREE.SphereGeometry(0.02, 4, 4), emis(color, 2.0)), mask);
+  eyeL.position.set(0.08, 0.02, 0.05);
+  const eyeR = add(new THREE.Mesh(new THREE.SphereGeometry(0.02, 4, 4), emis(color, 2.0)), mask);
+  eyeR.position.set(0.08, 0.02, -0.05);
+  return (t) => {
+    const intensity = Math.random() > 0.96 ? 0 : 2.0;
+    eyeL.material.emissiveIntensity = intensity;
+    eyeR.material.emissiveIntensity = intensity;
+  };
+};
+
+const buildCyberGoggles: FxBuilder = ({ add, spec, host }) => {
+  const color = spec.color ?? 0x33ff33;
+  const strap = add(new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.05, 0.42), darkM(0x111116)), host);
+  strap.position.set(0, 0.32, 0);
+  const lensL = add(new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.04, 8), metalM(0x223322)), host);
+  lensL.position.set(0.08, 0.32, 0.21); lensL.rotation.x = Math.PI / 2;
+  const glowL = add(new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.045, 8), emis(color, 1.8)), lensL);
+  const lensR = add(new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.04, 8), metalM(0x223322)), host);
+  lensR.position.set(-0.08, 0.32, 0.21); lensR.rotation.x = Math.PI / 2;
+  const glowR = add(new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.045, 8), emis(color, 1.8)), lensR);
+  return (t) => {
+    const s = 0.9 + Math.sin(t * 8) * 0.1;
+    glowL.scale.set(s, 1, s); glowR.scale.set(s, 1, s);
+  };
+};
+
+const buildPlagueMask: FxBuilder = ({ add, spec, host }) => {
+  const color = spec.color ?? 0x2a2211;
+  const hood = add(new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.36, 0.44), darkM(0x1a1a1a)), host);
+  hood.position.set(0, 0.28, -0.04);
+  const beak = add(new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.3, 4), darkM(color)), host);
+  beak.position.set(0, 0.12, 0.32); beak.rotation.x = Math.PI / 2.3;
+  const lensL = add(new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.01, 8), metalM(0x8a7a5a)), host);
+  lensL.position.set(0.08, 0.18, 0.17); lensL.rotation.x = Math.PI / 2;
+  const lensR = add(new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.01, 8), metalM(0x8a7a5a)), host);
+  lensR.position.set(-0.08, 0.18, 0.17); lensR.rotation.x = Math.PI / 2;
+  return () => {};
+};
+
+const buildLaurels: FxBuilder = ({ add, spec, host }) => {
+  const color = spec.color ?? 0xffd23a;
+  const leaves: THREE.Mesh[] = [];
+  const N = 8;
+  for (let i = 0; i < N; i++) {
+    const leaf = add(new THREE.Mesh(new THREE.OctahedronGeometry(0.04), metalM(color, 0.15)), host);
+    leaves.push(leaf);
+  }
+  return (t) => {
+    leaves.forEach((l, i) => {
+      const a = (i / N) * Math.PI * 2 + t * 0.8;
+      l.position.set(Math.cos(a) * 0.24, 0.32 + Math.sin(t * 2 + i) * 0.03, Math.sin(a) * 0.24);
+      l.rotation.y = a; l.rotation.z = Math.sin(t + i) * 0.3;
+    });
+  };
+};
+
+const buildSamuraiHat: FxBuilder = ({ add, spec, host }) => {
+  const color = spec.color ?? 0xff3333;
+  const cap = add(new THREE.Mesh(new THREE.ConeGeometry(0.38, 0.18, 12), darkM(0xd9b85a, 0.6)), host);
+  cap.position.set(0, 0.44, 0);
+  const ribbonL = add(new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.28, 0.01), emis(color, 0.9)), host);
+  ribbonL.position.set(0.06, 0.2, -0.2); ribbonL.rotation.z = -0.15;
+  const ribbonR = add(new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.28, 0.01), emis(color, 0.9)), host);
+  ribbonR.position.set(-0.06, 0.2, -0.2); ribbonR.rotation.z = 0.15;
+  return (t) => {
+    ribbonL.rotation.x = Math.sin(t * 3.5) * 0.15;
+    ribbonR.rotation.x = Math.cos(t * 3.5) * 0.15;
+  };
+};
+
+const buildDiverHelm: FxBuilder = ({ add, spec, host }) => {
+  const color = spec.color ?? 0x33ffaa;
+  const helm = add(new THREE.Mesh(new THREE.SphereGeometry(0.24, 10, 10), metalM(0x8a7a5a, 0.35)), host);
+  helm.position.set(0, 0.32, 0);
+  const portal = add(new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.02, 10), metalM(0x4a4a40)), host);
+  portal.position.set(0, 0.32, 0.23); portal.rotation.x = Math.PI / 2;
+  const glass = add(new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.025, 10), emis(color, 1.6)), portal);
+  return (t) => { glass.material.emissiveIntensity = 1.2 + Math.sin(t * 5) * 0.4; };
+};
+
+const buildAetherCrown: FxBuilder = ({ add, spec, host }) => {
+  const color = spec.color ?? 0x33aaff;
+  const shards: THREE.Mesh[] = [];
+  const N = 6;
+  for (let i = 0; i < N; i++) {
+    const shard = add(new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.12, 4), emis(color, 2.0)), host);
+    shard.rotation.x = Math.PI; shards.push(shard);
+  }
+  return (t) => {
+    shards.forEach((s, i) => {
+      const a = (i / N) * Math.PI * 2 - t * 1.2;
+      s.position.set(Math.cos(a) * 0.22, 0.48 + Math.sin(t * 3.5 + i) * 0.02, Math.sin(a) * 0.22);
+      s.rotation.y = -a;
+    });
+  };
+};
+
+// ---- 10 NEW TERRA SHIRTS ----
+const buildTrenchcoat: FxBuilder = (ctx) => {
+  const { spec } = ctx;
+  const color = spec.color ?? 0xd9a11a;
+  shellOn(ctx, 'torso', new THREE.BoxGeometry(0.46, 0.58, 0.28), darkM(0x2a1a10, 0.55), [0, 0, 0]);
+  const collarL = shellOn(ctx, 'torso', new THREE.BoxGeometry(0.04, 0.16, 0.08), metalM(color), [-0.12, 0.2, 0.15]);
+  if (collarL) { collarL.rotation.y = -0.4; collarL.rotation.z = -0.3; }
+  const collarR = shellOn(ctx, 'torso', new THREE.BoxGeometry(0.04, 0.16, 0.08), metalM(color), [0.12, 0.2, 0.15]);
+  if (collarR) { collarR.rotation.y = 0.4; collarR.rotation.z = 0.3; }
+  return () => {};
+};
+
+const buildNinjaGarb: FxBuilder = (ctx) => {
+  const { spec } = ctx;
+  const color = spec.color ?? 0xff3333;
+  shellOn(ctx, 'torso', new THREE.BoxGeometry(0.44, 0.58, 0.26), darkM(0x111116, 0.65), [0, 0, 0]);
+  shellOn(ctx, 'torso', new THREE.BoxGeometry(0.46, 0.06, 0.28), emis(color, 1.2), [0, -0.16, 0]);
+  return () => {};
+};
+
+const buildCyberHoodie: FxBuilder = (ctx) => {
+  const { spec } = ctx;
+  const color = spec.color ?? 0x33ff33;
+  shellOn(ctx, 'torso', new THREE.BoxGeometry(0.45, 0.58, 0.27), darkM(0x111c11, 0.45), [0, 0, 0]);
+  const collar = shellOn(ctx, 'torso', new THREE.BoxGeometry(0.38, 0.12, 0.26), emis(color, 1.5), [0, 0.28, 0.04]);
+  return (t) => { if (collar) (collar.material as THREE.MeshStandardMaterial).emissiveIntensity = 1.0 + Math.sin(t * 6) * 0.4; };
+};
+
+const buildKimono: FxBuilder = (ctx) => {
+  shellOn(ctx, 'torso', new THREE.BoxGeometry(0.44, 0.58, 0.26), darkM(0x5a1111, 0.55), [0, 0, 0]);
+  shellOn(ctx, 'armL', new THREE.BoxGeometry(0.18, 0.22, 0.2), darkM(0x5a1111, 0.55), [0, -0.18, 0]);
+  shellOn(ctx, 'armR', new THREE.BoxGeometry(0.18, 0.22, 0.2), darkM(0x5a1111, 0.55), [0, -0.18, 0]);
+  return () => {};
+};
+
+const buildAetherRobes: FxBuilder = (ctx) => {
+  const { spec } = ctx;
+  const color = spec.color ?? 0x33ccff;
+  shellOn(ctx, 'torso', new THREE.BoxGeometry(0.44, 0.58, 0.26), emis(0xeeeeee, 0.6), [0, 0, 0]);
+  const line = shellOn(ctx, 'torso', new THREE.BoxGeometry(0.04, 0.54, 0.28), emis(color, 1.8), [0, 0.02, 0]);
+  return (t) => { if (line) (line.material as THREE.MeshStandardMaterial).emissiveIntensity = 1.2 + Math.sin(t * 5) * 0.6; };
+};
+
+const buildPaladinPlate: FxBuilder = (ctx) => {
+  const { spec } = ctx;
+  const color = spec.color ?? 0xffaa00;
+  shellOn(ctx, 'torso', new THREE.BoxGeometry(0.46, 0.58, 0.28), metalM(0xcccccc, 0.22), [0, 0, 0]);
+  const gem = shellOn(ctx, 'torso', new THREE.BoxGeometry(0.08, 0.08, 0.3), emis(color, 2.0), [0, 0.08, 0.02]);
+  return (t) => { if (gem) (gem.material as THREE.MeshStandardMaterial).emissiveIntensity = 1.4 + Math.sin(t * 8) * 0.6; };
+};
+
+const buildVolcanicTunic: FxBuilder = (ctx) => {
+  const { spec } = ctx;
+  const color = spec.color ?? 0xff5500;
+  shellOn(ctx, 'torso', new THREE.BoxGeometry(0.45, 0.58, 0.27), darkM(0x1a0a05, 0.6), [0, 0, 0]);
+  const lava = shellOn(ctx, 'torso', new THREE.BoxGeometry(0.38, 0.48, 0.29), emis(color, 1.6), [0, 0, 0]);
+  return (t) => { if (lava) (lava.material as THREE.MeshStandardMaterial).emissiveIntensity = 1.1 + Math.sin(t * 4.5) * 0.5; };
+};
+
+const buildChefCoat: FxBuilder = (ctx) => {
+  shellOn(ctx, 'torso', new THREE.BoxGeometry(0.44, 0.58, 0.26), emis(0xffffff, 0.7), [0, 0, 0]);
+  shellOn(ctx, 'torso', new THREE.BoxGeometry(0.02, 0.3, 0.28), darkM(0x2a2a2a), [-0.08, 0.06, 0]);
+  shellOn(ctx, 'torso', new THREE.BoxGeometry(0.02, 0.3, 0.28), darkM(0x2a2a2a), [0.08, 0.06, 0]);
+  return () => {};
+};
+
+const buildDiverSuit: FxBuilder = (ctx) => {
+  shellOn(ctx, 'torso', new THREE.BoxGeometry(0.45, 0.58, 0.27), darkM(0x4a4a40, 0.6), [0, 0, 0]);
+  shellOn(ctx, 'torso', new THREE.BoxGeometry(0.36, 0.06, 0.3), metalM(0x8a7a5a), [0, 0.28, 0]);
+  return () => {};
+};
+
+const buildNebulaVest: FxBuilder = (ctx) => {
+  const { add, spec } = ctx;
+  const color = spec.color ?? 0xff33ff;
+  shellOn(ctx, 'torso', new THREE.BoxGeometry(0.44, 0.58, 0.26), darkM(0x0a0518, 0.55), [0, 0, 0]);
+  const sparkles: THREE.Sprite[] = [];
+  for (let i = 0; i < 4; i++) {
+    const s = add(softGlow(color, 0.12, 0.8), ctx.host);
+    sparkles.push(s);
+  }
+  return (t) => {
+    sparkles.forEach((s, i) => {
+      const ph = i * 1.5;
+      s.position.set(Math.sin(t + ph) * 0.18, 0.1 + Math.cos(t * 1.3 + ph) * 0.22, 0.15);
+    });
+  };
+};
+
+// ---- 10 NEW TERRA GLOVES ----
+const buildBrassGauntlets: FxBuilder = (ctx) => {
+  const { add, spec } = ctx;
+  const color = spec.color ?? 0xd9a11a;
+  const gaunts: THREE.Mesh[] = [];
+  for (const arm of ['armL', 'armR']) {
+    const part = ctx.rig.getObjectByName(arm);
+    if (part) {
+      const m = add(new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.22, 0.18), metalM(0x8a7a5a)), part);
+      m.position.set(0, -0.32, 0); gaunts.push(m);
+      const valve = add(new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.03, 6), metalM(color)), m);
+      valve.position.set(0, 0, 0.1); valve.rotation.x = Math.PI / 2;
+    }
+  }
+  return (t) => {
+    const scaleY = 1 + Math.sin(t * 6) * 0.03;
+    gaunts.forEach(g => g.scale.set(1, scaleY, 1));
+  };
+};
+
+const buildNinjaWraps: FxBuilder = (ctx) => {
+  const { add } = ctx;
+  for (const arm of ['armL', 'armR']) {
+    const part = ctx.rig.getObjectByName(arm);
+    if (part) {
+      const wraps = add(new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.24, 0.17), darkM(0x111116, 0.65)), part);
+      wraps.position.set(0, -0.32, 0);
+    }
+  }
+  return () => {};
+};
+
+const buildCyberGlovesNew: FxBuilder = (ctx) => {
+  const { add, spec } = ctx;
+  const color = spec.color ?? 0x33ff33;
+  const glows: THREE.Mesh[] = [];
+  for (const arm of ['armL', 'armR']) {
+    const part = ctx.rig.getObjectByName(arm);
+    if (part) {
+      const gloves = add(new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.2, 0.16), darkM(0x112211)), part);
+      gloves.position.set(0, -0.32, 0);
+      const g = add(new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.04, 0.17), emis(color, 1.8)), gloves);
+      g.position.set(0, 0.05, 0); glows.push(g);
+    }
+  }
+  return (t) => {
+    const val = 1.0 + Math.sin(t * 7) * 0.5;
+    glows.forEach(g => (g.material as THREE.MeshStandardMaterial).emissiveIntensity = val);
+  };
+};
+
+const buildAetherGauntlets: FxBuilder = (ctx) => {
+  const { add, spec } = ctx;
+  const color = spec.color ?? 0x33aaff;
+  const shields: THREE.Mesh[] = [];
+  for (const arm of ['armL', 'armR']) {
+    const part = ctx.rig.getObjectByName(arm);
+    if (part) {
+      const shield = add(new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.14, 0.02), emis(color, 2.0)), part);
+      shield.position.set(0, -0.36, 0.1); shields.push(shield);
+    }
+  }
+  return (t) => {
+    shields.forEach((s, i) => {
+      s.position.y = -0.36 + Math.sin(t * 4 + i) * 0.015;
+    });
+  };
+};
+
+const buildFireWraps: FxBuilder = (ctx) => {
+  const { add, spec } = ctx;
+  const color = spec.color ?? 0xff5500;
+  const flames: THREE.Sprite[] = [];
+  for (const arm of ['armL', 'armR']) {
+    const part = ctx.rig.getObjectByName(arm);
+    if (part) {
+      shellOn(ctx, arm, new THREE.BoxGeometry(0.15, 0.2, 0.16), darkM(0x331100, 0.6), [0, -0.32, 0]);
+      for (let i = 0; i < 2; i++) {
+        const f = add(softGlow(color, 0.18, 0.7), part);
+        flames.push(f);
+      }
+    }
+  }
+  return (t) => {
+    flames.forEach((f, i) => {
+      const side = i < 2 ? -1 : 1;
+      const ph = (i % 2) * Math.PI;
+      f.position.set(Math.sin(t * 5 + ph) * 0.05, -0.42 + Math.cos(t * 3 + ph) * 0.04, side * 0.04);
+      f.scale.setScalar(0.15 + Math.sin(t * 6 + ph) * 0.03);
+    });
+  };
+};
+
+const buildFrostMitts: FxBuilder = (ctx) => {
+  const { add, spec } = ctx;
+  const color = spec.color ?? 0x88ddff;
+  const iceChunks: THREE.Mesh[] = [];
+  for (const arm of ['armL', 'armR']) {
+    const part = ctx.rig.getObjectByName(arm);
+    if (part) {
+      shellOn(ctx, arm, new THREE.BoxGeometry(0.16, 0.18, 0.17), darkM(0x113344), [0, -0.32, 0]);
+      const chunk = add(new THREE.Mesh(new THREE.OctahedronGeometry(0.06), emis(color, 1.4)), part);
+      chunk.position.set(0, -0.45, 0.04); iceChunks.push(chunk);
+    }
+  }
+  return (t) => {
+    iceChunks.forEach((c, i) => {
+      c.rotation.x = t * 2 + i; c.rotation.y = t * 1.5;
+    });
+  };
+};
+
+const buildGoldRings: FxBuilder = (ctx) => {
+  const { add, spec } = ctx;
+  const color = spec.color ?? 0xffd700;
+  for (const arm of ['armL', 'armR']) {
+    const part = ctx.rig.getObjectByName(arm);
+    if (part) {
+      for (const offsetZ of [-0.05, 0, 0.05]) {
+        const ring = add(new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.02, 0.02), metalM(color, 0.15)), part);
+        ring.position.set(0, -0.46, offsetZ);
+      }
+    }
+  }
+  return () => {};
+};
+
+const buildBoneGauntlets: FxBuilder = (ctx) => {
+  const { add } = ctx;
+  for (const arm of ['armL', 'armR']) {
+    const part = ctx.rig.getObjectByName(arm);
+    if (part) {
+      const guard = add(new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.22, 0.17), darkM(0xeeeeee)), part);
+      guard.position.set(0, -0.32, 0);
+      const spike = add(new THREE.Mesh(new THREE.ConeGeometry(0.02, 0.06, 4), darkM(0xddddcc)), guard);
+      spike.position.set(0, 0, 0.095); spike.rotation.x = Math.PI / 2;
+    }
+  }
+  return () => {};
+};
+
+const buildToxicClaws: FxBuilder = (ctx) => {
+  const { add, spec } = ctx;
+  const color = spec.color ?? 0x99ff33;
+  const drops: THREE.Mesh[] = [];
+  for (const arm of ['armL', 'armR']) {
+    const part = ctx.rig.getObjectByName(arm);
+    if (part) {
+      shellOn(ctx, arm, new THREE.BoxGeometry(0.15, 0.16, 0.16), darkM(0x112211), [0, -0.32, 0]);
+      for (let i = 0; i < 2; i++) {
+        const claw = add(new THREE.Mesh(new THREE.ConeGeometry(0.015, 0.08, 4), emis(color, 1.6)), part);
+        claw.position.set((i === 0 ? -1 : 1) * 0.04, -0.48, 0.06); claw.rotation.x = -0.35;
+        const drop = add(new THREE.Mesh(new THREE.SphereGeometry(0.015, 4, 4), glowM(color, 0.8)), claw);
+        drop.position.set(0, -0.05, 0); drops.push(drop);
+      }
+    }
+  }
+  return (t) => {
+    drops.forEach((d, i) => {
+      d.position.y = -0.05 - ((t * 4.5 + i * 1.2) % 1.0) * 0.08;
+      d.scale.setScalar(1 - ((t * 4.5 + i * 1.2) % 1.0));
+    });
+  };
+};
+
+const buildOvenMitts: FxBuilder = (ctx) => {
+  const { add } = ctx;
+  for (const arm of ['armL', 'armR']) {
+    const part = ctx.rig.getObjectByName(arm);
+    if (part) {
+      const mitt = add(new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.22, 0.18), darkM(0xcc3333, 0.8)), part);
+      mitt.position.set(0, -0.36, 0.01);
+    }
+  }
+  return () => {};
+};
+
+// ---- 10 NEW TERRA BOOTS ----
+const buildBrassBoots: FxBuilder = (ctx) => {
+  const { add, spec } = ctx;
+  const color = spec.color ?? 0xd9a11a;
+  const boots: THREE.Mesh[] = [];
+  for (const leg of ['legL', 'legR']) {
+    const part = ctx.rig.getObjectByName(leg);
+    if (part) {
+      const b = add(new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.14, 0.25), metalM(0x8a7a5a)), part);
+      b.position.set(0, -0.53, 0.03); boots.push(b);
+      const pipe = add(new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.1, 6), metalM(color)), b);
+      pipe.position.set(0, 0.04, -0.135); pipe.rotation.x = Math.PI / 2.3;
+    }
+  }
+  return (t) => {
+    boots.forEach((b, i) => {
+      const s = 1.0 + Math.sin(t * 5.5 + i) * 0.02;
+      b.scale.set(1, s, 1);
+    });
+  };
+};
+
+const buildNinjaTabi: FxBuilder = (ctx) => {
+  const { add } = ctx;
+  for (const leg of ['legL', 'legR']) {
+    const part = ctx.rig.getObjectByName(leg);
+    if (part) {
+      const tabi = add(new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.11, 0.23), darkM(0x111116)), part);
+      tabi.position.set(0, -0.53, 0.03);
+    }
+  }
+  return () => {};
+};
+
+const buildCyberBootsNew: FxBuilder = (ctx) => {
+  const { add, spec } = ctx;
+  const color = spec.color ?? 0x33ccff;
+  const soles: THREE.Mesh[] = [];
+  for (const leg of ['legL', 'legR']) {
+    const part = ctx.rig.getObjectByName(leg);
+    if (part) {
+      const boot = add(new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.13, 0.24), darkM(0x111122)), part);
+      boot.position.set(0, -0.53, 0.03);
+      const sole = add(new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.02, 0.25), emis(color, 2.0)), boot);
+      sole.position.set(0, -0.065, 0.01); soles.push(sole);
+    }
+  }
+  return (t) => {
+    soles.forEach((s, i) => {
+      (s.material as THREE.MeshStandardMaterial).emissiveIntensity = 1.5 + Math.sin(t * 7 + i) * 0.5;
+    });
+  };
+};
+
+const buildAetherGreaves: FxBuilder = (ctx) => {
+  const { add, spec } = ctx;
+  const color = spec.color ?? 0x33ccff;
+  const bands: THREE.Mesh[] = [];
+  for (const leg of ['legL', 'legR']) {
+    const part = ctx.rig.getObjectByName(leg);
+    if (part) {
+      shellOn(ctx, leg, new THREE.BoxGeometry(0.17, 0.13, 0.24), emis(0xeeeeee, 0.7), [0, -0.53, 0.03]);
+      const band = add(new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.03, 0.25), emis(color, 1.8)), part);
+      band.position.set(0, -0.5, 0.03); bands.push(band);
+    }
+  }
+  return (t) => {
+    bands.forEach(b => (b.material as THREE.MeshStandardMaterial).emissiveIntensity = 1.2 + Math.sin(t * 5.5) * 0.4);
+  };
+};
+
+const buildLavaStriders: FxBuilder = (ctx) => {
+  const { add, spec } = ctx;
+  const color = spec.color ?? 0xff6600;
+  const soles: THREE.Mesh[] = [];
+  for (const leg of ['legL', 'legR']) {
+    const part = ctx.rig.getObjectByName(leg);
+    if (part) {
+      const Strider = add(new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.13, 0.25), darkM(0x221105, 0.65)), part);
+      Strider.position.set(0, -0.53, 0.03);
+      const sole = add(new THREE.Mesh(new THREE.BoxGeometry(0.19, 0.03, 0.26), emis(color, 1.8)), Strider);
+      sole.position.set(0, -0.06, 0); soles.push(sole);
+    }
+  }
+  return (t) => {
+    soles.forEach(s => (s.material as THREE.MeshStandardMaterial).emissiveIntensity = 1.1 + Math.sin(t * 5 + Math.random()) * 0.6);
+  };
+};
+
+const buildGlacialCleats: FxBuilder = (ctx) => {
+  const { add, spec } = ctx;
+  const color = spec.color ?? 0xaaddff;
+  const iceGlows: THREE.Mesh[] = [];
+  for (const leg of ['legL', 'legR']) {
+    const part = ctx.rig.getObjectByName(leg);
+    if (part) {
+      shellOn(ctx, leg, new THREE.BoxGeometry(0.17, 0.13, 0.24), darkM(0x113344), [0, -0.53, 0.03]);
+      const spike = add(new THREE.Mesh(new THREE.OctahedronGeometry(0.04), emis(color, 1.5)), part);
+      spike.position.set(0, -0.61, 0.03); iceGlows.push(spike);
+    }
+  }
+  return (t) => {
+    iceGlows.forEach((g, i) => {
+      g.rotation.y = t * 1.5 + i;
+    });
+  };
+};
+
+const buildWingedBoots: FxBuilder = (ctx) => {
+  const { add } = ctx;
+  const wingsL: THREE.Mesh[] = [];
+  const wingsR: THREE.Mesh[] = [];
+  for (const leg of ['legL', 'legR']) {
+    const part = ctx.rig.getObjectByName(leg);
+    if (part) {
+      shellOn(ctx, leg, new THREE.BoxGeometry(0.17, 0.12, 0.24), emis(0xeeeeee, 0.7), [0, -0.53, 0.03]);
+      const wing = add(new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.12, 4), emis(0xffffff, 1.2)), part);
+      wing.position.set(leg === 'legL' ? 0.11 : -0.11, -0.48, -0.04);
+      wing.rotation.x = -Math.PI / 3; wing.rotation.y = leg === 'legL' ? Math.PI / 2 : -Math.PI / 2;
+      (leg === 'legL' ? wingsL : wingsR).push(wing);
+    }
+  }
+  return (t) => {
+    const flap = Math.sin(t * 12) * 0.25;
+    wingsL.forEach(w => w.rotation.z = flap);
+    wingsR.forEach(w => w.rotation.z = -flap);
+  };
+};
+
+const buildDiverBoots: FxBuilder = (ctx) => {
+  const { add } = ctx;
+  for (const leg of ['legL', 'legR']) {
+    const part = ctx.rig.getObjectByName(leg);
+    if (part) {
+      const boot = add(new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.16, 0.26), darkM(0x4a4a40, 0.55)), part);
+      boot.position.set(0, -0.54, 0.03);
+    }
+  }
+  return () => {};
+};
+
+const buildSlimeSlippers: FxBuilder = (ctx) => {
+  const { add, spec } = ctx;
+  const color = spec.color ?? 0x66ff66;
+  const slimes: THREE.Mesh[] = [];
+  for (const leg of ['legL', 'legR']) {
+    const part = ctx.rig.getObjectByName(leg);
+    if (part) {
+      const slipper = add(new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.13, 0.24), glowM(color, 0.7)), part);
+      slipper.position.set(0, -0.53, 0.03); slimes.push(slipper);
+    }
+  }
+  return (t) => {
+    slimes.forEach((s, i) => {
+      const wave = 0.95 + Math.sin(t * 6 + i) * 0.05;
+      s.scale.set(wave, wave, wave);
+    });
+  };
+};
+
+const buildGoldGreavesNew: FxBuilder = (ctx) => {
+  const { add, spec } = ctx;
+  const color = spec.color ?? 0xffd700;
+  for (const leg of ['legL', 'legR']) {
+    const part = ctx.rig.getObjectByName(leg);
+    if (part) {
+      const boot = add(new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.14, 0.25), metalM(color, 0.18)), part);
+      boot.position.set(0, -0.53, 0.03);
+    }
+  }
+  return () => {};
+};
+
+// ---- 10 NEW TERRA BACKPACKS ----
+const buildChronoPack: FxBuilder = ({ add, spec, host }) => {
+  const color = spec.color ?? 0xd9a11a;
+  const frame = add(new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.32, 0.12), darkM(0x8a7a5a)), host);
+  frame.position.set(0, 0.3, -0.2);
+  const gear1 = add(new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.04, 8), metalM(color)), frame);
+  gear1.position.set(-0.06, 0.06, -0.08); gear1.rotation.x = Math.PI / 2;
+  const gear2 = add(new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.04, 6), metalM(0xb0b0b0)), frame);
+  gear2.position.set(0.06, -0.06, -0.08); gear2.rotation.x = Math.PI / 2;
+  const stem = add(new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.2, 4), metalM(color)), frame);
+  stem.position.set(0, -0.16, -0.07); stem.geometry.translate(0, -0.1, 0);
+  const weight = add(new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.02, 8), metalM(color)), stem);
+  weight.position.set(0, -0.2, 0); weight.rotation.x = Math.PI / 2;
+  return (t) => {
+    gear1.rotation.y = t * 1.5;
+    gear2.rotation.y = -t * 2.5;
+    stem.rotation.z = Math.sin(t * 3.5) * 0.32;
+  };
+};
+
+const buildPlasmaGrid: FxBuilder = ({ add, spec, host }) => {
+  const color = spec.color ?? 0xff33cc;
+  const frame = add(new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.36, 0.14), darkM(0x111122)), host);
+  frame.position.set(0, 0.3, -0.2);
+  const core = add(new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.26, 0.08), glowM(color, 0.3)), frame);
+  core.position.set(0, 0, -0.04);
+  const node = add(new THREE.Mesh(new THREE.SphereGeometry(0.035, 6, 6), emis(0x33ccff, 2.0)), frame);
+  node.position.set(0, 0, -0.12);
+  return (t) => {
+    node.position.y = Math.sin(t * 4.5) * 0.11;
+    node.position.x = Math.cos(t * 3.0) * 0.08;
+    core.scale.setScalar(0.95 + Math.sin(t * 8) * 0.05);
+  };
+};
+
+const buildBiodome: FxBuilder = ({ add, spec, host }) => {
+  const color = spec.color ?? 0x33ff33;
+  const ring = add(new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.04, 12), darkM(0x4a3a2a)), host);
+  ring.position.set(0, 0.2, -0.24);
+  const dome = add(new THREE.Mesh(new THREE.SphereGeometry(0.15, 12, 12, 0, Math.PI * 2, 0, Math.PI / 2), glowM(0xffffff, 0.18)), ring);
+  dome.position.set(0, 0.02, 0);
+  const tree = add(new THREE.Group(), ring);
+  tree.position.set(0, 0.02, 0);
+  const trunk = add(new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.025, 0.08, 5), darkM(0x8a5a2a)), tree);
+  trunk.position.set(0, 0.04, 0);
+  const leaves = add(new THREE.Mesh(new THREE.DodecahedronGeometry(0.05), emis(color, 0.9)), tree);
+  leaves.position.set(0, 0.1, 0);
+  return (t) => {
+    tree.rotation.y = t * 0.8;
+    leaves.scale.setScalar(0.98 + Math.sin(t * 3) * 0.02);
+  };
+};
+
+const buildBlackhole: FxBuilder = ({ add, spec, host }) => {
+  const color = spec.color ?? 0x9933ff;
+  const core = add(new THREE.Mesh(new THREE.SphereGeometry(0.075, 12, 12), emis(0x000000, 0)), host);
+  core.position.set(0, 0.3, -0.24);
+  const disk = add(new THREE.Mesh(new THREE.TorusGeometry(0.14, 0.025, 8, 32), glowM(color, 0.75)), host);
+  disk.position.copy(core.position); disk.rotation.x = Math.PI / 3;
+  return (t) => {
+    disk.rotation.z = -t * 4.5;
+    const s = 1.0 + Math.sin(t * 5.0) * 0.08;
+    disk.scale.set(s, s, 1);
+  };
+};
+
+const buildDragonJet: FxBuilder = ({ add, spec, host }) => {
+  const color = spec.color ?? 0xff5500;
+  const pack = add(new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.28, 0.14), darkM(0x331111)), host);
+  pack.position.set(0, 0.3, -0.2);
+  const wingL = add(new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.32, 4), metalM(0x5a1111)), pack);
+  wingL.position.set(-0.14, 0.08, -0.06); wingL.rotation.z = Math.PI / 2.5; wingL.rotation.y = 0.4;
+  const wingR = add(new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.32, 4), metalM(0x5a1111)), pack);
+  wingR.position.set(0.14, 0.08, -0.06); wingR.rotation.z = -Math.PI / 2.5; wingR.rotation.y = -0.4;
+  const jetL = add(new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.18, 5), glowM(color, 0.8)), pack);
+  jetL.position.set(-0.08, -0.16, -0.08); jetL.rotation.x = 0.15;
+  const jetR = add(new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.18, 5), glowM(color, 0.8)), pack);
+  jetR.position.set(0.08, -0.16, -0.08); jetR.rotation.x = 0.15;
+  return (t) => {
+    const flap = Math.sin(t * 4.0) * 0.15;
+    wingL.rotation.z = Math.PI / 2.5 + flap;
+    wingR.rotation.z = -Math.PI / 2.5 - flap;
+    const nozzleS = 0.88 + Math.sin(t * 18) * 0.12;
+    jetL.scale.set(nozzleS, 1, nozzleS);
+    jetR.scale.set(nozzleS, 1, nozzleS);
+  };
+};
+
+const buildLumenCrystals: FxBuilder = ({ add, spec, host }) => {
+  const color = spec.color ?? 0xffd700;
+  const crystals: THREE.Mesh[] = [];
+  const N = 3;
+  for (let i = 0; i < N; i++) {
+    const c = add(new THREE.Mesh(new THREE.OctahedronGeometry(0.07), emis(color, 1.8)), host);
+    crystals.push(c);
+  }
+  return (t) => {
+    crystals.forEach((c, i) => {
+      const a = (i / N) * Math.PI * 2 + t * 1.1;
+      c.position.set(Math.cos(a) * 0.35, 0.32 + Math.sin(t * 3 + i) * 0.05, -0.22 + Math.sin(a) * 0.12);
+      c.rotation.x = t + i; c.rotation.y = t * 1.4;
+    });
+  };
+};
+
+const buildAngelWings: FxBuilder = ({ add, spec, host }) => {
+  const color = spec.color ?? 0xffffff;
+  const pack = add(new THREE.Group(), host);
+  pack.position.set(0, 0.32, -0.2);
+  const wingL = add(new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.36, 0.04), emis(color, 1.2)), pack);
+  wingL.position.set(-0.16, 0.08, -0.04); wingL.rotation.z = Math.PI / 3;
+  const wingR = add(new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.36, 0.04), emis(color, 1.2)), pack);
+  wingR.position.set(0.16, 0.08, -0.04); wingR.rotation.z = -Math.PI / 3;
+  return (t) => {
+    const flap = Math.sin(t * 3.5) * 0.16;
+    wingL.rotation.z = Math.PI / 3 + flap;
+    wingR.rotation.z = -Math.PI / 3 - flap;
+  };
+};
+
+const buildTeslaCoil: FxBuilder = ({ add, spec, host }) => {
+  const color = spec.color ?? 0x33ccff;
+  const base = add(new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.28, 0.12), darkM(0x33333e)), host);
+  base.position.set(0, 0.3, -0.2);
+  const rod1 = add(new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.2, 6), metalM(0xd9a11a)), base);
+  rod1.position.set(-0.06, 0.16, -0.06);
+  const ball1 = add(new THREE.Mesh(new THREE.SphereGeometry(0.035, 6, 6), metalM(0xd9a11a)), rod1);
+  ball1.position.set(0, 0.1, 0);
+  const rod2 = add(new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.2, 6), metalM(0xd9a11a)), base);
+  rod2.position.set(0.06, 0.16, -0.06);
+  const ball2 = add(new THREE.Mesh(new THREE.SphereGeometry(0.035, 6, 6), metalM(0xd9a11a)), rod2);
+  ball2.position.set(0, 0.1, 0);
+  const arc = add(new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.015, 0.015), emis(color, 2.2)), base);
+  arc.position.set(0, 0.26, -0.06);
+  return (t) => {
+    arc.visible = (t * 8) % 1.0 > 0.84;
+    arc.scale.set(1, 0.8 + Math.random() * 0.4, 1);
+  };
+};
+
+const buildPagodaLantern: FxBuilder = ({ add, spec, host }) => {
+  const color = spec.color ?? 0xff3333;
+  const brac = add(new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 0.26, 4), metalM(0x1a1a1e)), host);
+  brac.position.set(0, 0.48, -0.16); brac.rotation.x = Math.PI / 2.5;
+  const lantern = add(new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.18, 8), emis(color, 1.2)), host);
+  lantern.position.set(0, 0.32, -0.32);
+  const top = add(new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.03, 8), metalM(0x1a1a1e)), lantern);
+  top.position.set(0, 0.1, 0);
+  const bot = add(new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.02, 8), metalM(0x1a1a1e)), lantern);
+  bot.position.set(0, -0.1, 0);
+  return (t) => {
+    lantern.position.y = 0.32 + Math.sin(t * 3) * 0.03;
+    lantern.rotation.z = Math.sin(t * 2) * 0.05;
+  };
+};
+
+const buildHydrowheel: FxBuilder = ({ add, spec, host }) => {
+  const color = spec.color ?? 0x33aaff;
+  const tank = add(new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.08, 8), metalM(0x113355)), host);
+  tank.position.set(0, 0.3, -0.22); tank.rotation.x = Math.PI / 2;
+  const wheel = add(new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.06, 6), metalM(color)), tank);
+  wheel.position.set(0, 0.01, 0);
+  const wash = add(softGlow(color, 0.36, 0.45), host);
+  wash.position.copy(tank.position);
+  return (t) => {
+    wheel.rotation.y = t * 2.5;
+    wash.material.opacity = 0.35 + Math.sin(t * 4) * 0.1;
+  };
+};
+
 // =================== registry ===================
 
 const BUILDERS: Record<string, FxBuilder> = {
@@ -1306,6 +2139,35 @@ const BUILDERS: Record<string, FxBuilder> = {
   crown_supernova: buildCrownSupernova, eclipse_ring: buildEclipseRing, frost_monarch: buildFrostMonarch, galaxy_swirl: buildGalaxySwirl,
   constellation_cloak: buildConstellationCloak, runic_aegis: buildRunicAegis, volcano_core: buildVolcanoCore,
   seraph_wings: buildSeraphWings, meteor_swarm: buildMeteorSwarm, comet_step: buildCometStep,
+
+  // standard hats
+  wool_beanie: buildWoolBeanie, camo_helmet: buildCamoHelmet, cyber_visor: buildCyberVisor, wizard_hat: buildWizardHat,
+  golden_crown: buildGoldenCrown, straw_sunhat: buildStrawSunhat, aviator_cap: buildAviatorCap, legend_circlet: buildLegendCirclet,
+
+  // 10 new hats
+  steampunk_tophat: buildSteampunkTophat, archmage_hat: buildArchmageHat, chef_toque: buildChefToque, oni_mask: buildOniMask,
+  cyber_goggles: buildCyberGoggles, plague_mask: buildPlagueMask, laurels: buildLaurels, samurai_hat: buildSamuraiHat,
+  diver_helm: buildDiverHelm, aether_crown: buildAetherCrown,
+
+  // 10 new shirts
+  trenchcoat: buildTrenchcoat, ninja_garb: buildNinjaGarb, cyber_hoodie: buildCyberHoodie, kimono: buildKimono,
+  aether_robes: buildAetherRobes, paladin_plate: buildPaladinPlate, volcanic_tunic: buildVolcanicTunic, chef_coat: buildChefCoat,
+  diver_suit: buildDiverSuit, nebula_vest: buildNebulaVest,
+
+  // 10 new gloves
+  brass_gauntlets: buildBrassGauntlets, ninja_wraps: buildNinjaWraps, cyber_gloves: buildCyberGlovesNew,
+  aether_gauntlets: buildAetherGauntlets, fire_wraps: buildFireWraps, frost_mitts: buildFrostMitts,
+  gold_rings: buildGoldRings, bone_gauntlets: buildBoneGauntlets, toxic_claws: buildToxicClaws, oven_mitts: buildOvenMitts,
+
+  // 10 new boots
+  brass_boots: buildBrassBoots, ninja_tabi: buildNinjaTabi, cyber_boots: buildCyberBootsNew, aether_greaves: buildAetherGreaves,
+  lava_striders: buildLavaStriders, glacial_cleats: buildGlacialCleats, winged_boots: buildWingedBoots, diver_boots: buildDiverBoots,
+  slime_slippers: buildSlimeSlippers, gold_greaves: buildGoldGreavesNew,
+
+  // 10 new backpacks
+  chrono_pack: buildChronoPack, plasma_grid: buildPlasmaGrid, biodome: buildBiodome, blackhole: buildBlackhole,
+  dragon_jet: buildDragonJet, lumen_crystals: buildLumenCrystals, angel_wings: buildAngelWings, tesla_coil: buildTeslaCoil,
+  pagoda_lantern: buildPagodaLantern, hydrowheel: buildHydrowheel,
 };
 
 /** True if a kind is renderable — used to validate the catalog at boot. */

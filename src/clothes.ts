@@ -25,11 +25,11 @@ export interface ClothesItem {
 export const CLOTHES_DATABASE: Record<string, ClothesItem> = {
   // HATS (6 items)
   default_cap: { id: 'default_cap', name: 'Default Red Cap', slot: 'hat', price: 0, desc: 'Your trusty starting tamer cap.', color: 0xd84a3a },
-  wool_beanie: { id: 'wool_beanie', name: 'Knit Wool Beanie', slot: 'hat', price: 100, desc: 'A cozy beanie made of knitted pink wool.', textureType: 'wool', textureColor: '#d95a8a', patternColor: '#b03a6a' },
-  camo_helmet: { id: 'camo_helmet', name: 'Stealth Camo Helmet', slot: 'hat', price: 250, desc: 'A tactical helmet with woodland camouflage.', textureType: 'camo', textureColor: '#556b2f', patternColor: '#2e8b57', accentColor: '#3e2723' },
-  cyber_visor: { id: 'cyber_visor', name: 'Cyber Visor', slot: 'hat', price: 400, desc: 'A futuristic visor glowing with blue grids.', textureType: 'cyber', textureColor: '#0c1022', patternColor: '#3a9df2' },
-  wizard_hat: { id: 'wizard_hat', name: 'Starry Wizard Hat', slot: 'hat', price: 500, desc: 'A pointed hat dotted with golden stars.', textureType: 'star', textureColor: '#1a103c', patternColor: '#f2c14e' },
-  golden_crown: { id: 'golden_crown', name: 'Royal Crown', slot: 'hat', price: 800, desc: 'A majestic golden crown fit for an Apex tamer.', textureType: 'gold' },
+  wool_beanie: { id: 'wool_beanie', name: 'Knit Wool Beanie', slot: 'hat', price: 100, desc: 'A cozy beanie made of knitted pink wool.', textureType: 'wool', textureColor: '#d95a8a', patternColor: '#b03a6a', fx: { kind: 'wool_beanie', color: 0xd95a8a } },
+  camo_helmet: { id: 'camo_helmet', name: 'Stealth Camo Helmet', slot: 'hat', price: 250, desc: 'A tactical helmet with woodland camouflage.', textureType: 'camo', textureColor: '#556b2f', patternColor: '#2e8b57', accentColor: '#3e2723', fx: { kind: 'camo_helmet', color: 0x556b2f } },
+  cyber_visor: { id: 'cyber_visor', name: 'Cyber Visor', slot: 'hat', price: 400, desc: 'A futuristic visor glowing with blue grids.', textureType: 'cyber', textureColor: '#0c1022', patternColor: '#3a9df2', fx: { kind: 'cyber_visor', color: 0x3a9df2 } },
+  wizard_hat: { id: 'wizard_hat', name: 'Starry Wizard Hat', slot: 'hat', price: 500, desc: 'A pointed hat dotted with golden stars.', textureType: 'star', textureColor: '#1a103c', patternColor: '#f2c14e', fx: { kind: 'wizard_hat', color: 0x1a103c } },
+  golden_crown: { id: 'golden_crown', name: 'Royal Crown', slot: 'hat', price: 800, desc: 'A majestic golden crown fit for an Apex tamer.', textureType: 'gold', fx: { kind: 'golden_crown', color: 0xf2c14e } },
 
   // SHIRTS (6 items)
   default_shirt: { id: 'default_shirt', name: 'Default Blue Shirt', slot: 'shirt', price: 0, desc: 'A comfortable cotton starting shirt.', color: 0x2a5ad8 },
@@ -64,9 +64,9 @@ export const CLOTHES_DATABASE: Record<string, ClothesItem> = {
   cyber_boots: { id: 'cyber_boots', name: 'Cybernetic Boots', slot: 'shoes', price: 450, desc: 'Gravitational thruster boots glowing neon green.', textureType: 'cyber', textureColor: '#1c1c24', patternColor: '#3af28a' },
 
   // ---- the new Aurel collection ----
-  straw_sunhat: { id: 'straw_sunhat', name: 'Meadow Sunhat', slot: 'hat', price: 90, desc: 'Woven straw from the windmill hill. Smells like summer.', textureType: 'wool', textureColor: '#d9b85a', patternColor: '#b8983a' },
-  aviator_cap: { id: 'aviator_cap', name: 'Skyrider Cap', slot: 'hat', price: 320, desc: 'Oiled leather flight cap, Gale-courier issue.', textureType: 'leather', textureColor: '#4a2d18' },
-  legend_circlet: { id: 'legend_circlet', name: 'Dawnflame Circlet', slot: 'hat', price: 950, desc: 'A Coliseum replica of Aljay\'s circlet — gold with an ember\'s heart.', textureType: 'gold' },
+  straw_sunhat: { id: 'straw_sunhat', name: 'Meadow Sunhat', slot: 'hat', price: 90, desc: 'Woven straw from the windmill hill. Smells like summer.', textureType: 'wool', textureColor: '#d9b85a', patternColor: '#b8983a', fx: { kind: 'straw_sunhat', color: 0xd9b85a } },
+  aviator_cap: { id: 'aviator_cap', name: 'Skyrider Cap', slot: 'hat', price: 320, desc: 'Oiled leather flight cap, Gale-courier issue.', textureType: 'leather', textureColor: '#4a2d18', fx: { kind: 'aviator_cap', color: 0x4a2d18 } },
+  legend_circlet: { id: 'legend_circlet', name: 'Dawnflame Circlet', slot: 'hat', price: 950, desc: 'A Coliseum replica of Aljay\'s circlet — gold with an ember\'s heart.', textureType: 'gold', fx: { kind: 'legend_circlet', color: 0xd9a11a } },
 
   guild_tunic: { id: 'guild_tunic', name: 'Guild Parade Tunic', slot: 'shirt', price: 260, desc: 'Crisp ceremonial stripes for festival days on the plaza.', textureType: 'stripe', textureColor: '#8a2e4a', patternColor: '#d9a11a' },
   leather_vest: { id: 'leather_vest', name: 'Wayfarer Vest', slot: 'shirt', price: 240, desc: 'Scuffed expedition leather, pockets included (decorative).', textureType: 'leather', textureColor: '#5a3a1e' },
@@ -208,6 +208,70 @@ export const CLOTHES_DATABASE: Record<string, ClothesItem> = {
 
   // ---- TERRA / WORLDRING POOL · SHOES ----
   ult_terra_comet_drive: { id: 'ult_terra_comet_drive', name: 'Aetherline Comet-Drive', slot: 'shoes', price: 0, desc: 'Cyan Aetherline drives that stamp glowing rune-rings and jet electric light with every step.', color: 0x081a26, ultra: true, ultraSource: 'terra', fx: { kind: 'comet_step', color: 0x6fe0ff, color2: 0xffffff } },
+
+  // ==========================================
+  // 50 NEW PREMIUM TERRA COSMETICS
+  // ==========================================
+
+  // ---- HATS ----
+  terra_tophat: { id: 'terra_tophat', name: 'Steampunk Monocle Tophat', slot: 'hat', price: 9000, desc: 'A tall black top hat with brass gearing and a glowing monocle lens.', color: 0x111116, terra: true, fx: { kind: 'steampunk_tophat', color: 0xd9a11a } },
+  terra_archmage_hat: { id: 'terra_archmage_hat', name: 'Archmage Floppy Hat', slot: 'hat', price: 12000, desc: 'A grand pointed wizard hat with a floating moon crest.', color: 0x221133, terra: true, fx: { kind: 'archmage_hat', color: 0xead0ff } },
+  terra_chef_toque: { id: 'terra_chef_toque', name: 'Master Chef Toque', slot: 'hat', price: 5000, desc: 'A tall chef hat that bobbles as you run.', color: 0xeeeeee, terra: true, fx: { kind: 'chef_toque', color: 0xffffff } },
+  terra_oni_mask: { id: 'terra_oni_mask', name: 'Neon Oni Mask', slot: 'hat', price: 14000, desc: 'A glowing red mask worn on the side of the head.', color: 0x5a1111, terra: true, fx: { kind: 'oni_mask', color: 0xff3333 } },
+  terra_cyber_goggles: { id: 'terra_cyber_goggles', name: 'Cyber Visor-Goggles', slot: 'hat', price: 8000, desc: 'Forehead goggles pulsing with blue neon digital matrix lines.', color: 0x112211, terra: true, fx: { kind: 'cyber_goggles', color: 0x33ff33 } },
+  terra_plague_mask: { id: 'terra_plague_mask', name: 'Plague Doctor Mask', slot: 'hat', price: 10000, desc: 'A dark bird-beaked doctor mask with glass goggles.', color: 0x2a1a10, terra: true, fx: { kind: 'plague_mask', color: 0x2a2211 } },
+  terra_laurels: { id: 'terra_laurels', name: 'Gilded Laurels', slot: 'hat', price: 15000, desc: 'A crown of floating gold leaf shards circling your head.', color: 0xd9a11a, terra: true, fx: { kind: 'laurels', color: 0xffd23a } },
+  terra_samurai_hat: { id: 'terra_samurai_hat', name: 'Straw Ronin Sugegasa', slot: 'hat', price: 7500, desc: 'A wide conical straw hat with hanging red ribbons.', color: 0xd9b85a, terra: true, fx: { kind: 'samurai_hat', color: 0xff3333 } },
+  terra_diver_helm: { id: 'terra_diver_helm', name: 'Vintage Diver Helmet', slot: 'hat', price: 16000, desc: 'A heavy brass helmet with glowing green portholes.', color: 0x8a7a5a, terra: true, fx: { kind: 'diver_helm', color: 0x33ffaa } },
+  terra_aether_crown: { id: 'terra_aether_crown', name: 'Arch-Aetherlight Crown', slot: 'hat', price: 25000, desc: 'Floating neon crystal shards pulsing in a halo.', color: 0x113355, terra: true, fx: { kind: 'aether_crown', color: 0x33aaff } },
+
+  // ---- SHIRTS ----
+  terra_trenchcoat: { id: 'terra_trenchcoat', name: 'Steampunk Trenchcoat', slot: 'shirt', price: 11000, desc: 'A long leather coat with brass lining and copper pipes.', color: 0x2a1a10, terra: true, fx: { kind: 'trenchcoat', color: 0xd9a11a } },
+  terra_ninja_garb: { id: 'terra_ninja_garb', name: 'Shinobi Shadow Garb', slot: 'shirt', price: 8500, desc: 'Dark ninja vest wraps with a red sash.', color: 0x111116, terra: true, fx: { kind: 'ninja_garb', color: 0xff3333 } },
+  terra_cyber_hoodie: { id: 'terra_cyber_hoodie', name: 'Gridrunner Neon Hoodie', slot: 'shirt', price: 12500, desc: 'A sleek hoodie with glowing green light stripes.', color: 0x111c11, terra: true, fx: { kind: 'cyber_hoodie', color: 0x33ff33 } },
+  terra_kimono: { id: 'terra_kimono', name: 'Imperial Silk Kimono', slot: 'shirt', price: 15000, desc: 'Flowing red silk sleeves with gold floral designs.', color: 0x5a1111, terra: true, fx: { kind: 'kimono', color: 0xffd700 } },
+  terra_aether_robes: { id: 'terra_aether_robes', name: 'Aetherlight Attire', slot: 'shirt', price: 22000, desc: 'Pure white robes glowing with flowing cyan circuit lines.', color: 0xeeeeee, terra: true, fx: { kind: 'aether_robes', color: 0x33ccff } },
+  terra_paladin_plate: { id: 'terra_paladin_plate', name: 'Gilded Paladin Plate', slot: 'shirt', price: 28000, desc: 'Ornate steel breastplate with a pulsing heart gem.', color: 0xcccccc, terra: true, fx: { kind: 'paladin_plate', color: 0xffaa00 } },
+  terra_volcanic_tunic: { id: 'terra_volcanic_tunic', name: 'Magma-Core Tunic', slot: 'shirt', price: 20000, desc: 'A heavy vest of cracked obsidian holding pulsing lava.', color: 0x1a0a05, terra: true, fx: { kind: 'volcanic_tunic', color: 0xff5500 } },
+  terra_chef_coat: { id: 'terra_chef_coat', name: 'Double-Breasted Chef Coat', slot: 'shirt', price: 6000, desc: 'White culinary jacket with double button rows.', color: 0xffffff, terra: true, fx: { kind: 'chef_coat', color: 0xdddddd } },
+  terra_diver_suit: { id: 'terra_diver_suit', name: 'Deep-Sea Diver Suit', slot: 'shirt', price: 18000, desc: 'Thick canvas suit with copper collar plating.', color: 0x4a4a40, terra: true, fx: { kind: 'diver_suit', color: 0x8a7a5a } },
+  terra_nebula_vest: { id: 'terra_nebula_vest', name: 'Nova Nebula Vest', slot: 'shirt', price: 24000, desc: 'A vest woven with starlight and slowly shifting cosmic gas.', color: 0x0a0518, terra: true, fx: { kind: 'nebula_vest', color: 0xff33ff } },
+
+  // ---- GLOVES ----
+  terra_brass_gauntlets: { id: 'terra_brass_gauntlets', name: 'Steampunk Brass Gauntlets', slot: 'gloves', price: 7500, desc: 'Piston-driven heavy brass arm-guards venting steam.', color: 0x8a7a5a, terra: true, fx: { kind: 'brass_gauntlets', color: 0xd9a11a } },
+  terra_ninja_wraps: { id: 'terra_ninja_wraps', name: 'Shadow Shinobi Wraps', slot: 'gloves', price: 4500, desc: 'Dark fabric bandages wrapped tight around hands.', color: 0x111116, terra: true, fx: { kind: 'ninja_wraps', color: 0xff3333 } },
+  terra_cyber_gloves: { id: 'terra_cyber_gloves', name: 'Hacker Circuit Gloves', slot: 'gloves', price: 9000, desc: 'Gloves with pulsing green terminal code grids.', color: 0x112211, terra: true, fx: { kind: 'cyber_gloves', color: 0x33ff33 } },
+  terra_aether_gauntlets: { id: 'terra_aether_gauntlets', name: 'Aether Shield Gauntlets', slot: 'gloves', price: 14000, desc: 'Floating cyan energy plates guarding your forearms.', color: 0x113355, terra: true, fx: { kind: 'aether_gauntlets', color: 0x33aaff } },
+  terra_fire_wraps: { id: 'terra_fire_wraps', name: 'Infernal Fire Wraps', slot: 'gloves', price: 13000, desc: 'Fists wrapped in living flames and floating ash particles.', color: 0x331100, terra: true, fx: { kind: 'fire_wraps', color: 0xff5500 } },
+  terra_frost_mitts: { id: 'terra_frost_mitts', name: 'Glacial Ice Gauntlets', slot: 'gloves', price: 12000, desc: 'Glacial gauntlets that chill the air around your hands.', color: 0x113344, terra: true, fx: { kind: 'frost_mitts', color: 0x88ddff } },
+  terra_gold_rings: { id: 'terra_gold_rings', name: 'Gilded Sovereign Rings', slot: 'gloves', price: 10000, desc: 'Shining gold rings worn on every finger.', color: 0xd9a11a, terra: true, fx: { kind: 'gold_rings', color: 0xffd700 } },
+  terra_bone_gauntlets: { id: 'terra_bone_gauntlets', name: 'Skeletal Crypt-Hands', slot: 'gloves', price: 8000, desc: 'Skeletal hands carved from hardened dragon bone.', color: 0xeeeeee, terra: true, fx: { kind: 'bone_gauntlets', color: 0xddddcc } },
+  terra_toxic_claws: { id: 'terra_toxic_claws', name: 'Noxious Claw-Grips', slot: 'gloves', price: 11000, desc: 'Claws dripping with glowing green acid drops.', color: 0x112211, terra: true, fx: { kind: 'toxic_claws', color: 0x99ff33 } },
+  terra_oven_mitts: { id: 'terra_oven_mitts', name: 'Fireproof Bakery Mitts', slot: 'gloves', price: 4000, desc: 'Red quilted oven mitts for handling hot bread.', color: 0xcc3333, terra: true, fx: { kind: 'oven_mitts', color: 0xffffff } },
+
+  // ---- BOOTS ----
+  terra_brass_boots: { id: 'terra_brass_boots', name: 'Steampunk Steam-Greaves', slot: 'shoes', price: 8000, desc: 'Heavy brass boots that release steam plumes as you walk.', color: 0x8a7a5a, terra: true, fx: { kind: 'brass_boots', color: 0xd9a11a } },
+  terra_ninja_tabi: { id: 'terra_ninja_tabi', name: 'Tabi Split-Sandals', slot: 'shoes', price: 5000, desc: 'Silent split-toe ninja footwear.', color: 0x111116, terra: true, fx: { kind: 'ninja_tabi', color: 0xff3333 } },
+  terra_cyber_boots: { id: 'terra_cyber_boots', name: 'Aero-Pulse Cyber Boots', slot: 'shoes', price: 10000, desc: 'Sleek boots with cyan glowing sole grids and thrust.', color: 0x111122, terra: true, fx: { kind: 'cyber_boots', color: 0x33ccff } },
+  terra_aether_greaves: { id: 'terra_aether_greaves', name: 'Aetherline Greaves', slot: 'shoes', price: 15000, desc: 'White boots leaving cyan spark-lines behind.', color: 0xeeeeee, terra: true, fx: { kind: 'aether_greaves', color: 0x33ccff } },
+  terra_lava_striders: { id: 'terra_lava_striders', name: 'Volcanic Lava Striders', slot: 'shoes', price: 13500, desc: 'Boots made of cooled lava leaving burning ash steps.', color: 0x221105, terra: true, fx: { kind: 'lava_striders', color: 0xff6600 } },
+  terra_glacial_cleats: { id: 'terra_glacial_cleats', name: 'Frostborn Cleats', slot: 'shoes', price: 12500, desc: 'Spiked ice cleats leaving a trail of drifting snow.', color: 0x113344, terra: true, fx: { kind: 'glacial_cleats', color: 0xaaddff } },
+  terra_winged_boots: { id: 'terra_winged_boots', name: 'Talaria Winged Boots', slot: 'shoes', price: 18000, desc: 'Ankle wings that flutter rapidly as you walk.', color: 0xeeeeee, terra: true, fx: { kind: 'winged_boots', color: 0xffffff } },
+  terra_diver_boots: { id: 'terra_diver_boots', name: 'Deep-Sea Lead Boots', slot: 'shoes', price: 9500, desc: 'Weighted boots making a heavy thud with each step.', color: 0x4a4a40, terra: true, fx: { kind: 'diver_boots', color: 0x8a7a5a } },
+  terra_slime_slippers: { id: 'terra_slime_slippers', name: 'Bouncy Slime Slippers', slot: 'shoes', price: 7000, desc: 'Jelly slippers that squeeze out green slime drops.', color: 0x225522, terra: true, fx: { kind: 'slime_slippers', color: 0x66ff66 } },
+  terra_gold_greaves: { id: 'terra_gold_greaves', name: 'Emperor Golden Greaves', slot: 'shoes', price: 16000, desc: 'Heavy boots made of solid polished gold.', color: 0xd9a11a, terra: true, fx: { kind: 'gold_greaves', color: 0xffd700 } },
+
+  // ---- BACKPACKS ----
+  terra_chrono_pack: { id: 'terra_chrono_pack', name: 'Steampunk Chronometer', slot: 'backpack', price: 15000, desc: 'A complex mechanical clockwork with rotating brass gears.', color: 0x8a7a5a, terra: true, fx: { kind: 'chrono_pack', color: 0xd9a11a } },
+  terra_plasma_grid: { id: 'terra_plasma_grid', name: 'Plasma Containment Cell', slot: 'backpack', price: 18000, desc: 'A technical grid containment block holding bouncing plasma.', color: 0x111122, terra: true, fx: { kind: 'plasma_grid', color: 0xff33cc } },
+  terra_biodome: { id: 'terra_biodome', name: 'Bio-Dome Terrarium', slot: 'backpack', price: 16000, desc: 'A glass dome holding a rotating miniature tree and motes.', color: 0x4a3a2a, terra: true, fx: { kind: 'biodome', color: 0x33ff33 } },
+  terra_blackhole: { id: 'terra_blackhole', name: 'Singularity Core', slot: 'backpack', price: 28000, desc: 'A miniature dark singularity drawing in purple light particles.', color: 0x05020c, terra: true, fx: { kind: 'blackhole', color: 0x9933ff } },
+  terra_dragon_jet: { id: 'terra_dragon_jet', name: 'Draconic Jet-Wings', slot: 'backpack', price: 23000, desc: 'Iron dragon wings that flap and vent orange fire plumes.', color: 0x331111, terra: true, fx: { kind: 'dragon_jet', color: 0xff5500 } },
+  terra_lumen_crystals: { id: 'terra_lumen_crystals', name: 'Lumenwright Shards', slot: 'backpack', price: 20000, desc: 'Three glowing yellow crystals orbiting your back.', color: 0xd9a11a, terra: true, fx: { kind: 'lumen_crystals', color: 0xffd700 } },
+  terra_angel_wings: { id: 'terra_angel_wings', name: 'Angelic Arch-Wings', slot: 'backpack', price: 24000, desc: 'Glowing white feather wings beating in a slow rhythm.', color: 0xeeeeee, terra: true, fx: { kind: 'angel_wings', color: 0xffffff } },
+  terra_tesla_coil: { id: 'terra_tesla_coil', name: 'Tesla Coil Pack', slot: 'backpack', price: 17000, desc: 'A high-voltage generator producing periodic electric arcs.', color: 0x33333e, terra: true, fx: { kind: 'tesla_coil', color: 0x33ccff } },
+  terra_pagoda_lantern: { id: 'terra_pagoda_lantern', name: 'Hanging Spirit Lantern', slot: 'backpack', price: 11000, desc: 'A floating red paper lantern that bobs behind you.', color: 0xcc3333, terra: true, fx: { kind: 'pagoda_lantern', color: 0xff3333 } },
+  terra_hydrowheel: { id: 'terra_hydrowheel', name: 'Hydrowheel Water-Tank', slot: 'backpack', price: 13000, desc: 'A glass waterwheel rotating and emitting splashing water.', color: 0x113355, terra: true, fx: { kind: 'hydrowheel', color: 0x33aaff } },
 };
 
 // Cached textures to prevent re-creation
@@ -507,7 +571,7 @@ export function updateTamerAppearance(tamer: THREE.Group, equipped: Record<strin
 
   // Hat/Cap
   const hatVal = getMatOrColor('hat', 0xd84a3a);
-  if (equipped.hat === 'none') {
+  if (equipped.hat === 'none' || equipped.hat !== 'default_cap') {
     opts.cap = null;
     opts.capTex = null;
   } else {

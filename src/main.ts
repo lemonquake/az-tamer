@@ -27,6 +27,7 @@ import { initMobileControls } from './mobile';
 import { perf } from './perf';
 import { prewarmVFXGlobal } from './vfx';
 import { mergeStaticScene } from './batch';
+import { updateTamerAppearance } from './clothes';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
 
@@ -786,6 +787,12 @@ function titleScreen(): Promise<{ mode: 'new' | 'continue'; slot: number }> {
     render();
   });
 }
+
+(window as any).__updateActiveTamerAppearance = (equipped: Record<string, string>, appearance: any) => {
+  if (activeView && activeView.owner && activeView.owner.tamer) {
+    updateTamerAppearance(activeView.owner.tamer, equipped, appearance);
+  }
+};
 
 async function boot(): Promise<void> {
   const { mode } = await titleScreen();

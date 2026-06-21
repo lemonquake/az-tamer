@@ -17,6 +17,7 @@ import { sfx, toggleMute, isMuted, getMusicVolume, getSoundVolume, setMusicVolum
 import { openTutorialReplayMenu, runGuardianTutorial, isTutorialOpen } from './tutorial';
 import { weekdayName, time12, fullDateLabel } from './calendar';
 import { getTournamentAlert } from './tournaments';
+import { CLOTHES_DATABASE } from './clothes';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
 
@@ -760,6 +761,45 @@ export function openMasterDebugMenu(player: Player): Promise<void> {
 
     updateSlotsDisplay();
 
+    // Populate closet selects
+    const closetSlots = ['hat', 'shirt', 'pants', 'gloves', 'backpack', 'shoes'] as const;
+    closetSlots.forEach(slot => {
+      const select = $<HTMLSelectElement>(`db-outfit-${slot}`);
+      select.innerHTML = '';
+      
+      if (slot === 'hat' || slot === 'backpack' || slot === 'gloves') {
+        const opt = document.createElement('option');
+        opt.value = 'none';
+        opt.textContent = 'None';
+        select.appendChild(opt);
+      }
+      
+      const items = Object.values(CLOTHES_DATABASE).filter(item => item.slot === slot);
+      items.sort((a, b) => a.name.localeCompare(b.name));
+      items.forEach(item => {
+        const opt = document.createElement('option');
+        opt.value = item.id;
+        opt.textContent = item.name;
+        select.appendChild(opt);
+      });
+      
+      select.value = player.equippedClothes[slot] || 'none';
+      
+      select.onchange = () => {
+        const val = select.value;
+        player.equippedClothes[slot] = val;
+        if (val !== 'none' && !player.ownedClothes.includes(val)) {
+          player.ownedClothes.push(val);
+        }
+        player.save(false);
+        refreshHUD();
+        const updater = (window as any).__updateActiveTamerAppearance;
+        if (updater) {
+          updater(player.equippedClothes, player.appearance);
+        }
+      };
+    });
+
     // 1. Dropdown species changes
     for (let i = 0; i < 3; i++) {
       const select = $<HTMLSelectElement>(`db-slot-${i}-species`);
@@ -1091,6 +1131,9 @@ export function openMasterDebugMenu(player: Player): Promise<void> {
       $('db-heal-all').onclick = null;
       $('db-techs-all').onclick = null;
       $('db-cap-99').onclick = null;
+      closetSlots.forEach(slot => {
+        $<HTMLSelectElement>(`db-outfit-${slot}`).onchange = null;
+      });
       
       debugMenuOpen = false;
       resolve();
