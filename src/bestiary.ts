@@ -10522,3 +10522,358 @@ function buildSproutshell(): BespokeBuild { return makeProceduralBespoke('shell'
 function buildZapwing(): BespokeBuild { return makeProceduralBespoke('avian', { primary: 0xf2d23a, secondary: 0x7adfd0, accent: 0xffffff }, 0x7adfd0); }
 function buildWispserpent(): BespokeBuild { return makeProceduralBespoke('serpent', { primary: 0x7adfd0, secondary: 0x9a5af2, accent: 0xffffff }, 0x9a5af2); }
 function buildShadeclaw(): BespokeBuild { return makeProceduralBespoke('brute', { primary: 0x9a5af2, secondary: 0xf2d23a, accent: 0x101018 }, 0xf2d23a); }
+
+// ============================================================
+// THE FORGE
+// ------------------------------------------------------------
+// Every Guardian that isn't individually hand-sculpted above is
+// born here. The old archetype builders gave ~130 species SIX
+// shared silhouettes painted in flat single colours — the
+// "recycled, no-effort" look. The Forge replaces that with a
+// real generation pass. For each species it produces:
+//   • a UNIQUE texture set, painted fresh and seeded from the
+//     species id — charred lava-veined hide, wet overlapping
+//     scales, living bark, circuit-etched alloy, star-flecked
+//     plumage, void-cracked shadow-fur. No two species share a
+//     canvas.
+//   • element REGALIA grown onto the body: dorsal flame crests,
+//     translucent fins, leaf fans + vines, arc-bolting spines,
+//     beating wings, ghost-fire — chosen by the creature's type.
+//   • seeded silhouette variation (proportions, head size, crest
+//     counts) so same-archetype kin still read apart, and a full
+//     idle rig (breathing, flame flicker, fin/​wing flutter,
+//     orbiting motes, tail sway).
+// `SCULPTED` is the allow-list of hand-made species that keep
+// their bespoke builders; everything else flows through here.
+// ============================================================
+
+export const SCULPTED = new Set<string>([
+  // Blaze
+  'cindcub', 'pyrofang', 'blazemaw', 'infernyx', 'solarex',
+  'ashwisp', 'flarekin', 'pyrelisk', 'vulkragon', 'ignisar', 'solphyra', 'smolderhog', 'magmaboar', 'cinderbat',
+  // Tide
+  'puddla', 'tidefin', 'maelstrike',
+  'abyssarch', 'leviathorn', 'coralkit', 'reefrider', 'pearlance', 'nacrelord', 'frostfin', 'glacimaw', 'mistling',
+  // Verdant
+  'sproutle', 'thornbex', 'sylvigor', 'eldergrove', 'yggdranox', 'pebblit', 'fernfox', 'bramblelynx', 'thicketclaw', 'grovetyrant', 'sylvaeon', 'shroomple', 'mycelord',
+  // Volt
+  'zaplet', 'voltyx', 'stormclaw', 'fulgurex', 'raidenjin', 'sparkmote', 'joltuft', 'ampyre', 'teslarch', 'gearmite', 'dynamaul',
+  // Gale
+  'wispry', 'galewing', 'cyclonix', 'tempestrix', 'zephyrax', 'zephlet', 'plumelet', 'skydancer', 'stratoroc', 'empyrhawk', 'driftling', 'nimbusyl',
+  // Umbra
+  'shadekit', 'duskfang', 'nocthowl', 'umbrelisk', 'chthonix', 'gloomite', 'mournmoth', 'duskweaver', 'nightloom', 'phantasmoth', 'erebusilk', 'cryptling', 'sarcophang',
+  // Corrupted sentinels + Legion
+  'ironhusk', 'gravemaw', 'voltigarch',
+  'ashkarath', 'vormaela', 'bramblehex', 'voltrazar', 'gorrundax', 'cryomara', 'luxavor', 'nyxghul', 'zerathuul',
+  // Hall of Legends
+  'firgara', 'onthrofa', 'vulfenix',
+]);
+
+const STAGE_TIER: Record<string, number> = {
+  Novice: 0, Adept: 1, Elite: 2, Apex: 3, Split: 4,
+  Special: 5, Terra: 6, Transcendent: 7, Aether: 8, Legendary: 9,
+};
+
+/** FNV-1a hash → a stable per-species seed. */
+function forgeSeed(s: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); }
+  return h >>> 0;
+}
+function hxs(n: number): string { return '#' + (n & 0xffffff).toString(16).padStart(6, '0'); }
+function rgbOf(n: number): [number, number, number] { return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
+/** Lighten (amt>0) or darken (amt<0) a hex colour, clamped. */
+function shade(n: number, amt: number): number {
+  let r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  if (amt >= 0) { r += (255 - r) * amt; g += (255 - g) * amt; b += (255 - b) * amt; }
+  else { const k = 1 + amt; r *= k; g *= k; b *= k; }
+  const cl = (x: number) => Math.max(0, Math.min(255, Math.round(x)));
+  return (cl(r) << 16) | (cl(g) << 8) | cl(b);
+}
+
+export interface ForgeOpts {
+  id: string;
+  arch: string;
+  palette: { primary: number; secondary: number; accent: number };
+  element: string;            // GType: Blaze | Tide | Verdant | Volt | Gale | Umbra
+  stage: string;
+  glow: number;
+  customColors?: { primary?: number; secondary?: number; accent?: number };
+}
+
+interface ForgeMats {
+  skin: THREE.MeshStandardMaterial;      // main hide — textured
+  plate: THREE.MeshStandardMaterial;     // secondary surface (belly/shell/wing)
+  hot: THREE.MeshStandardMaterial;       // emissive accent (claws, crest, horns)
+  membrane: THREE.MeshStandardMaterial;  // translucent (fins / wing webbing)
+  iris: number;
+  slit: boolean;
+}
+
+/** Build a unique, element-themed material set seeded by `key`. */
+function forgeMats(el: string, key: string, prim: number, sec: number, acc: number, glowN: number, seed: number, tier: number): ForgeMats {
+  const gh = hxs(glowN);
+  const defHot = () => std({ color: acc, emissive: glowN, emissiveIntensity: 1.3 + tier * 0.06, roughness: 0.3, metalness: 0.12 });
+  switch (el) {
+    case 'Tide': {
+      const skin = std({ map: scaleTex(`${key}:T`, hxs(prim), hxs(shade(prim, 0.35)), hxs(shade(prim, -0.4)), seed), roughness: 0.25, metalness: 0.28 });
+      const plate = std({ map: scaleTex(`${key}:Tp`, hxs(sec), hxs(shade(sec, 0.4)), hxs(shade(sec, -0.3)), seed + 5), roughness: 0.2, metalness: 0.3 });
+      return { skin, plate, hot: std({ color: acc, emissive: glowN, emissiveIntensity: 0.8, roughness: 0.15, metalness: 0.2 }), membrane: finMat(`${key}:Tm`, rgbOf(sec), rgbOf(acc), 0.72), iris: 0x9adff2, slit: false };
+    }
+    case 'Verdant': {
+      const skin = std({ map: barkTex(`${key}:V`, hxs(shade(prim, -0.15)), hxs(shade(prim, -0.5)), hxs(shade(prim, 0.25)), seed), roughness: 0.92 });
+      const plate = std({ map: leafMottle(`${key}:Vp`, hxs(sec), hxs(shade(sec, -0.4)), hxs(shade(sec, 0.3)), seed + 5), roughness: 0.82 });
+      return { skin, plate, hot: std({ color: acc, emissive: glowN, emissiveIntensity: 0.85, roughness: 0.4 }), membrane: finMat(`${key}:Vm`, rgbOf(sec), rgbOf(acc), 0.7), iris: 0xf2d23a, slit: false };
+    }
+    case 'Volt': {
+      const sp = stripePair(`${key}:L`, hxs(shade(prim, -0.25)), hxs(shade(prim, -0.55)), gh, seed);
+      const skin = std({ map: sp.map, emissive: glowN, emissiveMap: sp.glow, emissiveIntensity: 0.85 + tier * 0.06, roughness: 0.4, metalness: 0.5 });
+      const plate = std({ map: metalTex(`${key}:Lp`, hxs(sec), hxs(shade(sec, -0.4)), hxs(shade(sec, 0.45)), seed + 5), roughness: 0.3, metalness: 0.72 });
+      return { skin, plate, hot: std({ color: acc, emissive: glowN, emissiveIntensity: 1.6, roughness: 0.2, metalness: 0.3 }), membrane: finMat(`${key}:Lm`, rgbOf(acc), rgbOf(glowN), 0.6), iris: 0xfff0a0, slit: false };
+    }
+    case 'Gale': {
+      const skin = std({ map: featherTex(`${key}:G`, hxs(prim), hxs(shade(prim, -0.4)), hxs(shade(prim, 0.35)), seed), roughness: 0.68 });
+      const plate = std({ map: featherTex(`${key}:Gp`, hxs(sec), hxs(shade(sec, -0.3)), hxs(shade(sec, 0.4)), seed + 5), roughness: 0.62 });
+      return { skin, plate, hot: std({ color: acc, emissive: glowN, emissiveIntensity: 1.0, roughness: 0.3 }), membrane: finMat(`${key}:Gm`, rgbOf(sec), rgbOf(acc), 0.62), iris: 0xe8f4ff, slit: false };
+    }
+    case 'Umbra': {
+      const cp = crackPair(`${key}:U`, hxs(shade(prim, -0.62)), hxs(shade(sec, -0.2)), gh, seed + 3);
+      const skin = std({ map: furTex(`${key}:Uf`, hxs(shade(prim, -0.25)), hxs(shade(prim, -0.6)), hxs(shade(sec, 0.1)), seed), roughness: 0.85 });
+      const plate = std({ map: cp.map, emissive: glowN, emissiveMap: cp.glow, emissiveIntensity: 0.9 + tier * 0.05, roughness: 0.6 });
+      return { skin, plate, hot: defHot(), membrane: finMat(`${key}:Um`, rgbOf(acc), rgbOf(glowN), 0.5), iris: 0xe05af2, slit: true };
+    }
+    default: { // Blaze
+      const cp = crackPair(`${key}:B`, hxs(shade(prim, -0.55)), hxs(shade(sec, 0.05)), gh, seed);
+      const skin = std({ map: cp.map, emissive: glowN, emissiveMap: cp.glow, emissiveIntensity: 0.65 + tier * 0.05, roughness: 0.6, metalness: 0.12 });
+      const plate = std({ map: scaleTex(`${key}:Bp`, hxs(sec), hxs(shade(sec, 0.3)), hxs(shade(sec, -0.4)), seed + 7), roughness: 0.55, metalness: 0.15, emissive: glowN, emissiveIntensity: 0.12 });
+      return { skin, plate, hot: defHot(), membrane: finMat(`${key}:Bm`, rgbOf(acc), rgbOf(glowN), 0.55), iris: 0xffd23a, slit: true };
+    }
+  }
+}
+
+interface ForgeAnim {
+  cores: { m: THREE.Object3D; sx: number; sy: number; sz: number }[];
+  head?: THREE.Object3D; headY: number;
+  tail?: THREE.Object3D;
+  wings: THREE.Object3D[];
+  flames: Flick[];
+  motes: { m: THREE.Object3D; r: number; y: number; sp: number; ph: number; vert: number }[];
+  flutters: { m: THREE.Object3D; sp: number; ph: number; amp: number; base: number; axis: 'x' | 'y' | 'z' }[];
+  pulses: { m: THREE.Object3D; sp: number; ph: number }[];
+}
+
+/**
+ * Forge a Guardian: a known-good archetype skeleton, re-skinned with
+ * a unique seeded texture set, jittered into its own proportions, and
+ * grown element regalia + an idle rig. Returns a BespokeBuild so it
+ * drops straight into makeGuardian alongside the hand-sculpted models.
+ */
+export function forgeGuardian(o: ForgeOpts): BespokeBuild {
+  const prim = o.customColors?.primary ?? o.palette.primary;
+  const sec = o.customColors?.secondary ?? o.palette.secondary;
+  const acc = o.customColors?.accent ?? o.palette.accent;
+  const seed = forgeSeed(o.id);
+  const rnd = rng(seed);
+  const tier = STAGE_TIER[o.stage] ?? 2;
+  const el = o.element;
+  // colour-aware key → customised colourways get their own cached textures
+  const key = `forge:${o.id}:${(prim ^ Math.imul(sec, 3) ^ Math.imul(acc, 7)) >>> 0}`;
+  const M = forgeMats(el, key, prim, sec, acc, o.glow, seed, tier);
+
+  // 1) Known-good skeleton (faces +X, names head/tail/wing1/wing-1).
+  const g = buildProceduralArchetype(o.arch, { primary: prim, secondary: sec, accent: acc }, o.glow);
+
+  // 2) Re-skin: swap the flat archetype materials for textured ones.
+  g.traverse(ch => {
+    const m = ch as THREE.Mesh;
+    if (!m.isMesh) return;
+    const mat = m.material as THREE.MeshStandardMaterial;
+    if (!mat || !mat.color) return;
+    const c = mat.color.getHex();
+    if (c === prim) m.material = M.skin;
+    else if (c === sec) m.material = M.plate;
+    else if (c === acc) m.material = M.hot;
+  });
+
+  const head = g.getObjectByName('head') as THREE.Object3D | null;
+  const tail = g.getObjectByName('tail') as THREE.Object3D | null;
+  const wing1 = g.getObjectByName('wing1') as THREE.Object3D | null;
+  const wing2 = g.getObjectByName('wing-1') as THREE.Object3D | null;
+
+  // 3) Reparent the static body into a breathing core (head/tail/wings stay free).
+  const core = new THREE.Group();
+  for (const ch of [...g.children]) {
+    if (ch === head || ch === tail || ch === wing1 || ch === wing2) continue;
+    core.add(ch);
+  }
+  g.add(core);
+  const A: ForgeAnim = { cores: [], headY: head ? head.position.y : 0, wings: [], flames: [], motes: [], flutters: [], pulses: [] };
+  A.head = head ?? undefined;
+  A.tail = tail ?? undefined;
+
+  // 4) Seeded silhouette jitter — each species owns its proportions.
+  const bx = 0.92 + rnd() * 0.18, by = 0.93 + rnd() * 0.16, bz = 0.9 + rnd() * 0.16;
+  core.scale.set(bx, by, bz);
+  A.cores.push({ m: core, sx: bx, sy: by, sz: bz });
+  if (head) head.scale.multiplyScalar(0.82 + rnd() * 0.42);
+
+  // back-line sockets from head → tail, lifted to ride the spine
+  const hp = head ? head.position : new THREE.Vector3(0.4, 0.9, 0);
+  const tp = tail ? tail.position : new THREE.Vector3(-0.5, 0.7, 0);
+  const socketAt = (f: number) => new THREE.Vector3(
+    hp.x + (tp.x - hp.x) * f,
+    (hp.y + (tp.y - hp.y) * f) + 0.06 + Math.sin(f * Math.PI) * 0.05,
+    0,
+  );
+
+  const moteMat = (color: number) => std({ color, emissive: o.glow, emissiveIntensity: 1.8, roughness: 0.2 });
+  const addMotes = (n: number, color: number, radius: number, baseY: number, vert: number) => {
+    const mm = moteMat(color);
+    for (let i = 0; i < n; i++) {
+      const mo = orb(mm, 0.035 + rnd() * 0.03, 0, 0, 0, 1, 1, 1, 8, 6);
+      mo.userData.noShadow = true;
+      g.add(mo);
+      A.motes.push({ m: mo, r: radius * (0.6 + rnd() * 0.6), y: baseY + rnd() * 0.5, sp: (rnd() < 0.5 ? 1 : -1) * (0.5 + rnd() * 0.8), ph: rnd() * Math.PI * 2, vert });
+    }
+  };
+
+  const nCrest = Math.max(3, Math.min(7, 3 + tier + (rnd() * 2 | 0)));
+
+  // 5) Element regalia.
+  if (el === 'Blaze') {
+    for (let i = 0; i < nCrest; i++) {
+      const f = 0.12 + (i / Math.max(1, nCrest - 1)) * 0.74;
+      const sz = 0.3 - f * 0.14;
+      const fl = makeFlame(sz, sz * 0.42, 0xffe6a0, o.glow);
+      fl.position.copy(socketAt(f)); g.add(fl);
+      A.flames.push({ g: fl, speed: 6 + rnd() * 4, ph: i * 0.7, amp: 0.18 });
+    }
+    if (head) { const cf = makeFlame(0.32, 0.13, 0xffe6a0, o.glow); cf.position.set(0, 0.22, 0); head.add(cf); A.flames.push({ g: cf, speed: 8, ph: 1, amp: 0.2 }); }
+    if (tail) { const tf = makeFlame(0.28, 0.11, 0xffe6a0, o.glow); tf.position.set(-0.08, 0.05, 0); tail.add(tf); A.flames.push({ g: tf, speed: 7, ph: 2, amp: 0.2 }); }
+    addMotes(2 + tier, 0xffb44e, 0.6, 0.7, 0.32);
+  } else if (el === 'Tide') {
+    for (let i = 0; i < nCrest; i++) {
+      const f = 0.1 + (i / Math.max(1, nCrest - 1)) * 0.78;
+      const fin = makeFin(M.membrane, 0.24 - f * 0.1, 0, Math.PI);
+      fin.position.copy(socketAt(f));
+      g.add(fin);
+      A.flutters.push({ m: fin, sp: 3 + rnd(), ph: i, amp: 0.1, base: 0, axis: 'x' });
+    }
+    if (tail) { const fan = makeFin(M.membrane, 0.3, -Math.PI * 0.55, Math.PI * 1.1); fan.position.set(-0.12, 0.04, 0); fan.rotation.z = Math.PI / 2; tail.add(fan); A.flutters.push({ m: fan, sp: 2.6, ph: 0, amp: 0.12, base: Math.PI / 2, axis: 'x' }); }
+    if (head) for (const s of [1, -1]) { const ef = makeFin(M.membrane, 0.16, 0, Math.PI); ef.position.set(0, 0.02, s * 0.16); ef.rotation.y = s * Math.PI / 2.2; head.add(ef); A.flutters.push({ m: ef, sp: 4, ph: s, amp: 0.14, base: ef.rotation.x, axis: 'x' }); }
+    addMotes(3 + tier, 0xc8f0ff, 0.55, 0.8, 0.45);
+  } else if (el === 'Verdant') {
+    for (let i = 0; i < nCrest; i++) {
+      const f = 0.1 + (i / Math.max(1, nCrest - 1)) * 0.78;
+      const lf = leafBlade(M.plate, 0.2 - f * 0.07);
+      const p = socketAt(f); lf.position.copy(p);
+      lf.rotation.set((rnd() - 0.5) * 0.5, rnd() * Math.PI, -0.4 + (i % 2) * 0.8);
+      g.add(lf);
+      A.flutters.push({ m: lf, sp: 1.8 + rnd(), ph: i, amp: 0.09, base: lf.rotation.z, axis: 'z' });
+    }
+    for (let i = 0; i < 2 + (tier > 3 ? 1 : 0); i++) { // drooping vines
+      const p = socketAt(0.3 + i * 0.25);
+      const vine = bone(M.skin, p.x, p.y, (i ? 1 : -1) * 0.18, p.x - 0.1, p.y - 0.4, (i ? 1 : -1) * 0.28, 0.03, 0.012);
+      g.add(vine);
+    }
+    if (head) { const bloom = new THREE.Group(); for (let i = 0; i < 5; i++) { const pet = leafBlade(M.hot, 0.1); const a = (i / 5) * Math.PI * 2; pet.position.set(Math.cos(a) * 0.04, 0.18, Math.sin(a) * 0.04); pet.rotation.set(Math.PI / 2.4, 0, a); bloom.add(pet); } head.add(bloom); }
+    addMotes(2 + tier, 0xbff06a, 0.55, 0.7, 0.4);
+  } else if (el === 'Volt') {
+    const boltMat = std({ color: acc, emissive: o.glow, emissiveIntensity: 2.4, roughness: 0.2 });
+    const tips: THREE.Vector3[] = [];
+    for (let i = 0; i < nCrest; i++) {
+      const f = 0.12 + (i / Math.max(1, nCrest - 1)) * 0.74;
+      const p = socketAt(f); const h = 0.26 - f * 0.1;
+      const sp = new THREE.Mesh(new THREE.ConeGeometry(0.05, h, 5), M.plate);
+      sp.position.set(p.x, p.y + h / 2, 0); g.add(sp);
+      tips.push(new THREE.Vector3(p.x, p.y + h, 0));
+    }
+    for (let i = 0; i < tips.length - 1; i++) {
+      const a = tips[i], b = tips[i + 1];
+      const bolt = boltGroup(boltMat, a.x, a.y, a.z, b.x, b.y, b.z, 3, 0.012);
+      g.add(bolt);
+      A.pulses.push({ m: bolt, sp: 7 + rnd() * 5, ph: i * 1.3 });
+    }
+    if (head) for (const s of [1, -1]) { // antennae
+      const ant = bone(M.hot, 0, 0.16, s * 0.08, -0.06, 0.4, s * 0.13, 0.018, 0.01);
+      head.add(ant);
+      const knob = orb(boltMat, 0.04, -0.06, 0.42, s * 0.14); knob.userData.noShadow = true; head.add(knob);
+      A.pulses.push({ m: knob, sp: 9, ph: s });
+    }
+    addMotes(2 + tier, 0xfff0a0, 0.6, 0.8, 0.4);
+  } else if (el === 'Gale') {
+    addMotes(3 + tier, 0xffffff, 0.85, 0.8, 0.5); // orbiting stars
+    if (tail) for (let i = 0; i < 3; i++) { const w = orb(M.membrane, 0.07 - i * 0.015, -0.15 - i * 0.16, 0.02 - i * 0.03, 0); w.userData.noShadow = true; tail.add(w); }
+    if (head) { const crest = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.3, 5), M.hot); crest.position.set(-0.02, 0.2, 0); crest.rotation.z = -0.3; head.add(crest); }
+  } else { // Umbra
+    for (let i = 0; i < nCrest; i++) {
+      const f = 0.14 + (i / Math.max(1, nCrest - 1)) * 0.7;
+      const sz = 0.26 - f * 0.1;
+      const gf = makeFlame(sz, sz * 0.45, 0xead0ff, o.glow);
+      gf.position.copy(socketAt(f)); g.add(gf);
+      A.flames.push({ g: gf, speed: 4 + rnd() * 3, ph: i * 0.8, amp: 0.22 });
+    }
+    const bone2 = std({ color: 0xe8e0d0, roughness: 0.65 });
+    if (head) for (const s of [1, -1]) { const horn = spike(bone2, 0, 0.12, s * 0.1, -0.04, 0.46, s * 0.18, 0.04); head.add(horn); }
+    if (tail) { const tf = makeFlame(0.24, 0.1, 0xead0ff, o.glow); tf.position.set(-0.08, 0.05, 0); tail.add(tf); A.flames.push({ g: tf, speed: 5, ph: 2, amp: 0.24 }); }
+    addMotes(3 + tier, 0xb06af2, 0.6, 0.75, 0.45);
+  }
+
+  // 6) Wings — give Gale a pair if it lacks one; flap any that exist.
+  const wings: THREE.Object3D[] = [wing1, wing2].filter(Boolean) as THREE.Object3D[];
+  if (el === 'Gale' && wings.length === 0) {
+    for (const s of [1, -1] as const) {
+      const w = new THREE.Group();
+      for (let i = 0; i < 3; i++) {
+        const fe = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.5 - i * 0.08, 5), i === 0 ? M.hot : M.plate);
+        fe.position.set(-i * 0.12, 0, s * (0.18 + i * 0.16));
+        fe.rotation.x = s * Math.PI / 2; fe.rotation.z = i * 0.12; w.add(fe);
+      }
+      w.position.set(-0.05, 0.85, s * 0.28); w.name = s === 1 ? 'wing1' : 'wing-1';
+      g.add(w); wings.push(w);
+    }
+  }
+  for (const w of wings) {
+    A.wings.push(w);
+    const side = w.name === 'wing-1' ? -1 : 1;
+    A.flutters.push({ m: w, sp: 3.4, ph: 0, amp: side * 0.34, base: (w as THREE.Object3D).rotation.x, axis: 'x' });
+  }
+
+  // 7) Top-tier crown — Terra/Transcendent/Aether get an orbiting ring of shards.
+  if (tier >= 6) {
+    const crownMat = std({ color: acc, emissive: o.glow, emissiveIntensity: 2.0, roughness: 0.1 });
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      const shard = new THREE.Mesh(new THREE.OctahedronGeometry(0.07), crownMat);
+      shard.userData.noShadow = true;
+      const yTop = (head ? head.position.y : 1.2) + 0.45;
+      shard.position.set(Math.cos(a) * 0.4, yTop, Math.sin(a) * 0.4);
+      g.add(shard);
+      A.motes.push({ m: shard, r: 0.4, y: yTop, sp: 0.7, ph: a, vert: 0.06 });
+    }
+  }
+
+  finishShadows(g);
+
+  const animate = (t: number) => {
+    for (const c of A.cores) {
+      const s = Math.sin(t * 1.8);
+      c.m.scale.set(c.sx * (1 - s * 0.012), c.sy * (1 + s * 0.025), c.sz * (1 - s * 0.012));
+    }
+    if (A.head) {
+      A.head.position.y = A.headY + Math.sin(t * 1.7) * 0.02;
+      A.head.rotation.y = Math.sin(t * 0.55) * 0.1;
+      A.head.rotation.z = Math.sin(t * 0.9 + 1) * 0.04;
+    }
+    if (A.tail) { A.tail.rotation.z = Math.sin(t * 2.0) * 0.1; A.tail.rotation.y = Math.sin(t * 1.5) * 0.16; }
+    if (A.flames.length) flickAll(A.flames, t);
+    for (const w of A.flutters) (w.m.rotation as unknown as Record<string, number>)[w.axis] = w.base + Math.sin(t * w.sp + w.ph) * w.amp;
+    for (const mo of A.motes) {
+      const a = t * mo.sp + mo.ph;
+      mo.m.position.set(Math.cos(a) * mo.r, mo.y + Math.sin(t * 2.1 + mo.ph) * mo.vert, Math.sin(a) * mo.r);
+    }
+    for (const p of A.pulses) p.m.visible = Math.sin(t * p.sp + p.ph) > 0.25;
+  };
+
+  return { body: g, parts: { head: A.head, tail: A.tail, wings: A.wings }, animate };
+}

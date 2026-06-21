@@ -3,7 +3,7 @@
 // ============================================================
 import * as THREE from 'three';
 import { SPECIES, TYPE_COLORS, CRAWLER_PARTS, PAINT_JOBS, type Archetype, type CrawlerSlot, type PaintJob } from './data';
-import { BESPOKE, type BespokeBuild } from './bestiary';
+import { BESPOKE, SCULPTED, forgeGuardian, type BespokeBuild } from './bestiary';
 import type { GuardianCustomization } from './state';
 import { perf } from './perf';
 
@@ -984,6 +984,18 @@ export function makeStreetLamp(style: 'road' | 'plaza' = 'road'): THREE.Group {
 const mat = (color: number, opts: Partial<THREE.MeshStandardMaterialParameters> = {}) =>
   new THREE.MeshStandardMaterial({ color, roughness: 0.65, metalness: 0.08, ...opts });
 
+/** Nearest GType for a custom creature's aura colour, so the Forge can theme it. */
+function elementFromGlow(glow: number): string {
+  const gr = (glow >> 16) & 255, gg = (glow >> 8) & 255, gb = glow & 255;
+  let best = 'Blaze', bestD = Infinity;
+  for (const k of Object.keys(TYPE_COLORS) as (keyof typeof TYPE_COLORS)[]) {
+    const c = TYPE_COLORS[k];
+    const d = ((c >> 16 & 255) - gr) ** 2 + ((c >> 8 & 255) - gg) ** 2 + ((c & 255) - gb) ** 2;
+    if (d < bestD) { bestD = d; best = k; }
+  }
+  return best;
+}
+
 interface GuardianRig {
   group: THREE.Group;          // root (position this)
   body: THREE.Group;           // animatable core
@@ -1213,9 +1225,14 @@ function buildArchetype(arch: Archetype, p: { primary: number; secondary: number
 export function makeGuardian(speciesId: string, custom?: GuardianCustomization): GuardianRig {
   const def = SPECIES[speciesId];
   const glow = TYPE_COLORS[def.type];
-  // hand-sculpted species come from the bestiary; the rest use archetypes
-  const bespoke: BespokeBuild | undefined = BESPOKE[speciesId]?.();
-  const body = bespoke ? bespoke.body : buildArchetype(def.archetype, def.palette, glow, custom?.colors);
+  // hand-sculpted species come from the bestiary; everyone else is forged
+  // (unique seeded texture set + element regalia + idle rig).
+  const bespoke: BespokeBuild | undefined = SCULPTED.has(speciesId) ? BESPOKE[speciesId]?.() : undefined;
+  const forged: BespokeBuild | undefined = bespoke ? undefined : forgeGuardian({
+    id: speciesId, arch: def.archetype, palette: def.palette,
+    element: def.type, stage: def.stage, glow, customColors: custom?.colors,
+  });
+  const body = bespoke ? bespoke.body : forged!.body;
   body.scale.setScalar(def.scale);
 
   // If colors are customized on a bespoke model, manually traverse and swap material colors
@@ -1401,7 +1418,7 @@ export function makeGuardian(speciesId: string, custom?: GuardianCustomization):
     },
     baseY: 0,
     phase: Math.random() * Math.PI * 2,
-    animate: bespoke?.animate,
+    animate: (bespoke ?? forged)?.animate,
   };
   rigs.add(rig);
   return rig;
@@ -1420,9 +1437,14 @@ export function makeCustomCreature(
   aether = true,
   bespokeId?: string,
 ): GuardianRig {
-  // hand-sculpted one-offs (e.g. Aljay's three) come from the bestiary
+  // hand-sculpted one-offs (e.g. Aljay's three) come from the bestiary;
+  // anything else is forged from its archetype, colours and aura.
   const bespoke: BespokeBuild | undefined = bespokeId ? BESPOKE[bespokeId]?.() : undefined;
-  const body = bespoke ? bespoke.body : buildArchetype(arch, palette, glow);
+  const forged: BespokeBuild | undefined = bespoke ? undefined : forgeGuardian({
+    id: bespokeId ?? `custom-${arch}-${glow.toString(16)}`, arch, palette,
+    element: elementFromGlow(glow), stage: aether ? 'Aether' : 'Apex', glow,
+  });
+  const body = bespoke ? bespoke.body : forged!.body;
   body.scale.setScalar(scale);
   if (aether && !bespoke) {
     const auraMat = new THREE.MeshStandardMaterial({
@@ -1459,14 +1481,14 @@ export function makeCustomCreature(
   group.add(ring);
   const rig: GuardianRig = {
     group, body,
-    parts: bespoke?.parts ?? {
+    parts: (bespoke ?? forged)?.parts ?? {
       head: body.getObjectByName('head') ?? undefined,
       tail: body.getObjectByName('tail') ?? undefined,
       wings: [body.getObjectByName('wing1'), body.getObjectByName('wing-1')].filter(Boolean) as THREE.Object3D[],
     },
     baseY: 0,
     phase: Math.random() * Math.PI * 2,
-    animate: bespoke?.animate,
+    animate: (bespoke ?? forged)?.animate,
   };
   rigs.add(rig);
   return rig;
