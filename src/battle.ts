@@ -19,6 +19,7 @@ import {
   stormPanelTexture, stormSeamEmissive, getRenderer, type GuardianRig,
 } from './models';
 import { VFX } from './vfx';
+import type { RingVictoryStyle } from './celebrate';
 import { say, choose, toast, askName, setStoryInBattle, updateWorldStatus } from './ui';
 import { runBattleTutorial } from './tutorial';
 
@@ -116,6 +117,7 @@ export interface BattleOptions {
   noExp?: boolean;           // EXP is disabled in the Ring — you fight with the team you built
   noLoot?: boolean;          // no per-match shards/drops; the bracket pays the prize
   winLine?: string;          // custom victory subtitle (e.g. "Quarterfinal — you advance!")
+  ring?: RingVictoryStyle;   // sanctioned-bout identity — drives the themed victory celebration
 }
 
 interface EnemySpec { speciesId: string; level: number; }
@@ -2198,8 +2200,17 @@ export class Battle {
       return { g, beforeLevel, afterLevel: g.level, beforeExp, gained: share, newTechs: share > 0 ? this.newlyAvailableTechs(g, beforeLevel) : [] };
     });
 
-    playMusic('battle_win');
-    sfx('fanfare');
+    const ring = this.opts.ring;
+    if (ring) {
+      // Sanctioned win — the crowd erupts; the final crowns a champion.
+      playMusic(ring.isFinal ? 'tournament_champion' : 'tournament_win');
+      sfx('crowd_roar');
+      sfx('fanfare');
+      this.celebrateWin(ring);
+    } else {
+      playMusic('battle_win');
+      sfx('fanfare');
+    }
     await this.showVictorySummary(shards, share, dropName, results);
 
     // evolutions — each its own cinematic
@@ -2268,6 +2279,44 @@ export class Battle {
     });
   }
 
+  // ---------- ring celebration ----------
+  /** Confetti storm + light over the victorious team — themed by the tournament tier. */
+  private celebrateWin(ring: RingVictoryStyle): void {
+    const team = this.alive('player');
+    if (!team.length) return;
+    const grand = ring.grand || ring.isFinal;       // the final / Worlds / Legends gets the maxed version
+    const palette = ring.colors.length ? ring.colors : [0xffd24e];
+    const col = (i: number) => palette[i % palette.length];
+
+    team.forEach((u, i) => {
+      const chest = this.chest(u);
+      const ground = u.rig.group.position.clone().setY(0.05);
+      const c = col(i), c2 = col(i + 1);
+      // launch-and-flutter confetti in two tints
+      this.fx.burst(chest, c,  { count: grand ? 34 : 22, speed: 3.4, up: grand ? 3.6 : 2.8, gravity: -3, drag: 0.5, spread: 1, size: 0.14, life: grand ? 1.8 : 1.3 });
+      this.fx.burst(chest, c2, { count: grand ? 22 : 14, speed: 2.4, up: grand ? 4.2 : 3.2, gravity: -2.4, drag: 0.6, spread: 1, size: 0.12, life: grand ? 2.0 : 1.4 });
+      this.fx.ring(ground, c, { maxR: grand ? 2.4 : 1.6, life: 0.8, y: 0.05 });
+      this.fx.glow(chest, c, { scale: grand ? 1.8 : 1.3, life: 0.5 });
+      this.fx.flash(chest, c, { intensity: grand ? 26 : 15, life: 0.5 });
+      if (grand) {
+        this.fx.pillar(ground, c, { height: 5, radius: 0.7, life: 1.1 });
+        this.fx.spiral(u.rig.group.position.clone(), c2, { up: true, dur: 1.0, radius: 0.7, height: 2.2 });
+      }
+    });
+
+    this.fx.punch(grand ? 6 : 3.5);
+    this.fx.shake(grand ? 0.16 : 0.08, grand ? 0.7 : 0.45);
+
+    // The crowning keeps the confetti raining for a few extra waves.
+    if (grand) {
+      [350, 750, 1200].forEach((ms, w) => setTimeout(() => {
+        team.forEach((u, i) => this.fx.burst(this.chest(u), col(i + w), {
+          count: 18, speed: 3.0, up: 4.0, gravity: -2.6, drag: 0.55, spread: 1, size: 0.13, life: 1.7,
+        }));
+      }, ms));
+    }
+  }
+
   // ---------- victory summary ----------
   private async showVictorySummary(shards: number, share: number, dropName: string | null, results: GuardianResult[]): Promise<void> {
     const reward = this.opts.noExp ? `
@@ -2308,8 +2357,17 @@ export class Battle {
       ? `<div class="vc-sub">⚔️ Sanctioned tournament rules — <b>no EXP is awarded in the Ring</b>. You fight with the team you built; the bracket measures it.</div>`
       : guardianRows;
 
+    const ring = this.opts.ring;
+    const titleBlock = ring
+      ? `<div class="vc-banner ${ring.bannerClass}">
+           <div class="vc-crest">${ring.crest}</div>
+           <h2 class="vc-title">${ring.isFinal ? '👑 CHAMPION 👑' : '✦ VICTORY ✦'}</h2>
+           <div class="vc-kicker">${ring.tierName}</div>
+         </div>`
+      : `<h2 class="vc-title">✦ VICTORY ✦</h2>`;
+
     const body = `
-      <h2 class="vc-title">✦ VICTORY ✦</h2>
+      ${titleBlock}
       <p class="vc-sub">${this.opts.winLine ?? (this.opts.boss ? 'A mighty foe has fallen!' : 'The wild Guardians are defeated!')}</p>
       ${reward}
       <div class="vc-section-title">Guardians</div>

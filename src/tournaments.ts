@@ -21,6 +21,7 @@ import { say, choose, toast, openScreen, closeMenu } from './ui';
 import { jumpToDay, weekdayName, calendarDayOf, dateLabel, aeYear, weekOfYear } from './calendar';
 import { CLOTHES_DATABASE } from './clothes';
 import { ALL_RODS } from './fishingdata';
+import { styleFor, showChampionBanner } from './celebrate';
 
 // ---------------- continents & power tiers ----------------
 export type Continent = 'Olivar' | 'Veyra' | 'Tharkand' | 'Noruun';
@@ -478,6 +479,7 @@ export async function runTournament(p: Player, tier: TournamentTier, ev?: Schedu
       theme: ringTheme(tier),
       intro: `🏟️ ${tier.short} · ${round.name} — ${foe.label} steps onto the ring!`,
       winLine,
+      ring: styleFor(tier, isFinal, ev),
     });
 
     // Every tournament bout ends with the medics restoring the whole roster —
@@ -588,6 +590,8 @@ async function awardPlacement(p: Player, tier: TournamentTier, placement: 'champ
   (window as any).__refreshHUD?.();
 
   if (placement === 'champion') {
+    // The crowning — a full-screen, per-tier banner before the spoils are counted.
+    await showChampionBanner(styleFor(tier, true, _ev), { tp: tier.tp.champion, shards: tier.prizeShards, title: `${tier.short} Champion` });
     toast(`🏆 ${tier.short} CHAMPION! +${tier.tp.champion} TP, ◆${tier.prizeShards}`, 'gold', 4500);
     await say('Attendant Lyssa', `CHAMPION! ${tier.name} is yours. The wall will carry your name, the vault opens — ◆${tier.prizeShards} and ${tier.tp.champion} Tournament Points. ${tier.classKind === 'Championship' ? 'You are WORLD CHAMPION. The Worldring will not forget this night.' : ''}`);
   } else if (tp > 0) {

@@ -165,7 +165,10 @@ async function runBattle(specs: { speciesId: string; level: number }[], opts: Ba
   
   let track = 'battle';
   const prevOwner = prev?.owner;
-  if (opts.boss) {
+  if (opts.ring) {
+    // Sanctioned bout — the Circuit has its own soundtrack; the final lifts to its theme.
+    track = opts.ring.isFinal ? 'tournament_final' : 'tournament_theme';
+  } else if (opts.boss) {
     track = 'battle_boss';
   } else if (prevOwner && prevOwner.constructor?.name === 'Town' && prevOwner.intName === 'Grand Coliseum') {
     track = 'battle_coliseum';

@@ -425,6 +425,58 @@
     .vc-tech b { font-size: 15px; }
     .vc-tech .vc-sub { text-align: left; margin-top: 3px; }
 
+    /* ---------- themed victory-card banner (round wins) ---------- */
+    .vc-banner { text-align: center; padding: 10px 8px 12px; margin: -6px -8px 4px; border-radius: 12px;
+      background: var(--rb-grad, radial-gradient(ellipse at 50% 0%, rgba(242,193,78,0.22), transparent 70%));
+      box-shadow: inset 0 0 28px var(--rb-glow, rgba(242,193,78,0.28)); }
+    .vc-banner .vc-title { color: var(--rb-key, var(--ui-gold)); text-shadow: 0 0 18px var(--rb-glow, rgba(242,193,78,0.6)); }
+    .vc-crest { font-size: 40px; line-height: 1; animation: vcFloat 2s ease-in-out infinite; filter: drop-shadow(0 0 12px var(--rb-glow, rgba(242,193,78,0.6))); }
+    .vc-kicker { color: var(--rb-key, var(--ui-gold)); font-size: 11px; letter-spacing: 3px; text-transform: uppercase; margin-top: 3px; opacity: 0.85; }
+
+    /* ---------- champion crowning banner (full screen) ---------- */
+    #champion-banner {
+      position: absolute; inset: 0; z-index: 70; display: none;
+      align-items: center; justify-content: center; overflow: hidden; cursor: pointer; pointer-events: all;
+      background:
+        var(--rb-grad, radial-gradient(ellipse at 50% 40%, rgba(60,48,12,0.6), transparent 70%)),
+        radial-gradient(ellipse at 50% 40%, rgba(10,12,26,0.86), rgba(2,3,9,0.97));
+      backdrop-filter: blur(4px);
+    }
+    #champion-banner .cb-inner { position: relative; z-index: 2; text-align: center; padding: 26px 34px; animation: cbRise 0.6s cubic-bezier(.2,.9,.25,1.1); }
+    .cb-crest { font-size: 88px; line-height: 1; filter: drop-shadow(0 0 26px var(--rb-glow, rgba(242,193,78,0.7))); animation: cbPulse 1.6s ease-in-out infinite; }
+    .cb-kicker { color: var(--rb-key, var(--ui-gold)); font-size: 16px; letter-spacing: 10px; text-transform: uppercase; margin-top: 10px; text-indent: 10px; }
+    .cb-title { color: var(--rb-key, var(--ui-gold)); font-family: Georgia, serif; font-size: 40px; letter-spacing: 2px; margin: 6px 0 4px;
+      text-shadow: 0 0 30px var(--rb-glow, rgba(242,193,78,0.7)); }
+    .cb-prize { color: #f3ead2; font-size: 15px; margin-top: 10px; opacity: 0.92; }
+    .cb-continue { margin-top: 22px; }
+    #champion-banner.cb-grand .cb-crest { font-size: 110px; }
+    #champion-banner.cb-grand .cb-title { font-size: 50px; }
+    /* rotating beam of light behind the crest */
+    .cb-sweep { position: absolute; inset: -40%; z-index: 1; pointer-events: none; opacity: 0.5;
+      background: conic-gradient(from 0deg, transparent 0 12%, var(--rb-glow, rgba(242,193,78,0.5)) 16%, transparent 20% 50%, var(--rb-glow, rgba(242,193,78,0.5)) 66%, transparent 70%);
+      animation: cbSweep 9s linear infinite; mix-blend-mode: screen; }
+    #champion-banner.cb-grand .cb-sweep { opacity: 0.7; animation-duration: 6s; }
+    /* falling confetti strips */
+    .cb-confetti-layer { position: absolute; inset: 0; z-index: 1; pointer-events: none; overflow: hidden; }
+    .cb-confetti { position: absolute; top: -8%; width: 7px; height: 14px; border-radius: 2px; opacity: 0.9;
+      animation-name: cbFall; animation-timing-function: linear; animation-iteration-count: infinite; }
+    @keyframes cbFall { 0% { transform: translateY(-10vh) rotate(0deg); } 100% { transform: translateY(110vh) rotate(540deg); } }
+    @keyframes cbSweep { to { transform: rotate(360deg); } }
+    @keyframes cbPulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.08); } }
+    @keyframes cbRise { from { opacity: 0; transform: translateY(22px) scale(0.96); } to { opacity: 1; transform: none; } }
+
+    /* per-tier palettes — --rb-key tints text/crest, --rb-glow the bloom, --rb-grad the wash */
+    .rb-ringnight  { --rb-key:#bcd2f0; --rb-glow:rgba(120,180,232,0.5);  --rb-grad:radial-gradient(ellipse at 50% 30%, rgba(90,160,232,0.22), transparent 70%); }
+    .rb-seasonal   { --rb-key:#7ff0e0; --rb-glow:rgba(94,224,208,0.5);   --rb-grad:radial-gradient(ellipse at 50% 30%, rgba(94,224,208,0.22), transparent 70%); }
+    .rb-exhibition { --rb-key:#ff8ad0; --rb-glow:rgba(255,90,176,0.55);  --rb-grad:radial-gradient(ellipse at 50% 30%, rgba(177,90,232,0.26), transparent 70%); }
+    .rb-crown      { --rb-key:#f2d23a; --rb-glow:rgba(90,216,138,0.5);   --rb-grad:radial-gradient(ellipse at 50% 30%, rgba(242,210,58,0.22), transparent 70%); }
+    .rb-aurelia    { --rb-key:#f2c14e; --rb-glow:rgba(127,224,192,0.5);  --rb-grad:radial-gradient(ellipse at 50% 30%, rgba(242,193,78,0.24), transparent 70%); }
+    .rb-playoffs   { --rb-key:#ff7a4a; --rb-glow:rgba(255,45,85,0.55);   --rb-grad:radial-gradient(ellipse at 50% 30%, rgba(255,106,58,0.26), transparent 70%); }
+    .rb-sealwatch  { --rb-key:#c4a8ff; --rb-glow:rgba(155,92,255,0.6);   --rb-grad:radial-gradient(ellipse at 50% 30%, rgba(120,70,200,0.3), transparent 70%); }
+    .rb-worlds     { --rb-key:#ffe07a; --rb-glow:rgba(242,210,78,0.75);  --rb-grad:radial-gradient(ellipse at 50% 35%, rgba(255,210,78,0.34), transparent 72%); }
+    .rb-legends    { --rb-key:#ffffff; --rb-glow:rgba(255,120,210,0.6);
+      --rb-grad:conic-gradient(from 0deg at 50% 40%, rgba(255,90,176,0.28), rgba(94,224,208,0.28), rgba(255,210,78,0.28), rgba(155,92,255,0.28), rgba(255,90,176,0.28)); }
+
     /* white-out used for the evolution transformation */
     #evo-flash { position: absolute; inset: 0; background: #fff; z-index: 78; display: none; opacity: 0; pointer-events: none; }
 
@@ -1899,6 +1951,7 @@
       <div id="battle-parties"></div>
     </div>
     <div id="victory-screen"><div id="victory-inner"></div></div>
+    <div id="champion-banner"></div>
     <div id="evo-flash"></div>
 
     <div id="dialogue-box" class="panel">

@@ -30,6 +30,11 @@ const TRACKS: Record<string, string> = {
   battle_coliseum: 'music/battle_coliseum.mp3',
   battle_win: 'music/battle_win.mp3',
   battle_lost: 'music/battle_lost.mp3',
+  // Worldring Circuit — sanctioned tournament soundtrack
+  tournament_theme: 'music/tournament_theme.mp3',
+  tournament_final: 'music/tournament_final.mp3',
+  tournament_win: 'music/tournament_win.mp3',
+  tournament_champion: 'music/tournament_champion.mp3',
   // Fishing Expansion — dynamic fishing soundtrack
   fishing: 'music/fishing_theme.mp3',
   fishing_hooked: 'music/fishing_hooked.mp3',
@@ -223,7 +228,7 @@ function noiseBurst(dur: number, opts: {
 // ---------------- sound effects ----------------
 export type SfxName =
   | 'click' | 'confirm' | 'cancel' | 'open' | 'close'
-  | 'blip' | 'toast' | 'toastBad' | 'fanfare' | 'achievement'
+  | 'blip' | 'toast' | 'toastBad' | 'fanfare' | 'achievement' | 'crowd_roar' | 'champion_fanfare'
   // battle orchestra
   | 'whoosh' | 'hit' | 'crit' | 'boom' | 'zap' | 'splash'
   | 'leaf' | 'dark' | 'heal' | 'buff' | 'debuff' | 'charge' | 'ko' | 'guard';
@@ -318,6 +323,19 @@ export function sfx(name: SfxName): void {
     case 'achievement':
       [659, 880, 1109, 1319].forEach((f, i) => tone(f, 0.18, { type: 'sine', vol: 0.09, when: i * 0.09 }));
       tone(1760, 0.45, { type: 'sine', vol: 0.06, when: 0.4 });
+      break;
+    case 'crowd_roar':
+      // ten thousand voices — a broadband roar that swells then settles into applause.
+      noiseBurst(1.5, { vol: 0.13, freq: 380, slideTo: 760, q: 0.5 });
+      noiseBurst(1.7, { vol: 0.07, freq: 1500, slideTo: 2400, q: 0.4, when: 0.05 });
+      noiseBurst(0.9, { vol: 0.05, freq: 5200, q: 0.9, type: 'highpass', when: 0.6 }); // clap shimmer
+      break;
+    case 'champion_fanfare':
+      // a grander, two-octave climb for the Worlds / Legends crowning.
+      [392, 523, 659, 784, 1047].forEach((f, i) => tone(f, 0.26, { type: 'triangle', vol: 0.11, when: i * 0.1 }));
+      [523, 659, 784].forEach((f, i) => tone(f, 0.22, { type: 'sine', vol: 0.06, when: 0.5 + i * 0.04 }));
+      tone(1568, 0.7, { type: 'triangle', vol: 0.1, when: 0.56 });
+      tone(2093, 0.7, { type: 'sine', vol: 0.05, when: 0.6 });
       break;
   }
 }
