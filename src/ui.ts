@@ -3,7 +3,7 @@
 // toasts, name input
 // ============================================================
 import * as THREE from 'three';
-import { ITEMS, CRAWLER_PARTS, CRAWLER_SLOTS, CRAWLER_SLOT_INFO, TYPE_CSS, STAT_NAMES, HOUSES, DUNGEONS, expForLevel, SPECIES, TECHS, elementChipsHTML, type StatKey, type CrawlerSlot, getSpeciesPassive } from './data';
+import { ITEMS, CRAWLER_PARTS, CRAWLER_SLOTS, CRAWLER_SLOT_INFO, TYPE_CSS, STAT_NAMES, HOUSES, DUNGEONS, expForLevel, SPECIES, TECHS, elementChipsHTML, RARITY_INFO, ULTRA_GRADIENT, type StatKey, type CrawlerSlot, type CrawlerRarity, getSpeciesPassive } from './data';
 import { Player, Guardian, ParentSnapshot } from './state';
 import { makeGuardian, disposeRig, makeCrawler, disposeCrawler, updateTamerFX, SKIN_TONES, HAIR_COLORS, HAIRSTYLES } from './models';
 import { GUILD_LORE, avatarURL, guildIconURL, rankFor, questsDoneCount, makeCardNo } from './guilds';
@@ -219,7 +219,11 @@ export function askName(title: string, placeholder = '', cancelable = false): Pr
 
 // ---------------- HUD ----------------
 const bar = (cur: number, max: number, cls: string) =>
-  `<div class="minibar ${cls}"><div style="width:${Math.max(0, Math.min(100, (cur / max) * 100))}%"></div></div>`;
+  `<div class="bar-container">
+    <span class="bar-label">${cls.toUpperCase()}</span>
+    <div class="minibar ${cls}"><div style="width:${Math.max(0, Math.min(100, (cur / max) * 100))}%"></div></div>
+    <span class="bar-value">${cur}/${max}</span>
+  </div>`;
 
 let lastHUDPlayer: Player | null = null;
 let lastHUDZone = '';
@@ -272,9 +276,10 @@ export function updateHUD(player: Player, zone: string, extra?: { floor?: number
 
   // upper-left identity is clickable: portrait → Guild Card, chips → Guardian Cards
   let cardBusy = false;
+  const inBattle = !!(window as any).__inBattle;
   const portrait = hud.querySelector<HTMLElement>('.hud-portrait');
   if (portrait) portrait.onclick = async () => {
-    if (cardBusy || isDialogueOpen() || isMenuOpen()) return;
+    if (inBattle || cardBusy || isDialogueOpen() || isMenuOpen()) return;
     if (!house) { toast('Pledge to a Grand House to receive your Guild Card.', ''); return; }
     cardBusy = true;
     sfx('open');
@@ -282,7 +287,7 @@ export function updateHUD(player: Player, zone: string, extra?: { floor?: number
     cardBusy = false;
   };
   hud.querySelectorAll<HTMLElement>('[data-chip]').forEach(chip => chip.onclick = async () => {
-    if (cardBusy || isDialogueOpen() || isMenuOpen()) return;
+    if (inBattle || cardBusy || isDialogueOpen() || isMenuOpen()) return;
     const g = player.party[+chip.dataset.chip!];
     if (!g) return;
     cardBusy = true;
@@ -1336,6 +1341,10 @@ let crawlerSlotSel: CrawlerSlot = 'hull';
 function renderCrawler(p: Player): string {
   const c = p.crawler;
   const maxTier = (slot: CrawlerSlot) => Math.max(...Object.values(CRAWLER_PARTS).filter(x => x.slot === slot).map(x => x.tier));
+  const rarityBadge = (r: CrawlerRarity) => {
+    const info = RARITY_INFO[r], ultra = r === 'ultra';
+    return `<span class="tag" style="background:${ultra ? ULTRA_GRADIENT : info.bg};color:${ultra ? '#1a0a14' : '#fff'};font-size:9px;font-weight:700;letter-spacing:0.3px;${ultra ? 'text-shadow:0 0 4px rgba(255,255,255,0.6);' : ''}">${info.label}</span>`;
+  };
 
   const slotCard = (slot: CrawlerSlot) => {
     const info = CRAWLER_SLOT_INFO[slot];
@@ -1348,8 +1357,8 @@ function renderCrawler(p: Player): string {
         <div class="cr-slot-icon">${info.icon}</div>
         <div style="flex:1;min-width:0">
           <div class="cr-slot-label">${info.label}</div>
-          <div class="cr-slot-part">${part.name}</div>
-          <div class="cr-tier">${pips} <span class="sub">T${part.tier}${ownedCount > 1 ? ` · ${ownedCount} owned` : ''}</span></div>
+          <div class="cr-slot-part" style="color:${RARITY_INFO[part.rarity].color}">${part.name}</div>
+          <div class="cr-tier">${pips} <span class="sub">${RARITY_INFO[part.rarity].label}${ownedCount > 1 ? ` · ${ownedCount} owned` : ''}</span></div>
         </div>
       </div>`;
   };
@@ -1359,7 +1368,7 @@ function renderCrawler(p: Player): string {
     .filter(x => x.slot === crawlerSlotSel && c.owned.includes(x.id)).sort((a, b) => a.tier - b.tier);
   const bayRows = ownedParts.map(part => {
     const equipped = c.parts[crawlerSlotSel] === part.id;
-    return `<div class="list-row"><div style="flex:1"><b>${part.name}</b> <span class="sub">T${part.tier}</span><div class="sub">${part.desc}</div></div>
+    return `<div class="list-row" style="border-left:3px solid ${RARITY_INFO[part.rarity].color}"><div style="flex:1"><b>${part.name}</b> ${rarityBadge(part.rarity)}<div class="sub">${part.desc}</div></div>
       ${equipped ? '<span class="tag" style="background:var(--ui-green);color:#0c1022">EQUIPPED</span>' : `<button class="ui-btn" data-equip="${part.id}">Equip</button>`}</div>`;
   }).join('');
 
@@ -2031,7 +2040,7 @@ async function useItemFlow(player: Player, itemId: string, refresh: () => void):
   const it = ITEMS[itemId];
   const targets = it.kind === 'revive' ? player.party.filter(g => g.fainted) : player.party.filter(g => !g.fainted);
   if (!targets.length) { toast('No valid target.', 'red'); return; }
-  const names = targets.map(g => `${g.nickname} (Lv${g.level}, ${g.hp}/${g.stats.hp} HP)`);
+  const names = targets.map(g => `${g.nickname} (Lv${g.level}, HP: ${g.hp}/${g.stats.hp}, SP: ${g.sp}/${g.stats.sp})`);
   closeMenu();
   const pick = await choose('', `Use ${it.name} on which Guardian?`, [...names, 'Cancel']);
   if (pick < targets.length) {

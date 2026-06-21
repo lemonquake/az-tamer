@@ -19,7 +19,7 @@ import {
 } from './models';
 import { LEGENDS, WORLD_CIRCUIT, LEGEND_GUARDIANS, DAUGHTERS, AIRAH, ALJAY_HIDEOUTS } from './lore';
 import { openColiseumRegistration, showCircuitStandings, talkToStatkeeper } from './tournaments';
-import { CRAWLER_SLOTS, CRAWLER_SLOT_INFO, PAINT_JOBS, ELEMENT_CSS, type CrawlerSlot } from './data';
+import { CRAWLER_SLOTS, CRAWLER_SLOT_INFO, PAINT_JOBS, ELEMENT_CSS, RARITY_INFO, ULTRA_GRADIENT, type CrawlerSlot, type CrawlerRarity } from './data';
 import {
   say, conversation, choose, askName, toast, updateHUD, showInteractHint, showHotkeys,
   isDialogueOpen, isMenuOpen, openPauseMenu, openPanel, openScreen, closeMenu, type PanelKind,
@@ -3149,8 +3149,9 @@ export class Town {
     this.intNpcs = [];
     this.intRigs.forEach(disposeRig);
     this.intRigs = [];
-    // the Sanctum earned itself a bigger hall when the research wing moved in
-    this.intRoom = kind === 'sanctum' ? { w: 20, d: 15 } : { w: 18, d: 13 };
+    // the Sanctum earned itself a bigger hall when the research wing moved in;
+    // Dax's Garage became a full showroom when the prestige builds rolled in
+    this.intRoom = kind === 'sanctum' ? { w: 20, d: 15 } : kind === 'garage' ? { w: 24, d: 17 } : { w: 18, d: 13 };
     this.resetInteriorRig();
     const { w, d } = this.intRoom;
 
@@ -3240,29 +3241,128 @@ export class Town {
       ];
     } else if (kind === 'garage') {
       this.intName = "Dax's Garage";
-      // showcase crawler on a service lift
-      const lift = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.4, 0.4, 16),
+
+      // ---- a holographic name + rarity placard rendered to a canvas ----
+      const makePlacard = (title: string, rarity: CrawlerRarity): THREE.Group => {
+        const info = RARITY_INFO[rarity];
+        const cnv = document.createElement('canvas'); cnv.width = 512; cnv.height = 160;
+        const ctx = cnv.getContext('2d')!;
+        ctx.fillStyle = 'rgba(8,10,20,0.82)'; ctx.fillRect(0, 0, 512, 160);
+        let stroke: string | CanvasGradient = info.color;
+        if (rarity === 'ultra') {
+          const grd = ctx.createLinearGradient(0, 0, 512, 0);
+          grd.addColorStop(0, '#ff5ad2'); grd.addColorStop(0.5, '#5ad2ff'); grd.addColorStop(1, '#ffd25a');
+          stroke = grd;
+        }
+        ctx.strokeStyle = stroke; ctx.lineWidth = 7; ctx.strokeRect(8, 8, 496, 144);
+        ctx.textAlign = 'center';
+        ctx.shadowColor = info.color; ctx.shadowBlur = 18;
+        ctx.fillStyle = '#fff'; ctx.font = 'bold 48px Georgia, serif'; ctx.fillText(title, 256, 72);
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = typeof stroke === 'string' ? stroke : '#ffd25a';
+        ctx.font = 'bold 30px sans-serif'; ctx.fillText(info.label.toUpperCase(), 256, 122);
+        const tex = new THREE.CanvasTexture(cnv); tex.colorSpace = THREE.SRGBColorSpace;
+        const plane = new THREE.Mesh(new THREE.PlaneGeometry(2.3, 0.72),
+          new THREE.MeshBasicMaterial({ map: tex, transparent: true }));
+        const grp = new THREE.Group(); grp.add(plane);
+        return grp;
+      };
+
+      // ---- a prestige display: lit pedestal + slowly-revolving showcase Crawler ----
+      const buildDisplay = (x: number, z: number, look: CrawlerLook, title: string, rarity: CrawlerRarity, dscale = 1.0): void => {
+        const info = RARITY_INFO[rarity];
+        const col = parseInt(info.color.slice(1), 16);
+        const ped = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.7, 0.5, 22),
+          new THREE.MeshStandardMaterial({ color: 0x20232b, metalness: 0.7, roughness: 0.35 }));
+        ped.position.set(x, 0.25, z); s.add(ped);
+        const rim = new THREE.Mesh(new THREE.TorusGeometry(1.52, 0.05, 8, 36),
+          new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 1.3 }));
+        rim.rotation.x = Math.PI / 2; rim.position.set(x, 0.52, z); rim.name = 'stormtip'; s.add(rim);
+        const crawler = makeCrawler(look);
+        crawler.position.set(x, 0.55, z); crawler.scale.setScalar(dscale); crawler.name = 'showcase'; s.add(crawler);
+        const spot = new THREE.PointLight(col, rarity === 'ultra' ? 11 : 7, 8);
+        spot.position.set(x, 4.2, z); s.add(spot);
+        const placard = makePlacard(title, rarity);
+        placard.position.set(x, 2.9, z - 0.1); s.add(placard);
+        // a faint glass column hint for the ULTRA piece
+        if (rarity === 'ultra') {
+          const beam = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 3.6, 24, 1, true),
+            new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.06, side: THREE.DoubleSide }));
+          beam.position.set(x, 2.1, z); s.add(beam);
+        }
+        this.intColliders.push({ pos: new THREE.Vector3(x, 0, z), r: 1.75 });
+      };
+
+      const allPaint = (id: string): Partial<Record<CrawlerSlot, string>> =>
+        Object.fromEntries(CRAWLER_SLOTS.map(sl => [sl, id])) as Partial<Record<CrawlerSlot, string>>;
+
+      // the player's own machine on the central service lift
+      const lift = new THREE.Mesh(new THREE.CylinderGeometry(2.0, 2.2, 0.4, 18),
         new THREE.MeshStandardMaterial({ color: 0x3a4050, metalness: 0.7, roughness: 0.4 }));
-      lift.position.set(-4, 0.2, -1.5);
+      lift.position.set(-5.5, 0.2, 2);
+      const liftRim = new THREE.Mesh(new THREE.TorusGeometry(2.05, 0.04, 8, 40),
+        new THREE.MeshStandardMaterial({ color: 0xe8843a, emissive: 0xe8843a, emissiveIntensity: 1.2 }));
+      liftRim.rotation.x = Math.PI / 2; liftRim.position.set(-5.5, 0.42, 2); liftRim.name = 'stormtip';
       const showCrawler = makeCrawler({ parts: this.player.crawler.parts, paint: this.player.crawler.paint });
-      showCrawler.position.set(-4, 0.4, -1.5);
+      showCrawler.position.set(-5.5, 0.4, 2);
       showCrawler.scale.setScalar(1.15);
       showCrawler.name = 'showcrawler';
-      s.add(lift, showCrawler);
-      this.intColliders.push({ pos: new THREE.Vector3(-4, 0, -1.5), r: 2.6 });
-      // tool wall + workbench
+      s.add(lift, liftRim, showCrawler);
+      this.intColliders.push({ pos: new THREE.Vector3(-5.5, 0, 2), r: 2.4 });
+
+      // ---- the prestige showroom: one ULTRA centrepiece + three legendaries ----
+      buildDisplay(0, -d / 2 + 2.2, {
+        parts: { hull: 'hull16', engine: 'engine13', cargo: 'cargo13', cannon: 'cannon13', scanner: 'scanner13', legs: 'legs16' },
+      }, 'Aether Sovereign', 'ultra', 1.25);
+      buildDisplay(-8, -d / 2 + 3.5, {
+        parts: { hull: 'hull13', engine: 'engine10', cargo: 'cargo9', cannon: 'cannon12', scanner: 'scanner7', legs: 'legs7' },
+        paint: allPaint('p_chrome'),
+      }, 'Storm Titan', 'legendary', 1.1);
+      buildDisplay(8, -d / 2 + 3.5, {
+        parts: { hull: 'hull14', engine: 'engine8', cargo: 'cargo12', cannon: 'cannon10', scanner: 'scanner11', legs: 'legs13' },
+        paint: { hull: 'p_emberveil', legs: 'p_gold', cannon: 'p_gold' },
+      }, 'Wyrmlord', 'legendary', 1.1);
+      buildDisplay(8, 1.5, {
+        parts: { hull: 'hull15', engine: 'engine11', cargo: 'cargo8', cannon: 'cannon8', scanner: 'scanner12', legs: 'legs15' },
+      }, 'Prism Seraph', 'legendary', 1.1);
+
+      // neon showroom sign — canvas sized to the measured text so nothing clips,
+      // and the plane matched to the canvas aspect so the glyphs stay undistorted
+      {
+        const label = "DAX'S CRAWLER WORKS";
+        const cnv = document.createElement('canvas'); cnv.height = 200;
+        let ctx = cnv.getContext('2d')!;
+        ctx.font = 'bold 88px Georgia, serif';
+        cnv.width = Math.ceil(ctx.measureText(label).width) + 160; // room for the soft glow on both sides
+        ctx = cnv.getContext('2d')!;
+        ctx.textAlign = 'center'; ctx.shadowColor = '#5ab8e8'; ctx.shadowBlur = 26;
+        ctx.fillStyle = '#bfe8ff'; ctx.font = 'bold 88px Georgia, serif'; ctx.fillText(label, cnv.width / 2, 132);
+        const tex = new THREE.CanvasTexture(cnv); tex.colorSpace = THREE.SRGBColorSpace;
+        const ph = 1.7, pw = ph * (cnv.width / cnv.height);
+        const sign = new THREE.Mesh(new THREE.PlaneGeometry(pw, ph), new THREE.MeshBasicMaterial({ map: tex, transparent: true }));
+        sign.position.set(0, 3.3, -d / 2 + 0.25); s.add(sign);
+      }
+
+      // workbench + tool wall, tucked in the left-back corner
       const bench = new THREE.Mesh(new THREE.BoxGeometry(5, 1.0, 1.0),
         new THREE.MeshStandardMaterial({ color: 0x6a7282, metalness: 0.6, roughness: 0.4 }));
-      bench.position.set(4.5, 0.5, -d / 2 + 0.9);
+      bench.position.set(-w / 2 + 3.0, 0.5, -d / 2 + 0.9);
       s.add(bench);
-      this.intColliders.push({ pos: new THREE.Vector3(4.5, 0, -d / 2 + 0.9), r: 1.6 });
+      this.intColliders.push({ pos: new THREE.Vector3(-w / 2 + 3.0, 0, -d / 2 + 0.9), r: 1.6 });
       for (let i = 0; i < 5; i++) {
         const tool = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.7 - (i % 2) * 0.2, 0.06),
           new THREE.MeshStandardMaterial({ color: [0xc4582a, 0x8a93a8, 0xf2d23a][i % 3], metalness: 0.5 }));
-        tool.position.set(3 + i * 0.6, 2.2, -d / 2 + 0.45);
+        tool.position.set(-w / 2 + 1.6 + i * 0.6, 2.2, -d / 2 + 0.45);
         s.add(tool);
       }
-      // tesla coil hum
+      // a wall rack of spare wheels & legs as decor
+      for (let i = 0; i < 3; i++) {
+        const tire = new THREE.Mesh(new THREE.TorusGeometry(0.32, 0.12, 8, 18),
+          new THREE.MeshStandardMaterial({ color: 0x1c1e24, roughness: 0.85 }));
+        tire.position.set(w / 2 - 0.5, 1.0 + i * 0.95, -d / 2 + 1.6 + i * 0.2); tire.rotation.y = Math.PI / 2;
+        s.add(tire);
+      }
+      // tesla coil hum, front-right corner
       const coilG = new THREE.Group();
       for (let i = 0; i < 4; i++) {
         const coil = new THREE.Mesh(new THREE.TorusGeometry(0.45 - i * 0.07, 0.05, 6, 16),
@@ -3278,25 +3378,26 @@ export class Town {
       const ol = new THREE.PointLight(0x5ab8e8, 8, 8);
       ol.position.y = 2.1;
       coilG.add(orb, ol);
-      coilG.position.set(6.8, 0, 2.5);
+      coilG.position.set(w / 2 - 2.2, 0, 4.5);
       s.add(coilG);
-      this.intColliders.push({ pos: new THREE.Vector3(6.8, 0, 2.5), r: 0.9 });
-      // Dax by the lift
+      this.intColliders.push({ pos: new THREE.Vector3(w / 2 - 2.2, 0, 4.5), r: 0.9 });
+      // Dax, greeting you as you enter
       const dax = makeVoxelHuman({ top: 0xe8843a, hair: 0x2a2a3a, cap: 0x4a5468 });
-      dax.position.set(-1.2, 0, -1.2);
-      dax.rotation.y = -Math.PI / 3;
+      dax.position.set(-2.4, 0, 3.4);
+      dax.rotation.y = -Math.PI / 4;
       tagNpc(dax, 'Dax');
       s.add(dax);
       this.intNpcs.push(dax);
-      this.intColliders.push({ pos: new THREE.Vector3(-1.2, 0, -1.2), r: 0.6 });
+      this.intColliders.push({ pos: new THREE.Vector3(-2.4, 0, 3.4), r: 0.6 });
       this.intInteractables.push({
-        pos: new THREE.Vector3(-1.2, 0, -1.2), radius: 1.8,
+        pos: new THREE.Vector3(-2.4, 0, 3.4), radius: 1.8,
         label: 'Press <b>E</b> — talk to Engineer Dax',
         handler: () => this.openGarage(),
       });
       this.intMarkers = [
-        { x: -1.2, z: -1.2, label: 'Dax', color: '#e8843a', kind: 'npc' },
-        { x: -4, z: -1.5, label: 'Service Lift', color: '#8a93a8', kind: 'poi' },
+        { x: -2.4, z: 3.4, label: 'Dax', color: '#e8843a', kind: 'npc' },
+        { x: -5.5, z: 2, label: 'Service Lift', color: '#8a93a8', kind: 'poi' },
+        { x: 0, z: -d / 2 + 2.2, label: 'ULTRA Showcase', color: '#ff5ad2', kind: 'poi' },
         { x: 0, z: d / 2, label: 'Exit', color: '#e8d9a8', kind: 'door' },
       ];
     } else if (kind === 'sanctum') {
@@ -5806,8 +5907,10 @@ export class Town {
     this.tamer.position.copy(this.exitSpot);
     this.intRigs.forEach(disposeRig);
     this.intRigs = [];
-    const show = this.interiorScene?.getObjectByName('showcrawler') as THREE.Group | null;
-    if (show) disposeCrawler(show);
+    // dispose every Crawler rig in the room — the player's lift machine and all showroom displays
+    const crawlersToDispose: THREE.Group[] = [];
+    this.interiorScene?.traverse(o => { if (o.userData?.crawlerRig) crawlersToDispose.push(o as THREE.Group); });
+    crawlersToDispose.forEach(disposeCrawler);
     this.interiorScene = null;
     this.hallRooms = null;         // release the Hall's seven scenes
     this.podHover = null;          // release the Skyport's floating Pod
@@ -6638,7 +6741,8 @@ export class Town {
         (el.querySelector('#garage-blurb') as HTMLElement).textContent = CRAWLER_SLOT_INFO[activeSlot].blurb;
 
         // parts list for the active slot
-        const parts = Object.values(CRAWLER_PARTS).filter(x => x.slot === activeSlot).sort((a, b) => a.tier - b.tier);
+        const parts = Object.values(CRAWLER_PARTS).filter(x => x.slot === activeSlot)
+          .sort((a, b) => RARITY_INFO[a.rarity].rank - RARITY_INFO[b.rarity].rank || a.tier - b.tier || a.price - b.price);
         const list = el.querySelector('#garage-list') as HTMLElement;
         list.innerHTML = parts.map(part => {
           const owned = c.owned.includes(part.id);
@@ -6652,11 +6756,15 @@ export class Town {
           else if (owned) btn = `<button class="ui-btn" data-try="${part.id}">Try On</button>`;
           else if (trying) btn = `<button class="ui-btn gold" data-buyfit="${part.id}" ${p.shards < price ? 'disabled' : ''}>Buy & Install ◆${price}</button>`;
           else btn = `<div style="display:flex;gap:4px"><button class="ui-btn" data-try="${part.id}">Try</button><button class="ui-btn" data-buyfit="${part.id}" ${p.shards < price ? 'disabled' : ''}>◆${price}</button></div>`;
-          const tierStars = '★'.repeat(part.tier) + '☆'.repeat(4 - part.tier);
+          const info = RARITY_INFO[part.rarity];
+          const ultra = part.rarity === 'ultra';
+          const badge = `<span class="tag" style="background:${ultra ? ULTRA_GRADIENT : info.bg};color:${ultra ? '#1a0a14' : '#fff'};font-size:9px;font-weight:700;letter-spacing:0.4px;${ultra ? 'text-shadow:0 0 4px rgba(255,255,255,0.6);' : ''}">${info.label}</span>`;
           const tryBadge = trying && !equipped ? '<span class="tag" style="background:var(--ui-gold);color:#0c1022;margin-left:5px">ON RIG</span>' : '';
-          return `<div class="list-row" style="${trying ? 'border-color:var(--ui-gold);background:rgba(217,161,26,0.08);' : ''}">
+          const glow = (ultra || part.rarity === 'legendary') ? `box-shadow:inset 0 0 18px ${info.glow};` : '';
+          const rowStyle = `border-left:3px solid ${info.color};${glow}${trying ? 'outline:1px solid var(--ui-gold);background:rgba(217,161,26,0.08);' : ''}`;
+          return `<div class="list-row" style="${rowStyle}">
             <div style="flex:1" data-try="${part.id}">
-              <b>${part.name}</b> <span class="goldcol" style="font-size:11px;letter-spacing:1px">${tierStars}</span>${tryBadge}
+              <b>${part.name}</b> ${badge}${tryBadge}
               <div class="sub">${part.desc}</div>
             </div>${btn}</div>`;
         }).join('');
@@ -6777,7 +6885,7 @@ export class Town {
     const old = this.interiorScene.getObjectByName('showcrawler') as THREE.Group | null;
     if (old) disposeCrawler(old);
     const fresh = makeCrawler({ parts: this.player.crawler.parts, paint: this.player.crawler.paint });
-    fresh.position.set(-4, 0.4, -1.5);
+    fresh.position.set(-5.5, 0.4, 2);
     fresh.scale.setScalar(1.15);
     fresh.name = 'showcrawler';
     this.interiorScene.add(fresh);
@@ -7153,6 +7261,7 @@ export class Town {
       if (o.name === 'flame') { o.scale.y = 1 + Math.sin(now * 0.008 + o.position.x) * 0.18; }
       if (o.name === 'stormtip') { o.rotation.y = now * 0.002; }
       if (o.name === 'showcrawler') { o.rotation.y = now * 0.0006; }
+      if (o.name === 'showcase') { o.rotation.y = now * 0.00035 + o.position.x; }
       if (o.name === 'smoke') { o.position.y = 3.9 + Math.sin(now * 0.0014) * 0.2; o.scale.setScalar(1 + Math.sin(now * 0.0017) * 0.2); }
       if (o.name === 'springwater') { o.scale.setScalar(1 + Math.sin(now * 0.0022) * 0.03); }
       if (o.name === 'portal') ((o as THREE.Mesh).material as THREE.MeshBasicMaterial).opacity = 0.4 + Math.sin(now * 0.003) * 0.18;

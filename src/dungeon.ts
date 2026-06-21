@@ -718,6 +718,10 @@ export class DungeonRun {
 
   private drawMinimap(): void {
     const cv = $('minimap') as unknown as HTMLCanvasElement;
+    if ((window as any).__inBattle) {
+      cv.style.display = 'none';
+      return;
+    }
     cv.style.display = 'block';
     const c = cv.getContext('2d')!;
     const cell = cv.width / SIZE;

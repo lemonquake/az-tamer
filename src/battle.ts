@@ -20,7 +20,7 @@ import {
 } from './models';
 import { VFX } from './vfx';
 import type { RingVictoryStyle } from './celebrate';
-import { say, choose, toast, askName, setStoryInBattle, updateWorldStatus } from './ui';
+import { say, choose, toast, askName, setStoryInBattle, updateWorldStatus, refreshHUD } from './ui';
 import { runBattleTutorial } from './tutorial';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
@@ -742,13 +742,22 @@ export class Battle {
           </div>`
         : '';
       el.innerHTML = `<div class="nm"><span style="color:${TYPE_CSS[u.g.species.type]}">${side}${u.g.nickname}</span><span><span style="font-size:11px" title="${elementsOf(u.g).join(' · ')}">${els}</span> Lv${u.g.level}</span></div>
-        <div class="minibar hp"><div style="width:${Math.max(0, (u.g.hp / s.hp)) * 100}%"></div></div>
-        <div class="minibar sp"><div style="width:${Math.max(0, (u.g.sp / s.sp)) * 100}%"></div></div>${statusesHtml}${bondRow}`;
+        <div class="bar-container">
+          <span class="bar-label">HP</span>
+          <div class="minibar hp"><div style="width:${Math.max(0, (u.g.hp / s.hp)) * 100}%"></div></div>
+          <span class="bar-value">${u.g.hp}/${s.hp}</span>
+        </div>
+        <div class="bar-container">
+          <span class="bar-label">SP</span>
+          <div class="minibar sp"><div style="width:${Math.max(0, (u.g.sp / s.sp)) * 100}%"></div></div>
+          <span class="bar-value">${u.g.sp}/${s.sp}</span>
+        </div>${statusesHtml}${bondRow}`;
       u.cardEl = el;
       wrap.appendChild(el);
     };
     this.units.filter(u => u.side === 'enemy').forEach(mk);
     this.units.filter(u => u.side === 'player').forEach(mk);
+    refreshHUD();
   }
 
   private highlight(u: Unit | null): void {
@@ -1702,7 +1711,7 @@ export class Battle {
     this.log(prompt);
     const idx = await this.menu([
       ...candidates.map(u => ({
-        label: `<span style="color:${TYPE_CSS[u.g.species.type]}">${u.g.nickname}</span> Lv${u.g.level} — ${u.g.hp}/${u.g.stats.hp} HP`,
+        label: `<span style="color:${TYPE_CSS[u.g.species.type]}">${u.g.nickname}</span> Lv${u.g.level} — HP: ${u.g.hp}/${u.g.stats.hp} · SP: ${u.g.sp}/${u.g.stats.sp}`,
       })),
       { label: '← Back', cls: 'danger' },
     ]);
@@ -1856,7 +1865,7 @@ export class Battle {
       if (act === 'swap') {
         const cands = this.player.reserve.filter(g => !g.fainted);
         const si = await this.menu([
-          ...cands.map(g => ({ label: `${g.nickname} Lv${g.level} <span class="sub">${g.hp}/${g.stats.hp} HP</span>` })),
+          ...cands.map(g => ({ label: `${g.nickname} Lv${g.level} <span class="sub">HP: ${g.hp}/${g.stats.hp} · SP: ${g.sp}/${g.stats.sp}</span>` })),
           { key: 'back', label: '← Back', cls: 'danger' },
         ]);
         if (si >= cands.length) continue;
@@ -2657,6 +2666,9 @@ export class Battle {
     // Hide the overworld Calendar chip + event banner for the duration of the fight.
     (window as any).__inBattle = true;
     updateWorldStatus();
+    refreshHUD();
+    const minimap = $('minimap');
+    if (minimap) minimap.style.display = 'none';
 
     // battle speed chip (click or F) — starts at 1×
     this.speedMul = 1;

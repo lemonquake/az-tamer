@@ -204,6 +204,10 @@ function decorateQuestMarkers(p: Player, markers: MapMarker[], title: string): M
 const SIZE = 250;
 
 export function drawAreaMap(cv: HTMLCanvasElement, o: AreaMapOpts): void {
+  if ((window as any).__inBattle) {
+    cv.style.display = 'none';
+    return;
+  }
   if (cv.width !== SIZE) { cv.width = SIZE; cv.height = SIZE; }
   cv.style.display = 'block';
   const c = cv.getContext('2d')!;

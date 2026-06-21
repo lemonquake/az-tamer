@@ -353,7 +353,7 @@ export class Crawler {
   get cargoMax(): number { return this.part('cargo').value; }
   get cannonTier(): number { return this.part('cannon').value; }
   get scannerTier(): number { return this.part('scanner').value; }
-  get firstStrikeChance(): number { return [0, 0, 0.10, 0.25, 0.35][this.cannonTier] ?? 0; }
+  get firstStrikeChance(): number { return [0, 0, 0.10, 0.25, 0.35, 0.45, 0.55][this.cannonTier] ?? 0.55; }
   /** Chance for a field step to cost no Energy — finer legwork wastes less. */
   get strideEfficiency(): number { return (this.part('legs').value ?? 0) / 100; }
 

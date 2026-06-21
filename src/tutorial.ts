@@ -382,14 +382,30 @@ export async function runBattleTutorial(player: Player, replay = false): Promise
   bui.style.display = 'block';
   const parties = $('battle-parties') as HTMLElement;
   const prevParties = parties.innerHTML;
-  if (!parties.children.length) {
     parties.innerHTML = `
       <div class="unit-card"><div class="nm"><span style="color:var(--ui-purple)"><span style="color:var(--ui-red)">FOE</span> Gloomite</span><span>🌑🪨 Lv4</span></div>
-        <div class="minibar hp"><div style="width:78%"></div></div><div class="minibar sp"><div style="width:55%"></div></div>
+        <div class="bar-container">
+          <span class="bar-label">HP</span>
+          <div class="minibar hp"><div style="width:78%"></div></div>
+          <span class="bar-value">78/100</span>
+        </div>
+        <div class="bar-container">
+          <span class="bar-label">SP</span>
+          <div class="minibar sp"><div style="width:55%"></div></div>
+          <span class="bar-value">55/100</span>
+        </div>
         <div class="minibar bond"><div style="width:42%"></div></div><div class="bond-label">💜 Bond 14 · <b>42%</b> join chance</div></div>
       <div class="unit-card active"><div class="nm"><span style="color:var(--ui-green)">Your Guardian</span><span>Lv5</span></div>
-        <div class="minibar hp"><div style="width:92%"></div></div><div class="minibar sp"><div style="width:64%"></div></div></div>`;
-  }
+        <div class="bar-container">
+          <span class="bar-label">HP</span>
+          <div class="minibar hp"><div style="width:92%"></div></div>
+          <span class="bar-value">92/100</span>
+        </div>
+        <div class="bar-container">
+          <span class="bar-label">SP</span>
+          <div class="minibar sp"><div style="width:64%"></div></div>
+          <span class="bar-value">64/100</span>
+        </div></div>`;
   const menu = $('battle-menu') as HTMLElement;
   const prevHTML = menu.innerHTML;
   const prevDisplay = menu.style.display;

@@ -2322,13 +2322,30 @@ export const CRAWLER_SLOT_INFO: Record<CrawlerSlot, { icon: string; label: strin
   legs:    { icon: '🦿', label: 'Legs',    blurb: 'The stride itself. Finer legwork wastes less Energy with every step.' },
 };
 
+// Six-step rarity ladder. Drives shop badges, display placards and the
+// prismatic ULTRA treatment. Rank is derived from tier when not stated.
+export type CrawlerRarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary' | 'ultra';
+export const RARITY_ORDER: CrawlerRarity[] = ['common', 'uncommon', 'rare', 'epic', 'legendary', 'ultra'];
+export const RARITY_INFO: Record<CrawlerRarity, { label: string; color: string; glow: string; rank: number; bg: string }> = {
+  common:    { label: 'Common',    color: '#9aa6b8', glow: 'rgba(154,166,184,0.45)', rank: 0, bg: 'linear-gradient(135deg,#5a6273,#39414f)' },
+  uncommon:  { label: 'Uncommon',  color: '#5ec46a', glow: 'rgba(94,196,106,0.6)',   rank: 1, bg: 'linear-gradient(135deg,#3f9a4a,#256a30)' },
+  rare:      { label: 'Rare',      color: '#4aa6f2', glow: 'rgba(74,166,242,0.65)',   rank: 2, bg: 'linear-gradient(135deg,#2f7ad8,#1a4f9a)' },
+  epic:      { label: 'Epic',      color: '#b66af2', glow: 'rgba(182,106,242,0.7)',   rank: 3, bg: 'linear-gradient(135deg,#8a3ad8,#5a1f9a)' },
+  legendary: { label: 'Legendary', color: '#f2a83a', glow: 'rgba(242,168,58,0.75)',   rank: 4, bg: 'linear-gradient(135deg,#e88a1a,#a85a0a)' },
+  ultra:     { label: 'ULTRA RARE', color: '#ff5ad2', glow: 'rgba(255,90,210,0.85)',  rank: 5, bg: 'linear-gradient(120deg,#ff5ad2,#9a6aff,#5ad2ff,#ffd25a,#ff5ad2)' },
+};
+/** The prismatic CSS gradient ULTRA parts use for badges/placards. */
+export const ULTRA_GRADIENT = 'linear-gradient(120deg,#ff5ad2,#9a6aff,#5ad2ff,#7affc4,#ffd25a,#ff5ad2)';
+const rarityFromTier = (tier: number): CrawlerRarity => RARITY_ORDER[Math.min(tier - 1, 5)] ?? 'common';
+
 export interface CrawlerPart {
   id: string; slot: CrawlerSlot; name: string; tier: number; value: number; price: number; desc: string;
   /** visual style key consumed by the 3D part builder */
   style: string;
+  rarity: CrawlerRarity;
 }
-const P = (id: string, slot: CrawlerSlot, name: string, tier: number, value: number, price: number, style: string, desc: string): CrawlerPart =>
-  ({ id, slot, name, tier, value, price, style, desc });
+const P = (id: string, slot: CrawlerSlot, name: string, tier: number, value: number, price: number, style: string, desc: string, rarity?: CrawlerRarity): CrawlerPart =>
+  ({ id, slot, name, tier, value, price, style, desc, rarity: rarity ?? rarityFromTier(tier) });
 
 export const CRAWLER_PARTS: Record<string, CrawlerPart> = Object.fromEntries([
   P('hull1', 'hull', 'Scrap Hull', 1, 100, 0, 'scrap', 'Standard-issue academy hull — welded plates, honest rivets. 100 Hull.'),
@@ -2355,6 +2372,114 @@ export const CRAWLER_PARTS: Record<string, CrawlerPart> = Object.fromEntries([
   P('legs2', 'legs', 'Arachno Striders', 2, 15, 900, 'arachno', 'Six armored legs with a smoother gait: 15% of steps cost no Energy.'),
   P('legs3', 'legs', 'Sovereign Octapods', 3, 30, 2400, 'sovereign', 'Eight gold-jointed clawfeet gliding like silk: 30% of steps cost no Energy.'),
   P('legs4', 'legs', 'Aether Drift Legs', 4, 50, 4600, 'aetherdrift', 'Eight floating clawfeet that barely touch the ground: 50% of steps cost no Energy.'),
+
+  // ===================== NEW HULLS — every chassis a different silhouette & size =====================
+  P('hull5', 'hull', 'Vespine Frame', 2, 200, 650, 'wasp', 'A sleek, low-slung wasp chassis striped jet-and-amber. Built for speed, not stares. 200 Hull.'),
+  P('hull6', 'hull', 'Scarab Carapace', 3, 320, 1500, 'beetle', 'A domed beetle shell with iridescent elytra that flick open when she breathes. 320 Hull.'),
+  P('hull7', 'hull', 'Bastion Crab Shell', 3, 300, 1400, 'crab', 'A broad, flat war-crab carapace — squat, stubborn, and ringed in side-eyes. 300 Hull.'),
+  P('hull8', 'hull', 'Tidewrought Reef Hull', 3, 330, 1600, 'reef', 'Coral-grown plating crusted with barnacle nodes that glow Mistveil teal in the dark. 330 Hull.'),
+  P('hull9', 'hull', 'Obsidian Wedge', 4, 420, 3200, 'obsidian', 'A faceted black stealth wedge veined with banked-ember seams. Light slides right off it. 420 Hull.'),
+  P('hull10', 'hull', 'Juggernaut Bulwark', 4, 520, 3600, 'juggernaut', 'A rolling fortress — broad, tall, double dorsal blades. Foes bounce. 520 Hull.'),
+  P('hull11', 'hull', 'Ironframe Mecha-Cab', 4, 440, 3300, 'mecha', 'An exposed-strut pilot pod of raw industrial mecha-work, hydraulics on show. 440 Hull.'),
+  P('hull12', 'hull', "Monarch's Carriage", 5, 600, 6800, 'monarch', 'A regal domed coach crowned with gold spires and a single Tharkand gem. 600 Hull.', 'legendary'),
+  P('hull13', 'hull', 'Stormcell Dreadhull', 5, 640, 7200, 'stormcell', 'A storm-battery dreadnought hull that crackles with caged arcs along its spine. 640 Hull.', 'legendary'),
+  P('hull14', 'hull', 'Wyrmplate Chassis', 5, 680, 7600, 'wyrm', 'Overlapping draconic scale-plates, a dorsal ridge of horns, folded wing-stubs that twitch. 680 Hull.', 'legendary'),
+  P('hull15', 'hull', 'Prismatic Lattice Hull', 5, 620, 7000, 'prism', 'A geometric crystal lattice that throws a different colour from every angle. 620 Hull.', 'legendary'),
+  P('hull16', 'hull', 'Aether Sovereign Hull', 6, 800, 14000, 'aether', 'A chassis of folded sky — translucent plates drift unbound around a haloed core. The pinnacle. 800 Hull.', 'ultra'),
+  P('hull17', 'hull', 'Chronos Gearbox Hull', 6, 820, 14800, 'chronos', 'An ornate gold-brass clockwork casing built of spinning wheels and micro-escapements. 820 Hull.', 'ultra'),
+  P('hull18', 'hull', 'Gloomwyrm Carapace', 6, 840, 15200, 'gloom', 'A breathing, scale-covered organic cage lined with protective obsidian spines. 840 Hull.', 'ultra'),
+  P('hull19', 'hull', 'Void-Star Carapace', 6, 860, 15500, 'void', 'A dark matter shell composed of levitating white bone-plates around a star core. 860 Hull.', 'ultra'),
+  P('hull20', 'hull', 'Plasma Reactor Chassis', 6, 880, 15800, 'plasma', 'A carbon-weave experimental chassis lined with glowing superheated fuel tubes. 880 Hull.', 'ultra'),
+  P('hull21', 'hull', 'Crystalline Geode Hull', 6, 900, 16000, 'crystalline', 'A hollowed geode structure with raw amethyst crystal formations pulsing with energy. 900 Hull.', 'ultra'),
+
+
+  // ===================== NEW ENGINES =====================
+  P('engine5', 'engine', 'Piston Bank', 2, 220, 600, 'piston', 'A bank of brass pistons that hammer in sequence. Loud, honest, willing. 220 Energy.'),
+  P('engine6', 'engine', 'Rotary Whirlcore', 3, 320, 1400, 'rotary', 'A whirring rotary disc that never quite stops spinning. 320 Energy.'),
+  P('engine7', 'engine', 'Solar Fin Reactor', 3, 340, 1500, 'solar', 'Gold heat-fins drink the light and hum it back as power. 340 Energy.'),
+  P('engine8', 'engine', 'Magmaheart Core', 4, 450, 3300, 'magma', 'A churning molten heart sealed behind blast-glass; it pulses like a forge. 450 Energy.'),
+  P('engine9', 'engine', 'Cryo Vortex Core', 4, 450, 3300, 'cryo', 'A frost-blue vortex that vents cold mist and never overheats. 450 Energy.'),
+  P('engine10', 'engine', 'Tesla Cage Engine', 4, 470, 3500, 'teslacoil', 'A caged coil throwing live arcs between its prongs. Stand back. 470 Energy.'),
+  P('engine11', 'engine', 'Quantum Orbital Core', 5, 580, 6800, 'quantum', 'A bright nucleus ringed by three counter-spinning orbital tracks. 580 Energy.', 'legendary'),
+  P('engine12', 'engine', 'Pulsar Drive', 5, 600, 7000, 'pulsar', 'A lighthouse-bright core that pulses in a slow, hypnotic beat. 600 Energy.', 'legendary'),
+  P('engine13', 'engine', 'Singularity Core', 6, 740, 14500, 'singularity', 'A folded knot of void, ringed by light it refuses to release. Dax will not insure it. 740 Energy.', 'ultra'),
+  P('engine14', 'engine', 'Chronos Gear-Core', 6, 760, 14800, 'chronosecore', 'An intricate clockwork engine driven by a massive, steam-venting flywheel. 760 Energy.', 'ultra'),
+  P('engine15', 'engine', 'Gloomwyrm Heart', 6, 780, 15200, 'gloomheart', 'A bio-organic engine that thumps with life, fueled by glowing mossy veins. 780 Energy.', 'ultra'),
+  P('engine16', 'engine', 'Void Singularity Core', 6, 800, 15500, 'voidengine', 'A micro-singularity engine drawing in cosmic stardust to generate infinite power. 800 Energy.', 'ultra'),
+  P('engine17', 'engine', 'Overcharged Plasma Engine', 6, 820, 15800, 'plasmareactor', 'A glowing orb of pure plasma trapped in high-frequency magnetic rings. 820 Energy.', 'ultra'),
+  P('engine18', 'engine', 'Prism-Core Reactor', 6, 840, 16000, 'crystalcore', 'A heavy spinning amethyst cluster refracting energy beams throughout the chassis. 840 Energy.', 'ultra'),
+
+
+  // ===================== NEW CARGO =====================
+  P('cargo5', 'cargo', 'Reinforced Panniers', 2, 18, 550, 'panniers', 'Twin buckled saddle-panniers, ribbed with steel. Carry up to 18 item stacks.'),
+  P('cargo6', 'cargo', 'Crate Scaffold', 3, 28, 1300, 'crateframe', 'A bolted scaffold of lashed crates climbing the back. Carry up to 28 item stacks.'),
+  P('cargo7', 'cargo', 'Drone Loader Bay', 3, 30, 1500, 'dronebay', 'An open bay with a little loader drone that orbits the haul. Carry up to 30 item stacks.'),
+  P('cargo8', 'cargo', 'Mag-Lev Rack', 4, 44, 3100, 'magrack', 'Crates float a finger above their cradle on humming mag-rails. Carry up to 44 item stacks.'),
+  P('cargo9', 'cargo', 'Armored Lockers', 4, 40, 3000, 'armory', 'Twin riveted strongboxes with combination wheels. Carry up to 40 item stacks.'),
+  P('cargo10', 'cargo', 'Cryo Cooler Hold', 4, 42, 3100, 'cooler', 'A frosted, vented cold-hold breathing pale mist. Carry up to 42 item stacks.'),
+  P('cargo11', 'cargo', 'Galleon Deck', 5, 56, 6600, 'galleon', 'A ship-deck cargo rig with furled sailcloth and brass cleats. Carry up to 56 item stacks.', 'legendary'),
+  P('cargo12', 'cargo', "Dragon's Hoard", 5, 60, 6900, 'hoard', 'An open chest brimming with coin that glints when she moves. Carry up to 60 item stacks.', 'legendary'),
+  P('cargo13', 'cargo', 'Pocket Dimension Hold', 6, 80, 14000, 'dimensional', 'A folded-space cube; the inside is bigger than the outside. Obviously. Carry up to 80 item stacks.', 'ultra'),
+  P('cargo14', 'cargo', 'Chronos Paradox Vault', 6, 85, 14800, 'chronosvault', 'A time-dilating vault that loops inventory space, carrying up to 85 item stacks.', 'ultra'),
+  P('cargo15', 'cargo', 'Gloomwyrm Maw Hold', 6, 88, 15200, 'gloomstomach', 'A living bio-sack that digests and stores up to 88 item stacks in pocket folds.', 'ultra'),
+  P('cargo16', 'cargo', 'Void Abyss Pocket', 6, 90, 15500, 'voidhold', 'A miniature black hole portal resting on the chassis. Carry up to 90 item stacks.', 'ultra'),
+  P('cargo17', 'cargo', 'Plasma-Shielded Rack', 6, 92, 15800, 'plasmacrate', 'Industrial crate stacks protected by a dense, glowing energy field. Carry up to 92 item stacks.', 'ultra'),
+  P('cargo18', 'cargo', 'Crystal-Cluster Hold', 6, 95, 16000, 'crystalhoard', 'An open geode vault lined with raw minerals. Carry up to 95 item stacks.', 'ultra'),
+
+
+  // ===================== NEW CANNONS =====================
+  P('cannon5', 'cannon', 'Scatter Pod', 2, 2, 700, 'scatterpod', 'A fan of stubby barrels. Also stuns foes: +10% first-strike chance.'),
+  P('cannon6', 'cannon', 'Rail Spike', 3, 3, 1700, 'railspike', 'A magnetic rail that spits a glowing spike. +25% first-strike chance.'),
+  P('cannon7', 'cannon', 'Flak Battery', 3, 3, 1700, 'flak', 'A quad of short flak tubes that bark in unison. +25% first-strike chance.'),
+  P('cannon8', 'cannon', 'Plasma Lance', 4, 4, 3400, 'plasma', 'A vented coil-lance that builds a hissing plasma bolt. +35% first-strike chance.'),
+  P('cannon9', 'cannon', 'Frost Lance', 4, 4, 3400, 'frostlance', 'A rimed barrel that fires a shard of supercooled air. +35% first-strike chance.'),
+  P('cannon10', 'cannon', 'Siege Mortar', 4, 4, 3600, 'siege', 'A short, fat mortar that lobs shells over the rocks. +35% first-strike chance.'),
+  P('cannon11', 'cannon', 'Arc Lance', 5, 5, 6900, 'arclance', 'A twin-prong lance that leaps lightning between its tips. +45% first-strike chance.', 'legendary'),
+  P('cannon12', 'cannon', 'Stormcaller Array', 5, 5, 7200, 'stormcaller', 'A six-tube rocket cluster of pure Stormcall pedigree. +45% first-strike chance.', 'legendary'),
+  P('cannon13', 'cannon', 'Annihilator Cannon', 6, 6, 15000, 'annihilator', 'A folded-sky siege gun haloed in pink fire. Foes simply leave. +55% first-strike chance.', 'ultra'),
+  P('cannon14', 'cannon', 'Chronos Tachyon Beam', 6, 6, 14800, 'chronoscannon', 'A brass hourglass cannon shooting temporal beams. +50% first-strike chance.', 'ultra'),
+  P('cannon15', 'cannon', 'Gloomwyrm Acid Spitter', 6, 6, 15200, 'gloomspit', 'An organic mouth firing globs of glowing corrosive spit. +50% first-strike chance.', 'ultra'),
+  P('cannon16', 'cannon', 'Void Ray Cannon', 6, 6, 15500, 'voidcannon', 'A dark matter projector firing high-gravity singularities. +50% first-strike chance.', 'ultra'),
+  P('cannon17', 'cannon', 'Hyper-Plasma Blaster', 6, 6, 15800, 'plasmacannon', 'A heavy double-coil gun discharging massive plasma bolts. +50% first-strike chance.', 'ultra'),
+  P('cannon18', 'cannon', 'Crystalline Prism Cannon', 6, 6, 16000, 'crystalbeam', 'An amplifying focusing crystal that directs a searing beam. +50% first-strike chance.', 'ultra'),
+
+
+  // ===================== NEW SCANNERS =====================
+  P('scanner5', 'scanner', 'Brass Periscope', 2, 2, 650, 'periscope', 'A crank-up brass periscope with a swivelling prism. Wider reveal; chests ping on the map.'),
+  P('scanner6', 'scanner', 'Radar Dish', 3, 3, 1500, 'dish', 'A slow-sweeping parabolic dish. Full-floor chest & stair pings, wide reveal.'),
+  P('scanner7', 'scanner', 'Pulse-LIDAR Sweep', 3, 3, 1500, 'lidar', 'A spinning ring of laser emitters that paints the floor in pulses. Full-floor pings, wide reveal.'),
+  P('scanner8', 'scanner', 'Recon Drone Mast', 4, 4, 3200, 'droneprobe', 'A little recon drone tethered above the mast, scouting ahead. Sees half a floor at a glance.'),
+  P('scanner9', 'scanner', 'Tri-Owl Cluster', 4, 4, 3200, 'triowl', 'Three owl-eye dishes on a slow carousel. Nothing on the floor stays hidden.'),
+  P('scanner10', 'scanner', 'Spirit Lantern', 4, 4, 3300, 'spirit', 'A floating witch-lantern whose flame leans toward unseen treasure. Sees half a floor.'),
+  P('scanner11', 'scanner', 'Starchart Orrery', 5, 5, 6700, 'starchart', 'A brass orrery of orbiting moons that maps the floor like a constellation. Total reveal.', 'legendary'),
+  P('scanner12', 'scanner', 'Seraphic Halo', 5, 5, 7000, 'seraphic', 'A ring of feather-light wings around an all-seeing eye. Total reveal.', 'legendary'),
+  P('scanner13', 'scanner', 'Cosmic Oculus', 6, 6, 14000, 'cosmic', 'A levitating galaxy-eye that simply knows where everything is. Nothing is hidden from it.', 'ultra'),
+  P('scanner14', 'scanner', 'Chronos Chronoscope', 6, 6, 14800, 'chronosscope', 'A spinning clock face that scans the terrain in multiple timelines. Total reveal.', 'ultra'),
+  P('scanner15', 'scanner', 'Gloomwyrm All-Seeing Eye', 6, 6, 15200, 'gloomeye', 'A giant blinking organic eye on a fleshy stalk that senses life. Total reveal.', 'ultra'),
+  P('scanner16', 'scanner', 'Void Rift Probe', 6, 6, 15500, 'voidscanner', 'A miniature purple void rift emitting cosmic scanner rays. Total reveal.', 'ultra'),
+  P('scanner17', 'scanner', 'Plasma Sweep LIDAR', 6, 6, 15800, 'plasmalidar', 'A high-speed spinning plasma ring sweeping the area with lasers. Total reveal.', 'ultra'),
+  P('scanner18', 'scanner', 'Crystalline Refractor', 6, 6, 16000, 'crystalprism', 'A floating prism array splitting and refracting light beams. Total reveal.', 'ultra'),
+
+
+  // ===================== NEW LEGS / WHEELS — every stride unique & fully animated =====================
+  P('legs5', 'legs', 'Mantis Striders', 2, 18, 700, 'mantis', 'Six blade-shinned legs that fold like a praying mantis: 18% of steps cost no Energy.'),
+  P('legs6', 'legs', 'Raptor Sprint Legs', 2, 20, 750, 'raptor', 'Four digitigrade sprinter legs built to bound: 20% of steps cost no Energy.'),
+  P('legs7', 'legs', 'Titan Hydraulics', 3, 24, 1600, 'titan', 'Four colossal hydraulic pillars that piston with each stride: 24% of steps cost no Energy.'),
+  P('legs8', 'legs', 'Centipod Myriapod Legs', 3, 26, 1700, 'centipede', 'Ten little legs rippling in a wave down both flanks: 26% of steps cost no Energy.'),
+  P('legs9', 'legs', 'Trailblazer Wheels', 3, 28, 1800, 'wheeler', 'Four knobby off-road wheels on bouncing suspension arms: 28% of steps cost no Energy.'),
+  P('legs10', 'legs', 'Hexroller Drive', 4, 34, 3300, 'hexwheel', 'Six powered wheels, three a side, that never lose their grip: 34% of steps cost no Energy.'),
+  P('legs11', 'legs', 'Crystalstride Legs', 4, 40, 3500, 'crystal', 'Eight faceted crystal legs that chime and glow as they walk: 40% of steps cost no Energy.'),
+  P('legs12', 'legs', 'Siege Treads', 4, 36, 3400, 'tread', 'Twin tank treads of scrolling steel cleats that crush any ground: 36% of steps cost no Energy.'),
+  P('legs13', 'legs', 'Royal Guard Octapods', 5, 46, 6800, 'royalguard', 'Eight ornate gold legs with haloed joints, marching in honour-guard step: 46% of steps cost no Energy.', 'legendary'),
+  P('legs14', 'legs', 'Skimmer Hover Pads', 5, 54, 7200, 'hover', 'Four anti-grav thruster pads — no legs at all, just a glowing glide: 54% of steps cost no Energy.', 'legendary'),
+  P('legs15', 'legs', 'Maglev Orbiters', 5, 50, 7000, 'orbiter', 'Four spinning mag-lev orbs that carry her without ever touching down: 50% of steps cost no Energy.', 'legendary'),
+  P('legs16', 'legs', 'Seraph Drift Wings', 6, 66, 14500, 'seraph', 'Eight haloed wing-legs of folded light that barely acknowledge the ground: 66% of steps cost no Energy.', 'ultra'),
+  P('legs17', 'legs', 'Chronos Gear-Walkers', 6, 70, 14800, 'clockwork', 'Four mechanical brass legs that walk with precise mechanical ticks: 70% of steps cost no Energy.', 'ultra'),
+  P('legs18', 'legs', 'Gloomwyrm Monster Legs', 6, 72, 15200, 'monster', 'Six organic spiky monster legs wrapped in scales: 72% of steps cost no Energy.', 'ultra'),
+  P('legs19', 'legs', 'Void Tendril Legs', 6, 74, 15500, 'voidtentacles', 'Eight dark energy tentacles that glide silently over the ground: 74% of steps cost no Energy.', 'ultra'),
+  P('legs20', 'legs', 'Jellatin Slime Drag', 6, 68, 14200, 'jellatin', 'A gelatinous slug foot dragging the crawler along: 68% of steps cost no Energy.', 'ultra'),
+  P('legs21', 'legs', 'Grim Scythe Legs', 6, 75, 16000, 'reaper', 'Eight sleek obsidian blades that pull the crawler forward: 75% of steps cost no Energy.', 'ultra'),
+
 ].map(p => [p.id, p]));
 
 // ---------------- Crawler paint jobs ----------------
