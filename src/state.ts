@@ -5,27 +5,13 @@ import {
   SPECIES, TECHS, ITEMS, CRAWLER_PARTS, expForLevel, getSpeciesPassive,
   type SpeciesDef, type Stats, type StatKey, type Technique, type CrawlerPart,
   HOUSES, TYPE_ELEMENT, elementsOf, type Element, isBig3Legend, formRank,
+  STAGE_STAT_MULT, LEVEL_CAP_BY_RANK,
 } from './data';
 import { DEFAULT_APPEARANCE, type Appearance } from './models';
 import { defaultFishingState, normalizeFishingState, type FishingState } from './fishingdata';
 
 let uidCounter = 1;
 export const uid = () => `g${Date.now().toString(36)}${(uidCounter++).toString(36)}`;
-
-// Form-rank (0..8) → stat multipliers [hp/atk/def/wis, sp/spd] and level caps.
-// Monotonic: the more times a Guardian has evolved, the stronger it grows.
-const STAGE_STAT_MULT: [number, number][] = [
-  [1.00, 1.00], // 0 Novice
-  [1.15, 1.10], // 1 Adept
-  [1.45, 1.25], // 2 Elite
-  [1.85, 1.45], // 3 Apex
-  [2.35, 1.70], // 4 Split
-  [2.95, 2.00], // 5 Special
-  [3.65, 2.35], // 6 Terra
-  [4.45, 2.75], // 7 Transcendent
-  [5.40, 3.20], // 8 Aether
-];
-const LEVEL_CAP_BY_RANK = [16, 27, 40, 60, 70, 80, 88, 94, 99];
 
 // ---------------- Guardian ----------------
 export interface GuardianCustomization {
@@ -168,6 +154,13 @@ export class Guardian {
     } else if (passive.name.includes('Guard')) {
       baseStats.def = Math.floor(baseStats.def * 1.15); // Shell: +15% Defense
     }
+
+    baseStats.hp = Math.min(12500, baseStats.hp);
+    baseStats.sp = Math.min(3500, baseStats.sp);
+    baseStats.atk = Math.min(1500, baseStats.atk);
+    baseStats.def = Math.min(1500, baseStats.def);
+    baseStats.spd = Math.min(1500, baseStats.spd);
+    baseStats.wis = Math.min(1500, baseStats.wis);
 
     return baseStats;
   }

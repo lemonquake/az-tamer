@@ -1058,12 +1058,12 @@ export function openMasterDebugMenu(player: Player): Promise<void> {
       toast('Unlocked all species techniques for active party!', 'gold');
     };
 
-    $('db-cap-99').onclick = () => {
+    $('db-cap-255').onclick = () => {
       player.party.forEach(g => {
-        g.levelCap = 99;
+        g.levelCap = 255;
       });
       player.save(false);
-      toast('Set level cap to 99 for active party!', 'gold');
+      toast('Set level cap to 255 for active party!', 'gold');
     };
 
     const onKey = (e: KeyboardEvent) => {
@@ -1109,7 +1109,7 @@ export function openMasterDebugMenu(player: Player): Promise<void> {
       $('db-warp-btn').onclick = null;
       $('db-heal-all').onclick = null;
       $('db-techs-all').onclick = null;
-      $('db-cap-99').onclick = null;
+      $('db-cap-255').onclick = null;
       $('db-boutique-btn').onclick = null;
       
       debugMenuOpen = false;

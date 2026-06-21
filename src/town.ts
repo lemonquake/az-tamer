@@ -8217,7 +8217,7 @@ export class Town {
         } else {
           const out = outs[currentOutcomeIdx];
           const capBonus = Math.floor((parentA!.level - parentB!.level) / 2);
-          const predictedCap = Math.max(1, Math.min(99, parentA!.levelCap + capBonus));
+          const predictedCap = Math.max(1, Math.min(255, parentA!.levelCap + capBonus));
           const bonusText = capBonus >= 0 ? `+${capBonus}` : `${capBonus}`;
           const epBonus = Math.floor(parentB!.evolutionPoints * 0.25);
           const predictedEp = Math.floor(1 + parentA!.evolutionPoints + epBonus);
@@ -8430,7 +8430,7 @@ export class Town {
             const nickname = window.prompt(`Give a name to your new ${speciesName}!`, speciesName) || speciesName;
             const offspring = new Guardian(finalOutcome.speciesId, nextLvl, nickname);
             const capBonus = Math.floor((parentA!.level - parentB!.level) / 2);
-            offspring.levelCap = Math.max(1, Math.min(99, parentA!.levelCap + capBonus));
+            offspring.levelCap = Math.max(1, Math.min(255, parentA!.levelCap + capBonus));
             
             // Parents snaps
             const makeSnap = (g: Guardian): ParentSnapshot => {

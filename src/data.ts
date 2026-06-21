@@ -363,7 +363,7 @@ export const SIGNATURE_TECH: Record<string, string> = {
 
 // ---------------- Techniques ----------------
 export type TechKind = 'phys' | 'art';
-export type TechEffect = 'damage' | 'heal' | 'buffAtk' | 'buffDef' | 'debuffDef' | 'debuffSpd' | 'drain' | 'buffSpd' | 'debuffAtk';
+export type TechEffect = 'damage' | 'heal' | 'buffAtk' | 'buffDef' | 'debuffDef' | 'debuffSpd' | 'drain' | 'buffSpd' | 'debuffAtk' | 'percent_damage' | 'flat_heal' | 'percent_heal' | 'revive';
 export type TechTarget = 'one' | 'all' | 'self' | 'ally';
 
 export interface TechStatusEffect {
@@ -377,6 +377,7 @@ export interface TechStatusEffect {
   desc: string;
   shieldHp?: number;
   provokedBy?: any; // Unit reference in battle.ts, typed as any to avoid circular dependency
+  stacks?: number;
 }
 
 export interface Technique {
@@ -437,14 +438,14 @@ export const TECHS: Record<string, Technique> = Object.fromEntries([
   T('mist_veil', 'Mist Veil', 'Tide', 'art', 0, 10, 'buffDef', 'self', 'Cloaks the body in mist, raising Defense.'),
   T('tidal_crush', 'Tidal Crush', 'Tide', 'phys', 60, 16, 'damage', 'one', 'A wall of water collapses on the foe.'),
   T('abyss_maelstrom', 'Abyss Maelstrom', 'Tide', 'art', 66, 26, 'damage', 'all', 'Drags all foes into a whirlpool.'),
-  T('spring_mend', 'Spring Mend', 'Tide', 'art', 45, 14, 'heal', 'ally', 'Healing waters mend an ally.'),
+  T('spring_mend', 'Spring Mend', 'Tide', 'art', 120, 14, 'flat_heal', 'ally', 'Healing waters restore 120 HP to an ally.'),
   // Verdant
   T('seed_shot', 'Seed Shot', 'Verdant', 'phys', 22, 4, 'damage', 'one', 'Fires hardened seeds at the foe.'),
   T('thorn_whip', 'Thorn Whip', 'Verdant', 'phys', 38, 8, 'damage', 'one', 'A barbed vine lashes the foe.'),
   T('sap_drain', 'Sap Drain', 'Verdant', 'art', 30, 12, 'drain', 'one', 'Steals life-sap to heal the user.'),
   T('bramble_cage', 'Bramble Cage', 'Verdant', 'art', 34, 12, 'damage', 'all', 'Thorned brambles tear at all foes.'),
   T('elder_wrath', 'Elder Wrath', 'Verdant', 'phys', 68, 24, 'damage', 'one', 'The forest itself strikes in anger.'),
-  T('bloom_ward', 'Bloom Ward', 'Verdant', 'art', 50, 15, 'heal', 'ally', 'Blooming pollen restores an ally.'),
+  T('bloom_ward', 'Bloom Ward', 'Verdant', 'art', 35, 15, 'percent_heal', 'ally', 'Blooming pollen restores 35% of an ally\'s max HP.'),
   // Volt
   T('static_jab', 'Static Jab', 'Volt', 'phys', 22, 4, 'damage', 'one', 'A jab crackling with static.'),
   T('arc_bolt', 'Arc Bolt', 'Volt', 'art', 38, 8, 'damage', 'one', 'A leaping bolt of lightning.'),
@@ -469,13 +470,15 @@ export const TECHS: Record<string, Technique> = Object.fromEntries([
   // Legendary Starter Moves
   T('sol_eruption', 'Sol Eruption', 'Blaze', 'art', 90, 32, 'debuffDef', 'all', 'Erupts with the heat of the sun, melting the Defense of all foes.'),
   T('deluge_tempest', 'Deluge Tempest', 'Tide', 'art', 88, 30, 'drain', 'one', 'Summons a torrential deluge that siphons life force back to the caster.'),
-  T('nature_judgment', 'Nature Judgment', 'Verdant', 'art', 92, 34, 'heal', 'all', 'Unleashes the forest\'s judgment upon all, restoring HP to allies.'),
+  T('nature_judgment', 'Nature Judgment', 'Verdant', 'art', 300, 34, 'flat_heal', 'all', 'Unleashes the forest\'s judgment, restoring 300 HP to all allies.'),
   T('volt_singularity', 'Volt Singularity', 'Volt', 'art', 90, 32, 'debuffSpd', 'all', 'Creates an electromagnetic singularity that slows all foes.'),
   T('void_extinction', 'Void Extinction', 'Umbra', 'art', 95, 35, 'drain', 'one', 'Devours the target in void energy, restoring massive HP to the user.'),
   T('tempest_gale', 'Tempest Gale', 'Gale', 'art', 85, 28, 'buffAtk', 'self', 'A hurricane of wings that strikes all foes and stokes own Attack.'),
   // Aether-stage signature arts
   T('aether_flare', 'Aether Flare', 'Blaze', 'art', 105, 36, 'damage', 'all', 'The light that existed before fire. All foes are bathed in dawn made weapon.'),
-  T('dawn_rebirth', 'Dawn Rebirth', 'Blaze', 'art', 80, 30, 'heal', 'all', 'A sunrise sung backwards — allies are mended by the memory of morning.'),
+  T('dawn_rebirth', 'Dawn Rebirth', 'Blaze', 'art', 50, 30, 'percent_heal', 'all', 'A sunrise sung backwards — restores 50% max HP to all allies.'),
+  T('tide_revive', 'Tidal Resurrection', 'Tide', 'art', 50, 35, 'revive', 'ally', 'Invokes the deep tide to revive a fainted ally with 50% HP.'),
+  T('verdant_revive', 'Aetherial Rebirth', 'Verdant', 'art', 100, 60, 'revive', 'ally', 'An ultimate forest rebirth that revives a fainted ally with full HP.'),
   // ---- Aether world-boss ultimates (one per element; the new top-tier roster's signature AoE) ----
   T('sol_annihilation', 'Sol Annihilation', 'Blaze', 'art', 112, 36, 'damage', 'all', 'The final flare of a dying sun, poured over the whole field.'),
   T('tidal_apocalypse', 'Tidal Apocalypse', 'Tide', 'art', 112, 36, 'damage', 'all', 'An ocean raised vertical and dropped on the world at once.'),
@@ -511,8 +514,8 @@ export const TECHS: Record<string, Technique> = Object.fromEntries([
     'soaked', 'Soaked', 'debuff', 3, 'atk', -0.15, '💧', 'Attack reduced by 15%.', 0.8),
   T_status('chilling_wind', 'Chilling Wind', 'Tide', 'art', 25, 6, 'damage', 'one', 'A freezing draft that chills the target.',
     'chill', 'Chilled', 'debuff', 3, 'spd', -0.2, '❄️', 'Speed reduced by 20%.', 0.8),
-  T_status('dew_drop', 'Dew Drop', 'Tide', 'art', 0, 8, 'heal', 'ally', 'Restores health and grants regeneration.',
-    'regen', 'Regen', 'buff', 3, 'hot', 0.08, '🌿', 'Restoring health over time.', 1.0),
+  T_status('dew_drop', 'Dew Drop', 'Tide', 'art', 0, 8, 'heal', 'ally', 'Restores health and grants stackable regeneration.',
+    'regen_stackable', 'Regen', 'buff', 3, 'hot', 0.05, '🌿', 'Restoring health over time (stacks up to 3x).', 1.0),
   T_status('ocean_sanctuary', 'Ocean Sanctuary', 'Tide', 'art', 0, 12, 'buffDef', 'self', 'Shields the caster in deep ocean water.',
     'ocean_shield', 'Ocean Shield', 'buff', 3, 'shield', 0.3, '🫧', 'Barrier: absorbs damage and grants +20% defense.', 1.0),
   T_status('bubble_burst', 'Bubble Burst', 'Tide', 'art', 40, 10, 'damage', 'one', 'An exploding bubble that soaks the target.',
@@ -523,8 +526,8 @@ export const TECHS: Record<string, Technique> = Object.fromEntries([
     'soaked', 'Soaked', 'debuff', 3, 'atk', -0.15, '💧', 'Attack reduced by 15%.', 0.8),
   T_status('ice_spear', 'Ice Spear', 'Tide', 'art', 68, 16, 'damage', 'one', 'A piercing spear of ice that freezes.',
     'frozen', 'Frozen', 'debuff', 2, 'freeze', 0.0, '❄️', 'Frozen solid. Physical hits shatter for +40% damage.', 0.4),
-  T_status('aquatic_mend', 'Aquatic Mend', 'Tide', 'art', 40, 16, 'heal', 'all', 'Healing waters that grant regeneration to all allies.',
-    'regen', 'Regen', 'buff', 3, 'hot', 0.06, '🌿', 'Restoring health over time.', 1.0),
+  T_status('aquatic_mend', 'Aquatic Mend', 'Tide', 'art', 40, 16, 'heal', 'all', 'Healing waters that grant stackable regeneration to all allies.',
+    'regen_stackable', 'Regen', 'buff', 3, 'hot', 0.05, '🌿', 'Restoring health over time (stacks up to 3x).', 1.0),
   T_status('abyssal_drown', 'Abyssal Drown', 'Tide', 'art', 95, 30, 'damage', 'one', 'Drags the target into the deep, chilling them.',
     'chill', 'Chilled', 'debuff', 4, 'spd', -0.25, '❄️', 'Speed reduced by 25%.', 1.0),
 
@@ -533,8 +536,8 @@ export const TECHS: Record<string, Technique> = Object.fromEntries([
     'entangled', 'Entangled', 'debuff', 3, 'spd', -0.15, '🕸️', 'Speed reduced by 15%.', 0.8),
   T_status('spore_puff', 'Spore Puff', 'Verdant', 'art', 15, 6, 'damage', 'one', 'Releases sleep-inducing spores.',
     'slumber', 'Slumber', 'debuff', 2, 'sleep', 0.0, '💤', 'Asleep. Cannot act. Wakes up on hit for +50% damage.', 0.7),
-  T_status('root_mend', 'Root Mend', 'Verdant', 'art', 0, 8, 'heal', 'self', 'Deep roots heal and grant regeneration.',
-    'regen', 'Regen', 'buff', 3, 'hot', 0.08, '🌿', 'Restoring health over time.', 1.0),
+  T_status('root_mend', 'Root Mend', 'Verdant', 'art', 40, 8, 'percent_heal', 'self', 'Deep roots restore 40% HP and grant stackable regeneration.',
+    'regen_stackable', 'Regen', 'buff', 3, 'hot', 0.05, '🌿', 'Restoring health over time (stacks up to 3x).', 1.0),
   T_status('leaf_shield', 'Leaf Shield', 'Verdant', 'art', 0, 10, 'buffDef', 'self', 'Creates a defensive coat of thorns that reflects physical hits.',
     'bramble_armor', 'Bramble Armor', 'buff', 3, 'reflect', 0.15, '🪵', 'Reflecting 15% of physical damage.', 1.0),
   T_status('nature_strike', 'Nature Strike', 'Verdant', 'phys', 45, 10, 'damage', 'one', 'A powerful strike that entangles the target.',
@@ -647,6 +650,158 @@ export const TECHS: Record<string, Technique> = Object.fromEntries([
   T_sig('abyssal_taproot', 'Abyssal Taproot', 'Verdant', 'art', 158, 62, 'one', 3,
     'The root that anchored the seal on Ghandra reaches up through the dark and takes hold. What it grips, it curses.',
     { id: 'curse', name: 'Cursed', type: 'debuff', duration: 3, effect: 'curse', value: 0.05, icon: '🔮', desc: 'Cursed: cannot heal and takes +100% DoT damage.', chance: 0.8 }),
+  // ===== 50 NEW DISTRIBUTED TECHNIQUES =====
+  T('scorch_burst', 'Scorch Burst', 'Blaze', 'art', 44, 12, 'damage', 'all', 'A burst of searing heat that spreads across the field.'),
+  T_status('pyre_ward', 'Pyre Ward', 'Blaze', 'art', 0, 10, 'buffDef', 'self', 'Surrounds the caster in a shield of flame.', 'fire_armor_v2', 'Pyre Barrier', 'buff', 3, 'shield', 0.15, '🔥', 'Barrier: absorbs damage.', 1.0),
+  T_status('sunflare_blast', 'Sunflare Blast', 'Blaze', 'art', 75, 20, 'damage', 'one', 'An intense beam of sunlight that melts defense.', 'melted_v2', 'Melted', 'debuff', 2, 'def', -0.2, '🌋', 'Defense melted by solar heat.', 0.5),
+  T_status('blazing_temper', 'Blazing Temper', 'Blaze', 'art', 0, 10, 'buffAtk', 'self', 'Stokes a wild fury, boosting attack but causing berserk.', 'berserk_v2', 'Berserk', 'debuff', 3, 'berserk', 0.15, '😡', 'Attack increased, but strikes randomly.', 1.0),
+  T_status('ember_barrage', 'Ember Barrage', 'Blaze', 'phys', 48, 12, 'damage', 'one', 'Fires a barrage of hot embers that may cause burn.', 'burn_v2', 'Burned', 'debuff', 3, 'dot', 0.05, '🔥', 'Taking fire damage over time.', 0.4),
+  T_status('crimson_overdrive', 'Crimson Overdrive', 'Blaze', 'art', 0, 15, 'buffSpd', 'self', 'Increases speed and attack power.', 'crimson_haste', 'Overdrive', 'buff', 2, 'spd', 0.20, '⚡', 'Speed increased.', 1.0),
+  T_status('magma_deluge', 'Magma Deluge', 'Blaze', 'art', 82, 25, 'damage', 'all', 'Pours superheated magma on all foes, melting armor.', 'corroded_v2', 'Corroded', 'debuff', 3, 'corrosion', 0.05, '🌋', 'Defense corroded over time.', 0.3),
+  T('solar_blessing', 'Solar Blessing', 'Blaze', 'art', 110, 18, 'flat_heal', 'ally', 'Restores HP with warm sunlight.'),
+  T('wave_splash', 'Wave Splash', 'Tide', 'phys', 25, 4, 'damage', 'one', 'Splashes the foe with a quick burst of water.'),
+  T_status('coral_shield', 'Coral Shield', 'Tide', 'art', 0, 10, 'buffDef', 'self', 'Creates a protective barrier of hard coral.', 'coral_barrier', 'Coral Barrier', 'buff', 3, 'shield', 0.20, '🐚', 'Shield: absorbs damage.', 1.0),
+  T_status('frost_breath', 'Frost Breath', 'Tide', 'art', 32, 10, 'damage', 'one', 'Breathes sub-zero wind that can freeze the foe.', 'frozen_v2', 'Frozen', 'debuff', 1, 'freeze', 0.0, '❄️', 'Cannot act.', 0.3),
+  T('tsunami_surge', 'Tsunami Surge', 'Tide', 'art', 72, 22, 'damage', 'all', 'A massive wave sweeps across the entire battlefield.'),
+  T_status('tide_meld', 'Tide Meld', 'Tide', 'art', 0, 12, 'buffDef', 'self', 'Melds with the water, gaining healing over time.', 'hot_v2', 'Aqua Regen', 'buff', 3, 'hot', 0.06, '💚', 'Restoring health each round.', 1.0),
+  T_status('deep_pressure', 'Deep Pressure', 'Tide', 'art', 60, 18, 'damage', 'one', 'Crushes the foe under deep sea pressure, lowering speed.', 'pressured', 'Slowed', 'debuff', 3, 'spd', -0.2, '💧', 'Speed reduced.', 0.6),
+  T('aquatic_restoration', 'Aquatic Restoration', 'Tide', 'art', 140, 20, 'flat_heal', 'ally', 'A soothing jet of water that restores health.'),
+  T_status('abyssal_grip', 'Abyssal Grip', 'Tide', 'phys', 80, 24, 'damage', 'one', 'Drags the target down into the abyss, paralyzing them.', 'paralyzed_v2', 'Paralyzed', 'debuff', 2, 'paralyze', 0.0, '⚡', 'Chance to fail actions.', 0.5),
+  T('needle_leaf', 'Needle Leaf', 'Verdant', 'phys', 26, 4, 'damage', 'one', 'Fires sharp pine needles at the foe.'),
+  T_status('bark_armor', 'Bark Armor', 'Verdant', 'art', 0, 10, 'buffDef', 'self', 'Hardens skin into wooden armor.', 'bark_barrier', 'Bark Barrier', 'buff', 3, 'def', 0.25, '🪵', 'Defense increased.', 1.0),
+  T_status('bramble_entangle', 'Bramble Entangle', 'Verdant', 'art', 30, 12, 'damage', 'one', 'Entangles the foe in thorny brambles, slowing them.', 'entangled_v2', 'Slowed', 'debuff', 2, 'spd', -0.25, '🕸️', 'Speed reduced.', 0.8),
+  T('nature_nourish', 'Nature Nourish', 'Verdant', 'art', 35, 14, 'percent_heal', 'ally', 'Nourishes an ally with forest pollen, restoring 35% HP.'),
+  T_status('canopy_shield', 'Canopy Shield', 'Verdant', 'art', 0, 12, 'buffDef', 'self', 'Creates a protective leaf canopy.', 'canopy_barrier', 'Canopy Barrier', 'buff', 3, 'shield', 0.18, '🍃', 'Shield: absorbs damage.', 1.0),
+  T('petal_dance_tech', 'Petal Dance', 'Verdant', 'art', 52, 16, 'damage', 'all', 'A swirling storm of razor petals cutting all foes.'),
+  T_status('spore_blast', 'Spore Blast', 'Verdant', 'art', 60, 18, 'damage', 'one', 'Releases toxic spores that poisons the target.', 'poisoned_v2', 'Poisoned', 'debuff', 3, 'dot', 0.06, '☠️', 'Taking poison damage over time.', 0.8),
+  T('wrath_of_ghandra', 'Wrath of Ghandra', 'Verdant', 'phys', 95, 28, 'damage', 'one', 'The wrath of the legendary forest, striking with supreme force.'),
+  T('static_spark', 'Static Spark', 'Volt', 'art', 24, 4, 'damage', 'one', 'Shoots a quick spark of electricity.'),
+  T_status('volt_shield', 'Volt Shield', 'Volt', 'art', 0, 10, 'buffDef', 'self', 'Creates a static shield that boosts defense.', 'volt_barrier', 'Volt Shield', 'buff', 3, 'def', 0.2, '⚡', 'Defense boosted.', 1.0),
+  T_status('thunderclap_strike', 'Thunderclap Strike', 'Volt', 'phys', 42, 10, 'damage', 'one', 'Strikes with a loud clap of thunder that can stun.', 'stunned_v2', 'Stunned', 'debuff', 1, 'stun', 0.0, '💫', 'Cannot act.', 0.25),
+  T_status('overcharge_aura', 'Overcharge Aura', 'Volt', 'art', 0, 12, 'buffAtk', 'self', 'Overcharges own capacitors, boosting attack.', 'overcharged_v2', 'Overcharged', 'buff', 3, 'atk', 0.30, '⚡', 'Attack boosted.', 1.0),
+  T('plasma_blade', 'Plasma Blade', 'Volt', 'phys', 65, 16, 'damage', 'one', 'Cuts the target with a sword of pure plasma energy.'),
+  T_status('magnetic_pulse', 'Magnetic Pulse', 'Volt', 'art', 30, 14, 'debuffSpd', 'all', 'Releases an electromagnetic wave that slows all foes.', 'slowed_v2', 'Slowed', 'debuff', 3, 'spd', -0.20, '⚡', 'Speed reduced.', 0.8),
+  T('chain_lightning_v2', 'Chain Lightning', 'Volt', 'art', 50, 18, 'damage', 'all', 'Fires a bolt that chains between all enemies.'),
+  T_status('superconductor', 'Superconductor', 'Volt', 'art', 0, 18, 'buffSpd', 'self', 'Achieves zero resistance, boosting speed dramatically.', 'superconducting', 'Superconducting', 'buff', 3, 'spd', 0.40, '⚡', 'Speed boosted.', 1.0),
+  T('breeze_strike', 'Breeze Strike', 'Gale', 'phys', 25, 4, 'damage', 'one', 'A quick gust-assisted tackle.'),
+  T_status('wind_barrier', 'Wind Barrier', 'Gale', 'art', 0, 10, 'buffDef', 'self', 'Creates a swirling shield of wind.', 'wind_barrier_status', 'Wind Barrier', 'buff', 3, 'shield', 0.15, '🌀', 'Shield: absorbs damage.', 1.0),
+  T('feather_cyclone', 'Feather Cyclone', 'Gale', 'art', 46, 12, 'damage', 'all', 'A vortex of sharp feathers slices all foes.'),
+  T_status('slipstream_boost', 'Slipstream Boost', 'Gale', 'art', 0, 12, 'buffSpd', 'self', 'Rides the wind currents to boost speed.', 'slipstream', 'Slipstream', 'buff', 3, 'spd', 0.30, '🌀', 'Speed boosted.', 1.0),
+  T_status('sonic_boom_tech', 'Sonic Boom', 'Gale', 'art', 58, 16, 'damage', 'one', 'Releases a localized sonic boom that can disorient.', 'blinded_v2', 'Blinded', 'debuff', 2, 'blind', 0.0, '🕶️', 'Reduces accuracy.', 0.3),
+  T('typhoon_slice', 'Typhoon Slice', 'Gale', 'phys', 75, 20, 'damage', 'one', 'Slices through the air with hurricane-force claws.'),
+  T('aero_blast', 'Aero Blast', 'Gale', 'art', 90, 24, 'damage', 'one', 'A condensed sphere of high-pressure wind blasts the target.'),
+  T_status('sky_embrace', 'Sky Embrace', 'Gale', 'art', 0, 20, 'buffAtk', 'self', 'Invokes the spirit of the sky, raising attack and defense.', 'sky_blessing', 'Sky Blessing', 'buff', 3, 'atk', 0.20, '🌀', 'Attack boosted.', 1.0),
+  T('shadow_jab', 'Shadow Jab', 'Umbra', 'phys', 24, 4, 'damage', 'one', 'Strikes from the shadow of the target.'),
+  T_status('dark_shroud', 'Dark Shroud', 'Umbra', 'art', 0, 10, 'buffDef', 'self', 'Cloaks in darkness to raise defense.', 'dark_shroud_status', 'Dark Shroud', 'buff', 3, 'def', 0.20, '🌑', 'Defense boosted.', 1.0),
+  T_status('nightmare_gaze', 'Nightmare Gaze', 'Umbra', 'art', 28, 12, 'damage', 'one', 'Invades the foe\'s mind with terror, putting them to sleep.', 'asleep_v2', 'Asleep', 'debuff', 2, 'sleep', 0.0, '💤', 'Cannot act until hit.', 0.4),
+  T('void_siphon_v2', 'Void Siphon', 'Umbra', 'art', 48, 16, 'drain', 'one', 'Siphons life energy from the target to heal.'),
+  T('abyssal_claw', 'Abyssal Claw', 'Umbra', 'phys', 68, 18, 'damage', 'one', 'Lashes out with dark claws.'),
+  T_status('spectral_howl', 'Spectral Howl', 'Umbra', 'art', 20, 14, 'debuffAtk', 'all', 'A ghostly howl that weakens all foes.', 'weakened', 'Weakened', 'debuff', 2, 'atk', -0.20, '👻', 'Attack reduced.', 0.8),
+  T('eclipse_blast_v2', 'Eclipse Blast', 'Umbra', 'art', 88, 24, 'damage', 'all', 'Unleashes the cold energy of an eclipse on all foes.'),
+  T_status('doom_whisper', 'Doom Whisper', 'Umbra', 'art', 0, 30, 'damage', 'one', 'Whispers a dark curse of inevitable doom.', 'doom_v2', 'Doom', 'debuff', 4, 'doom', 0.0, '💀', 'Faints when duration reaches zero.', 0.5),
+  T('aether_restoration', 'Aether Restoration', 'Tide', 'art', 50, 25, 'percent_heal', 'all', 'Invokes deep aetheric waters to restore 50% HP to all allies.'),
+  T('cosmic_revival', 'Cosmic Revival', 'Umbra', 'art', 75, 45, 'revive', 'ally', 'Uses cosmic dark energy to revive an ally with 75% HP.'),
+  // ===== 100 NEW SIGNATURE TECHNIQUES =====
+  T_sig('celestial_supernova', 'Celestial Supernova', 'Blaze', 'art', 125, 240, 'all', 3, 'Solphyra releases a blinding core flash, burning all foes in starlight.'),
+  T_sig('apocalyptic_flare', 'Apocalyptic Flare', 'Blaze', 'art', 130, 240, 'all', 4, 'Solmageddon unleashes the dying heat of the cosmos, reducing all foes to ash.'),
+  T_sig('abyssal_drown', 'Abyssal Drown', 'Tide', 'art', 130, 240, 'all', 4, 'Maremortis collapses the weight of the deep ocean on all enemies.'),
+  T_sig('desolation_roots', 'Desolation Roots', 'Verdant', 'art', 130, 240, 'all', 4, 'Worldwither reaches decayed roots into the earth, corrupting all foes.'),
+  T_sig('lightning_judgment', 'Lightning Judgment', 'Volt', 'art', 130, 240, 'all', 4, 'Dynastorm calls down a divine thunderbolt that strikes all enemies.'),
+  T_sig('vacuum_cataclysm', 'Vacuum Cataclysm', 'Gale', 'art', 130, 240, 'all', 4, 'Voidtempest rips open space, pulling all foes into a violent vacuum.'),
+  T_sig('infinite_oblivion', 'Infinite Oblivion', 'Umbra', 'art', 130, 240, 'all', 4, 'Nihilumbra turns the field into absolute void, devouring all foes.'),
+  T_sig('ash_domain', 'Ash Domain', 'Blaze', 'art', 90, 220, 'all', 3, 'Ashkarath fills the air with a suffocating ash cloud, debuffing defense.', { id: 'suffocating_ash', name: 'Suffocated', type: 'debuff', duration: 3, effect: 'def', value: -0.25, icon: '🌋', desc: 'Defense reduced by ash.', chance: 0.8 }),
+  T_sig('abyssal_trench', 'Abyssal Trench', 'Tide', 'art', 110, 220, 'one', 3, 'Vormaela drags the target down into an ice-cold oceanic trench.'),
+  T_sig('curse_briars', 'Curse Briars', 'Verdant', 'art', 85, 220, 'one', 3, 'Bramblehex wraps the target in cursed vines that prevent healing.', { id: 'curse_briars_status', name: 'Cursed', type: 'debuff', duration: 3, effect: 'curse', value: 0, icon: '🔮', desc: 'Cannot heal.', chance: 1 }),
+  T_sig('voltage_punishment', 'Voltage Punishment', 'Volt', 'phys', 120, 220, 'one', 3, 'Voltrazar strikes the target with a high-voltage lightning horn.'),
+  T_sig('titan_overgrowth', 'Titan Overgrowth', 'Verdant', 'phys', 125, 220, 'one', 3, 'Gorrundax slams down with a wooden arm covered in rapid overgrowth.'),
+  T_sig('frost_prison', 'Frost Prison', 'Tide', 'art', 90, 220, 'one', 4, 'Cryomara locks the target in an eternal glacier, freezing them.', { id: 'frost_prison_status', name: 'Frozen', type: 'debuff', duration: 2, effect: 'freeze', value: 0, icon: '❄️', desc: 'Frozen solid.', chance: 0.8 }),
+  T_sig('lux_eruption', 'Lux Eruption', 'Blaze', 'art', 120, 220, 'one', 3, 'Luxavor unleashes a blinding beam of pure solar flare.'),
+  { id: 'ghoul_feast', name: 'Ghoul Feast', type: 'Umbra' as GType, kind: 'art' as TechKind, power: 100, spCost: 220, effect: 'drain' as TechEffect, target: 'one' as TechTarget, cooldown: 3, signature: true, desc: "Nyxghul devours the target's shadow, draining their health." },
+  T_sig('wind_reaper', 'Wind Reaper', 'Gale', 'phys', 115, 220, 'one', 2, 'Zerathuul slashes the target with crescent blades of vacuum wind.'),
+  T_sig('aurelian_blaze', 'Aurelian Blaze', 'Blaze', 'phys', 120, 220, 'one', 3, 'Aurelflare charges with a holy spear of white-hot plasma fire.'),
+  T_sig('abyss_seal', 'Abyss Seal', 'Tide', 'art', 80, 220, 'all', 3, 'Abyssophar traps all foes in a bubble of crushing dark energy.'),
+  { id: 'genesis_bloom', name: 'Genesis Bloom', type: 'Verdant' as GType, kind: 'art' as TechKind, power: 100, spCost: 220, effect: 'percent_heal' as TechEffect, target: 'all' as TechTarget, cooldown: 4, signature: true, desc: 'Genesophar restores full health and cures debuffs of all allies.' },
+  T_sig('transcendent_arc', 'Transcendent Arc', 'Volt', 'art', 90, 220, 'all', 3, 'Voltranscend releases a soaring arc that leaps between all foes.'),
+  { id: 'stellar_shield', name: 'Stellar Shield', type: 'Gale' as GType, kind: 'art' as TechKind, power: 0, spCost: 180, effect: 'buffDef' as TechEffect, target: 'self' as TechTarget, cooldown: 3, signature: true, statusChance: 1, desc: 'Cosmovault creates a gravity shield that blocks all incoming damage.', statusEffect: { id: 'grav_shield', name: 'Gravity Shield', type: 'buff' as const, duration: 3, effect: 'shield' as const, value: 0.35, icon: '🛡️', desc: 'Absorbs 35% damage.' } },
+  T_sig('sovereign_darkness', 'Sovereign Darkness', 'Umbra', 'art', 125, 220, 'one', 3, 'Voidsovereign commands the void to swallow the target whole.'),
+  T_sig('ignis_fury', 'Ignis Fury', 'Blaze', 'phys', 110, 220, 'one', 2, 'Ignisar hits the target with a sequence of rapid fire punches.'),
+  T_sig('nine_seasons', 'Nine Seasons', 'Verdant', 'art', 115, 220, 'one', 3, 'Sylvaeon attacks with the combined natural energy of nine seasons.'),
+  T_sig('erebus_web', 'Erebus Web', 'Umbra', 'art', 85, 220, 'all', 3, 'Erebusilk wraps all foes in dark threads, slowing them.', { id: 'erebus_slow', name: 'Webbed', type: 'debuff', duration: 3, effect: 'spd', value: -0.3, icon: '🕸️', desc: 'Speed reduced by 30%.', chance: 0.9 }),
+  T_sig('helios_crown', 'Helios Crown', 'Blaze', 'art', 120, 220, 'one', 3, 'Heliarch summons the solar crown, burning the foe with sunfire.'),
+  T_sig('wraith_flood', 'Wraith Flood', 'Tide', 'art', 90, 220, 'all', 3, 'Tidewraith summons a ghostly flood that sweeps away all foes.'),
+  T_sig('arch_growth', 'Arch Growth', 'Verdant', 'art', 95, 220, 'all', 3, 'Sylvanarch calls upon ancient roots to crush all foes on the battlefield.'),
+  T_sig('storm_decree', 'Storm Decree', 'Volt', 'art', 125, 220, 'one', 3, 'Stormarch issues a decree, discharging massive lightning on the target.'),
+  T_sig('aero_vortex', 'Aero Vortex', 'Gale', 'art', 95, 220, 'all', 3, 'Aeronarch summons a swirling vortex that cuts all foes with wind blades.'),
+  T_sig('umbra_eclipse', 'Umbra Eclipse', 'Umbra', 'art', 95, 220, 'all', 3, 'Umbrarch causes a total lunar eclipse, plunging all foes into darkness.'),
+  T_sig('stellar_roar', 'Stellar Roar', 'Blaze', 'art', 120, 220, 'one', 3, 'Solarex lets out a star-shattering roar that burns the target.'),
+  T_sig('abyssal_tail', 'Abyssal Tail', 'Tide', 'phys', 120, 220, 'one', 3, 'Leviathorn slams the target with a tail dripping with abyssal water.'),
+  { id: 'world_seed', name: 'World Seed', type: 'Verdant' as GType, kind: 'art' as TechKind, power: 120, spCost: 220, effect: 'drain' as TechEffect, target: 'one' as TechTarget, cooldown: 3, signature: true, desc: 'Yggdranox plants a seed of world-tree energy that drains the target.' },
+  T_sig('raiden_punch', 'Raiden Punch', 'Volt', 'phys', 120, 220, 'one', 3, 'Raidenjin punches the target with a fist of pure lightning.'),
+  T_sig('zephyr_slice', 'Zephyr Slice', 'Gale', 'phys', 120, 220, 'one', 2, 'Zephyrax slices the target with ultra-sharp zephyr wings.'),
+  T_sig('chthonic_grip', 'Chthonic Grip', 'Umbra', 'art', 120, 220, 'one', 3, 'Chthonix grips the target with underworld shadow chains.'),
+  T_sig('magma_fist', 'Magma Fist', 'Blaze', 'phys', 115, 220, 'one', 2, 'Magmaroth hits the target with a fist made of molten lava.'),
+  T_sig('ghost_wave', 'Ghost Wave', 'Tide', 'art', 90, 220, 'all', 3, 'Maelgheist sweeps all foes in a cold, phantom wave of sea energy.'),
+  T_sig('vine_strangle', 'Vine Strangle', 'Verdant', 'phys', 110, 220, 'one', 3, 'Thornmaw wraps the target in thorny vines, choking their defense.', { id: 'thorn_choke', name: 'Choked', type: 'debuff', duration: 2, effect: 'def', value: -0.2, icon: '🪵', desc: 'Defense reduced by vine throttle.', chance: 0.85 }),
+  T_sig('tesla_crash', 'Tesla Crash', 'Volt', 'phys', 115, 220, 'one', 3, 'Voltgolem crashes down on the target with immense electrical mass.'),
+  T_sig('turbo_cyclone', 'Turbo Cyclone', 'Gale', 'art', 90, 220, 'all', 3, 'Cyclonaut rotates its thrusters to create a massive cyclone.'),
+  { id: 'nyx_devour', name: 'Nyx Devour', type: 'Umbra' as GType, kind: 'phys' as TechKind, power: 115, spCost: 220, effect: 'drain' as TechEffect, target: 'one' as TechTarget, cooldown: 3, signature: true, desc: 'Nyxmaw bites the target with fangs of pure shadow essence, stealing health.' },
+  T_sig('terra_flare', 'Terra Flare', 'Blaze', 'art', 125, 220, 'one', 3, 'Pyrethon releases a devastating flare of terrestrial magma.'),
+  T_sig('ocean_judgment', 'Ocean Judgment', 'Tide', 'art', 95, 220, 'all', 3, 'Oceanarch judges all foes, dropping a massive water wall.'),
+  T_sig('earth_entangle', 'Earth Entangle', 'Verdant', 'art', 85, 220, 'all', 3, 'Terravine entangles all foes in roots that reduce their speed.', { id: 'earth_slow', name: 'Entangled', type: 'debuff', duration: 3, effect: 'spd', value: -0.25, icon: '🕸️', desc: 'Speed reduced.', chance: 0.85 }),
+  T_sig('galvanic_storm', 'Galvanic Storm', 'Volt', 'art', 95, 220, 'all', 3, 'Galvanyx summons a lightning storm that electrocutes all foes.'),
+  T_sig('strato_blade', 'Strato Blade', 'Gale', 'phys', 125, 220, 'one', 2, 'Stratoterra dives and cuts the target with sharp wing blades.'),
+  T_sig('tenebrous_rift', 'Tenebrous Rift', 'Umbra', 'art', 95, 220, 'all', 3, 'Tenebraterra opens a rift to the underworld, sucking in all foes.'),
+  T_sig('inferno_dive', 'Inferno Dive', 'Blaze', 'phys', 110, 220, 'one', 2, 'Infernyx dives from high altitude, engulfed in volcanic flames.'),
+  T_sig('abyssal_anchor', 'Abyssal Anchor', 'Tide', 'phys', 110, 220, 'one', 3, 'Abyssarch throws a heavy water anchor that crushes the target.'),
+  T_sig('elder_spores', 'Elder Spores', 'Verdant', 'art', 80, 220, 'all', 3, 'Eldergrove spreads ancient toxic spores that poison all foes.', { id: 'elder_poison', name: 'Poisoned', type: 'debuff', duration: 4, effect: 'dot', value: 0.05, icon: '☠️', desc: 'Poison damage over time.', chance: 0.8 }),
+  T_sig('thunder_fang', 'Thunder Fang', 'Volt', 'phys', 110, 220, 'one', 2, 'Fulgurex bites the target with fangs crackling with electricity.'),
+  T_sig('tempest_wing', 'Tempest Wing', 'Gale', 'phys', 110, 220, 'one', 2, 'Tempestrix strikes the target with wind-strengthened wing beats.'),
+  T_sig('umbra_gaze', 'Umbra Gaze', 'Umbra', 'art', 80, 220, 'one', 3, 'Umbrelisk stares at the target, lowering their attack power.', { id: 'umbra_weakness', name: 'Weakened', type: 'debuff', duration: 3, effect: 'atk', value: -0.25, icon: '👻', desc: 'Attack reduced.', chance: 0.9 }),
+  T_sig('volcanic_slam', 'Volcanic Slam', 'Blaze', 'phys', 115, 220, 'one', 3, 'Vulkragon slams the target, unleashing a small volcanic tremor.'),
+  { id: 'pearl_gate', name: 'Pearl Gate', type: 'Tide' as GType, kind: 'art' as TechKind, power: 0, spCost: 180, effect: 'buffDef' as TechEffect, target: 'self' as TechTarget, cooldown: 3, signature: true, statusChance: 1, desc: 'Nacrelord creates a shiny pearl barrier that boosts defense.', statusEffect: { id: 'pearl_barrier', name: 'Pearl Guard', type: 'buff' as const, duration: 3, effect: 'shield' as const, value: 0.25, icon: '🐚', desc: 'Absorbs 25% damage.' } },
+  T_sig('tyrant_root', 'Tyrant Root', 'Verdant', 'phys', 115, 220, 'one', 3, 'Grovetyrant slams the target with a massive vine root.'),
+  T_sig('empyrean_dive', 'Empyrean Dive', 'Gale', 'phys', 115, 220, 'one', 2, 'Empyrhawk dives from the clouds, slashing with sharp wind talons.'),
+  T_sig('phantasm_dust', 'Phantasm Dust', 'Umbra', 'art', 85, 220, 'all', 3, "Phantasmoth scatters glowing shadow dust that reduces foes' accuracy.", { id: 'phantasm_blind', name: 'Blinded', type: 'debuff', duration: 2, effect: 'blind', value: 0, icon: '🕶️', desc: 'Accuracy reduced.', chance: 0.8 }),
+  T_sig('drake_fire', 'Drake Fire', 'Blaze', 'art', 110, 220, 'one', 2, 'Magmadrak breathes a stream of concentrated hot dragon fire.'),
+  T_sig('coal_barrage', 'Coal Barrage', 'Blaze', 'phys', 85, 220, 'all', 3, 'Coalossus shoots a barrage of burning hot coal at all foes.'),
+  T_sig('aurora_blast', 'Aurora Blast', 'Blaze', 'art', 90, 220, 'all', 3, 'Aurorafire releases a colourful solar blast that burns all foes.'),
+  T_sig('abyss_bite', 'Abyss Bite', 'Tide', 'phys', 110, 220, 'one', 2, 'Abysshound bites the target with fangs of freezing cold water.'),
+  T_sig('siren_song', 'Siren Song', 'Tide', 'art', 80, 220, 'all', 3, 'Abysssiren sings a melody that slows all foes down.', { id: 'siren_slow', name: 'Entranced', type: 'debuff', duration: 3, effect: 'spd', value: -0.2, icon: '🎵', desc: 'Speed reduced.', chance: 0.85 }),
+  T_sig('titan_wave', 'Titan Wave', 'Tide', 'art', 90, 220, 'all', 3, 'Oceantitan slams down, sending a massive wave towards all foes.'),
+  T_sig('solar_antler', 'Solar Antler', 'Verdant', 'phys', 110, 220, 'one', 2, 'Solarstag charges and strikes with antlers radiating hot solar energy.'),
+  T_sig('decay_breath', 'Decay Breath', 'Verdant', 'art', 85, 220, 'one', 3, 'Rotwyrm breathes a cloud of decaying gas, poisoning the target.', { id: 'decay_poison', name: 'Poisoned', type: 'debuff', duration: 3, effect: 'dot', value: 0.06, icon: '☠️', desc: 'Poison damage over time.', chance: 0.9 }),
+  T_sig('canopy_swoop', 'Canopy Swoop', 'Verdant', 'phys', 110, 220, 'one', 2, 'Canopyhawk swoops down from the leaves, striking with leaf-hardened talons.'),
+  T_sig('fulgur_charge', 'Fulgur Charge', 'Volt', 'phys', 110, 220, 'one', 2, 'Fulguram charges forward, wreathed in a sphere of lightning.'),
+  T_sig('apex_shock', 'Apex Shock', 'Volt', 'art', 115, 220, 'one', 2, 'Stormapex discharges a concentrated bolt of high-voltage shock.'),
+  T_sig('goliath_charge', 'Goliath Charge', 'Volt', 'phys', 115, 220, 'one', 3, 'Stormgoliath rams the target with a head of solid steel and static electricity.'),
+  T_sig('nebula_strike', 'Nebula Strike', 'Gale', 'art', 110, 220, 'one', 2, 'Nebulamort fires a blast of stellar dust that burns the target.'),
+  T_sig('galaxy_spin', 'Galaxy Spin', 'Gale', 'phys', 85, 220, 'all', 3, 'Galaxia spins rapidly, releasing stellar winds that cut all foes.'),
+  T_sig('cosmic_impact', 'Cosmic Impact', 'Gale', 'art', 90, 220, 'all', 3, 'Cosmoclysm pulls down cosmic meteors to strike all foes.'),
+  T_sig('apocalypse_echo', 'Apocalypse Echo', 'Umbra', 'art', 85, 220, 'all', 3, "Apocalypsebat screeches a dark pitch that reduces foes' defense.", { id: 'echo_debuff', name: 'Shaken', type: 'debuff', duration: 2, effect: 'def', value: -0.2, icon: '🦇', desc: 'Defense reduced.', chance: 0.8 }),
+  T_sig('scythe_slash', 'Scythe Slash', 'Umbra', 'phys', 110, 220, 'one', 2, 'Voidreaper cuts the target with its dark void-energy scythe.'),
+  T_sig('obelisk_fall', 'Obelisk Fall', 'Umbra', 'art', 115, 220, 'one', 3, 'Obeliskarch summons a shadow pillar to crush the target.'),
+  T_sig('maw_eruption', 'Maw Eruption', 'Blaze', 'phys', 95, 220, 'one', 2, 'Blazemaw bites the target and releases an explosion from its throat.'),
+  T_sig('strike_torrent', 'Strike Torrent', 'Tide', 'art', 95, 220, 'one', 2, 'Maelstrike blasts the target with a high-pressure jet of tide water.'),
+  T_sig('sylvig_charge', 'Sylvig Charge', 'Verdant', 'phys', 95, 220, 'one', 2, 'Sylvigor charges forward with horns hardened by ancient sap.'),
+  T_sig('claw_discharge', 'Claw Discharge', 'Volt', 'phys', 95, 220, 'one', 2, 'Stormclaw slashes the target and discharges stored static electricity.'),
+  T_sig('cyclonic_whirl', 'Cyclonic Whirl', 'Gale', 'art', 75, 220, 'all', 3, 'Cyclonix flaps its wings rapidly, causing a mini cyclone that cuts all foes.'),
+  { id: 'nocturnal_howl', name: 'Nocturnal Howl', type: 'Umbra' as GType, kind: 'art' as TechKind, power: 0, spCost: 180, effect: 'buffAtk' as TechEffect, target: 'self' as TechTarget, cooldown: 3, signature: true, statusChance: 1, desc: 'Nocthowl howls at the moon, boosting speed and attack.', statusEffect: { id: 'noct_howl_status', name: 'Nocturnal Rage', type: 'buff' as const, duration: 3, effect: 'spd' as const, value: 0.25, icon: '🐺', desc: 'Speed boosted by 25%.' } },
+  T_sig('pyre_bite', 'Pyre Bite', 'Blaze', 'phys', 95, 220, 'one', 2, 'Pyrelisk bites the target with fangs burning with fire.'),
+  T_sig('pearla_thrust', 'Pearla Thrust', 'Tide', 'phys', 95, 220, 'one', 2, 'Pearlance thrusts forward with a sharp spear of condensed water.'),
+  T_sig('thicket_shred', 'Thicket Shred', 'Verdant', 'phys', 95, 220, 'one', 2, 'Thicketclaw tears at the target with sharp briar claws.'),
+  T_sig('tesla_beam', 'Tesla Beam', 'Volt', 'art', 95, 220, 'one', 2, 'Teslarch fires a blue electrical laser at the target.'),
+  T_sig('roc_feather', 'Roc Feather', 'Gale', 'phys', 95, 220, 'one', 2, 'Stratoroc shoots steel-like feathers at the target.'),
+  T_sig('loom_threads', 'Loom Threads', 'Umbra', 'art', 75, 220, 'all', 3, 'Nightloom tangles all foes in sticky dark threads that slow them down.', { id: 'loom_slow', name: 'Entangled', type: 'debuff', duration: 2, effect: 'spd', value: -0.2, icon: '🕸️', desc: 'Speed reduced.', chance: 0.85 }),
+  { id: 'grave_swallow', name: 'Grave Swallow', type: 'Umbra' as GType, kind: 'phys' as TechKind, power: 95, spCost: 220, effect: 'drain' as TechEffect, target: 'one' as TechTarget, cooldown: 3, signature: true, desc: "Gravemaw bites and swallows the target's energy, healing itself." },
+  T_sig('spark_spear', 'Spark Spear', 'Volt', 'phys', 95, 220, 'one', 2, 'Voltigarch stabs forward with a spear made of pure voltage.'),
+  T_sig('pyro_strike', 'Pyro Strike', 'Blaze', 'phys', 95, 220, 'one', 2, 'Pyrostrike strikes down with a hammer wreathed in flames.'),
+  T_sig('aqua_freeze', 'Aqua Freeze', 'Tide', 'art', 90, 220, 'one', 3, 'Aquafrost strikes the target with freezing cold water, occasionally freezing them.', { id: 'aqua_freeze_status', name: 'Frozen', type: 'debuff', duration: 1, effect: 'freeze', value: 0, icon: '❄️', desc: 'Frozen solid.', chance: 0.25 }),
+  { id: 'terra_pulse', name: 'Terra Pulse', type: 'Verdant' as GType, kind: 'art' as TechKind, power: 0, spCost: 180, effect: 'buffDef' as TechEffect, target: 'self' as TechTarget, cooldown: 3, signature: true, statusChance: 1, desc: 'Terragrow absorbs pulses from the earth, healing over time.', statusEffect: { id: 'terra_hot', name: 'Terra Growth', type: 'buff' as const, duration: 3, effect: 'hot' as const, value: 0.08, icon: '💚', desc: 'Healing 8% HP each turn.' } },
+  T_sig('volt_clysm', 'Volt Clysm', 'Volt', 'art', 75, 220, 'all', 3, 'Voltclysm releases a massive static explosion on all foes.'),
+  T_sig('shadow_strike', 'Shadow Strike', 'Umbra', 'phys', 95, 220, 'one', 2, "Umbrashade hides in shadows and strikes the target's weak spot."),
+  T_sig('sol_roar', 'Sol Roar', 'Blaze', 'art', 95, 220, 'one', 2, 'Solgaleo roars with solar power, burning the target.'),
+  T_sig('deep_tidal', 'Deep Tidal', 'Tide', 'art', 95, 220, 'one', 2, 'Tidedeep summons deep oceanic waves to crush the target.'),
+  T_sig('thorn_spark', 'Thorn Spark', 'Verdant', 'phys', 95, 220, 'one', 2, 'Thornspark strikes the target with thorn claws charged with sparks.'),
 ].map(t => [t.id, t]));
 
 // ---------------- Species ----------------
@@ -2668,6 +2823,16 @@ export function getSpeciesPassive(sp: SpeciesDef): PassiveSkill {
     nocthowl: { name: 'Void Embrace', desc: 'All attacks drain 15% of damage dealt as HP.' },
     umbrelisk: { name: 'Void Embrace', desc: 'All attacks drain 15% of damage dealt as HP.' },
     chthonix: { name: 'Void Embrace', desc: 'All attacks drain 15% of damage dealt as HP.' },
+    // Legends' Nine custom overrides
+    firgara: { name: 'Eternal Burning', desc: 'Deals 25% of Attack to all foes at the end of each round.' },
+    onthrofa: { name: 'Temporal Barrier', desc: 'Heals 5% max HP and boosts Speed stage by 1 at the end of each round.' },
+    vulfenix: { name: 'Rebirth Flame', desc: 'Heals 5% max HP at the end of each round.' },
+    raijura: { name: 'Static Overload', desc: 'Starts battle with 25% Speed boost and deals 15% Attack to all foes at the end of each round.' },
+    voltherion: { name: 'Lightning Core', desc: 'Heals 3% max HP and boosts Attack stage by 1 at the end of each round.' },
+    fulgrath: { name: 'Fulgurant Aura', desc: 'Deals 20% Wisdom to all foes at the end of each round.' },
+    verdalune: { name: 'Lunar Blessing', desc: 'Heals 5% max HP and restores 5 SP at the end of each round.' },
+    gaiathorn: { name: 'Rooted Shield', desc: 'Heals 4% max HP and grants 10% max HP shield at the end of each round.' },
+    nyxroot: { name: 'Abyssal Siphon', desc: 'Drains 3% HP from all foes at the end of each round.' },
   };
 
   if (custom[sp.id]) return custom[sp.id];
@@ -2684,6 +2849,34 @@ export function getSpeciesPassive(sp: SpeciesDef): PassiveSkill {
   
   // Procedural desc based on archetype
   let desc = 'Gains a battle advantage.';
+  const rank = formRank(sp);
+  if (rank >= 1) {
+    if (sp.type === 'Verdant' || sp.type === 'Tide') {
+      const pName = rank === 1 ? 'Springing Dew' : rank === 2 ? 'Life-Sap' : rank === 3 ? 'Nature\'s Pulse' : 'Aetherial Bloom';
+      const val = rank === 1 ? 2 : rank === 2 ? 3 : rank === 3 ? 4 : 5;
+      return { name: pName, desc: `Heals ${val}% of max HP at the end of each round.` };
+    }
+    if (sp.type === 'Blaze') {
+      const pName = rank === 1 ? 'Spark Singe' : rank === 2 ? 'Kindle' : rank === 3 ? 'Eruptive Core' : 'Solar Winds';
+      const val = rank === 1 ? 10 : rank === 2 ? 15 : rank === 3 ? 20 : 25;
+      return { name: pName, desc: `Deals ${val}% of Attack to all foes at the end of each round.` };
+    }
+    if (sp.type === 'Volt') {
+      const pName = rank === 1 ? 'Static Touch' : rank === 2 ? 'Volt Discharge' : rank === 3 ? 'Overcharged Aura' : 'Storm Core';
+      const val = rank === 1 ? 10 : rank === 2 ? 15 : rank === 3 ? 20 : 25;
+      return { name: pName, desc: `Deals ${val}% of Wisdom to all foes at the end of each round.` };
+    }
+    if (sp.type === 'Gale') {
+      const pName = rank === 1 ? 'Zephyr Breeze' : rank === 2 ? 'Slipstream' : rank === 3 ? 'Gale Aura' : 'Sky Domain';
+      const val = rank === 1 ? 2 : rank === 2 ? 3 : rank === 3 ? 4 : 5;
+      return { name: pName, desc: `Boosts Speed stage by 1 and heals ${val}% of max HP at the end of each round.` };
+    }
+    if (sp.type === 'Umbra') {
+      const pName = rank === 1 ? 'Shadow Leach' : rank === 2 ? 'Vitality Siphon' : rank === 3 ? 'Abyssal Feast' : 'Void Consumer';
+      const val = rank === 1 ? 1 : rank === 2 ? 2 : rank === 3 ? 3 : 4;
+      return { name: pName, desc: `Drains ${val}% HP from all foes at the end of each round.` };
+    }
+  }
   if (sp.archetype === 'beast') desc = '+10% Attack in battle.';
   else if (sp.archetype === 'serpent') desc = '+10% Wisdom in battle and immune to poison status.';
   else if (sp.archetype === 'avian') desc = '+10% Speed in battle.';
@@ -2696,27 +2889,41 @@ export function getSpeciesPassive(sp: SpeciesDef): PassiveSkill {
 
 // Dynamically distribute the 60 new techniques to all species of the corresponding element
 Object.values(SPECIES).forEach(sp => {
-  const newTechs = Object.values(TECHS).filter(t => t.type === sp.type && t.statusEffect);
+  const newTechs = Object.values(TECHS).filter(t => t.type === sp.type && (t.statusEffect || t.effect === 'revive'));
   newTechs.forEach(t => {
     const levelMap: Record<string, number> = {
       // Blaze
       magma_spit: 3, pyro_shield: 7, blazing_claw: 11, heat_wave: 15, combustion: 19,
       sun_channel: 23, flame_charge: 27, eruption_strike: 31, solar_burst: 35, supernova: 42,
+      scorch_burst: 5, pyre_ward: 10, sunflare_blast: 16, blazing_temper: 22, ember_barrage: 28,
+      crimson_overdrive: 34, magma_deluge: 40, solar_blessing: 46,
       // Tide
       aqua_splash: 3, chilling_wind: 7, dew_drop: 11, ocean_sanctuary: 15, bubble_burst: 19,
       frost_bite: 23, tidal_wave_tech: 27, ice_spear: 31, aquatic_mend: 35, abyssal_drown: 42,
+      wave_splash: 5, coral_shield: 10, frost_breath: 16, tsunami_surge: 22, tide_meld: 28,
+      deep_pressure: 34, aquatic_restoration: 40, abyssal_grip: 46, aether_restoration: 36,
       // Verdant
       vine_grip: 3, spore_puff: 7, root_mend: 11, leaf_shield: 15, nature_strike: 19,
       toxic_thorn: 23, spore_cloud: 27, earthquake_tech: 31, bramble_growth: 35, forest_wrath_tech: 42,
+      needle_leaf: 5, bark_armor: 10, bramble_entangle: 16, nature_nourish: 22, canopy_shield: 28,
+      petal_dance_tech: 34, spore_blast: 40, wrath_of_ghandra: 46,
       // Volt
       spark_shock: 3, voltage_boost: 7, lightning_strike_tech: 11, static_shield: 15, chain_lightning_tech: 19,
       thunder_fang_tech: 23, overload_burst: 27, plasma_blast: 31, shock_pulse: 35, voltage_tempest_tech: 42,
+      static_spark: 5, volt_shield: 10, thunderclap_strike: 16, overcharge_aura: 22, plasma_blade: 28,
+      magnetic_pulse: 34, chain_lightning_v2: 40, superconductor: 46,
       // Gale
       wind_slap: 3, tailwind_breeze: 7, feather_blade_tech: 11, zephyr_barrier: 15, cyclone_trap_tech: 19,
       wind_shear_tech: 23, sonic_boost: 27, hurricane_slash_tech: 31, gale_force_tech: 35, tempest_strike_tech: 42,
+      breeze_strike: 5, wind_barrier: 10, feather_cyclone: 16, slipstream_boost: 22, sonic_boom_tech: 28,
+      typhoon_slice: 34, aero_blast: 40, sky_embrace: 46,
       // Umbra
       shadow_scratch: 3, soul_drain_tech: 7, nightmare_fog: 11, dark_barrier: 15, shadow_strike_tech: 19,
       vampiric_bite_tech: 23, abyssal_void_tech: 27, doom_gaze: 31, eclipse_blast_tech: 35, apocalypse_tech: 42,
+      shadow_jab: 5, dark_shroud: 10, nightmare_gaze: 16, void_siphon_v2: 22, abyssal_claw: 28,
+      spectral_howl: 34, eclipse_blast_v2: 40, doom_whisper: 46, cosmic_revival: 50,
+      // Revives
+      tide_revive: 32, verdant_revive: 45,
     };
     
     const lvl = levelMap[t.id];
@@ -2727,4 +2934,188 @@ Object.values(SPECIES).forEach(sp => {
   
   // Sort techs by level so they display nicely
   sp.techs.sort((a, b) => a.level - b.level);
+});
+
+export const STAGE_STAT_MULT: [number, number][] = [
+  [1.00, 1.00], // 0 Novice
+  [1.15, 1.10], // 1 Adept
+  [1.45, 1.25], // 2 Elite
+  [1.85, 1.45], // 3 Apex
+  [2.35, 1.70], // 4 Split
+  [2.95, 2.00], // 5 Special
+  [3.65, 2.35], // 6 Terra
+  [4.45, 2.75], // 7 Transcendent
+  [5.40, 3.20], // 8 Aether
+];
+export const LEVEL_CAP_BY_RANK = [35, 60, 95, 130, 160, 190, 220, 240, 255];
+
+// Rebalance SP costs of all techniques dynamically based on their tiers and properties
+Object.values(TECHS).forEach(t => {
+  if (t.signature) {
+    t.spCost = t.target === 'all' ? 240 : 220;
+  } else if (t.effect === 'revive') {
+    t.spCost = t.id === 'verdant_revive' ? 200 : 150;
+  } else if (t.effect === 'flat_heal' || t.effect === 'percent_heal' || t.effect === 'heal') {
+    if (t.target === 'all') {
+      t.spCost = 180;
+    } else if (t.id === 'spring_mend' || t.id === 'bloom_ward' || t.id === 'root_mend' || t.id === 'dew_drop') {
+      t.spCost = 70;
+    } else {
+      t.spCost = (t.power >= 80 || t.id === 'aquatic_mend') ? 90 : 70;
+    }
+  } else {
+    if (t.power === 0) {
+      if (t.id === 'sun_channel') {
+        t.spCost = 90;
+      } else if (['blaze_rally', 'mist_veil', 'overcharge', 'tailwind'].includes(t.id)) {
+        t.spCost = 20;
+      } else {
+        t.spCost = 50;
+      }
+    } else if (t.power >= 110) {
+      t.spCost = 200;
+    } else if (t.power >= 80) {
+      t.spCost = t.target === 'all' ? 170 : 145;
+    } else if (t.power >= 60) {
+      t.spCost = 110;
+    } else if (t.power >= 30) {
+      t.spCost = 80;
+    } else {
+      if (t.target === 'all') {
+        t.spCost = 50;
+      } else {
+        t.spCost = 20;
+      }
+    }
+  }
+});
+
+// Set all Guardians starting SP (base SP) at 100
+Object.values(SPECIES).forEach(sp => {
+  sp.base.sp = 100;
+});
+
+
+
+
+// ==========================================
+// Dynamic Signature Techniques Injections
+// ==========================================
+const GUARDIAN_SIGNATURE_TECHS: Record<string, string> = {
+  'solphyra': 'celestial_supernova',
+  'solmageddon': 'apocalyptic_flare',
+  'maremortis': 'abyssal_drown',
+  'worldwither': 'desolation_roots',
+  'dynastorm': 'lightning_judgment',
+  'voidtempest': 'vacuum_cataclysm',
+  'nihilumbra': 'infinite_oblivion',
+  'ashkarath': 'ash_domain',
+  'vormaela': 'abyssal_trench',
+  'bramblehex': 'curse_briars',
+  'voltrazar': 'voltage_punishment',
+  'gorrundax': 'titan_overgrowth',
+  'cryomara': 'frost_prison',
+  'luxavor': 'lux_eruption',
+  'nyxghul': 'ghoul_feast',
+  'zerathuul': 'wind_reaper',
+  'aurelflare': 'aurelian_blaze',
+  'abyssophar': 'abyss_seal',
+  'genesophar': 'genesis_bloom',
+  'voltranscend': 'transcendent_arc',
+  'cosmovault': 'stellar_shield',
+  'voidsovereign': 'sovereign_darkness',
+  'ignisar': 'ignis_fury',
+  'sylvaeon': 'nine_seasons',
+  'erebusilk': 'erebus_web',
+  'heliarch': 'helios_crown',
+  'tidewraith': 'wraith_flood',
+  'sylvanarch': 'arch_growth',
+  'stormarch': 'storm_decree',
+  'aeronarch': 'aero_vortex',
+  'umbrarch': 'umbra_eclipse',
+  'solarex': 'stellar_roar',
+  'leviathorn': 'abyssal_tail',
+  'yggdranox': 'world_seed',
+  'raidenjin': 'raiden_punch',
+  'zephyrax': 'zephyr_slice',
+  'chthonix': 'chthonic_grip',
+  'magmaroth': 'magma_fist',
+  'maelgheist': 'ghost_wave',
+  'thornmaw': 'vine_strangle',
+  'voltgolem': 'tesla_crash',
+  'cyclonaut': 'turbo_cyclone',
+  'nyxmaw': 'nyx_devour',
+  'pyrethon': 'terra_flare',
+  'oceanarch': 'ocean_judgment',
+  'terravine': 'earth_entangle',
+  'galvanyx': 'galvanic_storm',
+  'stratoterra': 'strato_blade',
+  'tenebraterra': 'tenebrous_rift',
+  'infernyx': 'inferno_dive',
+  'abyssarch': 'abyssal_anchor',
+  'eldergrove': 'elder_spores',
+  'fulgurex': 'thunder_fang',
+  'tempestrix': 'tempest_wing',
+  'umbrelisk': 'umbra_gaze',
+  'vulkragon': 'volcanic_slam',
+  'nacrelord': 'pearl_gate',
+  'grovetyrant': 'tyrant_root',
+  'empyrhawk': 'empyrean_dive',
+  'phantasmoth': 'phantasm_dust',
+  'magmadrak': 'drake_fire',
+  'coalossus': 'coal_barrage',
+  'aurorafire': 'aurora_blast',
+  'abysshound': 'abyss_bite',
+  'abysssiren': 'siren_song',
+  'oceantitan': 'titan_wave',
+  'solarstag': 'solar_antler',
+  'rotwyrm': 'decay_breath',
+  'canopyhawk': 'canopy_swoop',
+  'fulguram': 'fulgur_charge',
+  'stormapex': 'apex_shock',
+  'stormgoliath': 'goliath_charge',
+  'nebulamort': 'nebula_strike',
+  'galaxia': 'galaxy_spin',
+  'cosmoclysm': 'cosmic_impact',
+  'apocalypsebat': 'apocalypse_echo',
+  'voidreaper': 'scythe_slash',
+  'obeliskarch': 'obelisk_fall',
+  'blazemaw': 'maw_eruption',
+  'maelstrike': 'strike_torrent',
+  'sylvigor': 'sylvig_charge',
+  'stormclaw': 'claw_discharge',
+  'cyclonix': 'cyclonic_whirl',
+  'nocthowl': 'nocturnal_howl',
+  'pyrelisk': 'pyre_bite',
+  'pearlance': 'pearla_thrust',
+  'thicketclaw': 'thicket_shred',
+  'teslarch': 'tesla_beam',
+  'stratoroc': 'roc_feather',
+  'nightloom': 'loom_threads',
+  'gravemaw': 'grave_swallow',
+  'voltigarch': 'spark_spear',
+  'pyrostrike': 'pyro_strike',
+  'aquafrost': 'aqua_freeze',
+  'terragrow': 'terra_pulse',
+  'voltclysm': 'volt_clysm',
+  'umbrashade': 'shadow_strike',
+  'solgaleo': 'sol_roar',
+  'tidedeep': 'deep_tidal',
+  'thornspark': 'thorn_spark',
+};
+
+Object.entries(GUARDIAN_SIGNATURE_TECHS).forEach(([speciesId, techId]) => {
+  const sp = SPECIES[speciesId];
+  if (sp) {
+    let lvl = 45;
+    if (sp.stage === 'Elite') lvl = 35;
+    else if (sp.stage === 'Apex' || sp.stage === 'Split' || sp.stage === 'Special') lvl = 45;
+    else if (sp.stage === 'Terra' || sp.stage === 'Transcendent') lvl = 55;
+    else if (sp.stage === 'Aether') lvl = 65;
+    
+    // Check if it already has this tech (avoid duplicates if re-evaluated)
+    if (!sp.techs.some(t => t.tech === techId)) {
+      sp.techs.push({ level: lvl, tech: techId });
+    }
+  }
 });
