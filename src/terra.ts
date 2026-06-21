@@ -1299,7 +1299,8 @@ export class TerraCity {
         }).join('');
 
         const list = el.querySelector('#tb-list') as HTMLElement;
-        const items = Object.values(CLOTHES_DATABASE).filter(i => i.terra && i.slot === activeTab);
+        // Atelier stock + any ultra-rare trophy gear the tamer has already won.
+        const items = Object.values(CLOTHES_DATABASE).filter(i => i.slot === activeTab && (i.terra || (i.ultra && p.ownedClothes.includes(i.id))));
         list.innerHTML = items.map(item => {
           const owned = p.ownedClothes.includes(item.id);
           const equipped = p.equippedClothes[activeTab] === item.id;
@@ -1314,7 +1315,9 @@ export class TerraCity {
               : `<div style="display:flex;gap:4px"><button class="ui-btn" data-try="${item.id}">Try</button><button class="ui-btn" data-buy="${item.id}" ${canBuy ? '' : 'disabled'}>◆${item.price}</button></div>`;
           }
           const dot = item.color !== undefined ? `#${item.color.toString(16).padStart(6, '0')}` : (item.fx?.color !== undefined ? `#${item.fx.color.toString(16).padStart(6, '0')}` : '#b18ae8');
-          const fxBadge = '<span class="tag" style="background:linear-gradient(90deg,#9a3aff,#ff5aa8);color:#fff;margin-left:5px">✨ FX</span>';
+          const fxBadge = item.ultra
+            ? '<span class="tag" style="background:linear-gradient(90deg,#f2c14e,#ff5aa8);color:#0c1022;margin-left:5px">★ ULTRA</span>'
+            : '<span class="tag" style="background:linear-gradient(90deg,#9a3aff,#ff5aa8);color:#fff;margin-left:5px">✨ FX</span>';
           const onBadge = equipped ? '<span class="tag" style="background:var(--ui-green);color:#0c1022;margin-left:5px">WORN</span>' : '';
           const tryBadge = (tryingOn && !equipped) ? '<span class="tag" style="background:var(--ui-gold);color:#0c1022;margin-left:5px">IN MIRROR</span>' : '';
           return `<div class="list-row" style="${tryingOn ? 'border:1px solid var(--ui-gold);background:rgba(217,161,26,0.1);' : ''}">

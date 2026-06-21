@@ -175,7 +175,13 @@ async function runBattle(specs: { speciesId: string; level: number }[], opts: Ba
   setView(battle.view);
   await battle.prepare(); // build arena + units + compile every shader while the screen is still black
   await fadeIn();
-  const result = await battle.run();
+  let result: BattleResult;
+  try {
+    result = await battle.run();
+  } finally {
+    // Guarantee the overworld Calendar/event overlays come back even if the fight throws.
+    (window as any).__inBattle = false;
+  }
   await fadeOut();
   
   let returnTrack = 'overworld';

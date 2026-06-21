@@ -1025,6 +1025,270 @@ function screenFaceTex(glow: string): THREE.Texture {
   return cachedTex('screen' + glow, () => { const t = canvasTex(64, (ctx, s) => { ctx.fillStyle = '#04100a'; ctx.fillRect(0, 0, s, s); ctx.fillStyle = glow; ctx.font = 'bold 22px monospace'; ctx.textAlign = 'center'; ctx.fillText('>_<', s / 2, s / 2 + 8); for (let y = 0; y < s; y += 4) { ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(0, y, s, 1); } }, 1); t.wrapS = THREE.RepeatWrapping; return t; });
 }
 
+// =================== ULTRA-RARE trophy effects ===================
+// Marquee FX reserved for tournament/Worldring prize gear. They lean on
+// the same helpers (emis/glowM/softGlow/sparkCloud/shellOn) so disposal
+// and the no-bloom render path keep working for free.
+
+// ---- HAT ----
+const buildCrownSupernova: FxBuilder = ({ add, spec, host }) => {
+  const color = spec.color ?? 0xffd23a;
+  const color2 = spec.color2 ?? 0xffffff;
+  const sc = spec.scale ?? 1;
+  const cy = 0.92;
+  const core = add(new THREE.Mesh(new THREE.IcosahedronGeometry(0.12 * sc, 1), emis(color2, 1.8)), host);
+  core.position.set(0, cy, 0);
+  const halo = add(softGlow(color, 0.95 * sc, 0.7), host); halo.position.set(0, cy, 0);
+  const corona = add(new THREE.Group(), host); corona.position.set(0, cy, 0);
+  const spikes: THREE.Mesh[] = [];
+  const N = 12;
+  for (let i = 0; i < N; i++) {
+    const a = (i / N) * Math.PI * 2;
+    const long = i % 2 === 0;
+    const m = glowM(long ? color : color2, 0.85);
+    const spk = add(new THREE.Mesh(new THREE.ConeGeometry(0.035 * sc, (long ? 0.34 : 0.2) * sc, 5), m), corona);
+    spk.position.set(Math.cos(a) * 0.16 * sc, 0, Math.sin(a) * 0.16 * sc);
+    spk.rotation.z = -Math.PI / 2; spk.rotation.y = -a;
+    spk.userData.ph = Math.random() * 6.28; spk.userData.mat = m;
+    spikes.push(spk);
+  }
+  const sparks = sparkCloud(add, 20, 0.7 * sc, color, 0.05, host); sparks.pts.position.set(0, cy, 0);
+  return (t, dt) => {
+    corona.rotation.y = t * (spec.speed ?? 1) * 1.6;
+    core.scale.setScalar(1 + Math.sin(t * 5) * 0.12);
+    halo.material.opacity = 0.5 + Math.sin(t * 6) * 0.22;
+    for (const s of spikes) { const k = 0.8 + Math.sin(t * 7 + s.userData.ph) * 0.3; s.scale.set(1, k, 1); (s.userData.mat as THREE.MeshBasicMaterial).opacity = 0.6 + Math.sin(t * 9 + s.userData.ph) * 0.3; }
+    const a = sparks.pos;
+    for (let i = 0; i < sparks.seed.length; i++) a[i * 3 + 1] = ((a[i * 3 + 1] + dt * 0.5 + 0.4) % 0.8) - 0.4;
+    sparks.geo.attributes.position.needsUpdate = true;
+  };
+};
+
+const buildEclipseRing: FxBuilder = ({ add, spec, host }) => {
+  const color = spec.color ?? 0xff7a1a;
+  const color2 = spec.color2 ?? 0xffe23a;
+  const cy = 0.95;
+  const grp = add(new THREE.Group(), host); grp.position.set(0, cy, 0); grp.rotation.x = -0.5;
+  const discMat = darkM(0x05060a); discMat.side = THREE.DoubleSide;
+  add(new THREE.Mesh(new THREE.CircleGeometry(0.17, 24), discMat), grp);
+  const coronaMat = emis(color, 1.6);
+  const corona = add(new THREE.Mesh(new THREE.TorusGeometry(0.19, 0.03, 10, 40), coronaMat), grp);
+  const glow = add(softGlow(color, 1.0, 0.6), host); glow.position.set(0, cy, 0);
+  const flares: THREE.Mesh[] = [];
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2;
+    const fl = add(new THREE.Mesh(new THREE.ConeGeometry(0.022, 0.13, 4), glowM(color2, 0.8)), grp);
+    fl.position.set(Math.cos(a) * 0.19, Math.sin(a) * 0.19, 0); fl.rotation.z = a - Math.PI / 2;
+    fl.userData.ph = Math.random() * 6.28; flares.push(fl);
+  }
+  const emb = sparkCloud(add, 16, 0.6, color2, 0.045, host); emb.pts.position.set(0, cy, 0);
+  return (t, dt) => {
+    grp.rotation.z = t * (spec.speed ?? 1) * 0.5;
+    coronaMat.emissiveIntensity = 1.3 + Math.sin(t * 4) * 0.5;
+    glow.material.opacity = 0.45 + Math.sin(t * 5) * 0.2;
+    for (const f of flares) { const k = 0.7 + Math.sin(t * 8 + f.userData.ph) * 0.4; f.scale.set(1, k, 1); }
+    const a = emb.pos;
+    for (let i = 0; i < emb.seed.length; i++) a[i * 3 + 1] = ((a[i * 3 + 1] - dt * 0.3 + 0.3) % 0.6) - 0.3;
+    emb.geo.attributes.position.needsUpdate = true;
+  };
+};
+
+const buildFrostMonarch: FxBuilder = ({ add, spec, host }) => {
+  const color = spec.color ?? 0x9fe6ff;
+  const cy = 0.9;
+  const ring = add(new THREE.Group(), host); ring.position.set(0, cy, 0);
+  const shards: THREE.Mesh[] = [];
+  const N = 7;
+  for (let i = 0; i < N; i++) {
+    const a = (i / N) * Math.PI * 2;
+    const m = emis(color, 1.2); m.transparent = true; m.opacity = 0.85;
+    const sh = add(new THREE.Mesh(new THREE.OctahedronGeometry(0.055, 0), m), ring);
+    sh.position.set(Math.cos(a) * 0.24, (i % 2) * 0.06 - 0.03, Math.sin(a) * 0.24);
+    sh.scale.y = 1.8; shards.push(sh);
+  }
+  const halo = add(softGlow(color, 0.8, 0.5), host); halo.position.set(0, cy, 0);
+  const snow = sparkCloud(add, 24, 0.7, 0xffffff, 0.035, host); snow.pts.position.set(0, cy + 0.1, 0);
+  return (t, dt) => {
+    ring.rotation.y = t * (spec.speed ?? 1) * 0.9;
+    shards.forEach((s, i) => { s.rotation.y = t * 1.5 + i; s.position.y = (i % 2) * 0.06 - 0.03 + Math.sin(t * 2 + i) * 0.02; });
+    halo.material.opacity = 0.4 + Math.sin(t * 3) * 0.12;
+    const a = snow.pos;
+    for (let i = 0; i < snow.seed.length; i++) a[i * 3 + 1] = ((a[i * 3 + 1] - dt * 0.25 + 0.4) % 0.8) - 0.4;
+    snow.geo.attributes.position.needsUpdate = true;
+  };
+};
+
+const buildGalaxySwirl: FxBuilder = ({ add, spec, host }) => {
+  const color = spec.color ?? 0x9a6cff;
+  const color2 = spec.color2 ?? 0x6fe0ff;
+  const cy = 0.96;
+  const disc = add(new THREE.Group(), host); disc.position.set(0, cy, 0); disc.rotation.x = -1.15;
+  const core = add(new THREE.Mesh(new THREE.SphereGeometry(0.06, 12, 10), emis(0xffffff, 2)), disc);
+  add(softGlow(color2, 0.5, 0.8), disc);
+  const count = 60;
+  const pos = new Float32Array(count * 3);
+  for (let i = 0; i < count; i++) {
+    const f = i / count;
+    const ang = f * Math.PI * 4 + (i % 2) * Math.PI;
+    const r = 0.06 + f * 0.26;
+    pos[i * 3] = Math.cos(ang) * r; pos[i * 3 + 1] = 0; pos[i * 3 + 2] = Math.sin(ang) * r;
+  }
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const pmat = new THREE.PointsMaterial({ size: 0.05, map: dotTex(), color, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true });
+  add(new THREE.Points(geo, pmat), disc);
+  const halo = add(softGlow(color, 0.9, 0.4), host); halo.position.set(0, cy, 0);
+  return (t) => {
+    disc.rotation.z = t * (spec.speed ?? 1) * 0.8;
+    core.scale.setScalar(1 + Math.sin(t * 5) * 0.15);
+    halo.material.opacity = 0.3 + Math.sin(t * 4) * 0.12;
+  };
+};
+
+// ---- SHIRT ----
+const buildConstellationCloak: FxBuilder = (ctx) => {
+  const { add, spec } = ctx;
+  const color = spec.color ?? 0x9ad8ff;
+  const color2 = spec.color2 ?? 0xffffff;
+  const torso = ctx.rig.getObjectByName('torso') ?? add(new THREE.Group());
+  const grp = add(new THREE.Group(), torso); grp.position.set(0, 0.04, 0.16);
+  const N = 16;
+  const pts3: THREE.Vector3[] = [];
+  for (let i = 0; i < N; i++) pts3.push(new THREE.Vector3((ctx.rng() - 0.5) * 0.5, (ctx.rng() - 0.5) * 0.5, (ctx.rng() - 0.5) * 0.05));
+  const spos = new Float32Array(N * 3); pts3.forEach((p, i) => { spos[i * 3] = p.x; spos[i * 3 + 1] = p.y; spos[i * 3 + 2] = p.z; });
+  const sgeo = new THREE.BufferGeometry(); sgeo.setAttribute('position', new THREE.BufferAttribute(spos, 3));
+  const smat = new THREE.PointsMaterial({ size: 0.06, map: dotTex(), color: color2, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false });
+  add(new THREE.Points(sgeo, smat), grp);
+  const linePos: number[] = [];
+  for (let i = 0; i < N - 1; i++) if (ctx.rng() < 0.6) { const a = pts3[i], b = pts3[i + 1]; linePos.push(a.x, a.y, a.z, b.x, b.y, b.z); }
+  const lgeo = new THREE.BufferGeometry(); lgeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(linePos), 3));
+  const lmat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false });
+  add(new THREE.LineSegments(lgeo, lmat), grp);
+  return (t) => {
+    smat.opacity = 0.7 + Math.sin(t * 3) * 0.25;
+    lmat.opacity = 0.35 + Math.sin(t * 2.2) * 0.2;
+  };
+};
+
+const buildRunicAegis: FxBuilder = (ctx) => {
+  const { add, spec } = ctx;
+  const color = spec.color ?? 0xffd66a;
+  const color2 = spec.color2 ?? 0xfff0b8;
+  const torso = ctx.rig.getObjectByName('torso') ?? add(new THREE.Group());
+  const sigMat = emis(color2, 1.6);
+  const sigil = add(new THREE.Mesh(new THREE.TorusGeometry(0.08, 0.02, 8, 6), sigMat), torso); sigil.position.set(0, 0.05, 0.2);
+  const sigGlow = add(softGlow(color, 0.5, 0.6), torso); sigGlow.position.set(0, 0.05, 0.22);
+  const rings: THREE.Group[] = [];
+  for (let r = 0; r < 2; r++) {
+    const ring = add(new THREE.Group(), torso); ring.position.set(0, 0.04, 0.05); ring.rotation.x = 1.2 + r * 0.3;
+    const M = 8;
+    for (let i = 0; i < M; i++) {
+      const a = (i / M) * Math.PI * 2;
+      const gl = add(new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.05, 0.012), emis(r ? color2 : color, 1.3)), ring);
+      gl.position.set(Math.cos(a) * (0.26 - r * 0.05), Math.sin(a) * (0.26 - r * 0.05), 0); gl.rotation.z = a;
+    }
+    rings.push(ring);
+  }
+  return (t) => {
+    rings[0].rotation.z = t * (spec.speed ?? 1) * 0.9;
+    rings[1].rotation.z = -t * (spec.speed ?? 1) * 0.7;
+    sigMat.emissiveIntensity = 1.2 + Math.sin(t * 4) * 0.6; sigil.rotation.z = t * 1.2;
+    sigGlow.material.opacity = 0.4 + Math.sin(t * 4) * 0.2;
+  };
+};
+
+const buildVolcanoCore: FxBuilder = (ctx) => {
+  const { add, spec } = ctx;
+  const color = spec.color ?? 0xff5a1a;
+  const color2 = spec.color2 ?? 0xffd23a;
+  const torso = ctx.rig.getObjectByName('torso') ?? add(new THREE.Group());
+  const coreMat = emis(color, 1.8);
+  const core = add(new THREE.Mesh(new THREE.IcosahedronGeometry(0.1, 1), coreMat), torso); core.position.set(0, 0.05, 0.2);
+  const coreGlow = add(softGlow(color2, 0.55, 0.7), torso); coreGlow.position.set(0, 0.05, 0.22);
+  const cols: THREE.Mesh[] = [];
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2;
+    const m = glowM(i % 2 ? color2 : color, 0.7);
+    const col = add(new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.2, 6), m), torso);
+    col.position.set(Math.cos(a) * 0.07, 0.12, 0.2 + Math.sin(a) * 0.02);
+    col.userData.ph = Math.random() * 6.28; col.userData.mat = m; cols.push(col);
+  }
+  const emb = sparkCloud(add, 18, 0.4, color2, 0.05, torso); emb.pts.position.set(0, 0.12, 0.22);
+  return (t, dt) => {
+    core.rotation.y = t * 1.5; core.rotation.x = t * 0.8;
+    coreMat.emissiveIntensity = 1.4 + Math.sin(t * 6) * 0.6;
+    coreGlow.material.opacity = 0.5 + Math.sin(t * 7) * 0.25;
+    for (const c of cols) { const k = 0.7 + Math.sin(t * (spec.speed ?? 1) * 9 + c.userData.ph) * 0.4; c.scale.set(1, k, 1); c.position.y = 0.12 + k * 0.04; (c.userData.mat as THREE.MeshBasicMaterial).opacity = 0.45 + Math.sin(t * 11 + c.userData.ph) * 0.3; }
+    const a = emb.pos;
+    for (let i = 0; i < emb.seed.length; i++) a[i * 3 + 1] = ((a[i * 3 + 1] + dt * 0.4 + 0.3) % 0.6) - 0.3;
+    emb.geo.attributes.position.needsUpdate = true;
+  };
+};
+
+// ---- BACKPACK ----
+const buildSeraphWings: FxBuilder = (ctx) => {
+  const { add, spec } = ctx;
+  const color = spec.color ?? 0xffe27a;
+  const color2 = spec.color2 ?? 0xffffff;
+  const pelvis = ctx.host;
+  const wings: THREE.Group[] = [];
+  for (const sx of [-1, 1]) {
+    const w = add(new THREE.Group(), pelvis); w.position.set(sx * 0.1, 0.4, -0.2);
+    for (let i = 0; i < 6; i++) {
+      const m = glowM(i % 2 ? color2 : color, 0.6); m.side = THREE.DoubleSide;
+      const feather = add(new THREE.Mesh(new THREE.PlaneGeometry(0.42 - i * 0.04, 0.09, 4, 1), m), w);
+      feather.position.set(sx * (0.18 + i * 0.05), 0.22 - i * 0.085, 0);
+      feather.rotation.z = sx * (0.25 + i * 0.22); feather.rotation.y = sx * 0.35;
+    }
+    wings.push(w);
+  }
+  const glow = add(softGlow(color, 1.1, 0.4), pelvis); glow.position.set(0, 0.4, -0.2);
+  return (t) => {
+    wings.forEach((w, k) => { const sx = k ? 1 : -1; w.rotation.z = Math.sin(t * (spec.speed ?? 1) * 2.2) * 0.16 * sx; w.children.forEach((f, i) => { (f as THREE.Mesh).position.z = Math.sin(t * 2.5 + i * 0.6) * 0.025; }); });
+    glow.material.opacity = 0.3 + Math.abs(Math.sin(t * 2.2)) * 0.2;
+  };
+};
+
+const buildMeteorSwarm: FxBuilder = (ctx) => {
+  const { add, spec } = ctx;
+  const color = spec.color ?? 0xff8a1a;
+  const color2 = spec.color2 ?? 0xffe23a;
+  const pelvis = ctx.host;
+  const ring = add(new THREE.Group(), pelvis); ring.position.set(0, 0.34, -0.18); ring.rotation.x = 0.5;
+  const meteors: { m: THREE.Mesh; a: number }[] = [];
+  const N = 5;
+  for (let i = 0; i < N; i++) {
+    const m = add(new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 6), emis(color, 1.5)), ring);
+    add(softGlow(color2, 0.22, 0.7), m);
+    meteors.push({ m, a: (i / N) * Math.PI * 2 });
+  }
+  const glow = add(softGlow(color, 0.7, 0.4), pelvis); glow.position.set(0, 0.34, -0.18);
+  return (t) => {
+    ring.rotation.z = t * (spec.speed ?? 1) * 1.4;
+    for (const mt of meteors) { const ang = mt.a + t * 1.5; mt.m.position.set(Math.cos(ang) * 0.3, Math.sin(ang) * 0.3, 0); }
+    glow.material.opacity = 0.3 + Math.sin(t * 5) * 0.12;
+  };
+};
+
+// ---- SHOES ----
+const buildCometStep: FxBuilder = (ctx) => {
+  const { add, spec } = ctx;
+  const color = spec.color ?? 0xffd23a;
+  const color2 = spec.color2 ?? 0xffffff;
+  const { L, R } = bootHosts(ctx);
+  const rings: { r: THREE.Mesh; m: THREE.MeshStandardMaterial }[] = [];
+  for (const [host, leg] of [[L, 'legL'], [R, 'legR']] as const) {
+    shellOn(ctx, leg, new THREE.BoxGeometry(0.17, 0.13, 0.27), metalM(0x2a2410, 0.4), [0, -0.55, 0.03]);
+    const m = emis(color, 1.4);
+    const r = add(new THREE.Mesh(new THREE.TorusGeometry(0.12, 0.012, 8, 24), m), host);
+    r.position.set(0, -0.66, 0.02); r.rotation.x = Math.PI / 2; rings.push({ r, m });
+    const g = add(softGlow(color, 0.3, 0.6), host); g.position.set(0, -0.64, 0.02);
+    const jet = add(new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.16, 6), glowM(color2, 0.65)), host); jet.position.set(0, -0.74, -0.06); jet.rotation.x = -0.3;
+  }
+  return (t) => {
+    rings.forEach(({ r, m }, i) => { const k = 1 + Math.sin(t * 4 + i * Math.PI) * 0.25; r.scale.set(k, k, 1); m.emissiveIntensity = 1.1 + Math.sin(t * 6 + i) * 0.5; });
+  };
+};
+
 // =================== registry ===================
 
 const BUILDERS: Record<string, FxBuilder> = {
@@ -1038,6 +1302,10 @@ const BUILDERS: Record<string, FxBuilder> = {
   thruster: buildThruster, glow_sole: buildGlowSole, hover_disc: buildHoverDisc, cryo_step: buildCryoStep, spark_heel: buildSparkHeel,
   energy_wings: buildEnergyWings, fusion_pack: buildFusionPack, jetpack: buildJetpack, orb_companion: buildOrbCompanion, comet_cape: buildCometCape,
   plasma_gauntlet: buildPlasmaGauntlet, ion_claw: buildIonClaw, powercell_fist: buildPowercellFist,
+  // ultra-rare trophy effects
+  crown_supernova: buildCrownSupernova, eclipse_ring: buildEclipseRing, frost_monarch: buildFrostMonarch, galaxy_swirl: buildGalaxySwirl,
+  constellation_cloak: buildConstellationCloak, runic_aegis: buildRunicAegis, volcano_core: buildVolcanoCore,
+  seraph_wings: buildSeraphWings, meteor_swarm: buildMeteorSwarm, comet_step: buildCometStep,
 };
 
 /** True if a kind is renderable — used to validate the catalog at boot. */

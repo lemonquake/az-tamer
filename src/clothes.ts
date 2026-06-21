@@ -15,6 +15,11 @@ export interface ClothesItem {
   accentColor?: string;
   terra?: boolean;  // sold only at Terra City's Aetherline Atelier
   fx?: FxSpec;      // animated prestige effect layered on the rig
+  /** Ultra-rare trophy gear — never sold in ANY shop; only dropped as a
+   *  tournament/Worldring prize. Equippable from any wardrobe once owned. */
+  ultra?: boolean;
+  /** Which prize pool an ultra item drops from. */
+  ultraSource?: 'tournament' | 'terra';
 }
 
 export const CLOTHES_DATABASE: Record<string, ClothesItem> = {
@@ -142,6 +147,67 @@ export const CLOTHES_DATABASE: Record<string, ClothesItem> = {
   terra_plasma_gauntlet: { id: 'terra_plasma_gauntlet', name: 'Plasma Gauntlets', slot: 'gloves', price: 12000, desc: 'Heavy gauntlets cradling a ball of magenta plasma in each palm.', color: 0x2a3242, terra: true, fx: { kind: 'plasma_gauntlet', color: 0xff5aa8 } },
   terra_ion_claw: { id: 'terra_ion_claw', name: 'Ion Claws', slot: 'gloves', price: 14000, desc: 'Three blades of acid-green ion-light extend from each knuckle. Purely decorative. Probably.', color: 0x1a1d28, terra: true, fx: { kind: 'ion_claw', color: 0x5aff9a } },
   terra_powercell_fist: { id: 'terra_powercell_fist', name: 'Powercell Fists', slot: 'gloves', price: 16000, desc: 'Bulky power-fists with glowing orange cells stacked across each knuckle.', color: 0x3a4252, terra: true, fx: { kind: 'powercell_fist', color: 0xff8a1a } },
+
+  // ============================================================
+  // ULTRA-RARE TROPHY GEAR — never sold anywhere. Dropped only to
+  // tamers ranked Lieutenant-or-above who WIN a sanctioned bracket.
+  // 20 from the circuit (`ultraSource:'tournament'`), 10 from the
+  // Worldring of Terra City (`ultraSource:'terra'`, won at Worlds /
+  // the Legends' Gauntlet). Each carries a marquee `fx`. price:0 — they
+  // have no shelf price because no shelf carries them.
+  // ============================================================
+
+  // ---- TOURNAMENT POOL · HATS ----
+  ult_supernova_crown: { id: 'ult_supernova_crown', name: 'Supernova Crown', slot: 'hat', price: 0, desc: 'A detonating star caged above your brow — a spiked corona that wheels endlessly, shedding gold flares. Champions only.', color: 0x2a2008, ultra: true, ultraSource: 'tournament', fx: { kind: 'crown_supernova', color: 0xffd23a, color2: 0xffffff } },
+  ult_eclipse_diadem: { id: 'ult_eclipse_diadem', name: 'Eclipse Diadem', slot: 'hat', price: 0, desc: 'A black sun ringed by a blazing corona of fire, drifting embers falling from its rim. The crowd goes silent for it.', color: 0x180c06, ultra: true, ultraSource: 'tournament', fx: { kind: 'eclipse_ring', color: 0xff7a1a, color2: 0xffe23a } },
+  ult_frost_monarch: { id: 'ult_frost_monarch', name: 'Frost-Monarch Crown', slot: 'hat', price: 0, desc: 'A slow carousel of floating ice-shards trailing a soft snowfall of light. Cold enough to fog your breath.', color: 0x10283a, ultra: true, ultraSource: 'tournament', fx: { kind: 'frost_monarch', color: 0x9fe6ff, color2: 0xffffff } },
+  ult_galaxy_circlet: { id: 'ult_galaxy_circlet', name: 'Galaxy Circlet', slot: 'hat', price: 0, desc: 'A whole spiral galaxy turns above your head, a white core blazing at its heart. A bracket-winner\'s halo.', color: 0x120a26, ultra: true, ultraSource: 'tournament', fx: { kind: 'galaxy_swirl', color: 0x9a6cff, color2: 0x6fe0ff } },
+  ult_champions_corona: { id: 'ult_champions_corona', name: "Champion's Ruby Corona", slot: 'hat', price: 0, desc: 'Eight ruby plasma-spikes dance over a gold band — struck in the colors of the Grand Chief\'s own seal.', color: 0x2a0a12, ultra: true, ultraSource: 'tournament', fx: { kind: 'plasma_crown', color: 0xe8243a, scale: 1.25 } },
+
+  // ---- TOURNAMENT POOL · SHIRTS ----
+  ult_constellation_cloak: { id: 'ult_constellation_cloak', name: 'Constellation Mantle', slot: 'shirt', price: 0, desc: 'A field of stars wired across the chest, joined by faint constellation-lines that twinkle and re-draw themselves.', color: 0x070b1c, ultra: true, ultraSource: 'tournament', fx: { kind: 'constellation_cloak', color: 0x9ad8ff, color2: 0xffffff } },
+  ult_runic_aegis: { id: 'ult_runic_aegis', name: 'Runic Aegis', slot: 'shirt', price: 0, desc: 'Two counter-rotating rings of gold rune-glyphs orbit a pulsing chest-sigil. Ancient Worldring warding, reforged.', color: 0x2a2008, ultra: true, ultraSource: 'tournament', fx: { kind: 'runic_aegis', color: 0xffd66a, color2: 0xfff0b8 } },
+  ult_volcano_core: { id: 'ult_volcano_core', name: 'Volcano-Core Cuirass', slot: 'shirt', price: 0, desc: 'A churning magma heart set in black plate, breathing heat-columns and a rising storm of embers.', color: 0x2a1208, ultra: true, ultraSource: 'tournament', fx: { kind: 'volcano_core', color: 0xff5a1a, color2: 0xffd23a } },
+  ult_aurora_regalia: { id: 'ult_aurora_regalia', name: 'Aurora Regalia', slot: 'shirt', price: 0, desc: 'Ribbons of gold-and-cyan aurora pour from the shoulders in slow, royal waves.', color: 0x0a0e1c, ultra: true, ultraSource: 'tournament', fx: { kind: 'aurora_mantle', color: 0xffd66a, color2: 0x6fe0ff } },
+  ult_arc_titan: { id: 'ult_arc_titan', name: 'Arc-Titan Plate', slot: 'shirt', price: 0, desc: 'A heavy vest built around a ruby arc-reactor, its containment ring spinning fierce and red.', color: 0x2a141c, ultra: true, ultraSource: 'tournament', fx: { kind: 'arc_reactor', color: 0xff3a5a } },
+
+  // ---- TOURNAMENT POOL · PANTS ----
+  ult_emberstorm_greaves: { id: 'ult_emberstorm_greaves', name: 'Emberstorm Greaves', slot: 'pants', price: 0, desc: 'Trousers that trail a gold firestorm of embers from the shins with every stride.', color: 0x2a1c08, ultra: true, ultraSource: 'tournament', fx: { kind: 'ember_legs', color: 0xffc23a } },
+  ult_voltcrown_greaves: { id: 'ult_voltcrown_greaves', name: 'Voltcrown Greaves', slot: 'pants', price: 0, desc: 'Plated greaves veined with twin ruby light-channels that surge when you move.', color: 0x2a1018, ultra: true, ultraSource: 'tournament', fx: { kind: 'volt_greaves', color: 0xff3a5a } },
+  ult_starfall_legs: { id: 'ult_starfall_legs', name: 'Starfall Leggings', slot: 'pants', price: 0, desc: 'Deep-violet greaves that breathe a slow, cosmic light-pulse down to the heel.', color: 0x14102a, ultra: true, ultraSource: 'tournament', fx: { kind: 'volt_greaves', color: 0x9a6cff } },
+
+  // ---- TOURNAMENT POOL · GLOVES ----
+  ult_aurelian_gauntlets: { id: 'ult_aurelian_gauntlets', name: 'Aurelian Plasma Gauntlets', slot: 'gloves', price: 0, desc: 'Heavy gauntlets cradling a sphere of gold plasma in each palm. Finals-night fire.', color: 0x2a2008, ultra: true, ultraSource: 'tournament', fx: { kind: 'plasma_gauntlet', color: 0xffd23a } },
+  ult_ion_talons: { id: 'ult_ion_talons', name: 'Ruby Ion Talons', slot: 'gloves', price: 0, desc: 'Three blades of ruby ion-light spring from each knuckle. Strictly ceremonial. Mostly.', color: 0x2a1018, ultra: true, ultraSource: 'tournament', fx: { kind: 'ion_claw', color: 0xff3a5a } },
+  ult_meteor_knuckles: { id: 'ult_meteor_knuckles', name: 'Meteor Knuckles', slot: 'gloves', price: 0, desc: 'Power-fists stacked with cyan energy-cells that flare cold and bright across each knuckle.', color: 0x10283a, ultra: true, ultraSource: 'tournament', fx: { kind: 'powercell_fist', color: 0x6fe0ff } },
+
+  // ---- TOURNAMENT POOL · BACKPACKS ----
+  ult_seraph_wings: { id: 'ult_seraph_wings', name: 'Seraph Wings', slot: 'backpack', price: 0, desc: 'Six great wings of gold light layered at your back, beating slowly in a saintly rhythm.', ultra: true, ultraSource: 'tournament', fx: { kind: 'seraph_wings', color: 0xffe27a, color2: 0xffffff } },
+  ult_meteor_swarm: { id: 'ult_meteor_swarm', name: 'Meteor-Swarm Pack', slot: 'backpack', price: 0, desc: 'A ring of small molten meteors orbits your back, each dragging a tail of sparks.', ultra: true, ultraSource: 'tournament', fx: { kind: 'meteor_swarm', color: 0xff8a1a, color2: 0xffe23a } },
+
+  // ---- TOURNAMENT POOL · SHOES ----
+  ult_comet_step: { id: 'ult_comet_step', name: 'Comet-Step Boots', slot: 'shoes', price: 0, desc: 'Boots that stamp glowing gold rune-rings underfoot and kick up jets of light.', color: 0x2a2008, ultra: true, ultraSource: 'tournament', fx: { kind: 'comet_step', color: 0xffd23a, color2: 0xffffff } },
+  ult_nova_treads: { id: 'ult_nova_treads', name: 'Nova Treads', slot: 'shoes', price: 0, desc: 'Twin ruby rocket-soles roaring white at the core. One breath from lift-off.', color: 0x2a1018, ultra: true, ultraSource: 'tournament', fx: { kind: 'thruster', color: 0xff3a5a, color2: 0xffffff } },
+
+  // ---- TERRA / WORLDRING POOL · HATS ----
+  ult_terra_galaxy_monarch: { id: 'ult_terra_galaxy_monarch', name: 'Worldring Galaxy Monarch', slot: 'hat', price: 0, desc: 'A magenta-and-cyan spiral galaxy crowns you — the Worldring\'s own night sky, won under Terra\'s dome.', color: 0x1a0a26, ultra: true, ultraSource: 'terra', fx: { kind: 'galaxy_swirl', color: 0xff5aa8, color2: 0x6fe0ff } },
+  ult_terra_eclipse_sovereign: { id: 'ult_terra_eclipse_sovereign', name: 'Void-Eclipse Sovereign', slot: 'hat', price: 0, desc: 'A black sun ringed in silent violet voidfire. Terra reserves it for World Champions alone.', color: 0x160a22, ultra: true, ultraSource: 'terra', fx: { kind: 'eclipse_ring', color: 0xc23aff, color2: 0xff5aa8 } },
+  ult_terra_prism_zenith: { id: 'ult_terra_prism_zenith', name: 'Zenith Prism Crown', slot: 'hat', price: 0, desc: 'A great spinning crystal that throws a slow, full-spectrum rainbow across the whole arena.', color: 0x1a1a26, ultra: true, ultraSource: 'terra', fx: { kind: 'prism', color: 0xffffff, scale: 1.3 } },
+
+  // ---- TERRA / WORLDRING POOL · SHIRTS ----
+  ult_terra_constellation_mantle: { id: 'ult_terra_constellation_mantle', name: 'Worldring Star-Mantle', slot: 'shirt', price: 0, desc: 'The Worldring\'s constellations, wired across the chest in magenta and cyan, re-drawing as you move.', color: 0x0a0820, ultra: true, ultraSource: 'terra', fx: { kind: 'constellation_cloak', color: 0xff5aa8, color2: 0x6fe0ff } },
+  ult_terra_runic_core: { id: 'ult_terra_runic_core', name: 'Aetherline Runic Core', slot: 'shirt', price: 0, desc: 'Cyan circuit-runes orbit a humming Aetherline sigil — engine-capital warding at its finest.', color: 0x081a26, ultra: true, ultraSource: 'terra', fx: { kind: 'runic_aegis', color: 0x6fe0ff, color2: 0xb8f0ff } },
+  ult_terra_nebula_emperor: { id: 'ult_terra_nebula_emperor', name: 'Nebula-Emperor Suit', slot: 'shirt', price: 0, desc: 'A deep-space voidsuit holding a drifting magenta starfield that twinkles with every step.', color: 0x180a26, ultra: true, ultraSource: 'terra', fx: { kind: 'nebula_suit', color: 0xc23aff } },
+
+  // ---- TERRA / WORLDRING POOL · BACKPACKS ----
+  ult_terra_seraph_void: { id: 'ult_terra_seraph_void', name: 'Void-Seraph Wings', slot: 'backpack', price: 0, desc: 'Six wings of violet-and-magenta voidlight, beating in absolute silence behind you.', ultra: true, ultraSource: 'terra', fx: { kind: 'seraph_wings', color: 0xb15aff, color2: 0xff5aa8 } },
+  ult_terra_meteor_halo: { id: 'ult_terra_meteor_halo', name: 'Aetherline Meteor Halo', slot: 'backpack', price: 0, desc: 'A ring of cyan Aetherline cometlets orbits your back, trailing electric-blue sparks.', ultra: true, ultraSource: 'terra', fx: { kind: 'meteor_swarm', color: 0x6fe0ff, color2: 0xffffff } },
+
+  // ---- TERRA / WORLDRING POOL · GLOVES ----
+  ult_terra_voidblade_talons: { id: 'ult_terra_voidblade_talons', name: 'Voidblade Talons', slot: 'gloves', price: 0, desc: 'Three blades of magenta voidlight extend from each knuckle, humming with caged power.', color: 0x180a22, ultra: true, ultraSource: 'terra', fx: { kind: 'ion_claw', color: 0xff5aa8 } },
+
+  // ---- TERRA / WORLDRING POOL · SHOES ----
+  ult_terra_comet_drive: { id: 'ult_terra_comet_drive', name: 'Aetherline Comet-Drive', slot: 'shoes', price: 0, desc: 'Cyan Aetherline drives that stamp glowing rune-rings and jet electric light with every step.', color: 0x081a26, ultra: true, ultraSource: 'terra', fx: { kind: 'comet_step', color: 0x6fe0ff, color2: 0xffffff } },
 };
 
 // Cached textures to prevent re-creation

@@ -19,6 +19,8 @@ import { WORLD_GUILDS, WORLD_CIRCUIT } from './lore';
 import { awardTournamentPoints, rankIndexFor, RANKS } from './ranks';
 import { say, choose, toast, openScreen, closeMenu } from './ui';
 import { jumpToDay, weekdayName, calendarDayOf, dateLabel, aeYear, weekOfYear } from './calendar';
+import { CLOTHES_DATABASE } from './clothes';
+import { ALL_RODS } from './fishingdata';
 
 // ---------------- continents & power tiers ----------------
 export type Continent = 'Olivar' | 'Veyra' | 'Tharkand' | 'Noruun';
@@ -478,6 +480,11 @@ export async function runTournament(p: Player, tier: TournamentTier, ev?: Schedu
       winLine,
     });
 
+    // Every tournament bout ends with the medics restoring the whole roster —
+    // win or lose, you leave the ring at full strength.
+    p.healAll();
+    (window as any).__refreshHUD?.();
+
     if (res !== 'win') {
       placement = isFinal ? 'finalist' : isSemi ? 'semifinal' : 'entered';
       await say('Attendant Lyssa', placement === 'finalist'
@@ -501,6 +508,56 @@ export async function runTournament(p: Player, tier: TournamentTier, ev?: Schedu
 
 function pickKnownForRecord(round: RoundDef, ev: ScheduledEvent | undefined, label: string): KnownName | undefined {
   return KNOWN_NAMES.find(k => k.name === label) ?? (round.knownId ? KNOWN_BY_ID[round.knownId] : undefined);
+}
+
+// ============================================================
+// ULTRA-RARE PRIZES — the officers' vault. A champion ranked
+// Lieutenant-or-above leaves with a trophy nobody can buy: a random
+// ultra-rare cosmetic (drawn from the Terra/Worldring pool when the
+// final was fought in Terra City, else the circuit pool), and a
+// chance — better in the bigger brackets — at an ultra-rare rod.
+// ============================================================
+/** RANKS index of Lieutenant — the floor for ultra-prize eligibility. */
+const ULTRA_REWARD_MIN_RANK = RANKS.findIndex(r => r.name === 'Lieutenant');
+
+/** Odds of also dropping an ultra-rare rod, by tournament class. */
+const ULTRA_ROD_CHANCE: Record<TierClass, number> = {
+  Local: 0.18, Seeding: 0.22, Regional: 0.30, Special: 0.42,
+  Playoffs: 0.50, Championship: 0.70, Legends: 0.70,
+};
+
+function pickUnowned<T extends { id: string }>(pool: T[], owned: string[]): T | null {
+  const fresh = pool.filter(x => !owned.includes(x.id));
+  if (!fresh.length) return null;
+  return fresh[Math.floor(Math.random() * fresh.length)];
+}
+
+async function grantUltraRewards(p: Player, tier: TournamentTier, afterRank: number): Promise<void> {
+  if (afterRank < ULTRA_REWARD_MIN_RANK) return;
+
+  const fromTerra = /terra city/i.test(tier.venue); // the Worldring finals
+  const source = fromTerra ? 'terra' : 'tournament';
+  const cosmeticPool = Object.values(CLOTHES_DATABASE).filter(c => c.ultra && c.ultraSource === source);
+  const won: string[] = [];
+
+  const cos = pickUnowned(cosmeticPool, p.ownedClothes);
+  if (cos) { p.ownedClothes.push(cos.id); won.push(`👕 ${cos.name}`); }
+
+  if (Math.random() < (ULTRA_ROD_CHANCE[tier.classKind] ?? 0.25)) {
+    const rod = pickUnowned(ALL_RODS.filter(r => r.ultra), p.fishing.ownedRods);
+    if (rod) { p.fishing.ownedRods.push(rod.id); won.push(`🎣 ${rod.name}`); }
+  }
+
+  if (!won.length) return; // already own every trophy in the pool
+  p.save(false);
+  (window as any).__refreshHUD?.();
+
+  const many = won.length > 1;
+  toast(`✨ ULTRA-RARE PRIZE! ${won.join('  ·  ')}`, 'gold', 5200);
+  await say('Attendant Lyssa',
+    `One more thing, Champion — the officers' vault only opens for ranks of Lieutenant and above, and tonight it opened for you. Inside: ${won.join(' and ')}. ` +
+    `${fromTerra ? 'Worldring craftsmanship — found nowhere on any shelf, on any continent.' : 'Found in no shop on four continents.'} ` +
+    `Wear ${many ? 'them' : 'it'} proud — ${many ? 'they were' : 'it was'} earned in the Ring.`);
 }
 
 async function awardPlacement(p: Player, tier: TournamentTier, placement: 'champion' | 'finalist' | 'semifinal' | 'entered', _ev?: ScheduledEvent): Promise<void> {
@@ -542,6 +599,9 @@ async function awardPlacement(p: Player, tier: TournamentTier, placement: 'champ
     toast(`⬆️ RANK UP — you are now ${RANKS[afterRank].name}!`, 'gold', 4500);
     await say('Attendant Lyssa', `And your Universal Rank just moved — ${RANKS[afterRank].name}. "${RANKS[afterRank].epithet}" Rank only ever moves on tournament placements, so wear it proud. It was earned in the Ring.`);
   }
+
+  // Champions ranked Lieutenant-or-above raid the officers' vault for ultra-rare trophy gear.
+  if (placement === 'champion') await grantUltraRewards(p, tier, afterRank);
 }
 
 // ============================================================

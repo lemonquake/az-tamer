@@ -407,18 +407,27 @@ function renderTab(tab: HubTab, player: Player, fs: FishingState, canBuy: boolea
 
 // ---------------- Rods ----------------
 function tabRods(player: Player, fs: FishingState, canBuy: boolean, refresh: () => void): TabBody {
-  const list = Object.values(RODS).map(rod => {
+  const stars = (n: number) => '★'.repeat(Math.min(5, Math.round(n))).padEnd(5, '·');
+  // Ultra-rare trophy rods are never sold — show them only once won.
+  const list = Object.values(RODS).filter(rod => !rod.ultra || fs.ownedRods.includes(rod.id)).map(rod => {
     const owned = fs.ownedRods.includes(rod.id);
     const equipped = fs.equippedRod === rod.id;
-    const stars = (n: number) => '★'.repeat(Math.round(n)).padEnd(5, '·');
     const btn = equipped ? `<button class="ui-btn primary" disabled>Equipped</button>`
       : owned ? `<button class="ui-btn" data-equip="${rod.id}">Equip</button>`
+      : rod.ultra ? `<span class="sub">Trophy</span>`
       : canBuy ? `<button class="ui-btn ${player.shards >= rod.price ? '' : 'danger'}" data-buy="${rod.id}">◆ ${fmt(rod.price)}</button>`
       : `<span class="sub">Locked</span>`;
+    const ultraBadge = rod.ultra ? '<span class="tag" style="background:linear-gradient(90deg,#f2c14e,#ff5aa8);color:#0c1022;margin-left:5px">★ ULTRA</span>' : '';
+    const perks: string[] = [];
+    if (rod.rareBias) perks.push(`✨ Rare-find +${Math.round(rod.rareBias * 100)}%`);
+    if (rod.shardBonus) perks.push(`💎 Shards +${Math.round((rod.shardBonus - 1) * 100)}%`);
+    if (rod.sizeBonus) perks.push(`📏 Size +${Math.round((rod.sizeBonus - 1) * 100)}%`);
+    if (rod.streakGuard) perks.push('🔥 Streak guard');
+    const perkRow = perks.length ? `<div class="rod-stats" style="opacity:0.95">${perks.map(p => `<span>${p}</span>`).join('')}</div>` : '';
     return `
       <div class="list-row rod-row ${equipped ? 'eq' : ''}" data-preview-rod="${rod.id}" title="Click to preview">
         <div style="flex:1">
-          <div class="lr-top"><b style="color:#${rod.color.toString(16).padStart(6, '0')}">${rod.name}</b> <span class="sub">Tier ${rod.tier}</span></div>
+          <div class="lr-top"><b style="color:#${rod.color.toString(16).padStart(6, '0')}">${rod.name}</b> <span class="sub">Tier ${rod.tier}</span>${ultraBadge}</div>
           <div class="sub">${rod.desc}</div>
           <div class="rod-stats">
             <span>⚡ Reel ${stars(rod.reelPower * 2.5)}</span>
@@ -426,6 +435,7 @@ function tabRods(player: Player, fs: FishingState, canBuy: boolean, refresh: () 
             <span>🍀 Luck ${stars(rod.luck * 2.2)}</span>
             <span>🎯 Cast ${rod.castMax}m</span>
           </div>
+          ${perkRow}
         </div>
         <div class="lr-act">${btn}</div>
       </div>`;

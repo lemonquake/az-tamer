@@ -19,7 +19,7 @@ import {
   stormPanelTexture, stormSeamEmissive, getRenderer, type GuardianRig,
 } from './models';
 import { VFX } from './vfx';
-import { say, choose, toast, askName, setStoryInBattle } from './ui';
+import { say, choose, toast, askName, setStoryInBattle, updateWorldStatus } from './ui';
 import { runBattleTutorial } from './tutorial';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
@@ -2596,6 +2596,9 @@ export class Battle {
     $('battle-auto').style.display = 'none';
     $('victory-screen').style.display = 'none';
     setStoryInBattle(true);
+    // Hide the overworld Calendar chip + event banner for the duration of the fight.
+    (window as any).__inBattle = true;
+    updateWorldStatus();
 
     // battle speed chip (click or F) — starts at 1×
     this.speedMul = 1;
@@ -2708,6 +2711,9 @@ export class Battle {
     if (this.autoKeyHandler) { window.removeEventListener('keydown', this.autoKeyHandler); this.autoKeyHandler = undefined; }
     setTimeScale(1);   // never let battle speed bleed into the overworld
     setStoryInBattle(false);
+    // Restore the Calendar chip + event banner now the fight is over.
+    (window as any).__inBattle = false;
+    updateWorldStatus();
     this.units.forEach(u => disposeRig(u.rig));
     this.disposeArena();
     $('battle-ui').style.display = 'none';

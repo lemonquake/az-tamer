@@ -1373,6 +1373,8 @@ export class Fishing {
       let sizeMult = 1.0;
       if (this.fs.equippedBait === 'golden_beetle') sizeMult *= 1.2;
       if (this.fs.equippedLine === 'lead_core') sizeMult *= 1.15;
+      const sizeRod = RODS[this.fs.equippedRod];
+      if (sizeRod?.sizeBonus) sizeMult *= sizeRod.sizeBonus;
       const size = rollSize(fish, this.rnd, sizeMult);
       await this.celebrate(fish, size, battleMs);
       const choice = await this.summarize(fish, size, cast, hook, battleMs);
@@ -2092,7 +2094,7 @@ export class Fishing {
     const line = LINES[this.fs.equippedLine] ?? LINES.basic_mono;
     
     if (!ok) {
-      if (rod.id === 'angler_whisper' && !this.streakFailsafeUsed) {
+      if ((rod.id === 'angler_whisper' || rod.streakGuard) && !this.streakFailsafeUsed) {
         this.streakFailsafeUsed = true;
         this.triggerFloatyText('🔥 FAILSAFE TRIGGERED!', '#ffd25a');
         sfx('fanfare');
@@ -2292,9 +2294,8 @@ export class Fishing {
     // shard payout (grade scales shards payout!)
     let shardGain = Math.round((RARITY[fish.rarity].score * RARITY[fish.rarity].sell * 0.05) + size.sizePct * 30 + 10);
     shardGain = Math.round(shardGain * gradeResult.multiplier);
-    if (fs.equippedRod === 'prismatic_rod') {
-      shardGain = Math.round(shardGain * 1.25); // +25% shards!
-    }
+    const shardMul = (RODS[fs.equippedRod]?.shardBonus) ?? 1;
+    if (shardMul !== 1) shardGain = Math.round(shardGain * shardMul); // prismatic & ultra-rare rods
     this.player.shards += shardGain;
 
     // fish bag for cooking

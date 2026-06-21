@@ -7657,8 +7657,9 @@ export class Town {
           return;
         }
 
-        // ===== wardrobe tabs ===== (Terra City prestige gear is sold only at its own Atelier)
-        const items = Object.values(CLOTHES_DATABASE).filter(item => item.slot === activeTab && !item.terra);
+        // ===== wardrobe tabs ===== (Terra City prestige gear is sold only at its own Atelier;
+        // ultra-rare trophy gear is never sold — it only shows here once won.)
+        const items = Object.values(CLOTHES_DATABASE).filter(item => item.slot === activeTab && !item.terra && (!item.ultra || p.ownedClothes.includes(item.id)));
         const canBeNone = ['hat', 'gloves', 'backpack'].includes(activeTab);
         let rowsHtml = '';
 
@@ -7701,14 +7702,15 @@ export class Town {
                   <button class="ui-btn" data-buy="${item.id}" ${canBuy ? '' : 'disabled'}>◆${price}</button>
                 </div>`;
           }
-          const dotColor = item.textureColor ?? (item.color !== undefined ? `#${item.color.toString(16).padStart(6, '0')}` : '#6a7290');
+          const dotColor = item.textureColor ?? (item.color !== undefined ? `#${item.color.toString(16).padStart(6, '0')}` : (item.fx?.color !== undefined ? `#${item.fx.color.toString(16).padStart(6, '0')}` : '#6a7290'));
           const styleBadge = item.textureType ? `<span class="tag" style="background:var(--ui-border);color:var(--ui-text);margin-left:5px">${item.textureType.toUpperCase()}</span>` : '';
+          const ultraBadge = item.ultra ? '<span class="tag" style="background:linear-gradient(90deg,#f2c14e,#ff5aa8);color:#0c1022;margin-left:5px">★ ULTRA</span>' : (item.fx ? '<span class="tag" style="background:linear-gradient(90deg,#9a3aff,#ff5aa8);color:#fff;margin-left:5px">✨ FX</span>' : '');
           const previewBadge = (tryingOn && !equipped) ? '<span class="tag" style="background:var(--ui-gold);color:#0c1022;margin-left:5px">IN MIRROR</span>' : '';
           const equippedBadge = equipped ? '<span class="tag" style="background:var(--ui-green);color:#0c1022;margin-left:5px">EQUIPPED</span>' : '';
           return `<div class="list-row" style="${tryingOn ? 'border:1px solid var(--ui-gold);background:rgba(217,161,26,0.1);' : ''}">
             <span class="swatch-dot sq" style="background:${dotColor};flex-shrink:0"></span>
             <div style="flex:1;cursor:pointer" data-row-select="${item.id}">
-              <b>${item.name}</b> ${styleBadge} ${previewBadge} ${equippedBadge}
+              <b>${item.name}</b> ${styleBadge} ${ultraBadge} ${previewBadge} ${equippedBadge}
               <div class="sub">${item.desc}</div>
             </div>
             <div style="margin-left:10px">${actionBtn}</div>

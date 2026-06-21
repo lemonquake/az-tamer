@@ -308,9 +308,12 @@ export function updateWorldStatus(): void {
     host.appendChild(banner);
   }
 
+  // During a battle the Calendar chip and the flashing event banner are hidden —
+  // the Ring is no place for the world clock or sign-up reminders.
+  const inBattle = !!(window as any).__inBattle;
   const hudVisible = $('hud').style.display !== 'none';
   const player = getActivePlayer();
-  if (!hudVisible || !player) { chip.style.display = 'none'; banner.style.display = 'none'; return; }
+  if (inBattle || !hudVisible || !player) { chip.style.display = 'none'; banner.style.display = 'none'; return; }
 
   chip.style.display = 'flex';
   chip.title = fullDateLabel();

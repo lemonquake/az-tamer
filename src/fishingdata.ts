@@ -656,9 +656,20 @@ export interface RodDef {
   fx: 'wood' | 'iron' | 'storm' | 'neon' | 'dragon' | 'tide';
   color: number; glow?: number;
   desc: string;
+  // ---- ultra-rare trophy perks (tournament-prize rods only) ----
+  /** never sold in any shop; obtained only as a Worldring-circuit prize */
+  ultra?: boolean;
+  /** multiplier on shard payout per catch (e.g. 1.4 = +40%) */
+  shardBonus?: number;
+  /** extra multiplier folded into the rare-fish encounter weighting */
+  rareBias?: number;
+  /** reignites a broken catch-streak once per outing */
+  streakGuard?: boolean;
+  /** multiplier on rolled fish size (bigger trophies) */
+  sizeBonus?: number;
 }
-const R = (id: string, name: string, tier: number, price: number, reelPower: number, lineStrength: number, luck: number, castMax: number, fx: RodDef['fx'], color: number, desc: string, glow?: number): RodDef =>
-  ({ id, name, tier, price, reelPower, lineStrength, luck, castMax, fx, color, desc, glow });
+const R = (id: string, name: string, tier: number, price: number, reelPower: number, lineStrength: number, luck: number, castMax: number, fx: RodDef['fx'], color: number, desc: string, glow?: number, opts: Partial<RodDef> = {}): RodDef =>
+  ({ id, name, tier, price, reelPower, lineStrength, luck, castMax, fx, color, desc, glow, ...opts });
 
 export const RODS: Record<string, RodDef> = Object.fromEntries(([
   R('beginner', 'Beginner Rod', 1, 0, 1.0, 1.0, 1.0, 14, 'wood', 0x8a6a3a, 'A whittled cane and a length of honest line. Everyone starts here.'),
@@ -668,10 +679,28 @@ export const RODS: Record<string, RodDef> = Object.fromEntries(([
   R('neonizer', 'Neonizer Rod', 5, 6200, 1.7, 1.7, 1.75, 30, 'neon', 0xff5ad8, 'A pulsing band of animated neon. The exotics cannot look away.', 0x5affd8),
   R('dragonheart', 'Dragonheart Rod', 6, 12000, 2.0, 2.0, 2.2, 38, 'dragon', 0xe8541e, 'Carved from a dragonfish spine and lit with living fire. The legend-hunter\'s rod.', 0xffae3a),
   R('quantum_reeler', 'Quantum Reeler', 5, 5800, 1.65, 1.5, 1.6, 28, 'neon', 0x3affaa, 'Reel power amplifies the longer you reel, but tension spikes are more sudden.', 0x3affaa),
-  R('prismatic_rod', 'Prismatic Rod', 5, 8000, 1.6, 1.6, 1.8, 32, 'tide', 0xe8ff3a, 'Light-bending crystal frame. Boosts shard value of all catches by 25%.', 0xffaa00),
+  R('prismatic_rod', 'Prismatic Rod', 5, 8000, 1.6, 1.6, 1.8, 32, 'tide', 0xe8ff3a, 'Light-bending crystal frame. Boosts shard value of all catches by 25%.', 0xffaa00, { shardBonus: 1.25 }),
   R('leviathan_harpoon', 'Leviathan Harpoon', 6, 15000, 2.2, 2.4, 2.0, 36, 'iron', 0x4a5a6a, 'Heavy-duty steel composite. Reduces aggression and strength of massive fish by 35%.'),
   R('angler_whisper', 'Angler\'s Whisper', 6, 18000, 1.9, 1.9, 2.5, 34, 'wood', 0xffaaff, 'Soft willow wood that channels thoughts. Perfect hook sweet-spot is 50% wider, prevents streak breaks once.', 0xffaaff),
   R('ghostweaver', 'Ghostweaver Rod', 7, 25000, 2.5, 2.5, 3.0, 42, 'storm', 0xaa3aff, 'Forged in a rift between waters. Ignores weather restrictions and acts as if in the secret cove anywhere.', 0xaa3aff),
+
+  // ============================================================
+  // ULTRA-RARE TROPHY RODS (tier 8) — never sold anywhere. Won only
+  // as a Worldring-circuit prize. All carry monstrous luck plus a
+  // distinct rare-finding `rareBias`; each leans into one extra perk
+  // (shardBonus / streakGuard / sizeBonus) so they feel different.
+  // price:0 — no shelf carries them.
+  // ============================================================
+  R('ult_celestius', 'Celestius Rod', 8, 0, 2.4, 2.4, 3.2, 44, 'tide', 0x9ad8ff, 'Star-forged from fallen sky-iron. Dramatically widens the odds of hooking the rarest fish in any water.', 0xfff0a0, { ultra: true, rareBias: 0.35 }),
+  R('ult_voidcaster', 'Voidcaster', 8, 0, 2.3, 2.6, 3.4, 46, 'storm', 0x9a3aff, 'Bends the water like spacetime. The deep\'s most elusive elite cannot stay away from its line.', 0xc23aff, { ultra: true, rareBias: 0.4 }),
+  R('ult_dawnbringer', 'Dawnbringer Rod', 8, 0, 2.6, 2.4, 3.0, 42, 'dragon', 0xff8a3a, 'Carved from a sun-dragon\'s spine. Every catch sells for 40% more shards.', 0xffae3a, { ultra: true, rareBias: 0.2, shardBonus: 1.4 }),
+  R('ult_leviathan_bane', "Leviathan's Bane", 8, 0, 2.8, 3.0, 2.8, 40, 'iron', 0x4a5a6a, 'A harpoon-rod of abyssal steel. Lands monstrous, oversized specimens — and never lets a streak break.', 0x9aa6b0, { ultra: true, rareBias: 0.2, sizeBonus: 1.35, streakGuard: true }),
+  R('ult_phoenixfeather', 'Phoenixfeather Rod', 8, 0, 2.5, 2.5, 3.1, 43, 'dragon', 0xff6a1a, 'Strung with a living phoenix quill. Reignites a broken streak once each outing.', 0xffd23a, { ultra: true, rareBias: 0.22, streakGuard: true }),
+  R('ult_glacial_spire', 'Glacial Spire', 8, 0, 2.4, 2.7, 3.0, 45, 'tide', 0x6fe0ff, 'Frost-tipped crystal that lures big, rare cold-water giants from the deep.', 0xb8f0ff, { ultra: true, rareBias: 0.25, sizeBonus: 1.2 }),
+  R('ult_thunderlord', 'Thunderlord Rod', 8, 0, 2.7, 2.3, 3.3, 48, 'storm', 0x6a7adf, 'Caged thunder hums down the spine. Calls the storm-spawned exotics from clear across the water.', 0xffe14a, { ultra: true, rareBias: 0.3 }),
+  R('ult_auroral', 'Auroral Rod', 8, 0, 2.4, 2.4, 3.5, 44, 'neon', 0x5affd8, 'A pulsing band of living aurora — the single greatest rare-fish lure ever strung.', 0x5affd8, { ultra: true, rareBias: 0.45 }),
+  R('ult_worldring', 'Worldring Rod', 8, 0, 2.6, 2.6, 3.2, 46, 'tide', 0xf2c14e, 'The Worldring\'s own championship rod. A flawless all-rounder: rich shards and rare finds alike.', 0xffe27a, { ultra: true, rareBias: 0.25, shardBonus: 1.3 }),
+  R('ult_eternalcast', 'Eternalcast', 8, 0, 2.9, 2.9, 3.6, 50, 'dragon', 0xfff0a0, 'The apex rod. Every perk, mastered — peerless luck, huge catches, fat shards, and an unbreakable streak.', 0xfff6c8, { ultra: true, rareBias: 0.5, shardBonus: 1.25, sizeBonus: 1.25, streakGuard: true }),
 ] as RodDef[]).map(r => [r.id, r]));
 export const ALL_RODS = Object.values(RODS);
 
@@ -1020,7 +1049,7 @@ export function rollFish(ctx: CatchContext, rnd: () => number): SpeciesDef {
     const rk = rarityRank(sp.rarity);
     let rareLift = 1;
     if (rk >= 2) {
-      rareLift = (ctx.rod.luck * ctx.line.luckBonus) * (1 + ctx.bait.rareBoost) * (0.6 + ctx.castQuality * 0.8);
+      rareLift = (ctx.rod.luck * ctx.line.luckBonus) * (1 + ctx.bait.rareBoost) * (0.6 + ctx.castQuality * 0.8) * (1 + (ctx.rod.rareBias ?? 0));
     }
     w = w * rareLift;
     // bait preference bonus
