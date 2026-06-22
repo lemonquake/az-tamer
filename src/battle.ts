@@ -824,7 +824,8 @@ export class Battle {
 
   /** Screenshake + lens punch scaled to how much of the target's HP just vanished. */
   private dmgFeedback(def: Unit, dmg: number, crit: boolean, eff: number): void {
-    const pct = dmg / def.g.stats.hp;
+    const maxHp = Math.max(1, def.g.stats.hp);
+    const pct = isFinite(dmg) && !isNaN(dmg) ? Math.min(2.0, dmg / maxHp) : 0;
     const amp = Math.min(0.5, pct * 1.05 + (crit ? 0.07 : 0) + (eff > 1 ? 0.04 : 0));
     this.fx.shake(amp, 0.28 + pct * 0.55);
     if (pct > 0.2 || crit) this.fx.punch(5);
@@ -928,6 +929,30 @@ export class Battle {
         this.fx.flash(p, 0x9a5af2, { intensity: 24 });
         sfx('dark');
         break;
+      case 'Lumen':
+        this.fx.glow(p, 0xfffcd8, { scale: big ? 2.5 : 1.5, life: 0.25 });
+        this.fx.burst(p, 0xfffcd8, { count: big ? 30 : 20, speed: 3.5, life: 0.5 });
+        this.fx.flash(p, 0xfffcd8, { intensity: 20 });
+        sfx('whoosh');
+        break;
+      case 'Gaia':
+        this.fx.glow(p, 0xc8a880, { scale: big ? 2.0 : 1.3, life: 0.3 });
+        this.fx.burst(p, 0xb0865a, { count: big ? 36 : 24, speed: 2.8, gravity: -2.0, life: 0.65 });
+        this.fx.ring(ground, 0xb0865a, { maxR: big ? 2.6 : 1.8 });
+        sfx('boom');
+        break;
+      case 'Frost':
+        this.fx.glow(p, 0xc8f2ff, { scale: big ? 2.0 : 1.3, life: 0.22 });
+        this.fx.burst(p, 0x9adff2, { count: big ? 32 : 22, speed: 3.0, gravity: -1.5, life: 0.6 });
+        sfx('whoosh');
+        break;
+      case 'Aether':
+        this.fx.glow(p, 0xffc8e8, { scale: big ? 2.6 : 1.7, life: 0.35 });
+        this.fx.burst(p, 0xff9ad2, { count: big ? 44 : 28, speed: 4.0, gravity: 0, life: 0.8 });
+        this.fx.ring(ground, 0xff9ad2, { maxR: big ? 2.8 : 1.9 });
+        this.fx.flash(p, 0xff9ad2, { intensity: 28 });
+        sfx('zap');
+        break;
     }
   }
 
@@ -963,6 +988,19 @@ export class Battle {
       }
       case 'Umbra':
         await this.fx.implode(to, 0x9a5af2, { count: 34, radius: 1.9, life: 0.5 });
+        break;
+      case 'Lumen':
+        await this.fx.projectile(from, to, 0xfffcd8, { size: 0.18, dur: 0.3, arc: 0.5 });
+        break;
+      case 'Gaia':
+        this.fx.ring(tgt.rig.group.position, 0xb0865a, { maxR: 1.1, life: 0.3 });
+        await wait(160);
+        break;
+      case 'Frost':
+        await this.fx.projectile(from, to, 0x9adff2, { size: 0.15, dur: 0.3, arc: 0.4 });
+        break;
+      case 'Aether':
+        await this.fx.projectile(from, to, 0xff9ad2, { size: 0.22, dur: 0.35, arc: 0.6 });
         break;
     }
   }
@@ -1001,6 +1039,22 @@ export class Battle {
       case 'Umbra':
         await Promise.all(targets.map(tgt => this.fx.implode(this.chest(tgt), 0x9a5af2, { count: 24, radius: 1.6, life: 0.45 })));
         break;
+      case 'Lumen':
+        await Promise.all(targets.map(tgt => this.fx.implode(this.chest(tgt), 0xfffcd8, { count: 20, radius: 1.5, life: 0.4 })));
+        break;
+      case 'Gaia':
+        await wait(110);
+        break;
+      case 'Frost': {
+        const from = this.chest(att);
+        await Promise.all(targets.map(tgt => this.fx.projectile(from, this.chest(tgt), 0x9adff2, { size: 0.15, dur: 0.35, arc: 0.4 })));
+        break;
+      }
+      case 'Aether': {
+        const from = this.chest(att);
+        await Promise.all(targets.map((tgt, i) => wait(i * 100).then(() => this.fx.projectile(from, this.chest(tgt), 0xff9ad2, { size: 0.2, dur: 0.38, arc: 0.5 }))));
+        break;
+      }
       case 'Volt':
       case 'Verdant':
         await wait(110); // per-target impacts carry the show
@@ -1009,7 +1063,8 @@ export class Battle {
   }
 
   private async hitReact(def: Unit, dmg: number, eff: number, crit: boolean, from?: THREE.Vector3): Promise<void> {
-    const pct = dmg / def.g.stats.hp;
+    const maxHp = Math.max(1, def.g.stats.hp);
+    const pct = isFinite(dmg) && !isNaN(dmg) ? Math.min(2.0, dmg / maxHp) : 0;
     const color = crit ? '#ff2a2a' : eff > 1 ? '#ff6a5a' : eff < 1 ? '#8b93b8' : '#ffffff';
     const scale = crit ? 2.0 : pct > 0.25 ? 1.6 : pct > 0.15 ? 1.25 : 1;
     const pos = def.rig.group.position.clone(); pos.y += 1.8;
@@ -1279,38 +1334,81 @@ export class Battle {
     }
 
     if (tech.effect === 'heal' || tech.effect === 'flat_heal' || tech.effect === 'percent_heal') {
-      const tgt = target ?? att;
+      const targets = tech.target === 'all'
+        ? this.alive(att.side)
+        : [target ?? att];
       await this.castWindup(att, color);
-      let amount = 0;
-      if (tech.effect === 'percent_heal') {
-        amount = Math.floor(tgt.g.stats.hp * (tech.power / 100));
-      } else if (tech.effect === 'flat_heal') {
-        amount = tech.power;
-      } else {
-        amount = Math.floor(tech.power + att.g.stats.wis * 0.6);
-      }
+
+      let surged = false;
       if (getSpeciesPassive(att.g.species).name === 'Torrential Surge') {
-        amount = Math.floor(amount * 1.30);
+        surged = true;
         this.log(`💧 <b>${att.g.nickname}</b>'s Torrential Surge boosted healing by 30%!`);
       }
-      const isTargetCursed = tgt.statuses && tgt.statuses.some(st => st.effect === 'curse');
-      if (isTargetCursed) {
-        amount = 0;
-        this.log(`🔮 <b>${tgt.g.nickname}</b> is Cursed and cannot heal!`);
+
+      let hasCursed = false;
+      let hasHealed = false;
+
+      for (const tgt of targets) {
+        let amount = 0;
+        if (tech.effect === 'percent_heal') {
+          amount = Math.floor(tgt.g.stats.hp * (tech.power / 100));
+        } else if (tech.effect === 'flat_heal') {
+          amount = tech.power;
+        } else {
+          amount = Math.floor(tech.power + att.g.stats.wis * 0.6);
+        }
+        if (surged) {
+          amount = Math.floor(amount * 1.30);
+        }
+
+        const isTargetCursed = tgt.statuses && tgt.statuses.some(st => st.effect === 'curse');
+        if (isTargetCursed) {
+          amount = 0;
+          this.log(`🔮 <b>${tgt.g.nickname}</b> is Cursed and cannot heal!`);
+          hasCursed = true;
+        } else {
+          hasHealed = true;
+        }
+
+        tgt.g.hp = Math.min(tgt.g.stats.hp, tgt.g.hp + amount);
+
+        if (tech.id === 'genesis_bloom') {
+          const hadDebuffs = tgt.statuses && tgt.statuses.some(s => s.type === 'debuff');
+          const hadNegStages = tgt.stages.atk < 0 || tgt.stages.def < 0 || tgt.stages.spd < 0;
+          if (hadDebuffs || hadNegStages) {
+            tgt.statuses = tgt.statuses.filter(s => s.type !== 'debuff');
+            if (tgt.stages.atk < 0) tgt.stages.atk = 0;
+            if (tgt.stages.def < 0) tgt.stages.def = 0;
+            if (tgt.stages.spd < 0) tgt.stages.spd = 0;
+            this.updateUnitMods(tgt);
+            this.log(`✨ <b>${tgt.g.nickname}</b>'s debuffs were cured!`);
+          }
+        }
+
+        if (isTargetCursed) {
+          makeFloatingDamageText(this.scene, tgt.rig.group.position.clone().setY(2.2), 'Heal Blocked!', '#df45ff');
+          this.fx.glow(this.chest(tgt), 0x9900ee, { scale: 1.2, life: 0.4 });
+        } else {
+          this.fx.spiral(tgt.rig.group.position.clone(), 0x5ad88a, { up: true, dur: 0.9 });
+          this.fx.glow(this.chest(tgt), 0x8af2b0, { scale: 1.6, life: 0.5 });
+          this.fx.burst(this.chest(tgt).setY(2.3), 0x8af2b0, { count: 16, speed: 1.1, gravity: -2, life: 0.9, size: 0.11 });
+          makeFloatingDamageText(this.scene, tgt.rig.group.position.clone().setY(2), `+${amount}`, '#5ad88a', 1.15);
+        }
       }
-      tgt.g.hp = Math.min(tgt.g.stats.hp, tgt.g.hp + amount);
-      sfx(isTargetCursed ? 'debuff' : 'heal');
-      if (isTargetCursed) {
-        makeFloatingDamageText(this.scene, tgt.rig.group.position.clone().setY(2.2), 'Heal Blocked!', '#df45ff');
-        this.fx.glow(this.chest(tgt), 0x9900ee, { scale: 1.2, life: 0.4 });
-      } else {
-        this.fx.spiral(tgt.rig.group.position.clone(), 0x5ad88a, { up: true, dur: 0.9 });
-        this.fx.glow(this.chest(tgt), 0x8af2b0, { scale: 1.6, life: 0.5 });
-        this.fx.burst(this.chest(tgt).setY(2.3), 0x8af2b0, { count: 16, speed: 1.1, gravity: -2, life: 0.9, size: 0.11 });
-        makeFloatingDamageText(this.scene, tgt.rig.group.position.clone().setY(2), `+${amount}`, '#5ad88a', 1.15);
-      }
+
+      sfx(hasHealed ? 'heal' : hasCursed ? 'debuff' : 'heal');
+
       if (att.side === 'player') this.stat(att.g.id).assists += 1;
-      this.pushLog('💚', `<b>${who}</b> used ${tech.name} — restored ${amount} HP to ${tgt.g.nickname}.`);
+
+      if (tech.target === 'all') {
+        this.pushLog('💚', `<b>${who}</b> used ${tech.name} — restored HP to all allies.`);
+      } else {
+        const singleAmt = tech.effect === 'percent_heal' ? Math.floor(targets[0].g.stats.hp * (tech.power / 100)) : tech.effect === 'flat_heal' ? tech.power : Math.floor(tech.power + att.g.stats.wis * 0.6);
+        const finalSingleAmt = surged ? Math.floor(singleAmt * 1.3) : singleAmt;
+        const isCursed = targets[0].statuses && targets[0].statuses.some(st => st.effect === 'curse');
+        this.pushLog('💚', `<b>${who}</b> used ${tech.name} — restored ${isCursed ? 0 : finalSingleAmt} HP to ${targets[0].g.nickname}.`);
+      }
+
       this.renderCards();
       await wait(500);
       return;
@@ -1524,8 +1622,9 @@ export class Battle {
     if (!tech.statusEffect) return;
     const chance = tech.statusChance ?? 1.0;
     if (Math.random() < chance) {
+      const isBeneficial = tech.effect === 'heal' || tech.effect === 'flat_heal' || tech.effect === 'percent_heal' || tech.statusEffect.type === 'buff';
       const targetsToApply = tech.target === 'all'
-        ? this.alive(att.side === 'player' ? 'enemy' : 'player')
+        ? this.alive(isBeneficial ? att.side : (att.side === 'player' ? 'enemy' : 'player'))
         : tech.target === 'self' || tech.target === 'ally'
           ? [targets[0] ?? att]
           : targets;

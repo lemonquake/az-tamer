@@ -218,7 +218,7 @@ const SURNAMES = ['Marrow', 'Ashby', 'Vance', 'Holt', 'Quill', 'Drey', 'Stark', 
 interface Opponent { name: string; guildId: string; color: string; team: Mon[]; quote: string; }
 function randomGuildOpponent(power: PowerTier, size: number): Opponent {
   const guild = rnd(WORLD_GUILDS);
-  const types = GUILD_TYPES[guild.id] ?? ['Blaze', 'Tide', 'Verdant', 'Volt', 'Gale', 'Umbra'];
+  const types = GUILD_TYPES[guild.id] ?? ['Blaze', 'Tide', 'Verdant', 'Volt', 'Gale', 'Umbra', 'Lumen', 'Gaia', 'Frost', 'Aether'];
   const name = `${rnd(FIRST_NAMES)} ${rnd(SURNAMES)}`;
   const lines = [
     `For the honor of ${guild.name}!`,

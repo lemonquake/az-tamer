@@ -105,6 +105,9 @@ export class VFX {
 
   /** Shake the camera. amp ≈ world units; keeps the stronger of current vs incoming. */
   shake(amp: number, dur = 0.4): void {
+    if (!isFinite(amp) || isNaN(amp)) amp = 0;
+    if (!isFinite(dur) || isNaN(dur) || dur <= 0) dur = 0.4;
+    dur = Math.min(5, dur);
     const current = this.shakeDur > 0 ? this.shakeAmp * Math.pow(1 - Math.min(1, this.shakeT / this.shakeDur), 2) : 0;
     if (amp < current) return;
     this.shakeAmp = amp;

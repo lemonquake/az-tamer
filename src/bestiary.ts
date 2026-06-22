@@ -10337,141 +10337,895 @@ export const BESPOKE: Record<string, BespokeBuilder> = {
 };
 
 // ---------------- procedural bespoke helpers for fusions & extra-evolutions ----------------
-function buildProceduralArchetype(arch: string, p: { primary: number; secondary: number; accent: number }, glow: number): THREE.Group {
+function buildProceduralArchetype(arch: string, p: { primary: number; secondary: number; accent: number }, glow: number, seed = 0): THREE.Group {
+  if (EXOTIC_ARCHES.has(arch)) return buildExoticArchetype(arch, p, glow, seed);
   const g = new THREE.Group();
+  const rnd = rng(seed);
   const prim = std({ color: p.primary });
   const sec = std({ color: p.secondary });
   const acc = std({ color: p.accent, emissive: glow, emissiveIntensity: 0.55, roughness: 0.3 });
 
   const makeLocalEye = () => {
-    return new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 8), std({ color: 0x101018, roughness: 0.2 }));
+    return new THREE.Mesh(new THREE.SphereGeometry(0.07 * (0.85 + rnd() * 0.3), 8, 8), std({ color: 0x101018, roughness: 0.2 }));
   };
 
+  const rndScale = (sx = 0.2, sy = 0.2, sz = 0.2) => new THREE.Vector3(
+    1 + (rnd() - 0.5) * sx,
+    1 + (rnd() - 0.5) * sy,
+    1 + (rnd() - 0.5) * sz
+  );
+
   if (arch === 'beast') {
+    const sBody = rndScale(0.35, 0.3, 0.3);
     const body = new THREE.Mesh(new THREE.SphereGeometry(0.42, 16, 12), prim);
-    body.scale.set(1.25, 0.95, 0.9); body.position.y = 0.55; g.add(body);
-    const head = new THREE.Group(); head.position.set(0.45, 0.85, 0);
-    const skull = new THREE.Mesh(new THREE.SphereGeometry(0.3, 14, 10), sec); head.add(skull);
-    const snout = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.3, 8), prim);
-    snout.rotation.z = -Math.PI / 2; snout.position.set(0.3, -0.05, 0); head.add(snout);
-    const e1 = makeLocalEye(), e2 = makeLocalEye(); e1.position.set(0.2, 0.1, 0.16); e2.position.set(0.2, 0.1, -0.16); head.add(e1, e2);
-    const ear1 = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.26, 6), acc);
-    const ear2 = ear1.clone(); ear1.position.set(-0.05, 0.3, 0.14); ear2.position.set(-0.05, 0.3, -0.14); head.add(ear1, ear2);
-    head.name = 'head'; g.add(head);
-    for (const [x, z] of [[0.28, 0.22], [0.28, -0.22], [-0.28, 0.22], [-0.28, -0.22]]) {
-      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 0.4, 8), sec);
-      leg.position.set(x, 0.2, z); g.add(leg);
+    body.scale.set(1.25 * sBody.x, 0.95 * sBody.y, 0.9 * sBody.z); body.position.y = 0.55; g.add(body);
+    
+    const head = new THREE.Group(); head.position.set(0.45 + (rnd() - 0.5) * 0.1, 0.85 + (rnd() - 0.5) * 0.1, 0);
+    const sSkull = rndScale(0.25, 0.25, 0.25);
+    const skull = new THREE.Mesh(new THREE.SphereGeometry(0.3, 14, 10), sec); skull.scale.copy(sSkull); head.add(skull);
+    
+    const snoutL = 0.2 + rnd() * 0.25;
+    const snoutR = 0.1 + rnd() * 0.08;
+    const snout = new THREE.Mesh(new THREE.ConeGeometry(snoutR, snoutL, 8), prim);
+    snout.rotation.z = -Math.PI / 2; snout.position.set(0.18 + snoutL / 2, -0.05, 0); head.add(snout);
+    
+    const e1 = makeLocalEye(), e2 = makeLocalEye(); 
+    e1.position.set(0.2, 0.1, 0.16); e2.position.set(0.2, 0.1, -0.16); head.add(e1, e2);
+    
+    const earType = rnd() < 0.4 ? 'cone' : rnd() < 0.7 ? 'box' : 'sphere';
+    const earW = 0.06 + rnd() * 0.06, earH = 0.18 + rnd() * 0.25;
+    let ear1: THREE.Mesh, ear2: THREE.Mesh;
+    if (earType === 'cone') {
+      ear1 = new THREE.Mesh(new THREE.ConeGeometry(earW, earH, 6), acc);
+    } else if (earType === 'box') {
+      ear1 = new THREE.Mesh(new THREE.BoxGeometry(earW, earH, earW), acc);
+    } else {
+      ear1 = new THREE.Mesh(new THREE.SphereGeometry(earW, 8, 8), acc);
+      ear1.scale.set(0.5, 2, 1);
     }
-    const tail = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.5, 8), acc);
-    tail.position.set(-0.6, 0.7, 0); tail.rotation.z = Math.PI / 3.4; tail.name = 'tail'; g.add(tail);
+    ear2 = ear1.clone(); 
+    ear1.position.set(-0.05, 0.25, 0.14); ear2.position.set(-0.05, 0.25, -0.14);
+    ear1.rotation.set((rnd() - 0.5) * 0.2, 0, (rnd() - 0.5) * 0.3);
+    ear2.rotation.set((rnd() - 0.5) * 0.2, 0, -(rnd() - 0.5) * 0.3);
+    head.add(ear1, ear2);
+
+    if (rnd() < 0.5) {
+      const hornType = rnd() < 0.5 ? 'single' : 'dual';
+      if (hornType === 'single') {
+        const horn = new THREE.Mesh(new THREE.ConeGeometry(0.04 + rnd() * 0.05, 0.2 + rnd() * 0.2, 5), acc);
+        horn.position.set(0.12, 0.25, 0);
+        horn.rotation.z = -0.2 - rnd() * 0.3;
+        head.add(horn);
+      } else {
+        const horn1 = new THREE.Mesh(new THREE.ConeGeometry(0.03 + rnd() * 0.04, 0.15 + rnd() * 0.2, 5), acc);
+        const horn2 = horn1.clone();
+        horn1.position.set(0.1, 0.22, 0.08); horn2.position.set(0.1, 0.22, -0.08);
+        horn1.rotation.set(-0.2 - rnd() * 0.2, 0, -0.1 - rnd() * 0.2);
+        horn2.rotation.set(0.2 + rnd() * 0.2, 0, -0.1 - rnd() * 0.2);
+        head.add(horn1, horn2);
+      }
+    }
+
+    head.name = 'head'; g.add(head);
+
+    const legH = 0.25 + rnd() * 0.35;
+    const legR = 0.06 + rnd() * 0.06;
+    for (const [x, z] of [[0.28, 0.22], [0.28, -0.22], [-0.28, 0.22], [-0.28, -0.22]]) {
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(legR * 0.8, legR, legH, 8), sec);
+      leg.position.set(x, legH / 2, z); g.add(leg);
+    }
+    
+    const tailL = 0.3 + rnd() * 0.45;
+    const tailW = 0.06 + rnd() * 0.06;
+    const tail = new THREE.Mesh(new THREE.ConeGeometry(tailW, tailL, 8), acc);
+    tail.position.set(-0.6, 0.7, 0); tail.rotation.z = Math.PI / 3.4 + (rnd() - 0.5) * 0.4; tail.name = 'tail'; g.add(tail);
   } else if (arch === 'serpent') {
-    let y = 0.25, x = 0, r = 0.34;
-    for (let i = 0; i < 5; i++) {
+    let y = 0.25, x = 0, r = 0.34 * (0.8 + rnd() * 0.4);
+    const segCount = 4 + (rnd() * 4 | 0);
+    for (let i = 0; i < segCount; i++) {
       const seg = new THREE.Mesh(new THREE.SphereGeometry(r, 14, 10), i % 2 ? sec : prim);
-      seg.position.set(x, y, 0); g.add(seg);
+      const offsetZ = i > 0 ? (rnd() - 0.5) * 0.15 : 0;
+      seg.position.set(x, y, offsetZ); g.add(seg);
       if (i === 0) seg.name = 'tail';
-      y += r * 1.15; x -= 0.1; r *= 0.88;
+      y += r * 1.15; x -= 0.1 + (rnd() - 0.5) * 0.08; r *= 0.82 + rnd() * 0.1;
     }
     const head = new THREE.Group(); head.position.set(x + 0.12, y + 0.05, 0);
     const skull = new THREE.Mesh(new THREE.SphereGeometry(0.26, 14, 10), prim);
-    skull.scale.set(1.3, 0.9, 1); head.add(skull);
+    skull.scale.set(1.3 * (0.85 + rnd() * 0.3), 0.9 * (0.85 + rnd() * 0.3), 1); head.add(skull);
+    
     const e1 = makeLocalEye(), e2 = makeLocalEye();
     e1.position.set(0.18, 0.06, 0.14); e2.position.set(0.18, 0.06, -0.14); head.add(e1, e2);
-    const crest = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.35, 6), acc);
-    crest.position.set(-0.1, 0.25, 0); crest.rotation.z = Math.PI / 7; head.add(crest);
+    
+    if (rnd() < 0.6) {
+      const crest = new THREE.Mesh(new THREE.ConeGeometry(0.06 + rnd() * 0.06, 0.25 + rnd() * 0.25, 6), acc);
+      crest.position.set(-0.1, 0.25, 0); crest.rotation.z = Math.PI / 7 + (rnd() - 0.5) * 0.3; head.add(crest);
+    }
     head.name = 'head'; g.add(head);
-    for (let i = 0; i < 3; i++) {
-      const fin = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.3, 5), acc);
-      fin.position.set(-0.35, 0.4 + i * 0.35, 0); fin.rotation.z = Math.PI / 2.4; g.add(fin);
+    
+    const finCount = 2 + (rnd() * 3 | 0);
+    for (let i = 0; i < finCount; i++) {
+      const fin = new THREE.Mesh(new THREE.ConeGeometry(0.05 + rnd() * 0.04, 0.2 + rnd() * 0.2, 5), acc);
+      fin.position.set(-0.35 + (rnd() - 0.5) * 0.1, 0.4 + i * 0.35, 0); fin.rotation.z = Math.PI / 2.4 + (rnd() - 0.5) * 0.3; g.add(fin);
     }
   } else if (arch === 'avian') {
+    const sBody = rndScale(0.25, 0.25, 0.25);
     const body = new THREE.Mesh(new THREE.SphereGeometry(0.38, 16, 12), prim);
-    body.scale.set(1, 1.15, 0.85); body.position.y = 0.75; g.add(body);
-    const head = new THREE.Group(); head.position.set(0.18, 1.25, 0);
+    body.scale.set(1 * sBody.x, 1.15 * sBody.y, 0.85 * sBody.z); body.position.y = 0.75; g.add(body);
+    
+    const head = new THREE.Group(); head.position.set(0.18 + (rnd() - 0.5) * 0.08, 1.25 + (rnd() - 0.5) * 0.1, 0);
     const skull = new THREE.Mesh(new THREE.SphereGeometry(0.24, 14, 10), sec); head.add(skull);
-    const beak = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.28, 6), acc);
-    beak.rotation.z = -Math.PI / 2; beak.position.set(0.26, -0.02, 0); head.add(beak);
+    
+    const beakL = 0.2 + rnd() * 0.16;
+    const beakW = 0.06 + rnd() * 0.06;
+    const beak = new THREE.Mesh(new THREE.ConeGeometry(beakW, beakL, 6), acc);
+    beak.rotation.z = -Math.PI / 2; beak.position.set(0.18 + beakL / 2, -0.02, 0); head.add(beak);
+    
     const e1 = makeLocalEye(), e2 = makeLocalEye(); e1.position.set(0.14, 0.08, 0.14); e2.position.set(0.14, 0.08, -0.14); head.add(e1, e2);
+    
+    if (rnd() < 0.6) {
+      const fc = 1 + (rnd() * 3 | 0);
+      for (let j = 0; j < fc; j++) {
+        const crest = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.15 + rnd() * 0.15, 4), acc);
+        crest.position.set(-0.1 + j * 0.05, 0.22, 0);
+        crest.rotation.z = -0.5 - j * 0.3 + (rnd() - 0.5) * 0.2;
+        head.add(crest);
+      }
+    }
     head.name = 'head'; g.add(head);
+    
+    const wScale = rndScale(0.3, 0.3, 0.3);
     const mkWing = (side: 1 | -1) => {
       const w = new THREE.Group();
       const feather = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.06, 0.26), sec);
-      feather.position.set(0, 0, side * 0.3);
+      feather.position.set(0, 0, side * 0.3); feather.scale.copy(wScale);
       const tip = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.3, 5), acc);
-      tip.rotation.x = side * Math.PI / 2; tip.position.set(0, 0, side * 0.6);
+      tip.rotation.x = side * Math.PI / 2; tip.position.set(0, 0, side * 0.6 * wScale.z);
       w.add(feather, tip);
       w.position.set(-0.05, 0.85, side * 0.3); w.name = `wing${side}`;
       return w;
     };
     g.add(mkWing(1), mkWing(-1));
+    
+    const legH = 0.35 + rnd() * 0.2;
     for (const z of [0.12, -0.12]) {
-      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 0.45, 6), acc);
-      leg.position.set(0, 0.25, z); g.add(leg);
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.03 + rnd() * 0.03, 0.04 + rnd() * 0.03, legH, 6), acc);
+      leg.position.set(0, legH / 2, z); g.add(leg);
     }
-    const tail = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.45, 6), prim);
-    tail.position.set(-0.45, 0.7, 0); tail.rotation.z = Math.PI / 2.6; tail.name = 'tail'; g.add(tail);
+    
+    const tail = new THREE.Mesh(new THREE.ConeGeometry(0.12 * (0.8 + rnd() * 0.4), 0.45 * (0.8 + rnd() * 0.4), 6), prim);
+    tail.position.set(-0.45, 0.7, 0); tail.rotation.z = Math.PI / 2.6 + (rnd() - 0.5) * 0.3; tail.name = 'tail'; g.add(tail);
   } else if (arch === 'brute') {
+    const sBody = rndScale(0.25, 0.25, 0.25);
     const torso = new THREE.Mesh(new THREE.SphereGeometry(0.5, 16, 12), prim);
-    torso.scale.set(1, 1.2, 0.85); torso.position.y = 0.85; g.add(torso);
-    const head = new THREE.Group(); head.position.set(0.1, 1.5, 0);
-    const skull = new THREE.Mesh(new THREE.SphereGeometry(0.26, 14, 10), sec); head.add(skull);
+    torso.scale.set(1 * sBody.x, 1.2 * sBody.y, 0.85 * sBody.z); torso.position.y = 0.85; g.add(torso);
+    
+    const head = new THREE.Group(); head.position.set(0.1, 1.5 + (rnd() - 0.5) * 0.1, 0);
+    const sSkull = rndScale(0.2, 0.2, 0.2);
+    const skull = new THREE.Mesh(new THREE.SphereGeometry(0.26, 14, 10), sec); skull.scale.copy(sSkull); head.add(skull);
+    
     const e1 = makeLocalEye(), e2 = makeLocalEye();
     e1.position.set(0.18, 0.04, 0.12); e2.position.set(0.18, 0.04, -0.12); head.add(e1, e2);
-    const horn1 = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.3, 6), acc);
-    const horn2 = horn1.clone();
-    horn1.position.set(-0.02, 0.26, 0.12); horn2.position.set(-0.02, 0.26, -0.12); head.add(horn1, horn2);
+    
+    if (rnd() < 0.75) {
+      const hornType = rnd() < 0.33 ? 'single' : rnd() < 0.66 ? 'dual' : 'quad';
+      const hornH = 0.2 + rnd() * 0.25;
+      if (hornType === 'single') {
+        const horn = new THREE.Mesh(new THREE.ConeGeometry(0.06, hornH, 6), acc);
+        horn.position.set(0.12, 0.26, 0); horn.rotation.z = -0.3; head.add(horn);
+      } else if (hornType === 'dual') {
+        const horn1 = new THREE.Mesh(new THREE.ConeGeometry(0.07, hornH, 6), acc);
+        const horn2 = horn1.clone();
+        horn1.position.set(-0.02, 0.26, 0.12); horn2.position.set(-0.02, 0.26, -0.12); head.add(horn1, horn2);
+      } else {
+        for (let j = 0; j < 2; j++) {
+          const hz = 0.08 + j * 0.1;
+          const h1 = new THREE.Mesh(new THREE.ConeGeometry(0.04, hornH * 0.7, 5), acc);
+          const h2 = h1.clone();
+          h1.position.set(-0.05, 0.22, hz); h2.position.set(-0.05, 0.22, -hz);
+          h1.rotation.set(-0.4, 0, -0.2); h2.rotation.set(0.4, 0, -0.2);
+          head.add(h1, h2);
+        }
+      }
+    }
     head.name = 'head'; g.add(head);
+    
+    const sShoulder = 0.14 + rnd() * 0.08;
+    const armL = 0.45 + rnd() * 0.3;
+    const armR = 0.09 + rnd() * 0.06;
     for (const side of [1, -1]) {
-      const shoulder = new THREE.Mesh(new THREE.SphereGeometry(0.18, 10, 8), acc);
+      const shoulder = new THREE.Mesh(new THREE.SphereGeometry(sShoulder, 10, 8), acc);
       shoulder.position.set(0, 1.25, side * 0.5); g.add(shoulder);
-      const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.14, 0.6, 8), sec);
-      arm.position.set(0.05, 0.9, side * 0.58); arm.rotation.x = side * 0.18; g.add(arm);
-      const fist = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 8), prim);
-      fist.position.set(0.08, 0.55, side * 0.62); g.add(fist);
-      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.16, 0.5, 8), sec);
-      leg.position.set(0, 0.25, side * 0.22); g.add(leg);
+      
+      const arm = new THREE.Mesh(new THREE.CylinderGeometry(armR * 0.8, armR, armL, 8), sec);
+      arm.position.set(0.05, 1.25 - armL/2, side * (0.5 + sShoulder/2)); arm.rotation.x = side * 0.18; g.add(arm);
+      
+      const fist = new THREE.Mesh(new THREE.SphereGeometry(armR * 1.3, 10, 8), prim);
+      fist.position.set(0.08, 1.25 - armL - 0.05, side * (0.5 + sShoulder/2 + 0.05)); g.add(fist);
+      
+      const legH = 0.4 + rnd() * 0.25;
+      const legR = 0.1 + rnd() * 0.08;
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(legR * 0.8, legR, legH, 8), sec);
+      leg.position.set(0, legH / 2, side * 0.22); g.add(leg);
     }
   } else if (arch === 'sprite') {
+    const sBody = rndScale(0.25, 0.25, 0.25);
     const body = new THREE.Mesh(new THREE.SphereGeometry(0.36, 16, 12), prim);
-    body.position.y = 0.55; body.name = 'head'; g.add(body);
+    body.scale.copy(sBody); body.position.y = 0.55; body.name = 'head'; g.add(body);
+    
     const e1 = makeLocalEye(), e2 = makeLocalEye();
-    e1.scale.setScalar(1.4); e2.scale.setScalar(1.4);
-    e1.position.set(0.26, 0.62, 0.13); e2.position.set(0.26, 0.62, -0.13); g.add(e1, e2);
+    e1.scale.setScalar(1.4 * (0.8 + rnd() * 0.4)); e2.scale.setScalar(1.4 * (0.8 + rnd() * 0.4));
+    e1.position.set(0.26 * sBody.x, 0.62 * sBody.y, 0.13 * sBody.z); e2.position.set(0.26 * sBody.x, 0.62 * sBody.y, -0.13 * sBody.z); g.add(e1, e2);
+    
     const p1 = makeLocalEye(), p2 = makeLocalEye();
     p1.scale.setScalar(0.7); p2.scale.setScalar(0.7);
-    p1.position.set(0.32, 0.62, 0.13); p2.position.set(0.32, 0.62, -0.13); g.add(p1, p2);
-    const halo = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.035, 8, 24), acc);
-    halo.rotation.x = Math.PI / 2; halo.position.y = 0.55; halo.name = 'tail'; g.add(halo);
-    for (let i = 0; i < 3; i++) {
-      const orbMesh = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 8), acc);
-      const a = (i / 3) * Math.PI * 2;
-      orbMesh.position.set(Math.cos(a) * 0.42, 0.55, Math.sin(a) * 0.42); g.add(orbMesh);
+    p1.position.set(0.32 * sBody.x, 0.62 * sBody.y, 0.13 * sBody.z); p2.position.set(0.32 * sBody.x, 0.62 * sBody.y, -0.13 * sBody.z); g.add(p1, p2);
+    
+    const haloType = rnd() < 0.5 ? 'torus' : 'cylinder';
+    if (haloType === 'torus') {
+      const halo = new THREE.Mesh(new THREE.TorusGeometry(0.42 * (0.8 + rnd() * 0.4), 0.035 * (0.7 + rnd() * 0.6), 8, 24), acc);
+      halo.rotation.x = Math.PI / 2; halo.position.y = 0.55; halo.name = 'tail'; g.add(halo);
+    } else {
+      const halo = new THREE.Mesh(new THREE.CylinderGeometry(0.42 * (0.8 + rnd() * 0.4), 0.42 * (0.8 + rnd() * 0.4), 0.05, 6, 1, true), acc);
+      halo.rotation.x = Math.PI / 2; halo.position.y = 0.55; halo.name = 'tail'; g.add(halo);
     }
-    const tuft = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.25, 6), sec);
-    tuft.position.set(0, 0.92, 0); g.add(tuft);
-  } else { // shell
+    
+    const orbCount = 2 + (rnd() * 4 | 0);
+    const orbDist = 0.38 + rnd() * 0.2;
+    for (let i = 0; i < orbCount; i++) {
+      const orbSize = 0.05 + rnd() * 0.05;
+      const orbMesh = new THREE.Mesh(new THREE.SphereGeometry(orbSize, 8, 8), acc);
+      const a = (i / orbCount) * Math.PI * 2;
+      orbMesh.position.set(Math.cos(a) * orbDist, 0.55 + (rnd() - 0.5) * 0.15, Math.sin(a) * orbDist); g.add(orbMesh);
+    }
+    
+    if (rnd() < 0.6) {
+      const tuft = new THREE.Mesh(new THREE.ConeGeometry(0.06 + rnd() * 0.06, 0.2 + rnd() * 0.2, 6), sec);
+      tuft.position.set(0, 0.92, 0); tuft.rotation.z = (rnd() - 0.5) * 0.4; g.add(tuft);
+    }
+  } else {
+    const sDome = rndScale(0.25, 0.2, 0.25);
     const dome = new THREE.Mesh(new THREE.SphereGeometry(0.45, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2), sec);
-    dome.position.y = 0.35; g.add(dome);
-    const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.5, 0.12, 16), prim);
+    dome.scale.copy(sDome); dome.position.y = 0.35; g.add(dome);
+    
+    const rimW = 0.46 * sDome.x, rimH = 0.12 * (0.7 + rnd() * 0.6);
+    const rim = new THREE.Mesh(new THREE.CylinderGeometry(rimW, rimW * 1.05, rimH, 16), prim);
     rim.position.y = 0.32; g.add(rim);
-    const head = new THREE.Group(); head.position.set(0.42, 0.42, 0);
-    const skull = new THREE.Mesh(new THREE.SphereGeometry(0.18, 12, 10), prim); head.add(skull);
+    
+    const head = new THREE.Group(); head.position.set(0.42 * sDome.x, 0.42 * sDome.y, 0);
+    const skull = new THREE.Mesh(new THREE.SphereGeometry(0.18 * (0.8 + rnd() * 0.4), 12, 10), prim); head.add(skull);
+    
     const e1 = makeLocalEye(), e2 = makeLocalEye();
     e1.position.set(0.12, 0.05, 0.09); e2.position.set(0.12, 0.05, -0.09); head.add(e1, e2);
     head.name = 'head'; g.add(head);
-    for (let i = 0; i < 5; i++) {
-      const spikeMesh = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.2, 5), acc);
-      const a = (i / 5) * Math.PI * 2;
-      spikeMesh.position.set(Math.cos(a) * 0.3, 0.62, Math.sin(a) * 0.3);
+    
+    const spikeCount = 3 + (rnd() * 5 | 0);
+    const spikeH = 0.15 + rnd() * 0.15;
+    for (let i = 0; i < spikeCount; i++) {
+      const spikeMesh = new THREE.Mesh(new THREE.ConeGeometry(0.04 + rnd() * 0.03, spikeH, 5), acc);
+      const a = (i / spikeCount) * Math.PI * 2;
+      spikeMesh.position.set(Math.cos(a) * 0.3 * sDome.x, 0.62 * sDome.y, Math.sin(a) * 0.3 * sDome.z);
       spikeMesh.rotation.set(Math.sin(a) * 0.5, 0, -Math.cos(a) * 0.5);
       g.add(spikeMesh);
     }
-    for (const [x, z] of [[0.25, 0.3], [0.25, -0.3], [-0.25, 0.3], [-0.25, -0.3]]) {
-      const foot = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 6), prim);
-      foot.position.set(x, 0.1, z); g.add(foot);
+    
+    const feetType = rnd() < 0.5 ? 'sphere' : 'cylinder';
+    const feetR = 0.08 + rnd() * 0.05;
+    for (const [x, z] of [[0.25 * sDome.x, 0.3 * sDome.z], [0.25 * sDome.x, -0.3 * sDome.z], [-0.25 * sDome.x, 0.3 * sDome.z], [-0.25 * sDome.x, -0.3 * sDome.z]]) {
+      let foot: THREE.Mesh;
+      if (feetType === 'sphere') {
+        foot = new THREE.Mesh(new THREE.SphereGeometry(feetR, 8, 6), prim);
+      } else {
+        foot = new THREE.Mesh(new THREE.CylinderGeometry(feetR, feetR, 0.15, 8), prim);
+      }
+      foot.position.set(x, feetR / 2, z); g.add(foot);
     }
   }
   g.traverse(o => { if ((o as THREE.Mesh).isMesh) o.castShadow = true; });
+  return g;
+}
+
+// ============================================================
+// DESIGN ARCHETYPES — 36 distinct body plans for the Forge.
+// ------------------------------------------------------------
+// The old forge had SIX generic blob skeletons; every forged
+// species was one of them re-skinned, so a Light beast and a
+// Space beast shared a silhouette. These are real, recognisable
+// creature builds — saurians, drakes, hydras, golems, jellies,
+// crystal beasts, cosmic cores — each faces +X and names
+// head / tail / wing1 / wing-1 so the Forge can re-skin them,
+// socket element regalia along the spine, and drive the idle rig.
+// Bodies stay element-NEUTRAL (only prim/sec/acc + neutral eyes)
+// so any design can carry any element's texture set + regalia.
+// ============================================================
+const EXOTIC_ARCHES = new Set<string>([
+  'imp', 'saurian', 'raptor', 'ram', 'sabertooth', 'drake', 'wyrm', 'phoenix', 'roc', 'scorpion',
+  'colossus', 'crab', 'turtle', 'eel', 'cephalopod', 'jelly', 'anglerfish', 'leviathan', 'hydra',
+  'faewing', 'beetle', 'mantis', 'stag', 'treant', 'kitsune', 'dragonette', 'orbiter', 'manta',
+  'moth', 'wisp', 'arachnid', 'golem', 'crystalbeast', 'mammoth', 'seraph', 'nebula',
+]);
+
+/** Two glossy eyes added to a parent (mirrored on ±z). Colours avoid the
+ *  palette so the Forge re-skin never repaints them. `lit` self-illuminates. */
+function exoEyes(parent: THREE.Object3D, r: number, x: number, y: number, z: number, opts: { iris?: number; lit?: boolean } = {}): void {
+  const iris = opts.iris ?? 0x10131c;
+  const ballMat = std({ color: opts.lit ? iris : 0x14161f, roughness: 0.16, emissive: opts.lit ? iris : 0x000000, emissiveIntensity: opts.lit ? 1.5 : 0 });
+  const glintMat = std({ color: 0xfdfdfd, emissive: 0xfdfdfd, emissiveIntensity: 1.1, roughness: 0 });
+  for (const s of [1, -1] as const) {
+    parent.add(orb(ballMat, r, x, y, s * z, 1, 1, 1, 10, 8));
+    const gl = orb(glintMat, r * 0.32, x + r * 0.5, y + r * 0.35, s * z + r * 0.18, 1, 1, 1, 6, 5);
+    gl.userData.noShadow = true;
+    parent.add(gl);
+  }
+}
+
+/**
+ * Build one of the 36 distinct design archetypes. Pure body shapes in
+ * prim (hide) / sec (plate, belly, shell) / acc (claws, horns, crest):
+ * the Forge swaps these for textured materials and grows element regalia.
+ */
+function buildExoticArchetype(arch: string, p: { primary: number; secondary: number; accent: number }, glow: number, seed = 0): THREE.Group {
+  const g = new THREE.Group();
+  const rnd = rng(seed);
+  const jit = (base: number, amt: number) => base + (rnd() - 0.5) * amt;
+  const prim = std({ color: p.primary, roughness: 0.6 });
+  const sec = std({ color: p.secondary, roughness: 0.55 });
+  const acc = std({ color: p.accent, emissive: glow, emissiveIntensity: 0.55, roughness: 0.3 });
+  // local geometry shorthands
+  const box = (m: THREE.Material, w: number, h: number, d: number, x = 0, y = 0, z = 0) => { const me = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); me.position.set(x, y, z); return me; };
+  const cone = (m: THREE.Material, r: number, h: number, x = 0, y = 0, z = 0, seg = 7) => { const me = new THREE.Mesh(new THREE.ConeGeometry(r, h, seg), m); me.position.set(x, y, z); return me; };
+  const cyl = (m: THREE.Material, rt: number, rb: number, h: number, x = 0, y = 0, z = 0, seg = 10) => { const me = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg), m); me.position.set(x, y, z); return me; };
+  const torus = (m: THREE.Material, R: number, r: number, x = 0, y = 0, z = 0, seg = 22) => { const me = new THREE.Mesh(new THREE.TorusGeometry(R, r, 8, seg), m); me.position.set(x, y, z); return me; };
+  const octa = (m: THREE.Material, r: number, x = 0, y = 0, z = 0) => { const me = new THREE.Mesh(new THREE.OctahedronGeometry(r), m); me.position.set(x, y, z); return me; };
+  // rotate / reposition a mesh and RETURN it (THREE's add() returns the parent, so never chain off .add()).
+  const rot = (o: THREE.Object3D, x = 0, y = 0, z = 0) => { o.rotation.set(x, y, z); return o; };
+  const at = (o: THREE.Object3D, x = 0, y = 0, z = 0) => { o.position.set(x, y, z); return o; };
+  const headGrp = (x: number, y: number) => { const h = new THREE.Group(); h.position.set(x, y, 0); h.name = 'head'; g.add(h); return h; };
+  const tailGrp = (x: number, y: number) => { const t = new THREE.Group(); t.position.set(x, y, 0); t.name = 'tail'; g.add(t); return t; };
+  // a four-legged stance: legs at front/back × ±z
+  const quadLegs = (hipF: number, hipB: number, hipY: number, hipZ: number, h: number, r: number, mat: THREE.Material, footMat: THREE.Material) => {
+    for (const [lx, lz] of [[hipF, hipZ], [hipF, -hipZ], [hipB, hipZ], [hipB, -hipZ]] as const) {
+      g.add(bone(mat, lx, hipY, lz, lx + (lx > 0 ? 0.04 : -0.04), 0.04, lz * 1.05, r, r * 0.72, 8));
+      g.add(orb(footMat, r * 1.3, lx + (lx > 0 ? 0.06 : -0.06), r * 0.55, lz * 1.05, 1.35, 0.7, 1.1, 8, 6));
+    }
+  };
+
+  switch (arch) {
+    // ---------- BIPEDS / SAURIANS ----------
+    case 'saurian': {
+      const torso = orb(prim, 0.44, 0.05, jit(0.95, 0.1), 0, 1.45, 1.0, 0.92); torso.rotation.z = 0.25; g.add(torso);
+      g.add(orb(sec, 0.34, 0.28, 0.78, 0, 1.0, 0.85, 0.8)); // chest/belly
+      const head = headGrp(0.62, jit(1.28, 0.08));
+      head.add(orb(sec, 0.27, 0, 0, 0, 1.15, 0.95, 0.95));
+      const jaw = cone(prim, 0.17, 0.5, 0.32, -0.04, 0, 7); jaw.rotation.z = -Math.PI / 2; head.add(jaw);
+      head.add(box(acc, 0.5, 0.05, 0.02, 0.3, 0.04, 0)); // tooth ridge
+      exoEyes(head, 0.07, 0.12, 0.12, 0.15, { iris: 0xffcf6a, lit: true });
+      head.add(cone(acc, 0.05, 0.22, -0.06, 0.24, 0)); // brow horn
+      // tiny arms
+      for (const s of [1, -1] as const) g.add(bone(sec, 0.18, 1.0, s * 0.32, 0.34, 0.7, s * 0.34, 0.05, 0.03, 7));
+      quadLegs(0.06, 0.06, 0.62, 0.26, 0.6, 0.13, prim, acc); // both legs forward-ish (bipedal stance handled by tail balance)
+      const tail = tailGrp(-0.32, 0.78);
+      let tx = 0, ty = 0, tr = 0.2;
+      for (let i = 0; i < 5; i++) { tail.add(orb(prim, tr, tx, ty, 0, 1.1, 0.9, 0.9)); tx -= 0.26; ty -= 0.1; tr *= 0.78; }
+      tail.add(cone(acc, 0.06, 0.3, tx - 0.1, ty, 0, 6));
+      break;
+    }
+    case 'raptor': {
+      const torso = orb(prim, 0.36, 0.05, 0.92, 0, 1.5, 0.92, 0.82); torso.rotation.z = 0.18; g.add(torso);
+      g.add(orb(sec, 0.26, 0.26, 0.82, 0, 1.1, 0.8, 0.78));
+      const head = headGrp(0.56, 1.18);
+      head.add(orb(sec, 0.2, 0, 0, 0, 1.2, 0.92, 0.9));
+      head.add(rot(cone(prim, 0.11, 0.4, 0.26, -0.02, 0, 6), 0, 0, -Math.PI / 2));
+      exoEyes(head, 0.055, 0.1, 0.1, 0.12, { iris: 0xffe66a, lit: true });
+      for (let i = 0; i < 3; i++) head.add(rot(cone(acc, 0.03, 0.16, -0.04 - i * 0.05, 0.18, 0, 5), 0, 0, -0.7)); // head quills
+      for (const s of [1, -1] as const) { g.add(bone(sec, 0.18, 1.05, s * 0.26, 0.32, 0.8, s * 0.3, 0.04, 0.02, 6)); g.add(cone(acc, 0.025, 0.12, 0.34, 0.74, s * 0.3, 5)); }
+      quadLegs(0.04, 0.04, 0.66, 0.2, 0.64, 0.1, prim, acc);
+      const tail = tailGrp(-0.3, 0.95); let tx = 0, tr = 0.16;
+      for (let i = 0; i < 6; i++) { tail.add(orb(prim, tr, tx, 0, 0, 1.2, 0.85, 0.85)); tx -= 0.24; tr *= 0.82; } // long stiff horizontal tail
+      break;
+    }
+    case 'imp': {
+      g.add(orb(prim, 0.3, 0, 0.85, 0, 0.95, 1.05, 0.92)); // pot torso
+      g.add(orb(sec, 0.2, 0.12, 0.7, 0, 0.95, 0.8, 0.85));
+      const head = headGrp(0.06, 1.32);
+      head.add(orb(prim, 0.27, 0, 0, 0, 1.0, 0.95, 0.95));
+      const grin = cone(sec, 0.13, 0.22, 0.2, -0.06, 0, 6); grin.rotation.z = -Math.PI / 2; head.add(grin);
+      exoEyes(head, 0.07, 0.14, 0.06, 0.12, { iris: 0xff5c3a, lit: true });
+      for (const s of [1, -1] as const) head.add(spike(acc, -0.02, 0.18, s * 0.1, -0.12, 0.46, s * 0.2, 0.05)); // horns
+      for (const s of [1, -1] as const) { g.add(bone(prim, 0.04, 0.85, s * 0.26, 0.18, 0.55, s * 0.34, 0.045, 0.03, 6)); g.add(orb(acc, 0.05, 0.2, 0.5, s * 0.36)); }
+      quadLegs(0.0, 0.0, 0.5, 0.16, 0.46, 0.075, prim, acc);
+      // bat wings
+      for (const s of [1, -1] as const) {
+        const w = new THREE.Group(); w.position.set(-0.2, 1.0, s * 0.22); w.name = s === 1 ? 'wing1' : 'wing-1';
+        for (let i = 0; i < 3; i++) w.add(bone(sec, 0, 0, 0, -0.18 - i * 0.04, 0.42 - i * 0.16, s * (0.3 + i * 0.18), 0.02, 0.01, 5));
+        w.add(rot(makeFin(std({ color: p.accent, transparent: true, opacity: 0.55, side: THREE.DoubleSide }), 0.42, -0.3, 1.6), s * Math.PI / 2, 0, 0));
+        g.add(w);
+      }
+      const tail = tailGrp(-0.26, 0.85); tail.add(bone(prim, 0, 0, 0, -0.4, -0.18, 0, 0.04, 0.015, 6)); tail.add(rot(cone(acc, 0.07, 0.16, -0.46, -0.2, 0, 5), 0, 0, Math.PI / 2));
+      break;
+    }
+    case 'dragonette': {
+      g.add(orb(prim, 0.28, -0.02, 0.7, 0, 1.0, 1.05, 0.95)); // small round body
+      g.add(orb(sec, 0.18, 0.08, 0.6, 0, 0.95, 0.85, 0.85));
+      const head = headGrp(0.18, 1.1); // big head
+      head.add(orb(prim, 0.3, 0, 0, 0, 1.05, 0.95, 0.95));
+      head.add(rot(cone(sec, 0.13, 0.26, 0.26, -0.04, 0, 7), 0, 0, -Math.PI / 2));
+      exoEyes(head, 0.09, 0.16, 0.08, 0.13, { iris: 0x9adfff, lit: true });
+      for (const s of [1, -1] as const) head.add(spike(acc, 0, 0.2, s * 0.08, -0.06, 0.42, s * 0.14, 0.04));
+      quadLegs(0.05, -0.12, 0.4, 0.18, 0.36, 0.08, prim, acc);
+      for (const s of [1, -1] as const) { const w = new THREE.Group(); w.position.set(-0.18, 0.95, s * 0.18); w.name = s === 1 ? 'wing1' : 'wing-1'; w.add(rot(makeFin(std({ color: p.secondary, transparent: true, opacity: 0.7, side: THREE.DoubleSide }), 0.36, -0.4, 1.7), s * Math.PI / 2, 0, 0.2)); g.add(w); }
+      const tail = tailGrp(-0.28, 0.7); tail.add(bone(prim, 0, 0, 0, -0.46, 0.08, 0, 0.06, 0.02, 7)); tail.add(rot(cone(acc, 0.1, 0.18, -0.52, 0.1, 0, 5), 0, 0, Math.PI / 2));
+      break;
+    }
+    case 'colossus': {
+      const torso = box(prim, 0.7, 0.95, 0.62, 0, 1.35, 0); torso.geometry = new THREE.BoxGeometry(0.7, 0.95, 0.62); g.add(torso);
+      g.add(orb(sec, 0.4, 0.04, 1.55, 0, 1.0, 0.5, 0.9)); // shoulders yoke
+      const head = headGrp(0.1, 1.95);
+      head.add(box(sec, 0.32, 0.34, 0.34, 0, 0, 0));
+      exoEyes(head, 0.06, 0.18, 0.02, 0.1, { iris: 0xffd84a, lit: true });
+      head.add(cone(acc, 0.07, 0.3, 0.04, 0.28, 0)); // crown spike
+      // four arms
+      for (const s of [1, -1] as const) for (const [ay, len] of [[1.7, 0.7], [1.45, 0.6]] as const) {
+        g.add(orb(acc, 0.13, 0, ay, s * 0.42, 1, 1, 1, 10, 8));
+        g.add(bone(prim, 0.02, ay, s * 0.46, 0.12, ay - len, s * (0.52 + len * 0.1), 0.1, 0.08, 8));
+        g.add(box(sec, 0.18, 0.18, 0.18, 0.16, ay - len - 0.05, s * (0.56 + len * 0.12))); // fist
+      }
+      for (const s of [1, -1] as const) { g.add(box(prim, 0.22, 0.85, 0.24, 0.02, 0.5, s * 0.2)); g.add(box(sec, 0.28, 0.12, 0.32, 0.06, 0.06, s * 0.2)); }
+      tailGrp(-0.35, 1.0);
+      break;
+    }
+    case 'golem': {
+      g.add(box(prim, 0.66, 0.7, 0.56, 0, 1.05, 0)); // chunky torso
+      g.add(box(sec, 0.74, 0.22, 0.62, 0, 1.4, 0)); // shoulder slab
+      const head = headGrp(0.05, 1.62);
+      head.add(box(prim, 0.3, 0.28, 0.3, 0, 0, 0));
+      exoEyes(head, 0.05, 0.14, 0.0, 0.09, { iris: 0x7af0ff, lit: true });
+      for (const s of [1, -1] as const) {
+        g.add(box(prim, 0.2, 0.5, 0.22, 0.02, 1.15, s * 0.42));
+        g.add(box(sec, 0.26, 0.26, 0.28, 0.06, 0.82, s * 0.44)); // big fist
+        g.add(box(prim, 0.26, 0.55, 0.28, 0, 0.32, s * 0.18));
+        g.add(box(sec, 0.3, 0.14, 0.34, 0.04, 0.05, s * 0.18));
+      }
+      // crystal heart
+      g.add(octa(acc, 0.12, 0.2, 1.1, 0));
+      tailGrp(-0.4, 1.0);
+      break;
+    }
+    case 'seraph': {
+      g.add(cyl(prim, 0.16, 0.42, 1.0, 0, 0.7, 0)); // robed lower body taper
+      g.add(orb(sec, 0.26, 0, 1.32, 0, 0.95, 1.1, 0.85)); // chest
+      const head = headGrp(0.04, 1.72);
+      head.add(orb(sec, 0.22, 0, 0, 0));
+      exoEyes(head, 0.05, 0.16, 0.02, 0.1, { iris: 0xfff4c0, lit: true });
+      for (const s of [1, -1] as const) g.add(bone(prim, 0.0, 1.3, s * 0.24, 0.06, 0.85, s * 0.16, 0.05, 0.03, 7)); // arms folded down
+      // three pairs of wings (top pair animated)
+      const wmat = std({ color: p.secondary, transparent: true, opacity: 0.72, side: THREE.DoubleSide, emissive: glow, emissiveIntensity: 0.4 });
+      for (const s of [1, -1] as const) {
+        const w = new THREE.Group(); w.position.set(-0.1, 1.45, s * 0.2); w.name = s === 1 ? 'wing1' : 'wing-1';
+        w.add(rot(makeFin(wmat, 0.5, -0.3, 1.8), s * Math.PI / 2, 0, 0.3)); g.add(w);
+        for (const [yy, sz, rot] of [[1.2, 0.42, 0.0], [0.95, 0.34, -0.3]] as const) { const sw = makeFin(wmat, sz, -0.3, 1.7); sw.position.set(-0.12, yy, s * 0.16); sw.rotation.set(s * Math.PI / 2, 0, rot); g.add(sw); }
+      }
+      tailGrp(-0.3, 0.7);
+      break;
+    }
+    // ---------- DRACONIC ----------
+    case 'drake': {
+      g.add(orb(prim, 0.46, 0, 0.95, 0, 1.35, 0.95, 0.92)); // torso
+      g.add(orb(sec, 0.3, 0.2, 0.78, 0, 1.0, 0.8, 0.82));
+      g.add(bone(prim, 0.36, 1.05, 0, 0.6, 1.4, 0, 0.14, 0.1, 8)); // neck
+      const head = headGrp(0.7, 1.5);
+      head.add(orb(sec, 0.22, 0, 0, 0, 1.2, 0.9, 0.9));
+      head.add(rot(cone(prim, 0.12, 0.36, 0.26, -0.03, 0, 6), 0, 0, -Math.PI / 2));
+      exoEyes(head, 0.06, 0.12, 0.1, 0.13, { iris: 0xffb14a, lit: true });
+      for (const s of [1, -1] as const) head.add(spike(acc, -0.04, 0.16, s * 0.08, -0.18, 0.4, s * 0.16, 0.04));
+      quadLegs(0.28, -0.3, 0.62, 0.3, 0.6, 0.12, prim, acc);
+      for (const s of [1, -1] as const) {
+        const w = new THREE.Group(); w.position.set(-0.05, 1.45, s * 0.28); w.name = s === 1 ? 'wing1' : 'wing-1';
+        for (let i = 0; i < 4; i++) w.add(bone(sec, 0, 0, 0, -0.1 - i * 0.06, 0.5 - i * 0.16, s * (0.34 + i * 0.2), 0.03, 0.012, 5));
+        w.add(rot(makeFin(std({ color: p.secondary, transparent: true, opacity: 0.6, side: THREE.DoubleSide }), 0.56, -0.35, 1.7), s * Math.PI / 2, 0, 0));
+        g.add(w);
+      }
+      const tail = tailGrp(-0.4, 0.95); let tx = 0, tr = 0.16; for (let i = 0; i < 5; i++) { tail.add(orb(prim, tr, tx, -i * 0.04, 0, 1.1, 0.9, 0.9)); tx -= 0.26; tr *= 0.8; } tail.add(at(makeFin(std({ color: p.accent, transparent: true, opacity: 0.7, side: THREE.DoubleSide }), 0.16, 0, Math.PI), tx, -0.18, 0));
+      break;
+    }
+    case 'wyrm': {
+      // rising S-coil of segments, clawed forelimbs, big horned head
+      let y = 0.3, x = -0.5, r = 0.32; const segs: THREE.Vector3[] = [];
+      for (let i = 0; i < 7; i++) { g.add(orb(i % 2 ? sec : prim, r, x, y, Math.sin(i * 0.9) * 0.12, 1.05, 1.0, 1.0)); segs.push(v3(x, y, 0)); y += r * 1.05; x += 0.12 + (i < 3 ? 0.05 : 0.0); r *= 0.92; }
+      const head = headGrp(x + 0.16, y + 0.02);
+      head.add(orb(sec, 0.26, 0, 0, 0, 1.25, 0.95, 0.95));
+      head.add(rot(cone(prim, 0.13, 0.4, 0.3, -0.04, 0, 7), 0, 0, -Math.PI / 2));
+      exoEyes(head, 0.06, 0.14, 0.1, 0.14, { iris: 0xb98aff, lit: true });
+      for (const s of [1, -1] as const) head.add(spike(acc, -0.06, 0.16, s * 0.1, -0.26, 0.46, s * 0.2, 0.05));
+      for (const s of [1, -1] as const) { const sb = segs[2]; g.add(bone(prim, sb.x + 0.1, sb.y, s * 0.18, sb.x + 0.34, sb.y - 0.34, s * 0.3, 0.06, 0.03, 6)); for (let k = 0; k < 3; k++) g.add(cone(acc, 0.02, 0.1, sb.x + 0.36 + k * 0.04, sb.y - 0.42, s * (0.3 + k * 0.05), 5)); }
+      const tail = tailGrp(segs[0].x - 0.1, segs[0].y); tail.add(rot(cone(acc, 0.08, 0.34, -0.18, -0.06, 0, 6), 0, 0, Math.PI / 2.4));
+      break;
+    }
+    case 'hydra': {
+      g.add(orb(prim, 0.46, -0.05, 0.9, 0, 1.2, 0.95, 1.05)); // bulky body
+      g.add(orb(sec, 0.32, 0.18, 0.72, 0, 1.0, 0.78, 0.9));
+      quadLegs(0.24, -0.28, 0.6, 0.3, 0.56, 0.12, prim, acc);
+      // three necks + heads
+      const neckSpec: [number, number][] = [[0.55, 0.2], [0.5, -0.0], [0.45, 0.2]];
+      neckSpec.forEach((spec, idx) => {
+        const zz = (idx - 1) * 0.26;
+        const base = v3(0.3, 1.25, zz);
+        const tip = v3(spec[0], 1.55 + spec[1], zz * 1.4);
+        g.add(bone(prim, base.x, base.y, base.z, tip.x, tip.y, tip.z, 0.1, 0.07, 7));
+        const hg = new THREE.Group(); hg.position.copy(tip); if (idx === 1) hg.name = 'head';
+        hg.add(orb(sec, 0.17, 0, 0.05, 0, 1.2, 0.9, 0.9));
+        hg.add(rot(cone(prim, 0.08, 0.26, 0.18, 0.0, 0, 6), 0, 0, -Math.PI / 2));
+        exoEyes(hg, 0.045, 0.08, 0.12, 0.09, { iris: 0x9affd0, lit: true });
+        hg.add(cone(acc, 0.035, 0.16, -0.06, 0.2, 0, 5));
+        g.add(hg);
+      });
+      const tail = tailGrp(-0.42, 0.85); let tx = 0, tr = 0.14; for (let i = 0; i < 4; i++) { tail.add(orb(prim, tr, tx, 0, 0)); tx -= 0.22; tr *= 0.82; } tail.add(rot(cone(acc, 0.06, 0.22, tx - 0.08, 0, 0, 5), 0, 0, Math.PI / 2));
+      break;
+    }
+    case 'leviathan': {
+      // long arc of fat segments, finned head, fluke tail
+      let x = -0.7, y = 0.55, r = 0.34; const path: THREE.Vector3[] = [];
+      for (let i = 0; i < 8; i++) { g.add(orb(i % 2 ? sec : prim, r, x, y, 0, 1.1, 1.0, 1.0)); path.push(v3(x, y, 0)); x += 0.24; y += Math.cos(i * 0.5) * 0.06 + 0.02; r *= 0.95; }
+      const head = headGrp(x + 0.1, y);
+      head.add(orb(sec, 0.3, 0, 0, 0, 1.2, 1.0, 1.0));
+      head.add(rot(cone(prim, 0.16, 0.42, 0.3, -0.04, 0, 7), 0, 0, -Math.PI / 2));
+      exoEyes(head, 0.07, 0.12, 0.12, 0.18, { iris: 0x6ad8ff, lit: true });
+      for (const s of [1, -1] as const) head.add(at(makeFin(std({ color: p.accent, transparent: true, opacity: 0.7, side: THREE.DoubleSide }), 0.22, -0.4, 1.3), -0.1, 0.06, s * 0.16));
+      const tail = tailGrp(path[0].x - 0.12, path[0].y);
+      for (const s of [1, -1] as const) tail.add(rot(makeFin(std({ color: p.secondary, transparent: true, opacity: 0.8, side: THREE.DoubleSide }), 0.3, -0.2, 1.2), 0, 0, s > 0 ? 2.5 : -2.5));
+      break;
+    }
+    case 'phoenix': {
+      g.add(orb(prim, 0.34, 0, 1.0, 0, 0.95, 1.25, 0.85)); // upright body
+      g.add(orb(sec, 0.24, 0.06, 0.78, 0, 0.9, 0.95, 0.8));
+      const head = headGrp(0.18, 1.5);
+      head.add(orb(prim, 0.2, 0, 0, 0));
+      head.add(rot(cone(acc, 0.07, 0.26, 0.2, 0.02, 0, 6), 0, 0, -Math.PI / 2)); // beak
+      exoEyes(head, 0.055, 0.1, 0.08, 0.11, { iris: 0xffdf6a, lit: true });
+      for (let i = 0; i < 3; i++) head.add(rot(cone(acc, 0.03, 0.22 - i * 0.03, -0.02 + i * 0.04, 0.22, 0, 5), 0, 0, -0.4 - i * 0.2)); // crest plumes
+      for (let i = 0; i < 2; i++) g.add(bone(acc, 0, 0.78, 0, 0.05, 0.5, (i ? 0.08 : -0.08), 0.03, 0.02, 5)); // legs
+      for (const s of [1, -1] as const) {
+        const w = new THREE.Group(); w.position.set(-0.04, 1.05, s * 0.22); w.name = s === 1 ? 'wing1' : 'wing-1';
+        for (let i = 0; i < 5; i++) { const fe = cone(i % 2 ? acc : sec, 0.06, 0.6 - i * 0.06, -i * 0.1, 0, s * (0.2 + i * 0.14), 5); fe.rotation.x = s * Math.PI / 2; fe.rotation.z = i * 0.08; w.add(fe); }
+        g.add(w);
+      }
+      const tail = tailGrp(-0.32, 0.95);
+      for (let i = 0; i < 5; i++) { const pl = cone(i % 2 ? acc : sec, 0.05, 0.7 - i * 0.05, 0, 0, 0, 5); pl.rotation.z = Math.PI / 2.1; pl.position.set(-0.3 - i * 0.06, -0.05 - i * 0.06, (i - 2) * 0.08); tail.add(pl); }
+      break;
+    }
+    case 'roc': {
+      g.add(orb(prim, 0.46, 0, 1.0, 0, 1.1, 1.05, 0.95));
+      g.add(orb(sec, 0.32, 0.12, 0.82, 0, 1.0, 0.85, 0.82));
+      const head = headGrp(0.34, 1.42);
+      head.add(orb(prim, 0.24, 0, 0, 0));
+      const beak = cone(acc, 0.1, 0.34, 0.22, -0.02, 0, 6); beak.rotation.z = -Math.PI / 2 - 0.3; head.add(beak); // hooked
+      exoEyes(head, 0.07, 0.14, 0.1, 0.13, { iris: 0xffe06a, lit: true });
+      head.add(rot(cone(sec, 0.06, 0.2, -0.04, 0.2, 0, 5), 0, 0, -0.5));
+      for (const s of [1, -1] as const) { g.add(bone(acc, 0.05, 0.86, s * 0.16, 0.12, 0.34, s * 0.2, 0.04, 0.03, 6)); for (let k = 0; k < 3; k++) g.add(cone(acc, 0.02, 0.12, 0.16 + k * 0.04, 0.05, s * (0.18 + k * 0.03), 4)); }
+      for (const s of [1, -1] as const) {
+        const w = new THREE.Group(); w.position.set(-0.05, 1.1, s * 0.3); w.name = s === 1 ? 'wing1' : 'wing-1';
+        for (let i = 0; i < 6; i++) { const fe = cone(i % 2 ? sec : prim, 0.07, 0.8 - i * 0.08, -i * 0.08, 0, s * (0.18 + i * 0.16), 5); fe.rotation.x = s * Math.PI / 2; w.add(fe); }
+        g.add(w);
+      }
+      const tail = tailGrp(-0.42, 0.92); for (let i = 0; i < 4; i++) { const fe = cone(i % 2 ? sec : prim, 0.06, 0.5, 0, 0, (i - 1.5) * 0.1, 5); fe.rotation.z = Math.PI / 2; fe.position.x = -0.24; tail.add(fe); }
+      break;
+    }
+    // ---------- ARTHROPODS / INSECTOIDS ----------
+    case 'mantis': {
+      g.add(cyl(prim, 0.16, 0.24, 0.7, 0, 1.0, 0)); // upright abdomen
+      g.add(orb(sec, 0.2, 0.06, 1.32, 0, 1.0, 0.9, 0.9)); // thorax
+      const head = headGrp(0.16, 1.55);
+      const tri = cone(sec, 0.16, 0.26, 0, 0, 0, 3); tri.rotation.x = Math.PI; head.add(tri);
+      exoEyes(head, 0.08, 0.06, 0.04, 0.13, { iris: 0x9aff5c, lit: true });
+      for (const s of [1, -1] as const) head.add(bone(acc, 0.04, 0.08, s * 0.05, 0.16, 0.42, s * 0.12, 0.012, 0.005, 5)); // antennae
+      // raptorial forearms
+      for (const s of [1, -1] as const) { g.add(bone(prim, 0.1, 1.32, s * 0.16, 0.34, 1.1, s * 0.26, 0.04, 0.03, 6)); g.add(bone(acc, 0.34, 1.1, s * 0.26, 0.5, 1.34, s * 0.24, 0.035, 0.015, 6)); for (let k = 0; k < 3; k++) g.add(cone(acc, 0.015, 0.07, 0.4 + k * 0.04, 1.2 + k * 0.04, s * 0.26, 4)); }
+      // 4 walking legs
+      for (const s of [1, -1] as const) for (const lz of [0.18, 0.0] as const) { g.add(bone(prim, -0.05, 0.95, s * (0.16 + lz), -0.1, 0.5, s * (0.34 + lz), 0.025, 0.015, 5)); g.add(bone(prim, -0.1, 0.5, s * (0.34 + lz), 0.0, 0.03, s * (0.4 + lz), 0.018, 0.01, 5)); }
+      for (const s of [1, -1] as const) { const w = new THREE.Group(); w.position.set(-0.06, 1.2, s * 0.1); w.name = s === 1 ? 'wing1' : 'wing-1'; w.add(rot(makeFin(std({ color: p.secondary, transparent: true, opacity: 0.45, side: THREE.DoubleSide }), 0.5, -0.1, 0.7), s * Math.PI / 2, 0.2, 0)); g.add(w); }
+      tailGrp(-0.2, 0.7);
+      break;
+    }
+    case 'beetle': {
+      g.add(orb(prim, 0.4, 0, 0.55, 0, 1.3, 0.7, 1.0)); // low body
+      const shell = orb(sec, 0.44, -0.02, 0.62, 0, 1.25, 0.85, 1.05); shell.geometry = new THREE.SphereGeometry(0.44, 16, 12, 0, Math.PI * 2, 0, Math.PI / 1.7); g.add(shell); // domed carapace
+      g.add(box(acc, 0.5, 0.02, 0.04, 0, 0.92, 0)); // elytra seam
+      const head = headGrp(0.46, 0.5);
+      head.add(orb(prim, 0.18, 0, 0, 0, 1.0, 0.85, 1.0));
+      head.add(rot(cone(acc, 0.05, 0.4, 0.16, 0.1, 0, 6), 0, 0, -Math.PI / 2.6)); // pronotum horn
+      exoEyes(head, 0.05, 0.08, 0.04, 0.12, { iris: 0xffcf4a, lit: true });
+      for (const s of [1, -1] as const) for (const lx of [0.28, 0.05, -0.2] as const) g.add(bone(prim, lx, 0.4, s * 0.34, lx + 0.06, 0.02, s * 0.5, 0.03, 0.018, 5));
+      tailGrp(-0.42, 0.55);
+      break;
+    }
+    case 'arachnid': {
+      g.add(orb(prim, 0.32, 0.18, 0.5, 0, 1.0, 0.7, 0.95)); // cephalothorax
+      g.add(orb(sec, 0.42, -0.22, 0.55, 0, 1.1, 0.9, 1.05)); // abdomen
+      const head = headGrp(0.42, 0.52);
+      head.add(orb(prim, 0.16, 0, 0, 0, 1.0, 0.85, 1.0));
+      for (const [ey, ez] of [[0.06, 0.06], [0.1, 0.12], [0.02, 0.13]] as const) exoEyes(head, 0.035, 0.1, ey, ez, { iris: 0xc46aff, lit: true });
+      for (const s of [1, -1] as const) head.add(spike(acc, 0.12, -0.04, s * 0.06, 0.22, -0.16, s * 0.1, 0.03)); // fangs
+      for (const s of [1, -1] as const) for (let i = 0; i < 4; i++) { const ang = -0.4 + i * 0.4; const kx = 0.1 + Math.cos(ang) * 0.4; const kz = 0.34 + i * 0.06; g.add(bone(prim, 0.1, 0.55, s * 0.22, kx, 0.78, s * kz, 0.03, 0.022, 5)); g.add(bone(prim, kx, 0.78, s * kz, kx + 0.14, 0.04, s * (kz + 0.12), 0.022, 0.012, 5)); }
+      tailGrp(-0.5, 0.55);
+      break;
+    }
+    case 'scorpion': {
+      g.add(orb(prim, 0.32, 0, 0.42, 0, 1.5, 0.6, 0.95)); // low body
+      const head = headGrp(0.4, 0.46);
+      head.add(orb(prim, 0.16, 0, 0, 0, 1.1, 0.8, 1.0));
+      exoEyes(head, 0.04, 0.06, 0.08, 0.08, { iris: 0xff8a4a, lit: true });
+      // pincers
+      for (const s of [1, -1] as const) { g.add(bone(prim, 0.3, 0.45, s * 0.18, 0.62, 0.4, s * 0.3, 0.05, 0.04, 6)); g.add(orb(sec, 0.12, 0.7, 0.4, s * 0.32, 1.2, 0.8, 1.0)); g.add(rot(cone(acc, 0.04, 0.22, 0.82, 0.44, s * 0.34, 5), 0, 0, -Math.PI / 2)); g.add(rot(cone(acc, 0.04, 0.18, 0.82, 0.36, s * 0.3, 5), 0, 0, -Math.PI / 2)); }
+      for (const s of [1, -1] as const) for (const lx of [0.1, -0.08, -0.24] as const) g.add(bone(prim, lx, 0.42, s * 0.26, lx + 0.04, 0.03, s * 0.42, 0.025, 0.015, 5));
+      // arching tail with stinger
+      const tail = tailGrp(-0.34, 0.5); let tx = 0, ty = 0, tr = 0.12;
+      for (let i = 0; i < 5; i++) { tail.add(orb(i % 2 ? sec : prim, tr, tx, ty, 0)); tx -= 0.16 - i * 0.02; ty += 0.16 + i * 0.03; tr *= 0.9; }
+      tail.add(rot(cone(acc, 0.06, 0.24, tx - 0.04, ty + 0.06, 0, 6), 0, 0, 0.6));
+      break;
+    }
+    case 'crab': {
+      const shell = orb(sec, 0.5, 0, 0.55, 0, 1.4, 0.55, 1.15); shell.geometry = new THREE.SphereGeometry(0.5, 18, 12, 0, Math.PI * 2, 0, Math.PI / 1.8); g.add(shell);
+      g.add(orb(prim, 0.42, 0, 0.4, 0, 1.4, 0.5, 1.1));
+      const head = headGrp(0.3, 0.5);
+      for (const s of [1, -1] as const) { head.add(bone(prim, 0, 0, s * 0.1, 0.06, 0.24, s * 0.14, 0.02, 0.02, 5)); exoEyes(head, 0.05, 0.06, 0.26, 0.14, { iris: 0x10131c }); }
+      // big claws
+      for (const s of [1, -1] as const) { g.add(bone(prim, 0.34, 0.42, s * 0.3, 0.62, 0.46, s * 0.44, 0.06, 0.045, 6)); g.add(orb(acc, 0.16, 0.72, 0.46, s * 0.46, 1.1, 1.2, 0.9)); g.add(rot(cone(acc, 0.05, 0.2, 0.86, 0.5, s * 0.46, 5), 0, 0, -Math.PI / 2)); }
+      for (const s of [1, -1] as const) for (const lx of [0.18, -0.02, -0.22] as const) g.add(bone(prim, lx, 0.4, s * 0.4, lx + 0.02, 0.03, s * 0.56, 0.025, 0.015, 5));
+      tailGrp(-0.45, 0.45);
+      break;
+    }
+    case 'moth': {
+      g.add(orb(prim, 0.26, 0, 0.85, 0, 1.0, 1.3, 1.0)); // fuzzy body
+      g.add(orb(sec, 0.18, 0.06, 1.18, 0, 1.0, 0.9, 0.95)); // thorax
+      const head = headGrp(0.12, 1.32);
+      head.add(orb(prim, 0.15, 0, 0, 0));
+      exoEyes(head, 0.07, 0.08, 0.02, 0.1, { iris: 0xffd86a, lit: true });
+      for (const s of [1, -1] as const) { const a = bone(acc, 0.02, 0.1, s * 0.05, 0.1, 0.4, s * 0.18, 0.012, 0.006, 5); head.add(a); for (let k = 0; k < 5; k++) head.add(cone(acc, 0.008, 0.05, 0.04 + k * 0.015, 0.16 + k * 0.05, s * (0.08 + k * 0.025), 4)); }
+      const wmat = std({ color: p.secondary, transparent: true, opacity: 0.66, side: THREE.DoubleSide });
+      const wmat2 = std({ color: p.accent, transparent: true, opacity: 0.6, side: THREE.DoubleSide, emissive: glow, emissiveIntensity: 0.3 });
+      for (const s of [1, -1] as const) {
+        const w = new THREE.Group(); w.position.set(0.0, 1.05, s * 0.16); w.name = s === 1 ? 'wing1' : 'wing-1';
+        w.add(rot(makeFin(wmat, 0.5, -0.2, 1.4), s * Math.PI / 2, 0, 0.1)); g.add(w);
+        const lw = makeFin(wmat2, 0.4, -0.2, 1.4); lw.position.set(-0.1, 0.78, s * 0.14); lw.rotation.set(s * Math.PI / 2, 0, -0.4); g.add(lw);
+      }
+      const tail = tailGrp(-0.24, 0.82); tail.add(rot(cone(prim, 0.08, 0.2, -0.12, 0, 0, 6), 0, 0, Math.PI / 2));
+      break;
+    }
+    // ---------- AQUATIC ----------
+    case 'eel': {
+      let x = -0.6, y = 0.5, r = 0.2; const path: THREE.Vector3[] = [];
+      for (let i = 0; i < 9; i++) { g.add(orb(i % 2 ? sec : prim, r, x, y, Math.sin(i * 0.7) * 0.16, 1.1, 1.0, 1.0)); path.push(v3(x, y, Math.sin(i * 0.7) * 0.16)); x += 0.18; y += 0.04; r *= 0.97; }
+      // continuous dorsal fin
+      const finMatL = std({ color: p.accent, transparent: true, opacity: 0.6, side: THREE.DoubleSide, emissive: glow, emissiveIntensity: 0.3 });
+      for (let i = 1; i < path.length - 1; i++) { const f = makeFin(finMatL, 0.12, -0.2, 1.0); f.position.copy(path[i]); f.position.y += 0.12; f.rotation.z = Math.PI / 2; g.add(f); }
+      const head = headGrp(x + 0.05, y);
+      head.add(orb(sec, 0.2, 0, 0, 0, 1.3, 0.9, 0.9));
+      head.add(rot(cone(prim, 0.1, 0.28, 0.2, -0.02, 0, 6), 0, 0, -Math.PI / 2));
+      exoEyes(head, 0.055, 0.1, 0.08, 0.12, { iris: 0x6affd0, lit: true });
+      const tail = tailGrp(path[0].x - 0.08, path[0].y); for (const s of [1, -1] as const) tail.add(rot(makeFin(finMatL, 0.22, -0.2, 1.1), 0, 0, s > 0 ? 2.4 : -2.4));
+      break;
+    }
+    case 'cephalopod': {
+      const mantle = cone(prim, 0.36, 0.7, 0, 1.2, 0, 14); g.add(mantle); // pointed mantle up
+      g.add(orb(prim, 0.36, 0, 0.95, 0, 1.0, 0.8, 1.0));
+      const head = headGrp(0.0, 0.92);
+      exoEyes(head, 0.12, 0.18, 0.0, 0.22, { iris: 0x10131c });
+      g.add(orb(sec, 0.18, 0.18, 0.92, 0, 1, 1, 1)); // brow band
+      // 8 arms
+      for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2; const ex = Math.cos(a) * 0.26, ez = Math.sin(a) * 0.26; const curl = (rnd() - 0.5) * 0.3; g.add(bone(i % 2 ? sec : prim, ex, 0.7, ez, ex * 2.4 + curl, 0.05, ez * 2.4, 0.05, 0.015, 6)); }
+      tailGrp(0, 1.5);
+      break;
+    }
+    case 'jelly': {
+      const bellMat = std({ color: p.primary, transparent: true, opacity: 0.6, roughness: 0.1, emissive: glow, emissiveIntensity: 0.35, side: THREE.DoubleSide });
+      const bell = new THREE.Mesh(new THREE.SphereGeometry(0.46, 18, 12, 0, Math.PI * 2, 0, Math.PI / 1.7), bellMat); bell.position.y = 1.05; g.add(bell);
+      g.add(torus(sec, 0.42, 0.05, 0, 0.82, 0)); // bell rim
+      const head = headGrp(0.0, 1.0);
+      exoEyes(head, 0.07, 0.2, -0.05, 0.13, { iris: 0x9adfff, lit: true });
+      // frilly oral arms + long tentacles
+      const tMat = std({ color: p.secondary, transparent: true, opacity: 0.55, side: THREE.DoubleSide });
+      for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI * 2; g.add(bone(tMat, Math.cos(a) * 0.16, 0.78, Math.sin(a) * 0.16, Math.cos(a) * 0.22, 0.2, Math.sin(a) * 0.22, 0.05, 0.02, 5)); }
+      for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2; g.add(bone(std({ color: p.accent, transparent: true, opacity: 0.5, emissive: glow, emissiveIntensity: 0.4 }), Math.cos(a) * 0.36, 0.82, Math.sin(a) * 0.36, Math.cos(a) * 0.42, -0.2 - rnd() * 0.2, Math.sin(a) * 0.42, 0.018, 0.006, 5)); }
+      tailGrp(0, 1.4);
+      break;
+    }
+    case 'anglerfish': {
+      g.add(orb(prim, 0.46, 0, 0.7, 0, 1.15, 1.0, 1.0)); // big round head/body
+      const head = headGrp(0.34, 0.72);
+      const mouth = cone(sec, 0.34, 0.4, 0.06, -0.04, 0, 10); mouth.rotation.z = -Math.PI / 2; head.add(mouth);
+      for (let i = 0; i < 7; i++) { const a = (i / 7) * Math.PI; head.add(rot(cone(acc, 0.02, 0.12, 0.16, -0.04 + Math.sin(a) * 0.14, Math.cos(a) * 0.14, 4), 0, 0, -Math.PI / 2)); } // teeth ring
+      exoEyes(head, 0.07, 0.0, 0.16, 0.16, { iris: 0xfff0a0, lit: true });
+      // lure
+      const lure = bone(prim, -0.1, 0.4, 0, 0.1, 0.75, 0, 0.025, 0.015, 6); head.add(lure);
+      const bulb = orb(std({ color: p.accent, emissive: glow, emissiveIntensity: 2.4, roughness: 0.1 }), 0.07, 0.12, 0.78, 0); bulb.userData.noShadow = true; head.add(bulb);
+      for (const s of [1, -1] as const) g.add(bone(prim, -0.2, 0.65, s * 0.3, -0.34, 0.3, s * 0.4, 0.035, 0.02, 5)); // stubby fins
+      const tail = tailGrp(-0.44, 0.7); for (const s of [1, -1] as const) tail.add(rot(makeFin(std({ color: p.secondary, transparent: true, opacity: 0.7, side: THREE.DoubleSide }), 0.24, -0.2, 1.2), 0, 0, s > 0 ? 2.5 : -2.5));
+      break;
+    }
+    case 'turtle': {
+      const shell = new THREE.Mesh(new THREE.SphereGeometry(0.5, 18, 12, 0, Math.PI * 2, 0, Math.PI / 1.9), sec); shell.position.y = 0.62; shell.scale.set(1.1, 0.78, 1.2); g.add(shell);
+      // scute ridges
+      for (let i = 0; i < 5; i++) { const a = (i / 5) * Math.PI * 2; g.add(box(acc, 0.1, 0.04, 0.1, Math.cos(a) * 0.28, 0.78, Math.sin(a) * 0.3)); }
+      g.add(box(acc, 0.1, 0.04, 0.1, 0, 0.92, 0));
+      g.add(orb(prim, 0.4, 0, 0.5, 0, 1.1, 0.6, 1.1)); // body
+      const head = headGrp(0.46, 0.55);
+      head.add(orb(prim, 0.17, 0, 0, 0, 1.2, 0.95, 0.95));
+      head.add(rot(cone(acc, 0.08, 0.16, 0.16, -0.02, 0, 6), 0, 0, -Math.PI / 2)); // beak
+      exoEyes(head, 0.05, 0.08, 0.06, 0.11, { iris: 0x10131c });
+      for (const s of [1, -1] as const) for (const lx of [0.24, -0.24] as const) g.add(bone(prim, lx, 0.4, s * 0.3, lx + (lx > 0 ? 0.06 : -0.06), 0.04, s * 0.42, 0.07, 0.05, 7));
+      const tail = tailGrp(-0.46, 0.5); tail.add(rot(cone(prim, 0.06, 0.2, -0.1, 0, 0, 5), 0, 0, Math.PI / 2));
+      break;
+    }
+    // ---------- MAMMALS / BEASTS ----------
+    case 'stag': {
+      g.add(orb(prim, 0.34, 0, 0.95, 0, 1.5, 0.78, 0.85)); // slim body
+      g.add(bone(prim, 0.3, 1.0, 0, 0.5, 1.35, 0, 0.09, 0.07, 7)); // neck
+      const head = headGrp(0.56, 1.42);
+      head.add(orb(sec, 0.16, 0, 0, 0, 1.3, 0.85, 0.85));
+      head.add(rot(cone(prim, 0.07, 0.22, 0.16, -0.02, 0, 6), 0, 0, -Math.PI / 2)); // muzzle
+      exoEyes(head, 0.045, 0.06, 0.08, 0.1, { iris: 0x10131c });
+      // branching antlers (head-local: main beam + forward tines)
+      for (const s of [1, -1] as const) { const main = bone(acc, -0.04, 0.16, s * 0.06, -0.16, 0.6, s * 0.2, 0.025, 0.015, 5); head.add(main); for (let k = 0; k < 3; k++) { const tine = cone(acc, 0.018, 0.16, -0.1 - k * 0.03, 0.3 + k * 0.12, s * (0.14 + k * 0.03), 5); tine.rotation.z = 0.6; head.add(tine); } }
+      quadLegs(0.22, -0.24, 0.78, 0.22, 0.78, 0.06, prim, prim);
+      const tail = tailGrp(-0.34, 0.95); tail.add(rot(cone(sec, 0.05, 0.18, -0.06, -0.04, 0, 5), 0, 0, Math.PI / 1.8));
+      break;
+    }
+    case 'ram': {
+      g.add(orb(prim, 0.42, 0, 0.82, 0, 1.35, 0.85, 1.0)); // stout body
+      const head = headGrp(0.5, 1.0);
+      head.add(orb(sec, 0.2, 0, 0, 0, 1.2, 0.95, 0.9));
+      head.add(rot(cone(prim, 0.1, 0.22, 0.18, -0.04, 0, 6), 0, 0, -Math.PI / 2));
+      exoEyes(head, 0.05, 0.08, 0.04, 0.13, { iris: 0x10131c });
+      // curled horns approximated by torus arcs
+      for (const s of [1, -1] as const) { const horn = new THREE.Mesh(new THREE.TorusGeometry(0.13, 0.04, 8, 16, Math.PI * 1.4), acc); horn.position.set(-0.02, 0.14, s * 0.16); horn.rotation.set(Math.PI / 2, s * 0.3, 0.4); head.add(horn); }
+      quadLegs(0.24, -0.26, 0.62, 0.24, 0.62, 0.1, prim, sec);
+      const tail = tailGrp(-0.4, 0.82); tail.add(orb(sec, 0.08, -0.06, -0.06, 0));
+      break;
+    }
+    case 'sabertooth': {
+      g.add(orb(prim, 0.42, 0, 0.78, 0, 1.55, 0.82, 0.95)); // muscular low body
+      g.add(orb(sec, 0.36, 0.32, 0.92, 0, 1.0, 0.95, 0.9)); // shoulders
+      const head = headGrp(0.58, 0.92);
+      head.add(orb(prim, 0.22, 0, 0, 0, 1.1, 0.95, 0.95));
+      head.add(rot(cone(sec, 0.12, 0.24, 0.18, -0.06, 0, 7), 0, 0, -Math.PI / 2));
+      exoEyes(head, 0.06, 0.1, 0.1, 0.13, { iris: 0xffc24a, lit: true });
+      for (const s of [1, -1] as const) head.add(rot(cone(acc, 0.03, 0.3, 0.14, -0.22, s * 0.08, 5), 0, 0, -2.8)); // sabers down
+      quadLegs(0.3, -0.3, 0.6, 0.26, 0.58, 0.12, prim, acc);
+      const tail = tailGrp(-0.42, 0.82); let tx = 0, tr = 0.08; for (let i = 0; i < 4; i++) { tail.add(orb(prim, tr, tx, i * 0.02, 0)); tx -= 0.2; } tail.add(orb(sec, 0.1, tx, 0.08, 0));
+      break;
+    }
+    case 'mammoth': {
+      g.add(orb(prim, 0.54, -0.05, 1.1, 0, 1.3, 1.05, 1.05)); // huge body
+      g.add(orb(prim, 0.4, -0.05, 1.45, 0, 1.0, 0.7, 1.0)); // hump
+      const head = headGrp(0.5, 1.1);
+      head.add(orb(prim, 0.3, 0, 0, 0, 1.05, 1.0, 0.95));
+      exoEyes(head, 0.05, 0.16, 0.12, 0.18, { iris: 0x10131c });
+      // trunk
+      let tx2 = 0.22, ty2 = -0.08; for (let i = 0; i < 5; i++) { head.add(orb(prim, 0.1 - i * 0.012, tx2, ty2, 0)); tx2 += 0.04; ty2 -= 0.12; }
+      for (const s of [1, -1] as const) head.add(rot(cone(acc, 0.06, 0.5, 0.2, -0.18, s * 0.12, 7), 0, 0, -2.2)); // tusks
+      quadLegs(0.32, -0.34, 0.7, 0.34, 0.7, 0.16, prim, sec);
+      const tail = tailGrp(-0.55, 1.0); tail.add(bone(prim, 0, 0, 0, -0.14, -0.3, 0, 0.04, 0.02, 6)); tail.add(orb(sec, 0.05, -0.16, -0.34, 0));
+      break;
+    }
+    case 'kitsune': {
+      g.add(orb(prim, 0.32, 0, 0.85, 0, 1.45, 0.78, 0.85)); // slender body
+      g.add(bone(prim, 0.32, 0.95, 0, 0.5, 1.2, 0, 0.08, 0.06, 7));
+      const head = headGrp(0.56, 1.26);
+      head.add(orb(sec, 0.17, 0, 0, 0, 1.15, 0.95, 0.9));
+      head.add(rot(cone(prim, 0.08, 0.2, 0.16, -0.02, 0, 6), 0, 0, -Math.PI / 2));
+      exoEyes(head, 0.05, 0.08, 0.08, 0.11, { iris: 0xffd86a, lit: true });
+      for (const s of [1, -1] as const) head.add(rot(cone(acc, 0.06, 0.2, -0.04, 0.18, s * 0.1, 5), 0, 0, 0.2)); // ears
+      quadLegs(0.22, -0.24, 0.72, 0.2, 0.72, 0.06, prim, prim);
+      // multiple tails fanning up
+      const tail = tailGrp(-0.34, 0.9);
+      const nT = 5;
+      for (let i = 0; i < nT; i++) { const a = (i - (nT - 1) / 2) * 0.28; const tl = new THREE.Group(); tl.rotation.z = 0.9 + (rnd() - 0.5) * 0.2; tl.rotation.y = a; tl.add(bone(prim, 0, 0, 0, -0.5, 0.0, 0, 0.07, 0.03, 6)); tl.add(orb(acc, 0.09, -0.54, 0.0, 0)); tail.add(tl); if (i === Math.floor(nT / 2)) tl.name = 'maintail'; }
+      break;
+    }
+    // ---------- CONSTRUCT / MINERAL / COSMIC ----------
+    case 'crystalbeast': {
+      g.add(octa(prim, 0.42, 0, 0.95, 0)); // faceted torso
+      g.add(octa(sec, 0.24, 0.2, 0.78, 0));
+      const head = headGrp(0.5, 1.05);
+      head.add(octa(sec, 0.2, 0, 0, 0));
+      exoEyes(head, 0.05, 0.1, 0.04, 0.1, { iris: 0x9af0ff, lit: true });
+      head.add(octa(acc, 0.1, -0.02, 0.22, 0));
+      // prism legs
+      for (const [lx, lz] of [[0.24, 0.22], [0.24, -0.22], [-0.24, 0.22], [-0.24, -0.22]] as const) { const leg = cone(prim, 0.1, 0.56, lx, 0.28, lz, 4); leg.rotation.x = Math.PI; g.add(leg); }
+      // shard back ridge
+      for (let i = 0; i < 5; i++) g.add(octa(acc, 0.1 - i * 0.012, -0.05 - i * 0.14, 1.2 - i * 0.04, 0));
+      const tail = tailGrp(-0.4, 0.9); tail.add(octa(acc, 0.1, -0.1, 0, 0));
+      break;
+    }
+    case 'treant': {
+      g.add(cyl(prim, 0.26, 0.4, 1.2, 0, 0.65, 0, 9)); // trunk
+      g.add(cyl(prim, 0.18, 0.28, 0.4, 0.06, 1.35, 0, 8)); // upper trunk
+      const head = headGrp(0.14, 1.45);
+      head.add(orb(prim, 0.2, 0, 0, 0, 0.9, 1.1, 0.95));
+      exoEyes(head, 0.06, 0.14, 0.0, 0.1, { iris: 0xbfff6a, lit: true });
+      head.add(box(prim, 0.16, 0.04, 0.12, 0.14, -0.1, 0)); // wooden brow/mouth
+      // canopy
+      for (let i = 0; i < 5; i++) { const a = (i / 5) * Math.PI * 2; g.add(orb(sec, 0.2 + rnd() * 0.06, Math.cos(a) * 0.22, 1.7 + Math.sin(i) * 0.06, Math.sin(a) * 0.22)); }
+      g.add(orb(sec, 0.24, 0, 1.85, 0));
+      // branch arms
+      for (const s of [1, -1] as const) { g.add(bone(prim, 0.08, 1.2, s * 0.24, 0.34, 1.4, s * 0.4, 0.06, 0.03, 6)); for (let k = 0; k < 2; k++) g.add(bone(prim, 0.34, 1.4, s * 0.4, 0.44 + k * 0.08, 1.55 + k * 0.06, s * (0.46 + k * 0.06), 0.025, 0.012, 5)); }
+      // root feet
+      for (const [lx, lz] of [[0.18, 0.18], [0.18, -0.18], [-0.18, 0.18], [-0.18, -0.18]] as const) g.add(bone(prim, lx * 0.6, 0.3, lz * 0.6, lx, 0.02, lz, 0.08, 0.04, 6));
+      tailGrp(-0.34, 0.6);
+      break;
+    }
+    case 'orbiter': {
+      const core = octa(acc, 0.22, 0, 1.05, 0); core.userData.noShadow = true; g.add(core);
+      g.add(cyl(prim, 0.08, 0.08, 0.9, 0, 1.05, 0, 8)); // spindle
+      const head = headGrp(0.0, 1.05);
+      exoEyes(head, 0.06, 0.18, 0.06, 0.1, { iris: 0x7af0ff, lit: true });
+      for (const [ry, tilt] of [[1.05, 0.0], [0.85, 0.5], [1.25, -0.5]] as const) { const ring = torus(prim, 0.4, 0.05, 0, ry, 0); ring.rotation.set(Math.PI / 2, 0, tilt); g.add(ring); }
+      for (let i = 0; i < 4; i++) { const a = (i / 4) * Math.PI * 2; g.add(box(sec, 0.1, 0.1, 0.1, Math.cos(a) * 0.4, 1.05, Math.sin(a) * 0.4)); }
+      g.add(cyl(sec, 0.18, 0.22, 0.16, 0, 0.5, 0, 8)); // base
+      tailGrp(0, 1.4);
+      break;
+    }
+    case 'nebula': {
+      const coreMat = std({ color: p.accent, emissive: glow, emissiveIntensity: 2.6, roughness: 0.1 });
+      const head = headGrp(0.0, 1.05);
+      const core = orb(coreMat, 0.26, 0, 0, 0); core.userData.noShadow = true; head.add(core);
+      const halo = orb(std({ color: p.primary, transparent: true, opacity: 0.4, emissive: glow, emissiveIntensity: 1.2, roughness: 0.1 }), 0.4, 0, 0, 0); halo.userData.noShadow = true; head.add(halo);
+      exoEyes(head, 0.05, 0.2, 0.04, 0.09, { iris: 0xffffff, lit: true });
+      const ringMat = std({ color: p.secondary, emissive: glow, emissiveIntensity: 0.8, roughness: 0.2, transparent: true, opacity: 0.85 });
+      for (const [tilt, ry, R] of [[0.0, 1.05, 0.55], [0.7, 1.05, 0.46], [-0.5, 1.05, 0.62]] as const) { const ring = torus(ringMat, R, 0.03, 0, ry, 0, 30); ring.rotation.set(Math.PI / 2 + tilt, 0, tilt * 0.5); g.add(ring); }
+      for (let i = 0; i < 7; i++) { const a = (i / 7) * Math.PI * 2; const sh = octa(coreMat, 0.05, Math.cos(a) * 0.6, 1.05 + Math.sin(i * 1.3) * 0.2, Math.sin(a) * 0.6); sh.userData.noShadow = true; g.add(sh); }
+      tailGrp(0, 1.4);
+      break;
+    }
+    case 'wisp': {
+      const bodyMat = std({ color: p.primary, transparent: true, opacity: 0.78, emissive: glow, emissiveIntensity: 0.7, roughness: 0.2 });
+      const head = headGrp(0.0, 1.0);
+      const core = cone(bodyMat, 0.26, 0.6, 0, -0.1, 0, 12); core.rotation.x = Math.PI; head.add(core); // teardrop (point down)
+      head.add(orb(bodyMat, 0.26, 0, 0.06, 0));
+      exoEyes(head, 0.08, 0.2, 0.06, 0.12, { iris: 0xfff0b0, lit: true });
+      // trailing ribbons
+      for (let i = 0; i < 4; i++) { const a = (i / 4) * Math.PI * 2; g.add(bone(std({ color: p.secondary, transparent: true, opacity: 0.5, emissive: glow, emissiveIntensity: 0.4 }), Math.cos(a) * 0.14, 0.8, Math.sin(a) * 0.14, Math.cos(a) * 0.3, 0.2 - rnd() * 0.2, Math.sin(a) * 0.3, 0.04, 0.008, 5)); }
+      const tail = tailGrp(-0.0, 0.7); tail.add(cone(std({ color: p.accent, transparent: true, opacity: 0.5, emissive: glow, emissiveIntensity: 0.5 }), 0.08, 0.3, 0, -0.16, 0, 6));
+      break;
+    }
+    case 'manta': {
+      const wingMat = std({ color: p.primary, roughness: 0.4, side: THREE.DoubleSide });
+      // flat diamond body
+      const bodyTop = new THREE.Mesh(new THREE.SphereGeometry(0.5, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), wingMat); bodyTop.scale.set(1.4, 0.28, 1.0); bodyTop.position.y = 0.95; g.add(bodyTop);
+      g.add(orb(sec, 0.3, 0.0, 0.92, 0, 1.5, 0.3, 0.8));
+      // pectoral "wings"
+      for (const s of [1, -1] as const) { const w = new THREE.Group(); w.position.set(0, 0.95, s * 0.2); w.name = s === 1 ? 'wing1' : 'wing-1'; const fin = new THREE.Mesh(new THREE.ConeGeometry(0.5, 0.95, 3), wingMat); fin.scale.set(1, 0.12, 1); fin.rotation.set(s * Math.PI / 2, 0, Math.PI / 2); w.add(fin); g.add(w); }
+      const head = headGrp(0.5, 0.95);
+      head.add(orb(prim, 0.14, 0, 0, 0, 1.0, 0.7, 1.1));
+      for (const s of [1, -1] as const) head.add(rot(cone(acc, 0.04, 0.18, 0.1, -0.02, s * 0.12, 5), 0, 0, -Math.PI / 2)); // cephalic fins
+      exoEyes(head, 0.05, 0.04, 0.04, 0.16, { iris: 0x9adfff, lit: true });
+      const tail = tailGrp(-0.5, 0.92); tail.add(bone(prim, 0, 0, 0, -0.7, -0.05, 0, 0.04, 0.008, 6)); tail.add(rot(cone(acc, 0.03, 0.1, -0.74, -0.06, 0, 5), 0, 0, Math.PI / 2));
+      break;
+    }
+    case 'faewing': {
+      g.add(orb(prim, 0.18, 0, 0.95, 0, 0.9, 1.2, 0.85)); // tiny torso
+      const head = headGrp(0.06, 1.28);
+      head.add(orb(sec, 0.16, 0, 0, 0));
+      exoEyes(head, 0.07, 0.1, 0.02, 0.09, { iris: 0xbfff8a, lit: true });
+      head.add(rot(cone(acc, 0.04, 0.14, -0.02, 0.18, 0.06, 5), 0, 0, 0.3));
+      head.add(rot(cone(acc, 0.04, 0.14, -0.02, 0.18, -0.06, 5), 0, 0, 0.3));
+      for (const s of [1, -1] as const) g.add(bone(prim, 0, 0.9, s * 0.1, 0.05, 0.62, s * 0.14, 0.025, 0.015, 5)); // legs
+      for (const s of [1, -1] as const) g.add(bone(prim, 0.04, 1.1, s * 0.08, 0.16, 0.95, s * 0.16, 0.02, 0.012, 5)); // arms
+      // 4 dragonfly wings
+      const wmat = std({ color: p.accent, transparent: true, opacity: 0.5, side: THREE.DoubleSide, emissive: glow, emissiveIntensity: 0.4 });
+      for (const s of [1, -1] as const) { const w = new THREE.Group(); w.position.set(-0.04, 1.08, s * 0.1); w.name = s === 1 ? 'wing1' : 'wing-1'; const f1 = makeFin(wmat, 0.34, -0.2, 0.9); f1.rotation.set(s * Math.PI / 2, 0, 0.3); w.add(f1); const f2 = makeFin(wmat, 0.26, -0.2, 0.9); f2.position.set(-0.1, -0.06, 0); f2.rotation.set(s * Math.PI / 2, 0, -0.2); w.add(f2); g.add(w); }
+      tailGrp(-0.18, 0.9);
+      break;
+    }
+    default: { // safety net — a simple quadruped so unknown names still build
+      g.add(orb(prim, 0.4, 0, 0.7, 0, 1.3, 0.95, 0.95));
+      const head = headGrp(0.42, 0.95); head.add(orb(sec, 0.24, 0, 0, 0)); exoEyes(head, 0.06, 0.14, 0.06, 0.12);
+      quadLegs(0.24, -0.24, 0.5, 0.22, 0.5, 0.1, prim, acc);
+      tailGrp(-0.42, 0.7);
+      break;
+    }
+  }
+
+  g.traverse(o => { if ((o as THREE.Mesh).isMesh && !o.userData.noShadow) o.castShadow = true; });
   return g;
 }
 
@@ -10642,6 +11396,27 @@ function forgeMats(el: string, key: string, prim: number, sec: number, acc: numb
       const plate = std({ map: cp.map, emissive: glowN, emissiveMap: cp.glow, emissiveIntensity: 0.9 + tier * 0.05, roughness: 0.6 });
       return { skin, plate, hot: defHot(), membrane: finMat(`${key}:Um`, rgbOf(acc), rgbOf(glowN), 0.5), iris: 0xe05af2, slit: true };
     }
+    case 'Lumen': {
+      const skin = std({ color: prim, roughness: 0.15, metalness: 0.1 });
+      const plate = std({ color: sec, roughness: 0.12, metalness: 0.2 });
+      return { skin, plate, hot: std({ color: acc, emissive: glowN, emissiveIntensity: 1.2, roughness: 0.2 }), membrane: finMat(`${key}:Lm`, rgbOf(sec), rgbOf(acc), 0.7), iris: 0xffffff, slit: false };
+    }
+    case 'Gaia': {
+      const skin = std({ map: barkTex(`${key}:T`, hxs(shade(prim, -0.2)), hxs(shade(prim, -0.55)), hxs(shade(prim, 0.2)), seed), roughness: 0.95 });
+      const plate = std({ map: scaleTex(`${key}:Tp`, hxs(sec), hxs(shade(sec, 0.3)), hxs(shade(sec, -0.3)), seed + 4), roughness: 0.9 });
+      return { skin, plate, hot: std({ color: acc, emissive: glowN, emissiveIntensity: 0.9, roughness: 0.5 }), membrane: finMat(`${key}:Tm`, rgbOf(sec), rgbOf(acc), 0.65), iris: 0xa08060, slit: false };
+    }
+    case 'Frost': {
+      const skin = std({ map: scaleTex(`${key}:F`, hxs(prim), hxs(shade(prim, 0.2)), hxs(shade(prim, -0.2)), seed), roughness: 0.18, metalness: 0.2 });
+      const plate = std({ color: sec, roughness: 0.1, metalness: 0.4 });
+      return { skin, plate, hot: std({ color: acc, emissive: glowN, emissiveIntensity: 1.4, roughness: 0.15 }), membrane: finMat(`${key}:Fm`, rgbOf(acc), rgbOf(glowN), 0.7), iris: 0x9adff2, slit: false };
+    }
+    case 'Aether': {
+      const sp = starPair(key, seed);
+      const skin = std({ map: sp.map, emissive: glowN, emissiveMap: sp.glow, emissiveIntensity: 1.3, roughness: 0.25 });
+      const plate = std({ color: sec, roughness: 0.2, metalness: 0.2 });
+      return { skin, plate, hot: std({ color: acc, emissive: glowN, emissiveIntensity: 1.5, roughness: 0.2 }), membrane: finMat(`${key}:Am`, rgbOf(acc), rgbOf(glowN), 0.62), iris: 0xff9ad2, slit: true };
+    }
     default: { // Blaze
       const cp = crackPair(`${key}:B`, hxs(shade(prim, -0.55)), hxs(shade(sec, 0.05)), gh, seed);
       const skin = std({ map: cp.map, emissive: glowN, emissiveMap: cp.glow, emissiveIntensity: 0.65 + tier * 0.05, roughness: 0.6, metalness: 0.12 });
@@ -10662,11 +11437,44 @@ interface ForgeAnim {
   pulses: { m: THREE.Object3D; sp: number; ph: number }[];
 }
 
+// ------------------------------------------------------------
+// Element-themed archetype pools. Each forged species is assigned
+// one of the 36 design body-plans by HASHING its id — so kin of the
+// same element get DIFFERENT silhouettes (no more "same blob across
+// every Guardian"), while staying thematically right for the element.
+// Pools are ordered roughly humble → grand; the pick is biased upward
+// by form rank so Novices read smaller and Aether forms read grander.
+// ------------------------------------------------------------
+const ARCHETYPE_POOL: Record<string, string[]> = {
+  Blaze:   ['imp', 'saurian', 'ram', 'sabertooth', 'raptor', 'drake', 'scorpion', 'phoenix', 'colossus'],
+  Tide:    ['crab', 'turtle', 'eel', 'cephalopod', 'anglerfish', 'jelly', 'manta', 'leviathan', 'hydra'],
+  Verdant: ['faewing', 'beetle', 'mantis', 'stag', 'kitsune', 'treant', 'drake', 'colossus', 'hydra'],
+  Volt:    ['dragonette', 'raptor', 'mantis', 'orbiter', 'wyrm', 'drake', 'roc', 'colossus', 'phoenix'],
+  Gale:    ['faewing', 'moth', 'manta', 'roc', 'dragonette', 'phoenix', 'drake', 'seraph', 'wisp'],
+  Umbra:   ['imp', 'arachnid', 'kitsune', 'moth', 'cephalopod', 'wyrm', 'hydra', 'leviathan', 'colossus'],
+  Lumen:   ['wisp', 'faewing', 'dragonette', 'kitsune', 'orbiter', 'phoenix', 'seraph', 'roc', 'colossus'],
+  Gaia:    ['beetle', 'ram', 'turtle', 'crystalbeast', 'golem', 'treant', 'mammoth', 'colossus', 'drake'],
+  Frost:   ['dragonette', 'stag', 'sabertooth', 'crystalbeast', 'mammoth', 'wyrm', 'golem', 'leviathan', 'seraph'],
+  Aether:  ['wisp', 'orbiter', 'jelly', 'manta', 'crystalbeast', 'seraph', 'nebula', 'hydra', 'colossus'],
+};
+
+/** Deterministically choose a design body-plan for a forged species. */
+function pickForgeArch(el: string, id: string, tier: number, base: string): string {
+  const pool = ARCHETYPE_POOL[el];
+  if (!pool || !pool.length) return base;
+  const span = pool.length;
+  const h = forgeSeed(id + ':arch');
+  // grander designs sit later in the pool; bias the window's floor up with rank
+  const lo = Math.min(span - 1, Math.floor((tier / 8) * (span - 1) * 0.55));
+  return pool[lo + (h % (span - lo))];
+}
+
 /**
- * Forge a Guardian: a known-good archetype skeleton, re-skinned with
- * a unique seeded texture set, jittered into its own proportions, and
- * grown element regalia + an idle rig. Returns a BespokeBuild so it
- * drops straight into makeGuardian alongside the hand-sculpted models.
+ * Forge a Guardian: a distinct design body-plan (chosen from an element
+ * pool by species id), re-skinned with a unique seeded texture set,
+ * jittered into its own proportions, and grown element regalia + an idle
+ * rig. Returns a BespokeBuild so it drops straight into makeGuardian
+ * alongside the hand-sculpted models.
  */
 export function forgeGuardian(o: ForgeOpts): BespokeBuild {
   const prim = o.customColors?.primary ?? o.palette.primary;
@@ -10680,8 +11488,10 @@ export function forgeGuardian(o: ForgeOpts): BespokeBuild {
   const key = `forge:${o.id}:${(prim ^ Math.imul(sec, 3) ^ Math.imul(acc, 7)) >>> 0}`;
   const M = forgeMats(el, key, prim, sec, acc, o.glow, seed, tier);
 
-  // 1) Known-good skeleton (faces +X, names head/tail/wing1/wing-1).
-  const g = buildProceduralArchetype(o.arch, { primary: prim, secondary: sec, accent: acc }, o.glow);
+  // 1) Distinct design body-plan, element-themed + id-seeded (faces +X,
+  //    names head/tail/wing1/wing-1). Falls back to the species' base arch.
+  const arch = pickForgeArch(el, o.id, tier, o.arch);
+  const g = buildProceduralArchetype(arch, { primary: prim, secondary: sec, accent: acc }, o.glow, seed);
 
   // 2) Re-skin: swap the flat archetype materials for textured ones.
   g.traverse(ch => {
@@ -10805,7 +11615,7 @@ export function forgeGuardian(o: ForgeOpts): BespokeBuild {
     addMotes(3 + tier, 0xffffff, 0.85, 0.8, 0.5); // orbiting stars
     if (tail) for (let i = 0; i < 3; i++) { const w = orb(M.membrane, 0.07 - i * 0.015, -0.15 - i * 0.16, 0.02 - i * 0.03, 0); w.userData.noShadow = true; tail.add(w); }
     if (head) { const crest = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.3, 5), M.hot); crest.position.set(-0.02, 0.2, 0); crest.rotation.z = -0.3; head.add(crest); }
-  } else { // Umbra
+  } else if (el === 'Umbra') {
     for (let i = 0; i < nCrest; i++) {
       const f = 0.14 + (i / Math.max(1, nCrest - 1)) * 0.7;
       const sz = 0.26 - f * 0.1;
@@ -10817,6 +11627,34 @@ export function forgeGuardian(o: ForgeOpts): BespokeBuild {
     if (head) for (const s of [1, -1]) { const horn = spike(bone2, 0, 0.12, s * 0.1, -0.04, 0.46, s * 0.18, 0.04); head.add(horn); }
     if (tail) { const tf = makeFlame(0.24, 0.1, 0xead0ff, o.glow); tf.position.set(-0.08, 0.05, 0); tail.add(tf); A.flames.push({ g: tf, speed: 5, ph: 2, amp: 0.24 }); }
     addMotes(3 + tier, 0xb06af2, 0.6, 0.75, 0.45);
+  } else if (el === 'Lumen') {
+    if (head) {
+      const halo = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.02, 6, 20), std({ color: acc, emissive: o.glow, emissiveIntensity: 1.5 }));
+      halo.position.set(0, 0.32, 0); halo.rotation.x = Math.PI / 2; head.add(halo);
+    }
+    addMotes(3 + tier, 0xffffff, 0.7, 0.8, 0.4);
+  } else if (el === 'Gaia') {
+    for (let i = 0; i < nCrest; i++) {
+      const f = 0.12 + (i / Math.max(1, nCrest - 1)) * 0.74;
+      const h = 0.22 - f * 0.08;
+      const sp = new THREE.Mesh(new THREE.ConeGeometry(0.06, h, 6), M.hot);
+      sp.position.copy(socketAt(f)); sp.rotation.z = Math.PI / 6; g.add(sp);
+    }
+    addMotes(2 + tier, 0xb0865a, 0.6, 0.7, 0.3);
+  } else if (el === 'Frost') {
+    for (let i = 0; i < nCrest; i++) {
+      const f = 0.12 + (i / Math.max(1, nCrest - 1)) * 0.74;
+      const h = 0.25 - f * 0.09;
+      const crystal = new THREE.Mesh(new THREE.OctahedronGeometry(h * 0.6), M.hot);
+      crystal.position.copy(socketAt(f)); g.add(crystal);
+    }
+    addMotes(3 + tier, 0xd8f2ff, 0.65, 0.75, 0.4);
+  } else if (el === 'Aether') {
+    if (head) {
+      const crown = new THREE.Mesh(new THREE.TorusGeometry(0.24, 0.025, 8, 24), std({ color: acc, emissive: o.glow, emissiveIntensity: 2.0 }));
+      crown.position.set(0, 0.38, 0); crown.rotation.x = Math.PI / 2; head.add(crown);
+    }
+    addMotes(4 + tier, 0xff9ad2, 0.8, 0.8, 0.55);
   }
 
   // 6) Wings — give Gale a pair if it lacks one; flap any that exist.
