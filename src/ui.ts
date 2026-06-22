@@ -3,7 +3,7 @@
 // toasts, name input
 // ============================================================
 import * as THREE from 'three';
-import { ITEMS, CRAWLER_PARTS, CRAWLER_SLOTS, CRAWLER_SLOT_INFO, TYPE_CSS, STAT_NAMES, HOUSES, DUNGEONS, expForLevel, SPECIES, TECHS, elementChipsHTML, RARITY_INFO, ULTRA_GRADIENT, type StatKey, type CrawlerSlot, type CrawlerRarity, getSpeciesPassive } from './data';
+import { ITEMS, CRAWLER_PARTS, CRAWLER_SLOTS, CRAWLER_SLOT_INFO, TYPE_CSS, STAT_NAMES, HOUSES, DUNGEONS, expForLevel, SPECIES, TECHS, elementChipsHTML, RARITY_INFO, ULTRA_GRADIENT, type StatKey, type CrawlerSlot, type CrawlerRarity, getSpeciesPassive, ELEMENT_CSS, ELEMENT_ICONS, TYPE_ELEMENT } from './data';
 import { Player, Guardian, ParentSnapshot } from './state';
 import { makeGuardian, disposeRig, makeCrawler, disposeCrawler, updateTamerFX, SKIN_TONES, HAIR_COLORS, HAIRSTYLES } from './models';
 import { GUILD_LORE, avatarURL, guildIconURL, rankFor, questsDoneCount, makeCardNo } from './guilds';
@@ -16,8 +16,11 @@ import { checkAchievements, achievementsHTML } from './achievements';
 import { sfx, toggleMute, isMuted, getMusicVolume, getSoundVolume, setMusicVolume, setSoundVolume } from './audio';
 import { openTutorialReplayMenu, runGuardianTutorial, isTutorialOpen } from './tutorial';
 import { weekdayName, time12, fullDateLabel } from './calendar';
-import { getTournamentAlert } from './tournaments';
+import { getTournamentAlert, TournamentBracket, BracketCompetitor, TournamentTier, guildName, guildColor } from './tournaments';
 import { CLOTHES_DATABASE, updateTamerAppearance } from './clothes';
+import { WORLD_GUILDS } from './lore';
+import { speciesSnapshotURL } from './snapshots';
+import { renderLeaderboardPanel, wireLeaderboardPanel, getPlayerMMR, setPlayerMMR } from './mmr';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
 
@@ -366,7 +369,7 @@ export function showHotkeys(on: boolean, dungeon = false, regions = false): void
   }
 
   el.innerHTML = [
-    '<b>P</b> Tamer', '<b>I</b> Items', '<b>G</b> Guardians', '<b>C</b> Crawler', '<b>J</b> Journal', '<b>V</b> Evolutions',
+    '<b>P</b> Tamer', '<b>I</b> Items', '<b>G</b> Guardians', '<b>C</b> Crawler', '<b>J</b> Journal', '<b>V</b> Evolutions', '<b>L</b> Leaderboard',
     ...(dungeon ? ['<b>M</b> Map'] : []),
     ...(regions ? ['<b>T</b> Regions'] : []),
     '<b>N</b> Sound', '<b>Esc</b> Menu',
@@ -516,6 +519,18 @@ export async function executeCheatFlow(player: Player): Promise<void> {
       player.save(false);
       refreshHUD();
       toast('Cheat Activated: +10,000 Shards!', 'gold');
+    } else if (code.toLowerCase().startsWith('mmr')) {
+      // "mmr2500" sets directly; bare "mmr" prompts for a value.
+      const inline = code.slice(3).trim();
+      let value = parseInt(inline, 10);
+      if (isNaN(value)) {
+        const entered = await askName('Set MMR', String(getPlayerMMR(player)), true);
+        value = parseInt(entered ?? '', 10);
+      }
+      if (isNaN(value)) { toast('Invalid MMR value', 'red'); return; }
+      const v = setPlayerMMR(player, value);
+      refreshHUD();
+      toast(`Cheat Activated: MMR set to ★ ${v.toLocaleString()}!`, 'gold');
     } else {
       toast('Invalid Cheat Code', 'red');
     }
@@ -762,6 +777,7 @@ export function openMasterDebugMenu(player: Player): Promise<void> {
       const rIdx = rankIndexFor(player);
       const rankName = RANKS[rIdx].name;
       $('db-rank-val').textContent = `${rankName} (${player.tournamentPoints} TP)`;
+      $('db-mmr-val').textContent = getPlayerMMR(player).toLocaleString();
     };
 
     updateSlotsDisplay();
@@ -963,6 +979,22 @@ export function openMasterDebugMenu(player: Player): Promise<void> {
       toast('Tournament Points reset to 0!', 'red');
     };
 
+    // 4b. Ladder MMR — sets the rating that gates tournaments
+    const applyMMR = (value: number) => {
+      const v = setPlayerMMR(player, value);
+      refreshHUD();
+      updateSlotsDisplay();
+      toast(`MMR set to ★ ${v.toLocaleString()}!`, 'gold');
+    };
+    $('db-mmr-set').onclick = () => {
+      const input = $<HTMLInputElement>('db-mmr-input');
+      const v = parseInt(input.value, 10);
+      if (isNaN(v)) { toast('Enter a valid MMR number.', 'red'); return; }
+      applyMMR(v);
+    };
+    $('db-mmr-2000').onclick = () => applyMMR(2000);
+    $('db-mmr-2800').onclick = () => applyMMR(2800);
+
     // 5. Warp/Teleportation
     $('db-warp-btn').onclick = () => {
       const destType = $<HTMLSelectElement>('db-warp-select').value;
@@ -1104,6 +1136,9 @@ export function openMasterDebugMenu(player: Player): Promise<void> {
       $('db-tp-100').onclick = null;
       $('db-tp-250').onclick = null;
       $('db-tp-reset').onclick = null;
+      $('db-mmr-set').onclick = null;
+      $('db-mmr-2000').onclick = null;
+      $('db-mmr-2800').onclick = null;
       $('db-cine-play').onclick = null;
       $('db-fish-play').onclick = null;
       $('db-warp-btn').onclick = null;
@@ -1173,14 +1208,14 @@ const typeTag = (g: Guardian) =>
   `<span class="tag" style="background:${TYPE_CSS[g.species.type]};color:#0c1022">${g.species.type}</span>`;
 
 // ================= panel system (P / I / G / C) =================
-export type PanelKind = 'player' | 'inventory' | 'guardians' | 'crawler' | 'quests' | 'evotree';
+export type PanelKind = 'player' | 'inventory' | 'guardians' | 'crawler' | 'quests' | 'evotree' | 'leaderboard';
 export interface PanelCtx { canSave: boolean; }
 
-const PANEL_KEYS: Record<string, PanelKind> = { p: 'player', i: 'inventory', g: 'guardians', c: 'crawler', j: 'quests', v: 'evotree' };
+const PANEL_KEYS: Record<string, PanelKind> = { p: 'player', i: 'inventory', g: 'guardians', c: 'crawler', j: 'quests', v: 'evotree', l: 'leaderboard' };
 const PANEL_TITLES: Record<PanelKind, string> = {
-  player: '🧭 Tamer Data', inventory: '🎒 Inventory', guardians: '🐾 Guardians', crawler: '🛞 Crawler', quests: '📖 Quest Journal', evotree: '🧬 Evolutions',
+  player: '🧭 Tamer Data', inventory: '🎒 Inventory', guardians: '🐾 Guardians', crawler: '🛞 Crawler', quests: '📖 Quest Journal', evotree: '🧬 Evolutions', leaderboard: '🏆 Leaderboard',
 };
-const PANEL_HOTKEY: Record<PanelKind, string> = { player: 'P', inventory: 'I', guardians: 'G', crawler: 'C', quests: 'J', evotree: 'V' };
+const PANEL_HOTKEY: Record<PanelKind, string> = { player: 'P', inventory: 'I', guardians: 'G', crawler: 'C', quests: 'J', evotree: 'V', leaderboard: 'L' };
 
 /** Open a dedicated panel. Esc or the panel's own hotkey closes it (hotkeys also switch panels). */
 export function openPanel(kind: PanelKind, player: Player, ctx: PanelCtx): Promise<void> {
@@ -1262,6 +1297,9 @@ export function openPanel(kind: PanelKind, player: Player, ctx: PanelCtx): Promi
 
 // ---------- panel bodies ----------
 function renderPanelBody(kind: PanelKind, p: Player, refresh: () => void, ctx: PanelCtx): string {
+  if (kind === 'leaderboard') {
+    return renderLeaderboardPanel(p, refresh);
+  }
   if (kind === 'player') {
     const house = HOUSES.find(h => h.id === p.houseId);
     const lore = house ? GUILD_LORE[house.id] : null;
@@ -1736,7 +1774,9 @@ function renderJournal(p: Player): string {
 }
 
 function wirePanelBody(kind: PanelKind, el: HTMLElement, p: Player, refresh: () => void, ctx: PanelCtx): void {
-  if (kind === 'quests') {
+  if (kind === 'leaderboard') {
+    wireLeaderboardPanel(el, p, refresh);
+  } else if (kind === 'quests') {
     el.querySelectorAll<HTMLElement>('[data-jtab]').forEach(b => b.onclick = () => {
       journalTab = b.dataset.jtab as JournalTab;
       journalSel = null;
@@ -2114,6 +2154,7 @@ export function openPauseMenu(
           <button class="ui-btn" data-hub="crawler">🛞 Crawler <span class="sub">(C)</span></button>
           <button class="ui-btn" data-hub="quests">📖 Quest Journal <span class="sub">(J)</span></button>
           <button class="ui-btn" data-hub="evotree">🧬 Evolution Atlas <span class="sub">(V)</span></button>
+          <button class="ui-btn" data-hub="leaderboard">🏆 Leaderboard <span class="sub">(L)</span></button>
           <button class="ui-btn" id="hub-tutorial">🎓 Field Manual <span class="sub">(replay tutorials)</span></button>
           <button class="ui-btn" id="hub-options">⚙️ Game Options</button>
         </div>
@@ -2553,6 +2594,1467 @@ export async function openDebugBoutique(player: Player): Promise<void> {
       sfx('cancel');
       closeMenu();
       resolve();
+    };
+  });
+}
+
+function startWorldsParticles(parentEl: HTMLElement, tierId = 'world_championship'): { destroy: () => void } {
+  const canvas = document.createElement('canvas');
+  canvas.className = 'worlds-particle-canvas';
+  canvas.style.position = 'absolute';
+  canvas.style.top = '0';
+  canvas.style.left = '0';
+  canvas.style.width = '100%';
+  canvas.style.height = '100%';
+  canvas.style.pointerEvents = 'none';
+  canvas.style.zIndex = '0';
+  parentEl.appendChild(canvas);
+
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return { destroy: () => {} };
+
+  let width = (canvas.width = parentEl.clientWidth);
+  let height = (canvas.height = parentEl.clientHeight);
+
+  const handleResize = () => {
+    width = canvas.width = parentEl.clientWidth;
+    height = canvas.height = parentEl.clientHeight;
+  };
+  window.addEventListener('resize', handleResize);
+
+  interface Particle {
+    x: number;
+    y: number;
+    size: number;
+    speedY: number;
+    speedX: number;
+    alpha: number;
+    fadeSpeed: number;
+    color: string;
+    shape: 'circle' | 'square' | 'bubble' | 'star' | 'lightning';
+  }
+
+  const particles: Particle[] = [];
+  
+  let colors: string[] = ['#f2c14e', '#ffd24e', '#ffffff', '#e8a13a'];
+  let shape: 'circle' | 'square' | 'bubble' | 'star' | 'lightning' = 'circle';
+  
+  if (tierId === 'weekly_open') {
+    colors = ['#cd7f32', '#d4af37', '#ffffff', '#e5a05d'];
+    shape = 'circle';
+  } else if (tierId === 'turmal_seasonal') {
+    colors = ['#5ee0d0', '#7fd4ff', '#ffffff', '#76ffd4'];
+    shape = 'lightning';
+  } else if (tierId === 'foretales_exhibition') {
+    colors = ['#ff5ab0', '#ffd24e', '#b15ae8', '#00ffff'];
+    shape = 'square';
+  } else if (tierId === 'continental_crown') {
+    colors = ['#f2d23a', '#5ad88a', '#ffffff', '#ffea75'];
+    shape = 'star';
+  } else if (tierId === 'aurelia_cup') {
+    colors = ['#f2c14e', '#7fe0c0', '#ff8a3a', '#70e0ff'];
+    shape = 'bubble';
+  } else if (tierId === 'gauntlet_seeds') {
+    colors = ['#ff6a3a', '#ff2d55', '#ffb05e', '#cfcfcf'];
+    shape = 'circle';
+  } else if (tierId === 'sealwatch') {
+    colors = ['#b18ae8', '#9b5cff', '#2c1e4c', '#c8b0ff'];
+    shape = 'circle';
+  } else if (tierId === 'world_championship' || tierId === 'legends_gauntlet') {
+    colors = ['#ffd24e', '#fff0b0', '#ffffff', '#ff77aa', '#88eeff'];
+    shape = 'star';
+  }
+
+  const spawnParticle = () => {
+    particles.push({
+      x: Math.random() * width,
+      y: height + 10,
+      size: 1.2 + Math.random() * 2.8,
+      speedY: -(0.4 + Math.random() * 1.2),
+      speedX: (Math.random() - 0.5) * 0.4,
+      alpha: 0.15 + Math.random() * 0.7,
+      fadeSpeed: 0.0015 + Math.random() * 0.004,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      shape: shape,
+    });
+  };
+
+  for (let i = 0; i < 24; i++) {
+    particles.push({
+      x: Math.random() * width,
+      y: Math.random() * height,
+      size: 1.2 + Math.random() * 2.8,
+      speedY: -(0.4 + Math.random() * 1.2),
+      speedX: (Math.random() - 0.5) * 0.4,
+      alpha: 0.15 + Math.random() * 0.7,
+      fadeSpeed: 0.0015 + Math.random() * 0.004,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      shape: shape,
+    });
+  }
+
+  let active = true;
+  const anim = () => {
+    if (!active) return;
+    ctx.clearRect(0, 0, width, height);
+
+    if (Math.random() < 0.22 && particles.length < 80) {
+      spawnParticle();
+    }
+
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.y += p.speedY;
+      p.x += p.speedX;
+      p.alpha -= p.fadeSpeed;
+
+      if (p.y < -10 || p.alpha <= 0 || p.x < -10 || p.x > width + 10) {
+        particles.splice(i, 1);
+        continue;
+      }
+
+      ctx.fillStyle = p.color;
+      ctx.globalAlpha = p.alpha;
+      ctx.beginPath();
+      
+      if (p.shape === 'circle') {
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (p.shape === 'square') {
+        ctx.fillRect(p.x - p.size, p.y - p.size, p.size * 2, p.size * 2);
+      } else if (p.shape === 'bubble') {
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.strokeStyle = p.color;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        // small bubble highlight
+        ctx.beginPath();
+        ctx.arc(p.x - p.size * 0.3, p.y - p.size * 0.3, p.size * 0.25, 0, Math.PI * 2);
+        ctx.fillStyle = '#ffffff';
+        ctx.globalAlpha = p.alpha * 0.5;
+        ctx.fill();
+      } else if (p.shape === 'star') {
+        const cx = p.x;
+        const cy = p.y;
+        const spikes = 5;
+        const outerRadius = p.size * 1.8;
+        const innerRadius = p.size * 0.8;
+        let rot = Math.PI / 2 * 3;
+        let x_pos = cx;
+        let y_pos = cy;
+        const step = Math.PI / spikes;
+
+        ctx.moveTo(cx, cy - outerRadius);
+        for (let j = 0; j < spikes; j++) {
+          x_pos = cx + Math.cos(rot) * outerRadius;
+          y_pos = cy + Math.sin(rot) * outerRadius;
+          ctx.lineTo(x_pos, y_pos);
+          rot += step;
+          x_pos = cx + Math.cos(rot) * innerRadius;
+          y_pos = cy + Math.sin(rot) * innerRadius;
+          ctx.lineTo(x_pos, y_pos);
+          rot += step;
+        }
+        ctx.lineTo(cx, cy - outerRadius);
+        ctx.closePath();
+        ctx.fill();
+      } else if (p.shape === 'lightning') {
+        ctx.moveTo(p.x, p.y - p.size * 1.5);
+        ctx.lineTo(p.x - p.size * 0.8, p.y + p.size * 0.1);
+        ctx.lineTo(p.x + p.size * 0.2, p.y + p.size * 0.1);
+        ctx.lineTo(p.x - p.size * 0.3, p.y + p.size * 1.5);
+        ctx.lineTo(p.x + p.size * 0.8, p.y - p.size * 0.1);
+        ctx.lineTo(p.x - p.size * 0.2, p.y - p.size * 0.1);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1.0;
+    requestAnimationFrame(anim);
+  };
+
+  anim();
+
+  return {
+    destroy: () => {
+      active = false;
+      window.removeEventListener('resize', handleResize);
+      canvas.remove();
+    },
+  };
+}
+
+function hashString(str: string): number {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return Math.abs(hash);
+}
+
+function generateTamerAvatar(name: string, baseColor: string): string {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const ctx = c.getContext('2d');
+  if (!ctx) return '';
+
+  const hash = hashString(name);
+
+  // Deterministic choices
+  const skinColors = ['#e8b48a', '#d09268', '#ae7855', '#ffdcb8', '#fce5cd'];
+  const hairColors = ['#35261a', '#1e1a18', '#6a3d24', '#b57945', '#deb27c', '#c73a20', '#3b5f8f', '#6c538c'];
+  
+  const skin = skinColors[hash % skinColors.length];
+  const hair = hairColors[(hash >> 2) % hairColors.length];
+  const hairStyle = (hash >> 4) % 4; // 0: short, 1: sides, 2: cap, 3: wild
+  const eyeColor = ['#2a2a3a', '#3a6c53', '#3a5c6c', '#6c4c3a'][(hash >> 6) % 4];
+
+  // Background
+  const bg = ctx.createLinearGradient(0, 0, 0, 128);
+  bg.addColorStop(0, baseColor + '44');
+  bg.addColorStop(1, '#0c1022');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, 128, 128);
+
+  // Shoulders (jacket)
+  ctx.fillStyle = baseColor;
+  ctx.fillRect(20, 100, 88, 28);
+  // Shirt inside jacket
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(52, 100, 24, 12);
+
+  // Head/neck
+  ctx.fillStyle = skin;
+  ctx.fillRect(48, 88, 32, 16); // neck
+  ctx.fillRect(34, 38, 60, 56); // head
+
+  // Hair
+  ctx.fillStyle = hair;
+  if (hairStyle === 0) {
+    // short
+    ctx.fillRect(30, 28, 68, 16);
+    ctx.fillRect(30, 38, 8, 20);
+    ctx.fillRect(90, 38, 8, 20);
+  } else if (hairStyle === 1) {
+    // sides/long
+    ctx.fillRect(30, 28, 68, 16);
+    ctx.fillRect(30, 38, 12, 40);
+    ctx.fillRect(86, 38, 12, 40);
+  } else if (hairStyle === 2) {
+    // cap/beanie
+    ctx.fillStyle = baseColor;
+    ctx.fillRect(26, 22, 76, 22);
+    ctx.fillStyle = hair;
+    ctx.fillRect(30, 44, 8, 12);
+    ctx.fillRect(90, 44, 8, 12);
+  } else {
+    // wild/spiky
+    ctx.fillRect(30, 28, 68, 16);
+    // spiky chunks
+    ctx.fillRect(26, 20, 16, 12);
+    ctx.fillRect(48, 18, 16, 12);
+    ctx.fillRect(70, 18, 16, 12);
+    ctx.fillRect(86, 20, 16, 12);
+  }
+
+  // Eyes
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(44, 56, 12, 10);
+  ctx.fillRect(72, 56, 12, 10);
+  ctx.fillStyle = eyeColor;
+  ctx.fillRect(48, 58, 6, 8);
+  ctx.fillRect(76, 58, 6, 8);
+
+  // Mouth
+  ctx.fillStyle = '#a05a4a';
+  ctx.fillRect(54, 76, 20, 4);
+
+  return c.toDataURL('image/png');
+}
+
+function generateGoldTexture(): string {
+  const size = 128;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d')!;
+  
+  const grad = ctx.createLinearGradient(0, 0, size, size);
+  grad.addColorStop(0, '#ffe58f');
+  grad.addColorStop(0.25, '#d4af37');
+  grad.addColorStop(0.5, '#f3d070');
+  grad.addColorStop(0.75, '#aa7c11');
+  grad.addColorStop(1, '#ffe07a');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, size, size);
+
+  ctx.fillStyle = '#ffffff';
+  for (let i = 0; i < 200; i++) {
+    ctx.globalAlpha = Math.random() * 0.16;
+    const w = 4 + Math.random() * 60;
+    const h = 1 + Math.random() * 1.5;
+    ctx.fillRect(Math.random() * size - w/2, Math.random() * size, w, h);
+  }
+  
+  ctx.fillStyle = '#000000';
+  for (let i = 0; i < 120; i++) {
+    ctx.globalAlpha = Math.random() * 0.12;
+    const w = 4 + Math.random() * 30;
+    const h = 1 + Math.random() * 1.0;
+    ctx.fillRect(Math.random() * size - w/2, Math.random() * size, w, h);
+  }
+  
+  return canvas.toDataURL('image/png');
+}
+
+export async function showBracketTreeScreen(
+  bracket: TournamentBracket,
+  currentRoundIndex: number,
+  tier: TournamentTier
+): Promise<void> {
+  return new Promise<void>(resolve => {
+    const roundsHtml = [];
+    const totalRounds = bracket.roundsCount;
+
+    // Apply content screen expansions
+    const contentEl = $('menu-content');
+    contentEl.style.width = 'min(1160px, 96vw)';
+    contentEl.style.maxHeight = '95vh';
+
+    const restoreStyles = () => {
+      contentEl.style.width = '';
+      contentEl.style.maxHeight = '';
+    };
+
+    const goldTexUrl = generateGoldTexture();
+
+    // Precompute W-L records and competitor map for all formats
+    const winCounts: Record<string, number> = {};
+    const lossCounts: Record<string, number> = {};
+    const competitorMap: Record<string, BracketCompetitor> = {};
+
+    // Initialize counts for all rounds' competitors
+    for (const round of bracket.rounds) {
+      if (!round) continue;
+      for (const c of round) {
+        if (c) {
+          winCounts[c.id] = 0;
+          lossCounts[c.id] = 0;
+          competitorMap[c.id] = c;
+        }
+      }
+    }
+    // Scan all matches to ensure all competitors are populated
+    for (const roundMatches of bracket.matches) {
+      if (!roundMatches) continue;
+      for (const m of roundMatches) {
+        if (m) {
+          if (m.competitorA) {
+            winCounts[m.competitorA.id] = winCounts[m.competitorA.id] ?? 0;
+            lossCounts[m.competitorA.id] = lossCounts[m.competitorA.id] ?? 0;
+            competitorMap[m.competitorA.id] = m.competitorA;
+          }
+          if (m.competitorB) {
+            winCounts[m.competitorB.id] = winCounts[m.competitorB.id] ?? 0;
+            lossCounts[m.competitorB.id] = lossCounts[m.competitorB.id] ?? 0;
+            competitorMap[m.competitorB.id] = m.competitorB;
+          }
+        }
+      }
+    }
+
+    // Scan all matches up to the current state and calculate wins/losses
+    for (let r = 0; r < bracket.matches.length; r++) {
+      const roundMatches = bracket.matches[r];
+      if (!roundMatches) continue;
+      for (const m of roundMatches) {
+        if (m && m.winnerId) {
+          winCounts[m.winnerId] = (winCounts[m.winnerId] ?? 0) + 1;
+          const loserId = m.winnerId === m.competitorA.id ? m.competitorB.id : m.competitorA.id;
+          lossCounts[loserId] = (lossCounts[loserId] ?? 0) + 1;
+        }
+      }
+    }
+
+    const pInstance = Player.activeInstance;
+    const canPredict = currentRoundIndex === 0 && pInstance && !pInstance.tournament.predictions;
+    const tempPredictions: Record<string, string> = {};
+
+    // Helper function to render a detailed tamer profile modal overlay
+    const showTamerProfileModal = (comp: BracketCompetitor) => {
+      const wins = winCounts[comp.id] ?? 0;
+      const losses = lossCounts[comp.id] ?? 0;
+      
+      const guildDef = WORLD_GUILDS.find(g => g.id === comp.guildId);
+      const guildCrest = guildDef ? (comp.guildId === 'first_fire' ? '🐚' : comp.guildId === 'pearlwake' ? '🌊' : comp.guildId === 'duneward' ? '🏜️' : comp.guildId === 'aurora_lodge' ? '❄️' : comp.guildId === 'grand_houses' ? '🏰' : '🛡️') : '🛡️';
+      
+      let avatarUrl = '';
+      if (comp.isPlayer) {
+        const p = Player.activeInstance;
+        avatarUrl = p ? avatarURL(p) : '';
+      } else {
+        avatarUrl = generateTamerAvatar(comp.name, comp.color);
+      }
+      
+      const guardiansHtml = comp.speciesIds.map(sid => {
+        const s = SPECIES[sid];
+        const typeCol = TYPE_CSS[s?.type] ?? '#999';
+        const snapshot = speciesSnapshotURL(sid);
+        return `
+          <div class="tamer-profile-guardian-card">
+            <div class="tamer-profile-guardian-snapshot-wrapper" style="border-color:${typeCol}">
+              <img class="tamer-profile-guardian-snapshot" src="${snapshot}" />
+            </div>
+            <span class="tamer-profile-guardian-name" title="${s?.name ?? sid}">${s?.name ?? sid}</span>
+            <span class="tamer-profile-guardian-type" style="background:${typeCol}">${s?.type ?? 'Aether'}</span>
+          </div>
+        `;
+      }).join('');
+
+      // Tamer rating and average stats
+      let totalOffense = 0;
+      let totalDefense = 0;
+      let totalSpeed = 0;
+      for (const sid of comp.speciesIds) {
+        const s = SPECIES[sid];
+        if (s) {
+          const b = s.base || { hp: 50, sp: 20, atk: 50, def: 50, spd: 50, wis: 50 };
+          totalOffense += (b.atk || 50) + (b.wis || 50);
+          totalDefense += (b.hp || 50) + (b.def || 50);
+          totalSpeed += b.spd || 50;
+        }
+      }
+      const count = comp.speciesIds.length || 1;
+      const avgOff = Math.round(totalOffense / count);
+      const avgDef = Math.round(totalDefense / (count * 1.5));
+      const avgSpd = Math.round(totalSpeed / count);
+      
+      const ratingVal = comp.rating;
+      const tierBadge = ratingVal >= 1700 ? '<span class="tamer-rating-pill s-tier">S-TIER</span>'
+        : ratingVal >= 1450 ? '<span class="tamer-rating-pill a-tier">A-TIER</span>'
+        : ratingVal >= 1200 ? '<span class="tamer-rating-pill b-tier">B-TIER</span>'
+        : '<span class="tamer-rating-pill c-tier">C-TIER</span>';
+      
+      const modalHtml = `
+        <div class="tamer-profile-modal-overlay" id="tamer-profile-modal">
+          <div class="tamer-profile-card">
+            <button class="tamer-profile-close-btn" id="tamer-profile-close">&times;</button>
+            
+            <div class="tamer-profile-header">
+              <div class="tamer-profile-avatar-wrapper" style="border-color:${comp.color}">
+                <img class="tamer-profile-avatar-img" src="${avatarUrl}" />
+              </div>
+              <div class="tamer-profile-info">
+                <div class="tamer-profile-name" style="color:${comp.color}">${comp.name}</div>
+                <div class="tamer-profile-sub">${comp.sub}</div>
+                <div class="tamer-profile-meta-row">
+                  <span class="tamer-profile-meta-item">📍 ${comp.hometown}</span>
+                  <span class="tamer-profile-meta-item">🏆 Rating: ${Math.round(comp.rating)}</span>
+                  <span class="tamer-profile-meta-item">📊 Record: ${wins}W - ${losses}L</span>
+                </div>
+              </div>
+            </div>
+            
+            ${comp.quote ? `<blockquote class="tamer-profile-quote">"${comp.quote}"</blockquote>` : ''}
+            
+            <div>
+              <div class="tamer-profile-section-title">Combat Capability</div>
+              <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--ui-text); background:rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius:8px; padding:10px;">
+                <div>⚔️ Off: <b>${avgOff}</b></div>
+                <div>🛡️ Def: <b>${avgDef}</b></div>
+                <div>⚡ Spd: <b>${avgSpd}</b></div>
+                <div>⭐ Rating: ${tierBadge}</div>
+              </div>
+            </div>
+
+            <div>
+              <div class="tamer-profile-section-title">Guild Alliance</div>
+              <div class="tamer-profile-guild-box">
+                <div class="tamer-profile-guild-header" style="color:${comp.color}">
+                  <span>${guildCrest}</span>
+                  <span>${guildDef ? guildDef.name : 'Independent Tamer'}</span>
+                  ${guildDef ? `<span style="font-size:10px;color:var(--ui-dim)">(${guildDef.seat}, ${guildDef.continent})</span>` : ''}
+                </div>
+                <div class="tamer-profile-guild-desc">
+                  ${guildDef ? guildDef.desc : 'Fights independently under the compact without guild sponsorship.'}
+                </div>
+              </div>
+            </div>
+            
+            <div>
+              <div class="tamer-profile-section-title">Active Guardian Team</div>
+              <div class="tamer-profile-guardians-grid">
+                ${guardiansHtml}
+              </div>
+            </div>
+            
+          </div>
+        </div>
+      `;
+      
+      const modalDiv = document.createElement('div');
+      modalDiv.innerHTML = modalHtml;
+      const modalElement = modalDiv.firstElementChild as HTMLElement;
+      document.body.appendChild(modalElement);
+      
+      const closeModal = () => {
+        sfx('cancel');
+        modalElement.remove();
+      };
+      modalElement.querySelector('#tamer-profile-close')?.addEventListener('click', closeModal);
+      modalElement.addEventListener('click', (e) => {
+        if (e.target === modalElement) closeModal();
+      });
+
+      // Holographic 3D Tilt handler
+      setTimeout(() => {
+        const card = modalElement.querySelector('.tamer-profile-card') as HTMLElement;
+        if (card) {
+          card.addEventListener('mousemove', (e: MouseEvent) => {
+            const rect = card.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            const xc = rect.width / 2;
+            const yc = rect.height / 2;
+            const rx = -((y - yc) / yc) * 7;
+            const ry = ((x - xc) / xc) * 7;
+            card.style.transform = `perspective(1000px) rotateX(${rx}deg) rotateY(${ry}deg)`;
+          });
+          card.addEventListener('mouseleave', () => {
+            card.style.transform = 'perspective(1000px) rotateX(0deg) rotateY(0deg)';
+          });
+        }
+      }, 50);
+    };
+
+    // Keep track of which matches have animated simulation results
+    const animatedMatches = new Set<string>();
+    const matchesToAnimate: { r: number; m: number; compA: BracketCompetitor; compB: BracketCompetitor; winnerId: string }[] = [];
+
+    // Pre-populate animated matches for past rounds. Find NPC matches to animate in the current round.
+    for (let r = 0; r < totalRounds; r++) {
+      const matchCount = bracket.matches[r]?.length ?? 0;
+      for (let m = 0; m < matchCount; m++) {
+        const matchData = bracket.matches[r][m];
+        if (matchData && matchData.winnerId !== undefined) {
+          const isNpc = !matchData.competitorA.isPlayer && !matchData.competitorB.isPlayer;
+          if (r < currentRoundIndex) {
+            animatedMatches.add(`${r}_${m}`);
+          } else if (isNpc) {
+            matchesToAnimate.push({ r, m, compA: matchData.competitorA, compB: matchData.competitorB, winnerId: matchData.winnerId });
+          }
+        }
+      }
+    }
+
+    const renderPolishedSlot = (
+      comp: BracketCompetitor,
+      isOpponent: boolean,
+      r: number,
+      m: number,
+      winnerId: string | undefined
+    ) => {
+      const matchKey = `${tier.id}_r${r}_m${m}`;
+      const predictedId = pInstance?.tournament.predictions?.[matchKey];
+      const isPredicted = predictedId === comp.id;
+      const isCorrect = winnerId && predictedId === winnerId;
+
+      const isWinner = winnerId === comp.id;
+      const isLoser = winnerId && winnerId !== comp.id;
+      
+      const isAnimatingThis = matchesToAnimate.some(sim => sim.r === r && sim.m === m);
+      const showWinner = isWinner && !isAnimatingThis;
+      const showLoser = isLoser && !isAnimatingThis;
+
+      let slotClass = 'trn-tamer-slot-polished';
+      if (showWinner) slotClass += ' winner';
+      if (showLoser) slotClass += ' loser';
+      if (comp.isPlayer) slotClass += ' player-slot';
+      if (canPredict && !comp.isPlayer) slotClass += ' predictable';
+      if (isPredicted) slotClass += ' predicted';
+
+      const scoreHtml = showWinner ? '<span class="trn-score-badge win">WIN</span>' : showLoser ? '<span class="trn-score-badge loss">LOSS</span>' : '';
+
+      let predictionBadgeHtml = '';
+      if (isPredicted) {
+        if (winnerId && !isAnimatingThis) {
+          predictionBadgeHtml = isCorrect ? '<span class="trn-predict-badge correct">✨ Match!</span>' : '<span class="trn-predict-badge incorrect">❌ Miss</span>';
+        } else {
+          predictionBadgeHtml = '<span class="trn-predict-badge">Pick</span>';
+        }
+      }
+
+      // Tamer profile picture
+      let avatarHtml = '';
+      if (comp.isPlayer) {
+        const p = Player.activeInstance;
+        const url = p ? avatarURL(p) : '';
+        avatarHtml = `<img class="trn-tamer-avatar" src="${url}" />`;
+      } else {
+        const url = generateTamerAvatar(comp.name, comp.color);
+        avatarHtml = `<img class="trn-tamer-avatar" src="${url}" />`;
+      }
+
+      // Check record
+      const wins = winCounts[comp.id] ?? 0;
+      const losses = lossCounts[comp.id] ?? 0;
+      const recordStr = `${wins}W - ${losses}L`;
+
+      // Hover preview description
+      const previewHtml = `
+        <div class="trn-tamer-preview">
+          <div class="trn-preview-title" style="color:${comp.color}">${comp.name}</div>
+          <div class="trn-preview-meta">📍 Hometown: ${comp.hometown}</div>
+          <div class="trn-preview-meta">🏆 Rating: ${Math.round(comp.rating)}</div>
+          <div class="trn-preview-meta">💬 "${comp.quote || 'No quote'}"</div>
+        </div>
+      `;
+
+      const detailsIconHtml = `<span class="trn-tamer-details-icon" title="View Profile" style="margin-left:auto; font-size:10px; opacity:0.6; z-index:10;">ℹ️</span>`;
+
+      return `
+        <div class="${slotClass}" id="match-slot-${r}-${m}-${isOpponent ? 1 : 0}">
+          <div class="trn-tamer-avatar-frame" style="border-color:${comp.color}; background: radial-gradient(circle, ${comp.color}22 0%, #10121f 100%); color:${comp.color}">
+            ${avatarHtml}
+          </div>
+          <div class="trn-tamer-details">
+            <div class="trn-tamer-name-row">
+              <span class="trn-tamer-name" style="color:${comp.color}">${comp.name}</span>
+              ${detailsIconHtml}
+            </div>
+            <div class="trn-tamer-sub-row">
+              <span class="trn-tamer-guild" style="color:${comp.color}">${comp.sub}</span>
+              <span class="trn-tamer-record-badge">${recordStr}</span>
+            </div>
+          </div>
+          <div class="trn-tamer-guardians-row">
+            ${comp.speciesIds.map(sid => {
+              const s = SPECIES[sid];
+              const typeCol = TYPE_CSS[s?.type] ?? '#999';
+              const elIcon = s ? (ELEMENT_ICONS[TYPE_ELEMENT[s.type]] ?? '❓') : '❓';
+              return `
+                <div class="trn-guardian-mini-icon-polished" style="border-color:${typeCol}; background:${typeCol}18" title="${s?.name ?? sid} (${s?.type ?? ''})">
+                  <span class="g-el-icon">${elIcon}</span>
+                  <span class="g-abbrev" style="color:${typeCol}">${sid.slice(0, 3).toUpperCase()}</span>
+                </div>
+              `;
+            }).join('')}
+          </div>
+          ${scoreHtml}
+          ${predictionBadgeHtml}
+          ${previewHtml}
+        </div>
+      `;
+    };
+
+    if (tier.format === 'round_robin') {
+      // 1. Group Stage Matchdays (rounds 0, 1, 2)
+      for (let r = 0; r < 3; r++) {
+        let matchCardsHtml = '';
+        for (let m = 0; m < 2; m++) {
+          const matchData = bracket.matches[r][m];
+          if (!matchData) continue;
+          
+          const compA = matchData.competitorA;
+          const compB = matchData.competitorB;
+          const winnerId = matchData.winnerId;
+
+          matchCardsHtml += `
+            <div class="trn-matchup" id="match-card-${r}-${m}">
+              ${renderPolishedSlot(compA, false, r, m, winnerId)}
+              ${renderPolishedSlot(compB, true, r, m, winnerId)}
+            </div>
+          `;
+        }
+        roundsHtml.push(`
+          <div class="trn-round round-${r}">
+            <div style="font-size:10px;color:var(--ui-dim);text-align:center;margin-bottom:4px;font-weight:700;text-transform:uppercase">Matchday ${r+1}</div>
+            ${matchCardsHtml}
+          </div>
+        `);
+      }
+
+      // 2. League Standings Column (Column 3)
+      const standingsSorted = Object.keys(competitorMap).map(id => ({
+        comp: competitorMap[id],
+        wins: winCounts[id] ?? 0,
+        losses: lossCounts[id] ?? 0,
+      })).sort((a, b) => b.wins - a.wins || a.losses - b.losses);
+
+      const tableRows = standingsSorted.map((item, idx) => {
+        const isPlayer = item.comp.isPlayer;
+        const rowClass = isPlayer ? 'trn-rr-row cs-you' : '';
+        return `
+          <tr class="${rowClass}">
+            <td style="font-weight:800;color:var(--ui-gold)">#${idx + 1}</td>
+            <td style="color:${item.comp.color};font-weight:700">${item.comp.name}</td>
+            <td style="text-align:center">${item.wins}</td>
+            <td style="text-align:center">${item.losses}</td>
+          </tr>
+        `;
+      }).join('');
+
+      const standingsBox = `
+        <div class="trn-matchup" id="rr-standings-box" style="padding:10px;background:rgba(12, 16, 34, 0.7);box-sizing:border-box">
+          <table class="trn-rr-table">
+            <thead>
+              <tr>
+                <th>Rank</th>
+                <th>Tamer</th>
+                <th style="text-align:center">W</th>
+                <th style="text-align:center">L</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${tableRows}
+            </tbody>
+          </table>
+        </div>
+      `;
+
+      roundsHtml.push(`
+        <div class="trn-round round-3">
+          <div style="font-size:10px;color:var(--ui-dim);text-align:center;margin-bottom:4px;font-weight:700;text-transform:uppercase">Group Standings</div>
+          ${standingsBox}
+        </div>
+      `);
+
+      // 3. Final Playoff Column (Column 4)
+      let finalCardHtml = '<div style="font-size:11px;color:var(--ui-dim);text-align:center;padding:20px;border:1px dashed rgba(255,255,255,0.06);background:rgba(0,0,0,0.2);border-radius:6px">TBD after Matchday 3</div>';
+      
+      const finalMatch = bracket.matches[3] && bracket.matches[3][0];
+      if (finalMatch) {
+        const compA = finalMatch.competitorA;
+        const compB = finalMatch.competitorB;
+        const winnerId = finalMatch.winnerId;
+
+        finalCardHtml = `
+          <div class="trn-matchup" id="match-card-3-0">
+            ${renderPolishedSlot(compA, false, 3, 0, winnerId)}
+            ${renderPolishedSlot(compB, true, 3, 0, winnerId)}
+          </div>
+        `;
+      }
+
+      roundsHtml.push(`
+        <div class="trn-round round-4">
+          <div style="font-size:10px;color:var(--ui-gold);text-align:center;margin-bottom:4px;font-weight:700;text-transform:uppercase">Final Playoff</div>
+          ${finalCardHtml}
+        </div>
+      `);
+    } else {
+      // Standard elimination layout
+      for (let r = 0; r < totalRounds; r++) {
+        const matchCountInRound = Math.pow(2, totalRounds - 1 - r);
+        let matchCardsHtml = '';
+
+        for (let m = 0; m < matchCountInRound; m++) {
+          const matchData = bracket.matches[r][m];
+          if (!matchData) continue;
+
+          const compA = matchData.competitorA;
+          const compB = matchData.competitorB;
+          const winnerId = matchData.winnerId;
+
+          const renderSlot = (comp: BracketCompetitor, isOpponent: boolean) => {
+            const matchKey = `${tier.id}_r${r}_m${m}`;
+            const predictedId = pInstance?.tournament.predictions?.[matchKey];
+            const isPredicted = predictedId === comp.id;
+            const isCorrect = winnerId && predictedId === winnerId;
+
+            const isWinner = winnerId === comp.id;
+            const isLoser = winnerId && winnerId !== comp.id;
+            
+            const isAnimatingThis = matchesToAnimate.some(sim => sim.r === r && sim.m === m);
+            const showWinner = isWinner && !isAnimatingThis;
+            const showLoser = isLoser && !isAnimatingThis;
+            
+            let slotClass = 'trn-tamer-slot';
+            if (showWinner) slotClass += ' winner';
+            if (showLoser) slotClass += ' loser';
+            if (comp.isPlayer) slotClass += ' player-slot';
+            if (canPredict && !comp.isPlayer) slotClass += ' predictable';
+            if (isPredicted) slotClass += ' predicted';
+
+            const scoreHtml = showWinner ? '<span class="trn-score-badge win">WIN</span>' : showLoser ? '<span class="trn-score-badge loss">LOSS</span>' : '';
+
+            let predictionBadgeHtml = '';
+            if (isPredicted) {
+              if (winnerId && !isAnimatingThis) {
+                predictionBadgeHtml = isCorrect ? '<span class="trn-predict-badge correct">✨ Match!</span>' : '<span class="trn-predict-badge incorrect">❌ Miss</span>';
+              } else {
+                predictionBadgeHtml = '<span class="trn-predict-badge">Pick</span>';
+              }
+            }
+
+            // Tamer profile picture
+            let avatarHtml = '';
+            if (comp.isPlayer) {
+              const p = Player.activeInstance;
+              const url = p ? avatarURL(p) : '';
+              avatarHtml = `<img class="trn-tamer-avatar" src="${url}" />`;
+            } else {
+              const url = generateTamerAvatar(comp.name, comp.color);
+              avatarHtml = `<img class="trn-tamer-avatar" src="${url}" />`;
+            }
+
+            // Check record
+            const wins = winCounts[comp.id] ?? 0;
+            const losses = lossCounts[comp.id] ?? 0;
+            const recordStr = `${wins}W - ${losses}L`;
+
+            const previewHtml = `
+              <div class="trn-tamer-preview">
+                <div class="trn-preview-title" style="color:${comp.color}">${comp.name}</div>
+                <div class="trn-preview-meta">📍 Hometown: ${comp.hometown}</div>
+                <div class="trn-preview-meta">🏆 Rating: ${Math.round(comp.rating)}</div>
+                <div class="trn-preview-meta">💬 "${comp.quote || 'No quote'}"</div>
+              </div>
+            `;
+
+            const detailsIconHtml = `<span class="trn-tamer-details-icon" title="View Profile" style="margin-left:auto; font-size:10px; opacity:0.6; z-index:10;">ℹ️</span>`;
+
+            return `
+              <div class="${slotClass}" id="match-slot-${r}-${m}-${isOpponent ? 1 : 0}">
+                <div class="trn-tamer-avatar-frame" style="border-color:${comp.color}; background: radial-gradient(circle, ${comp.color}22 0%, #10121f 100%); color:${comp.color}">
+                  ${avatarHtml}
+                </div>
+                <div class="trn-tamer-details">
+                  <div class="trn-tamer-name-row">
+                    <span class="trn-tamer-name" style="color:${comp.color}">${comp.name}</span>
+                    ${detailsIconHtml}
+                  </div>
+                  <div class="trn-tamer-sub-row">
+                    <span class="trn-tamer-guild" style="color:${comp.color}">${comp.sub}</span>
+                    <span class="trn-tamer-record-badge">${recordStr}</span>
+                  </div>
+                </div>
+                <div class="trn-tamer-guardians-row">
+                  ${comp.speciesIds.map(sid => {
+                    const s = SPECIES[sid];
+                    const typeCol = TYPE_CSS[s?.type] ?? '#999';
+                    const elIcon = s ? (ELEMENT_ICONS[TYPE_ELEMENT[s.type]] ?? '❓') : '❓';
+                    return `
+                      <div class="trn-guardian-mini-icon-polished" style="border-color:${typeCol}; background:${typeCol}18" title="${s?.name ?? sid} (${s?.type ?? ''})">
+                        <span class="g-el-icon">${elIcon}</span>
+                        <span class="g-abbrev" style="color:${typeCol}">${sid.slice(0, 3).toUpperCase()}</span>
+                      </div>
+                    `;
+                  }).join('')}
+                </div>
+                ${scoreHtml}
+                ${predictionBadgeHtml}
+                ${previewHtml}
+              </div>
+            `;
+          };
+
+          matchCardsHtml += `
+            <div class="trn-matchup" id="match-card-${r}-${m}">
+              ${renderSlot(compA, false)}
+              ${renderSlot(compB, true)}
+            </div>
+          `;
+        }
+
+        roundsHtml.push(`
+          <div class="trn-round round-${r}">
+            ${matchCardsHtml}
+          </div>
+        `);
+      }
+    }
+
+    const roundName = currentRoundIndex < totalRounds ? tier.rounds[currentRoundIndex].name : 'Tournament Completed';
+
+    const playerComp = bracket.rounds[0].find(c => c.isPlayer) || { name: 'You' };
+    let vsText = 'Spectating';
+    if (currentRoundIndex < totalRounds) {
+      const playerMatch = bracket.matches[currentRoundIndex]?.find(m => m.competitorA.isPlayer || m.competitorB.isPlayer);
+      if (playerMatch) {
+        const opponentComp = playerMatch.competitorA.isPlayer ? playerMatch.competitorB : playerMatch.competitorA;
+        vsText = `${playerComp.name} vs ${opponentComp.name}`;
+      } else {
+        vsText = 'Spectator Mode';
+      }
+    } else {
+      vsText = 'Completed';
+    }
+
+    const isWorlds = tier.id === 'world_championship';
+    const isLegends = tier.classKind === 'Legends';
+    const isEpic = isWorlds || isLegends;
+
+    // Predictions Slip Banner HTML
+    let predictBannerHtml = '';
+    if (canPredict) {
+      predictBannerHtml = `
+        <div class="trn-predict-banner">
+          <div class="trn-predict-title-wrap">
+            <div class="trn-predict-banner-title">✨ Bracket Predictions open!</div>
+            <div class="trn-predict-banner-desc">Click on the tamers you predict will win to build your prediction slip. Correct guesses earn ◆150 Shards!</div>
+          </div>
+          <div class="trn-predict-actions">
+            <button class="ui-btn" id="trn-lock-predictions" style="border: 1px solid var(--ui-gold); color: var(--ui-gold); font-size:11px; padding: 4px 12px; height:auto; cursor:pointer;">Lock Predictions</button>
+          </div>
+        </div>
+      `;
+    }
+
+    // Dramatic Title Card Splash
+    const showTitleCard = currentRoundIndex === 0 || currentRoundIndex === totalRounds - 2 || currentRoundIndex === totalRounds - 1;
+    let titleCardHtml = '';
+    if (showTitleCard && currentRoundIndex < totalRounds) {
+      const stageName = currentRoundIndex === 0 ? 'Tournament Commences' 
+        : currentRoundIndex === totalRounds - 2 ? 'Semifinals'
+        : 'The Grand Finals';
+      
+      titleCardHtml = `
+        <div class="trn-title-card-overlay">
+          <div class="trn-title-card-text">${tier.short}</div>
+          <div class="trn-title-card-sub">${stageName}</div>
+        </div>
+      `;
+    }
+
+    const html = `
+      <div class="trn-bracket-screen-wrapper">
+        <div class="trn-bracket-container ${isEpic ? 'trn-worlds-mode' : ''}">
+          ${isEpic ? `<div class="worlds-logo-glow"></div><div class="worlds-grid-overlay"></div>` : ''}
+          ${titleCardHtml}
+          <div class="trn-bracket-header ${isEpic ? 'worlds-header' : ''}">
+            <div class="trn-bracket-title ${isEpic ? 'worlds-title' : ''}">${isEpic ? '🏆 ' : ''}${tier.name} — ${roundName}${isEpic ? ' 🏆' : ''}</div>
+            <div class="trn-bracket-venue ${isEpic ? 'worlds-venue' : ''}">📍 ${tier.venue}</div>
+          </div>
+          ${predictBannerHtml}
+          <div class="trn-bracket-rounds" id="trn-rounds-wrapper">
+            ${roundsHtml.join('')}
+          </div>
+          <svg class="trn-bracket-overlay-svg" id="trn-svg-overlay"></svg>
+        </div>
+
+        <div class="trn-side-fight-panel">
+          <div class="trn-side-fight-header">Coliseum</div>
+          <div class="trn-side-fight-subheader">Tournament Match</div>
+          
+          <div class="trn-side-fight-status-box">
+            <div class="status-label">Next Match</div>
+            <div class="status-vs-tamers">${vsText}</div>
+            <div class="status-round">${roundName}</div>
+          </div>
+          
+          <button class="trn-premium-fight-btn" id="trn-bracket-ok" style="background-image: url(${goldTexUrl});">
+            <div class="fight-btn-shine"></div>
+            <div class="fight-btn-glow"></div>
+            <span class="fight-btn-text">${currentRoundIndex < totalRounds ? 'Fight!' : 'Close'}</span>
+          </button>
+        </div>
+      </div>
+    `;
+
+    const el = openScreen(html);
+
+    let particlesDestroyer: (() => void) | null = null;
+    const container = el.querySelector('.trn-bracket-container') as HTMLElement;
+    if (container) {
+      const particles = startWorldsParticles(container, tier.id);
+      particlesDestroyer = () => particles.destroy();
+    }
+    sfx('open');
+    if (isEpic) {
+      setTimeout(() => {
+        sfx('crowd_roar');
+      }, 300);
+    }
+
+    // Play title card sound
+    if (showTitleCard && currentRoundIndex < totalRounds) {
+      sfx('achievement');
+      sfx('crowd_roar');
+    }
+
+    // Interactive sound effects for hovering slots
+    el.querySelectorAll('.trn-tamer-slot-polished, .trn-tamer-slot').forEach((slot: any) => {
+      slot.addEventListener('mouseenter', () => {
+        sfx('blip');
+      });
+    });
+
+    // Details button click handlers (opens tamer profile modal)
+    el.querySelectorAll('.trn-tamer-details-icon').forEach((icon: any) => {
+      icon.addEventListener('click', (e: Event) => {
+        e.stopPropagation(); // Prevent slot prediction toggle
+        const slot = icon.closest('.trn-tamer-slot, .trn-tamer-slot-polished');
+        if (slot) {
+          const idParts = slot.id.split('-');
+          if (idParts.length >= 5) {
+            const rVal = parseInt(idParts[2]);
+            const mVal = parseInt(idParts[3]);
+            const isOppVal = parseInt(idParts[4]) === 1;
+            const matchData = bracket.matches[rVal]?.[mVal];
+            const comp = matchData ? (isOppVal ? matchData.competitorB : matchData.competitorA) : null;
+            if (comp) {
+              sfx('click');
+              showTamerProfileModal(comp);
+            }
+          }
+        }
+      });
+    });
+
+    // Click handlers for tamer slots (opens modal OR predicts winner)
+    el.querySelectorAll('.trn-tamer-slot, .trn-tamer-slot-polished').forEach((slot: any) => {
+      slot.addEventListener('click', () => {
+        const idParts = slot.id.split('-');
+        if (idParts.length >= 5) {
+          const rVal = parseInt(idParts[2]);
+          const mVal = parseInt(idParts[3]);
+          const isOppVal = parseInt(idParts[4]) === 1;
+          const matchKey = `${tier.id}_r${rVal}_m${mVal}`;
+          
+          let comp: BracketCompetitor | undefined;
+          const matchData = bracket.matches[rVal]?.[mVal];
+          if (matchData) {
+            comp = isOppVal ? matchData.competitorB : matchData.competitorA;
+          }
+          
+          if (!comp) return;
+
+          if (canPredict) {
+            // Register prediction
+            tempPredictions[matchKey] = comp.id;
+            
+            // Visual DOM updates: remove previous predicted class from both slots, add to this one
+            const matchCard = el.querySelector(`#match-card-${rVal}-${mVal}`);
+            if (matchCard) {
+              matchCard.querySelectorAll('.trn-tamer-slot, .trn-tamer-slot-polished').forEach((s: any) => {
+                s.classList.remove('predicted');
+                s.querySelector('.trn-predict-badge')?.remove();
+              });
+              slot.classList.add('predicted');
+              const badge = document.createElement('span');
+              badge.className = 'trn-predict-badge';
+              badge.innerText = 'Pick';
+              slot.appendChild(badge);
+              sfx('blip');
+            }
+            return;
+          }
+
+          // Non-predicting: normal profile modal
+          sfx('click');
+          showTamerProfileModal(comp);
+        }
+      });
+    });
+
+    // Handle Lock Predictions click
+    const lockBtn = el.querySelector('#trn-lock-predictions') as HTMLElement | null;
+    if (lockBtn && pInstance) {
+      lockBtn.onclick = () => {
+        pInstance.tournament.predictions = { ...tempPredictions };
+        pInstance.save(false);
+        sfx('confirm');
+        toast('Predictions locked in! Good luck.', 'gold');
+        restoreStyles();
+        closeMenu();
+        resolve(showBracketTreeScreen(bracket, currentRoundIndex, tier));
+      };
+    }
+
+    const drawConnectorLines = () => {
+      const svg = el.querySelector('#trn-svg-overlay') as SVGSVGElement | null;
+      if (!svg) return;
+      
+      svg.innerHTML = '';
+      const containerRect = el.querySelector('.trn-bracket-container')!.getBoundingClientRect();
+
+      if (tier.format === 'round_robin') {
+        // Draw round robin connecting lines:
+        // Matchday 3 matches connect to the Standings Box
+        const standingsBox = el.querySelector('#rr-standings-box');
+        if (!standingsBox) return;
+        const standingsRect = standingsBox.getBoundingClientRect();
+
+        const xTargetStandings = standingsRect.left - containerRect.left;
+        const yTargetStandings = (standingsRect.top + standingsRect.bottom) / 2 - containerRect.top;
+
+        for (let m = 0; m < 2; m++) {
+          const matchCard = el.querySelector(`#match-card-2-${m}`);
+          if (!matchCard) continue;
+          
+          const matchRect = matchCard.getBoundingClientRect();
+          const xStart = matchRect.right - containerRect.left;
+          const yStart = (matchRect.top + matchRect.bottom) / 2 - containerRect.top;
+          
+          const dx = (xTargetStandings - xStart) / 2;
+          const pathD = `M ${xStart} ${yStart} H ${xStart + dx} V ${yTargetStandings} H ${xTargetStandings}`;
+          
+          const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+          path.setAttribute('d', pathD);
+          path.setAttribute('class', 'trn-connector-path completed');
+          path.style.stroke = 'rgba(255,255,255,0.08)';
+          svg.appendChild(path);
+        }
+
+        // Standings box connects to Final Playoff slot 0 and 1
+        const finalCard = el.querySelector('#match-card-3-0');
+        if (finalCard) {
+          const finalRect = finalCard.getBoundingClientRect();
+          const xStartStandings = standingsRect.right - containerRect.left;
+          const yStartStandings = (standingsRect.top + standingsRect.bottom) / 2 - containerRect.top;
+
+          for (let s = 0; s < 2; s++) {
+            const slot = el.querySelector(`#match-slot-3-0-${s}`);
+            if (!slot) continue;
+            
+            const slotRect = slot.getBoundingClientRect();
+            const xEnd = slotRect.left - containerRect.left;
+            const yEnd = (slotRect.top + slotRect.bottom) / 2 - containerRect.top;
+            
+            const dx = (xEnd - xStartStandings) / 2;
+            const pathD = `M ${xStartStandings} ${yStartStandings} H ${xStartStandings + dx} V ${yEnd} H ${xEnd}`;
+            
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path.setAttribute('d', pathD);
+
+            const finalMatch = bracket.matches[3] && bracket.matches[3][0];
+            const isCompleted = finalMatch && finalMatch.winnerId !== undefined;
+            
+            let lineClass = 'trn-connector-path';
+            if (isCompleted) {
+              lineClass += ' completed';
+              const winner = finalMatch.winnerId === finalMatch.competitorA.id ? finalMatch.competitorA : finalMatch.competitorB;
+              path.style.color = winner.color;
+              path.style.stroke = winner.color;
+            } else if (currentRoundIndex === 3) {
+              lineClass += ' active';
+            }
+            path.setAttribute('class', lineClass);
+            svg.appendChild(path);
+          }
+        }
+      } else {
+        // Standard elimination lines
+        for (let r = 0; r < totalRounds - 1; r++) {
+          const matchCount = Math.pow(2, totalRounds - 1 - r);
+          for (let m = 0; m < matchCount; m++) {
+            const sourceCard = el.querySelector(`#match-card-${r}-${m}`);
+            if (!sourceCard) continue;
+
+            const targetSlotIndex = m % 2;
+            const targetMatchIndex = Math.floor(m / 2);
+            const targetSlot = el.querySelector(`#match-slot-${r+1}-${targetMatchIndex}-${targetSlotIndex}`);
+            if (!targetSlot) continue;
+
+            const sourceRect = sourceCard.getBoundingClientRect();
+            const targetRect = targetSlot.getBoundingClientRect();
+
+            const x1 = sourceRect.right - containerRect.left;
+            const y1 = (sourceRect.top + sourceRect.bottom) / 2 - containerRect.top;
+
+            const x2 = targetRect.left - containerRect.left;
+            const y2 = (targetRect.top + targetRect.bottom) / 2 - containerRect.top;
+
+            const dx = (x2 - x1) / 2;
+            const pathD = `M ${x1} ${y1} H ${x1 + dx} V ${y2} H ${x2}`;
+
+            const matchData = bracket.matches[r][m];
+            
+            // Completed state grows as simulation sequences finish
+            const isCompleted = matchData && matchData.winnerId !== undefined && (r < currentRoundIndex || animatedMatches.has(`${r}_${m}`) || matchData.competitorA.isPlayer || matchData.competitorB.isPlayer);
+            const isPlayerPath = matchData && (matchData.competitorA.isPlayer || matchData.competitorB.isPlayer || (matchData.winnerId === 'player'));
+
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path.setAttribute('d', pathD);
+            
+            let lineClass = 'trn-connector-path';
+            if (isCompleted) {
+              lineClass += ' completed';
+              const winner = matchData.winnerId === matchData.competitorA.id ? matchData.competitorA : matchData.competitorB;
+              path.style.color = winner.color;
+              path.style.stroke = winner.color;
+            } else if (isPlayerPath && r === currentRoundIndex) {
+              lineClass += ' active';
+            }
+            
+            path.setAttribute('class', lineClass);
+            svg.appendChild(path);
+          }
+        }
+      }
+    };
+
+    setTimeout(drawConnectorLines, 100);
+
+    const resizeObserver = new ResizeObserver(() => {
+      drawConnectorLines();
+    });
+    const wrapper = el.querySelector('#trn-rounds-wrapper');
+    if (wrapper) resizeObserver.observe(wrapper);
+
+    const okBtn = el.querySelector('#trn-bracket-ok') as HTMLButtonElement;
+
+    // Simulation animation execution loop
+    const runSimulations = async () => {
+      if (matchesToAnimate.length === 0 || canPredict) return;
+
+      if (okBtn) {
+        okBtn.disabled = true;
+        okBtn.innerText = 'Simulating...';
+      }
+
+      for (const sim of matchesToAnimate) {
+        const matchCard = el.querySelector(`#match-card-${sim.r}-${sim.m}`) as HTMLElement;
+        if (!matchCard) continue;
+
+        // Scroll to make sure it's visible in smaller screen layouts
+        matchCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+        // Highlight matchup clashing
+        matchCard.classList.add('clashing');
+        
+        // Flicker slots to simulate action roll
+        const slotA = el.querySelector(`#match-slot-${sim.r}-${sim.m}-0`) as HTMLElement;
+        const slotB = el.querySelector(`#match-slot-${sim.r}-${sim.m}-1`) as HTMLElement;
+        
+        sfx('charge');
+        for (let step = 0; step < 10; step++) {
+          if (slotA && slotB) {
+            if (step % 2 === 0) {
+              slotA.style.background = 'rgba(255, 255, 255, 0.12)';
+              slotB.style.background = 'transparent';
+            } else {
+              slotA.style.background = 'transparent';
+              slotB.style.background = 'rgba(255, 255, 255, 0.12)';
+            }
+          }
+          sfx('blip');
+          await new Promise(r => setTimeout(r, 70));
+        }
+
+        // Reset slots backgrounds
+        if (slotA) slotA.style.background = '';
+        if (slotB) slotB.style.background = '';
+        matchCard.classList.remove('clashing');
+
+        // Flash shockwave effect
+        const flashEl = document.createElement('div');
+        flashEl.className = 'trn-clash-impact-flash flash-active';
+        matchCard.appendChild(flashEl);
+
+        sfx('boom');
+        sfx('crowd_roar');
+
+        // Apply visual classes for winners & losers
+        const winSlot = sim.winnerId === sim.compA.id ? slotA : slotB;
+        const loseSlot = sim.winnerId === sim.compA.id ? slotB : slotA;
+        
+        if (winSlot) {
+          winSlot.classList.add('winner');
+          const badge = document.createElement('span');
+          badge.className = 'trn-score-badge win';
+          badge.innerText = 'WIN';
+          winSlot.appendChild(badge);
+        }
+        if (loseSlot) {
+          loseSlot.classList.add('loser');
+          const badge = document.createElement('span');
+          badge.className = 'trn-score-badge loss';
+          badge.innerText = 'LOSS';
+          loseSlot.appendChild(badge);
+        }
+
+        // Update prediction marker live!
+        const matchKey = `${tier.id}_r${sim.r}_m${sim.m}`;
+        const predictedId = pInstance?.tournament.predictions?.[matchKey];
+        if (predictedId) {
+          const predSlot = predictedId === sim.compA.id ? slotA : slotB;
+          if (predSlot) {
+            const isCorrect = predictedId === sim.winnerId;
+            const predBadge = document.createElement('span');
+            predBadge.className = `trn-predict-badge ${isCorrect ? 'correct' : 'incorrect'}`;
+            predBadge.innerHTML = isCorrect ? '✨ Match!' : '❌ Miss';
+            predSlot.appendChild(predBadge);
+            
+            if (isCorrect) {
+              sfx('achievement');
+              toast(`✨ Prediction Match: ${sim.winnerId === sim.compA.id ? sim.compA.name : sim.compB.name}!`, 'gold');
+            }
+          }
+        }
+
+        // Complete connector paths
+        animatedMatches.add(`${sim.r}_${sim.m}`);
+        drawConnectorLines();
+
+        setTimeout(() => flashEl.remove(), 400);
+        await new Promise(r => setTimeout(r, 600));
+      }
+
+      if (okBtn) {
+        okBtn.disabled = false;
+        okBtn.innerText = currentRoundIndex < totalRounds ? 'Fight!' : 'Close';
+      }
+    };
+
+    // Run simulations after title card screen has faded out
+    const simDelay = showTitleCard ? 2000 : 800;
+    setTimeout(runSimulations, simDelay);
+
+    okBtn.onclick = () => {
+      if (canPredict) {
+        sfx('toastBad');
+        toast('Lock predictions or view bracket options above!', 'red');
+        return;
+      }
+      resizeObserver.disconnect();
+      if (particlesDestroyer) particlesDestroyer();
+      sfx('click');
+      restoreStyles();
+      closeMenu();
+      resolve();
+    };
+  });
+}
+
+export async function showTournamentMatchIntro(
+  playerComp: BracketCompetitor,
+  opponentComp: BracketCompetitor,
+  tier: TournamentTier,
+  roundName: string
+): Promise<void> {
+  return new Promise<void>(resolve => {
+    sfx('open');
+    sfx('crowd_roar');
+    sfx('whoosh');
+
+    // Create overlay
+    const overlay = document.createElement('div');
+    overlay.className = 'trn-vs-overlay';
+
+    // Letterbox bars
+    const topBar = document.createElement('div');
+    topBar.className = 'trn-vs-letterbox-top';
+    const bottomBar = document.createElement('div');
+    bottomBar.className = 'trn-vs-letterbox-bottom';
+    overlay.appendChild(topBar);
+    overlay.appendChild(bottomBar);
+
+    // Banner tag
+    const bannerTag = document.createElement('div');
+    bannerTag.className = 'trn-vs-banner-tag';
+    bannerTag.innerHTML = `🏆 ${tier.name} &nbsp;·&nbsp; ${roundName} 🏆`;
+    overlay.appendChild(bannerTag);
+
+    // Get avatars
+    let playerAvatar = '';
+    const p = Player.activeInstance;
+    if (p) playerAvatar = avatarURL(p);
+    const opponentAvatar = generateTamerAvatar(opponentComp.name, opponentComp.color);
+
+    // Build party HTML for player
+    const playerPartyHtml = playerComp.speciesIds.map(sid => {
+      const s = SPECIES[sid];
+      const typeCol = TYPE_CSS[s?.type] ?? '#999';
+      const snap = speciesSnapshotURL(sid);
+      return `
+        <div class="trn-vs-guardian-card" style="border-color: ${typeCol}44">
+          <div class="trn-vs-guardian-snap-wrap" style="border: 1px solid ${typeCol}">
+            <img class="trn-vs-guardian-snap" src="${snap}" />
+          </div>
+          <div class="trn-vs-guardian-name" style="color: ${typeCol}">${s?.name ?? sid}</div>
+        </div>
+      `;
+    }).join('');
+
+    // Build party HTML for opponent
+    const opponentPartyHtml = opponentComp.speciesIds.map(sid => {
+      const s = SPECIES[sid];
+      const typeCol = TYPE_CSS[s?.type] ?? '#999';
+      const snap = speciesSnapshotURL(sid);
+      return `
+        <div class="trn-vs-guardian-card" style="border-color: ${typeCol}44">
+          <div class="trn-vs-guardian-snap-wrap" style="border: 1px solid ${typeCol}">
+            <img class="trn-vs-guardian-snap" src="${snap}" />
+          </div>
+          <div class="trn-vs-guardian-name" style="color: ${typeCol}">${s?.name ?? sid}</div>
+        </div>
+      `;
+    }).join('');
+
+    const container = document.createElement('div');
+    container.className = 'trn-vs-container';
+    container.innerHTML = `
+      <div class="trn-vs-column left" style="border-color: ${playerComp.color}44">
+        <div class="trn-vs-avatar-wrapper" style="border-color: ${playerComp.color}">
+          <img class="trn-vs-avatar-img" src="${playerAvatar}" />
+        </div>
+        <div class="trn-vs-name" style="color: ${playerComp.color}">${playerComp.name}</div>
+        <div class="trn-vs-sub">${playerComp.sub}</div>
+        <div class="trn-vs-guardians">
+          ${playerPartyHtml}
+        </div>
+      </div>
+
+      <div class="trn-vs-center">
+        <div class="trn-vs-logo">VS</div>
+      </div>
+
+      <div class="trn-vs-column right" style="border-color: ${opponentComp.color}44">
+        <div class="trn-vs-avatar-wrapper" style="border-color: ${opponentComp.color}">
+          <img class="trn-vs-avatar-img" src="${opponentAvatar}" />
+        </div>
+        <div class="trn-vs-name" style="color: ${opponentComp.color}">${opponentComp.name}</div>
+        <div class="trn-vs-sub">${opponentComp.sub}</div>
+        <div class="trn-vs-guardians">
+          ${opponentPartyHtml}
+        </div>
+      </div>
+    `;
+    overlay.appendChild(container);
+
+    // Opponent quote box
+    if (opponentComp.quote) {
+      const quoteBox = document.createElement('div');
+      quoteBox.className = 'trn-vs-quote-box';
+      quoteBox.innerHTML = `"${opponentComp.quote}"`;
+      overlay.appendChild(quoteBox);
+    }
+
+    // Enter Coliseum button
+    const enterBtn = document.createElement('button');
+    enterBtn.className = 'trn-vs-btn-enter';
+    enterBtn.innerText = 'Enter Arena';
+    overlay.appendChild(enterBtn);
+
+    // Screen flash overlay
+    const flash = document.createElement('div');
+    flash.className = 'trn-screen-flash';
+    document.body.appendChild(flash);
+
+    document.body.appendChild(overlay);
+
+    // Trigger visual screen shake on clash
+    setTimeout(() => {
+      sfx('crit');
+      const leftCol = overlay.querySelector('.trn-vs-column.left') as HTMLElement;
+      const rightCol = overlay.querySelector('.trn-vs-column.right') as HTMLElement;
+      if (leftCol && rightCol) {
+        leftCol.style.boxShadow = `0 15px 40px rgba(0,0,0,0.8), 0 0 30px ${playerComp.color}66`;
+        rightCol.style.boxShadow = `0 15px 40px rgba(0,0,0,0.8), 0 0 30px ${opponentComp.color}66`;
+      }
+      overlay.style.animation = 'matchClashShake 0.2s';
+    }, 850);
+
+    enterBtn.onclick = () => {
+      sfx('boom');
+      flash.classList.add('flash-active');
+      setTimeout(() => {
+        overlay.remove();
+        flash.remove();
+        resolve();
+      }, 750);
     };
   });
 }

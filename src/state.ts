@@ -9,6 +9,7 @@ import {
 } from './data';
 import { DEFAULT_APPEARANCE, type Appearance } from './models';
 import { defaultFishingState, normalizeFishingState, type FishingState } from './fishingdata';
+import { type MMRState, recordVisit } from './mmr';
 
 let uidCounter = 1;
 export const uid = () => `g${Date.now().toString(36)}${(uidCounter++).toString(36)}`;
@@ -39,6 +40,7 @@ export interface GuardianSave {
   elements?: Element[];
   parents?: { parentA: ParentSnapshot; parentB: ParentSnapshot };
   evolutionPoints?: number;
+  resCooldown?: number;
 }
 
 export class Guardian {
@@ -59,6 +61,9 @@ export class Guardian {
   elements: Element[];
   parents?: { parentA: ParentSnapshot; parentB: ParentSnapshot };
   evolutionPoints = 0;
+  statMultiplier = 1.0;
+  extraHpBonus = 0;
+  resCooldown = 0;
 
   constructor(speciesId: string, level = 1, nickname?: string) {
     this.id = uid();
@@ -155,7 +160,20 @@ export class Guardian {
       baseStats.def = Math.floor(baseStats.def * 1.15); // Shell: +15% Defense
     }
 
-    baseStats.hp = Math.min(12500, baseStats.hp);
+    if (this.statMultiplier !== 1.0) {
+      baseStats.hp = Math.floor(baseStats.hp * this.statMultiplier);
+      baseStats.sp = Math.floor(baseStats.sp * this.statMultiplier);
+      baseStats.atk = Math.floor(baseStats.atk * this.statMultiplier);
+      baseStats.def = Math.floor(baseStats.def * this.statMultiplier);
+      baseStats.spd = Math.floor(baseStats.spd * this.statMultiplier);
+      baseStats.wis = Math.floor(baseStats.wis * this.statMultiplier);
+    }
+
+    if (this.extraHpBonus) {
+      baseStats.hp += this.extraHpBonus;
+    }
+
+    baseStats.hp = Math.min(25000, baseStats.hp);
     baseStats.sp = Math.min(3500, baseStats.sp);
     baseStats.atk = Math.min(1500, baseStats.atk);
     baseStats.def = Math.min(1500, baseStats.def);
@@ -295,6 +313,7 @@ export class Guardian {
       elements: [...this.elements],
       parents: this.parents ? JSON.parse(JSON.stringify(this.parents)) : undefined,
       evolutionPoints: this.evolutionPoints,
+      resCooldown: this.resCooldown,
     };
   }
 
@@ -310,6 +329,7 @@ export class Guardian {
     g.elements = s.elements ? [...s.elements] : [...elementsOf(s.speciesId)];
     g.parents = s.parents ? JSON.parse(JSON.stringify(s.parents)) : undefined;
     g.evolutionPoints = s.evolutionPoints ?? 0;
+    g.resCooldown = s.resCooldown ?? 0;
     return g;
   }
 }
@@ -415,6 +435,23 @@ export interface GuildPerks {
   tacticalSynergy: number;// 0-5
 }
 
+export interface TrophyEarned {
+  id: string;
+  tierId: string;
+  tierName: string;
+  day: number;
+  dateStr: string;
+  finalOpponentName: string;
+  finalOpponentSub: string;
+  finalOpponentColor: string;
+  finalOpponentSpeciesIds: string[];
+  playerParty: {
+    speciesId: string;
+    nickname: string;
+    level: number;
+  }[];
+}
+
 /** Per-save tournament career: what you've entered, won, and who you've beaten. */
 export interface TournamentProgress {
   /** Event the player has registered for (null = none); fires on `registeredDay`. */
@@ -433,12 +470,25 @@ export interface TournamentProgress {
   worldTitles: number;
   /** Known-Name champions the player has beaten in a sanctioned bracket. */
   defeated: string[];
+  /** Active predictions for the current tournament bracket: matchupKey -> predictedWinnerId */
+  predictions: Record<string, string> | null;
+  trophies: TrophyEarned[];
+  tournamentMatchesWon: number;
+  tournamentMatchesLost: number;
+  currentStreak: number;
+  bestStreak: number;
 }
 
 export function defaultTournamentProgress(): TournamentProgress {
   return {
     registeredEventId: null, registeredDay: -1, signupSeenDay: -1,
     wins: {}, entries: {}, titles: [], bestPlacement: {}, worldTitles: 0, defeated: [],
+    predictions: null,
+    trophies: [],
+    tournamentMatchesWon: 0,
+    tournamentMatchesLost: 0,
+    currentStreak: 0,
+    bestStreak: 0,
   };
 }
 
@@ -465,6 +515,7 @@ export interface PlayerSave {
   guildPerks?: GuildPerks;
   guildQuestProgress?: Record<string, number>;
   savedLocation?: SavedLocation;
+  mmrState?: MMRState;
 }
 
 
@@ -472,7 +523,33 @@ export class Player {
   static activeInstance: Player | null = null;
 
   inDungeon = false;
-  savedLocation?: SavedLocation;
+  private _savedLocation?: SavedLocation;
+  get savedLocation(): SavedLocation | undefined {
+    return this._savedLocation;
+  }
+  set savedLocation(val: SavedLocation | undefined) {
+    const prev = this._savedLocation;
+    this._savedLocation = val;
+    if (val) {
+      this.recordLocationVisit(prev, val);
+    }
+  }
+
+  private recordLocationVisit(prev: SavedLocation | undefined, val: SavedLocation): void {
+    let isNewVisit = false;
+    if (!prev) {
+      isNewVisit = true;
+    } else if (prev.type !== val.type) {
+      isNewVisit = true;
+    } else if (val.room && (!prev.room || prev.room !== val.room)) {
+      isNewVisit = true;
+    }
+    if (isNewVisit) {
+      recordVisit(this);
+    }
+  }
+
+  mmrState: MMRState | null = null;
 
   tamerName = 'Tamer';
   shards = 0;
@@ -587,6 +664,7 @@ export class Player {
       guildPerks: { ...this.guildPerks },
       guildQuestProgress: { ...this.guildQuestProgress },
       savedLocation: this.savedLocation,
+      mmrState: this.mmrState ? JSON.parse(JSON.stringify(this.mmrState)) : undefined,
     };
     localStorage.setItem(slotKey(activeSlot), JSON.stringify(data));
   }
@@ -646,6 +724,11 @@ export class Player {
       p.tournament = d.tournament
         ? { ...defaultTournamentProgress(), ...d.tournament }
         : defaultTournamentProgress();
+      p.tournament.trophies = p.tournament.trophies || [];
+      p.tournament.tournamentMatchesWon = p.tournament.tournamentMatchesWon ?? 0;
+      p.tournament.tournamentMatchesLost = p.tournament.tournamentMatchesLost ?? 0;
+      p.tournament.currentStreak = p.tournament.currentStreak ?? 0;
+      p.tournament.bestStreak = p.tournament.bestStreak ?? 0;
       p.profilePic = d.profilePic ?? null;
       p.cardNo = d.cardNo ?? '';
       p.quests = d.quests ?? {};
@@ -678,6 +761,7 @@ export class Player {
       };
       p.guildQuestProgress = d.guildQuestProgress ? { ...d.guildQuestProgress } : {};
       p.savedLocation = d.savedLocation;
+      p.mmrState = d.mmrState ? JSON.parse(JSON.stringify(d.mmrState)) : null;
 
       // Retroactive stat adjustment for existing starter Guardians
       if (!p.flags['starter_stats_migrated_v2']) {

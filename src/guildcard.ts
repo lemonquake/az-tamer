@@ -8,6 +8,7 @@ import { HOUSES, type Element } from './data';
 import type { Player, GuildPerks } from './state';
 import { GUILD_LORE, drawCardFront, drawCardBack, makeEffigy, rankFor, shade, questsDoneCount } from './guilds';
 import { toast } from './ui';
+import { showTrophyCase } from './trophies';
 
 /** Downscale an uploaded image file to a 256×256 cover-cropped JPEG data URL. */
 function fileToAvatar(file: File): Promise<string> {
@@ -54,6 +55,7 @@ export function openGuildCard(player: Player, onPhotoChanged?: () => void): Prom
       <div id="gcard-actions">
         <button class="ui-btn" id="gcard-upload">📷 Upload profile photo</button>
         <button class="ui-btn" id="gcard-perks" style="background:rgba(217,161,26,0.18);color:var(--ui-gold);border:1px solid var(--ui-gold)">🧬 Guild Perks & Quests</button>
+        <button class="ui-btn" id="gcard-trophy" style="background:rgba(255,210,78,0.18);color:var(--ui-gold);border:1px solid var(--ui-gold)">🏆 Trophy Case</button>
         <button class="ui-btn primary" id="gcard-close">Close (Esc)</button>
       </div>
       <input type="file" id="gcard-file" accept="image/*" style="display:none">`;
@@ -171,6 +173,10 @@ export function openGuildCard(player: Player, onPhotoChanged?: () => void): Prom
       openGuildPerksPanel(player, house.color, () => {
         refreshBack();
       });
+    };
+
+    overlay.querySelector<HTMLElement>('#gcard-trophy')!.onclick = () => {
+      showTrophyCase(player);
     };
 
     // ---------- lifecycle ----------

@@ -28,6 +28,7 @@ import { perf } from './perf';
 import { prewarmVFXGlobal } from './vfx';
 import { mergeStaticScene } from './batch';
 import { updateTamerAppearance } from './clothes';
+import { recordDungeonOutcome } from './mmr';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
 
@@ -468,6 +469,7 @@ async function runOverworldLoop(startRegion = 'aurel'): Promise<DungeonDef | 'ag
 }
 
 async function handleDungeonOutcome(outcome: DungeonOutcome, dungeonDef: DungeonDef): Promise<void> {
+  recordDungeonOutcome(player, outcome);
   if (outcome === 'dead') {
     // night recovery camp cinematic — the medic patches you up by the fire
     const camp = new Cinematic('camp');

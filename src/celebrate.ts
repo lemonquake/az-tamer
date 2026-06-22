@@ -32,6 +32,10 @@ const VICTORY_STYLES: Record<string, BaseStyle> = {
   sealwatch:            { tierId: 'sealwatch',            tierName: 'The Sealwatch Invitational', short: 'Sealwatch', crest: '🌩️', colors: [0xb18ae8, 0x9b5cff, 0xc8b0ff],          bannerClass: 'rb-sealwatch',  grand: false },
   world_championship:   { tierId: 'world_championship',   tierName: 'THE WORLD CHAMPIONSHIP', short: 'Worlds',        crest: '👑', colors: [0xffd24e, 0xfff0b0, 0xffffff],          bannerClass: 'rb-worlds',     grand: true },
   legends_gauntlet:     { tierId: 'legends_gauntlet',     tierName: "The Legends' Gauntlet",  short: 'Legends',       crest: '🌌', colors: [0xff5ab0, 0x5ee0d0, 0xffd24e, 0x9b5cff], bannerClass: 'rb-legends',    grand: true },
+  lemon_interguild:     { tierId: 'lemon_interguild',     tierName: 'The Lemon Inter-Guild', short: 'Guild Wars',     crest: '🛡️', colors: [0xf2d23a, 0x5ad88a, 0xff8a3a, 0x5ab8e8], bannerClass: 'rb-guildwar',   grand: true },
+  aetherline_circuit:   { tierId: 'aetherline_circuit',   tierName: 'The Aether Line Circuit', short: 'Aether Line', crest: '💎', colors: [0xb18ae8, 0x5ee0d0, 0xff5ab0, 0xffffff], bannerClass: 'rb-aetherline', grand: false },
+  leodones_supercup:    { tierId: 'leodones_supercup',    tierName: 'The Leodones Supercup', short: 'Supercup',       crest: '🏆', colors: [0xf2884e, 0xffd24e, 0xff5a5a, 0xfff0b0], bannerClass: 'rb-supercup',   grand: true },
+  legend_showdown:      { tierId: 'legend_showdown',      tierName: 'The Legend Showdown',  short: 'Showdown',       crest: '⚔️', colors: [0xff2d55, 0xffd24e, 0x9b5cff, 0xffffff], bannerClass: 'rb-showdown',   grand: true },
 };
 
 // The Continental Crown re-skins itself to the continent it's fought on.

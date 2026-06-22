@@ -2578,6 +2578,7 @@ export class Town {
           'Fresh honey rolls at Pina\'s every morning! Wild Guardians go mad for them — tame ones too, honestly.',
           'Aljay the Dawnflame once bought a honey roll from my mother\'s stall. We have the coin he paid with framed over the oven.',
           'You smell that? Cinnamon and woodsmoke. That\'s Haven City, that is. Capital of Olivar, finest air on any of the four continents.',
+          'Anthony O. once came down from New Salmonan just to critique my honey rolls! Said they needed more dawnflame chili. The nerve!',
         ],
       },
       {
@@ -2587,6 +2588,7 @@ export class Town {
           'I served in the Legion War, fifteen years back. Saw the sky over Ghandra tear open like wet paper. Then I saw three kids walk INTO it.',
           'Greggy the Stormheart grounded Voltrazar with a coil he built overnight. I held the ladder. Best ladder-holding of my life.',
           'Element matchups win battles. Fire melts Ice, Water drowns Fire — the trio beat nine four-element monsters with that table. Learn it.',
+          'Have you seen Clyde B. over at Hyujon? Doc Clyde\'s assistant. He uses old-empire coils like Greggy did, but wraps them in neon.',
         ],
       },
       {
@@ -2596,6 +2598,7 @@ export class Town {
           'Can\'t talk long — packages for three Grand Houses! The terrace stairs are murder on busy days.',
           'They say the Stormspire hums again at night, like in the war. I deliver up the north road, I HEAR it.',
           'Fastest courier in Olivar, me. Greggy once outran his own thunder — I\'m basically training for that.',
+          'Ivan Lawrence is fast, sure, but I saw him race Riven Calloway along the Worldring\'s conduit rails. They went so fast the air smelled of ozone for an hour!',
         ],
       },
       {
@@ -2623,6 +2626,7 @@ export class Town {
           'When the lamps come on at dusk, the city looks like a constellation that fell asleep.',
           'Aether. The tenth element. Nine beings carry it — three Guardians each for Aljay, Greggy and Onnel. Firgara, Onthrofa, Vulfenix… I can name all nine. Most children can.',
           'They say Noruun\'s auroras are Ghandra\'s reflection. I check them every night. Last month… they flickered.',
+          'Paulo B. spends all his nights in the library searching the rifts. He thinks Ghandra\'s shadows are the next step after Aether.',
         ],
       },
       {
@@ -2632,6 +2636,7 @@ export class Town {
           'I\'m Aljay and you\'re Nyxghul! Pew! Pew!! …fine, YOU can be Aljay. But I get the broom. The broom is Firgara.',
           'When I graduate I\'m getting a fire one, a lightning one AND a leaf one. Three each, just like the Legends!',
           'My gran says Aljay walked through our market once, hood up, bought an apple. Nobody believes her. I believe her.',
+          'Louie B. showed me how to make steam-spray on the Agdao lagoon. You get a water one and a fire one, then splash! Sploooosh!',
         ],
       },
       {
