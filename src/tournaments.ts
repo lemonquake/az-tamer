@@ -17,7 +17,7 @@ import { SPECIES, TYPE_CSS } from './data';
 import { Player, type TrophyEarned } from './state';
 import { WORLD_GUILDS, WORLD_CIRCUIT } from './lore';
 import { awardTournamentPoints, rankIndexFor, RANKS } from './ranks';
-import { say, choose, toast, openScreen, closeMenu, showBracketTreeScreen, showTournamentMatchIntro } from './ui';
+import { say, choose, toast, openScreen, closeMenu, showBracketTreeScreen, showTournamentMatchIntro, showGuildWarMatchIntro } from './ui';
 import { jumpToDay, weekdayName, calendarDayOf, dateLabel, aeYear, weekOfYear } from './calendar';
 import { CLOTHES_DATABASE } from './clothes';
 import { ALL_RODS } from './fishingdata';
@@ -101,7 +101,7 @@ export const KNOWN_NAMES: KnownName[] = [
     id: 'azrin', name: 'Azrin Leodones', epithet: 'The Emberlark',
     continent: 'Olivar', worldRank: 1, continentRank: 1,
     guildId: 'grand_houses', color: '#f2884e',
-    team: ['solarex', 'infernyx', 'ignisar'],
+    team: ['solarex', 'stormapex', 'leviathorn'],
     quote: 'Try to keep up. I never slow down for anyone — not even Father.',
     bio: 'Elder daughter of Aljay the Dawnflame and Mayor Airah, and at sixteen already the youngest World Champion the Coliseum broadsheets can find a record of — atop a shelf of Intercontinental crowns. She fights the way her father did: like sunrise, sudden and everywhere at once, the whole ring lit before her opponent has finished bowing. Olivar puts her first and the other three continents do not seriously argue. For her little sister she would walk into anything — and one day, the rumor runs, into three Anomalies at once.',
   },
@@ -117,7 +117,7 @@ export const KNOWN_NAMES: KnownName[] = [
     id: 'azrael', name: 'Azrael Leodones', epithet: 'The Nightwing',
     continent: 'Olivar', worldRank: 3, continentRank: 2,
     guildId: 'grand_houses', color: '#9a6af2',
-    team: ['chthonix', 'erebusilk', 'phantasmoth'],
+    team: ['chthonix', 'abyssarch', 'fulgurex'],
     quote: 'Your Guardians are afraid of mine. It\'s alright. I\'ll be gentle. …Mostly.',
     bio: 'The younger Leodones — her father over again: stubborn past all argument, a quiet genius, convinced every Guardian is a friend she simply hasn\'t met yet, including yours. She fights from the dark and out-thinks the room three moves early, an unlit lantern on her belt the whole time. "For Ghandra," she says of it, and elaborates to no one. Second on the continent only because she refuses to take a final seriously — until, twice a season, she suddenly does, and the standings shake.',
   },
@@ -176,6 +176,70 @@ export const KNOWN_NAMES: KnownName[] = [
     team: ['leviathorn', 'abyssarch', 'nacrelord'],
     quote: 'The tide doesn\'t hurry, and it doesn\'t lose. Neither do I.',
     bio: 'First of the Pearlwake Compact\'s pro circuit in Veyra. She maps deep sea trenches by day and sweeps brackets by night. Maris has recently conceded her continent\'s top spot to Louie B., but remains a formidable presence in the Worldring.',
+  },
+  {
+    id: 'aljay', name: 'Aljay Leodones', epithet: 'The Dawnflame',
+    continent: 'Olivar', worldRank: 11, continentRank: 3,
+    guildId: 'grand_houses', color: '#f2884e',
+    team: ['solarex', 'ignisar', 'solphyra'],
+    quote: 'Let\'s see if you can handle the true fire of Aurel.',
+    bio: 'The eight-time World Champion who walked into Ghandra carrying nothing but a lantern.',
+  },
+  {
+    id: 'greggy', name: 'Greggy the Stormheart', epithet: 'The Stormheart',
+    continent: 'Olivar', worldRank: 12, continentRank: 4,
+    guildId: 'grand_houses', color: '#f2d23a',
+    team: ['raidenjin', 'voltrazar', 'fulgurex'],
+    quote: 'Strike once, strike true. That\'s the law of the storm.',
+    bio: 'Aljay\'s old comrade and Haven\'s legendary shield.',
+  },
+  {
+    id: 'onnel', name: 'Onnel the Worldroot', epithet: 'The Worldroot',
+    continent: 'Olivar', worldRank: 13, continentRank: 5,
+    guildId: 'grand_houses', color: '#5ad88a',
+    team: ['sylvigor', 'thornstag', 'thicketclaw'],
+    quote: 'The earth remembers. Let\'s see what you\'ve built.',
+    bio: 'The quiet legend who guides the forest and the mountains.',
+  },
+  {
+    id: 'grand', name: 'Grand', epithet: 'The First Shield',
+    continent: 'Olivar', worldRank: 14, continentRank: 6,
+    guildId: 'grand_houses', color: '#f2c14e',
+    team: ['thicketclaw', 'sylvigor', 'thornstag'],
+    quote: 'The shield will never break. Step forward.',
+    bio: 'Legendary protector of the capital.',
+  },
+  {
+    id: 'renzo', name: 'Renzo', epithet: 'The Sea Leviathan',
+    continent: 'Veyra', worldRank: 15, continentRank: 2,
+    guildId: 'first_fire', color: '#3a9df2',
+    team: ['maelstrike', 'reefguard', 'tidefin'],
+    quote: 'The tides obey only strength.',
+    bio: 'Doyen of Agdao and keeper of the western seas.',
+  },
+  {
+    id: 'lemon_quake', name: 'Lemon Quake', epithet: 'The Creator',
+    continent: 'Tharkand', worldRank: 16, continentRank: 5,
+    guildId: 'lumenwrights', color: '#ff5aa8',
+    team: ['ignisar', 'solphyra', 'vulkragon'],
+    quote: 'Welcome to my arena. Show me what you can create.',
+    bio: 'The architect of the Aetherium and builder of worlds.',
+  },
+  {
+    id: 'roydo', name: 'Roydo', epithet: 'The Storm Weaver',
+    continent: 'Tharkand', worldRank: 17, continentRank: 6,
+    guildId: 'filament_concord', color: '#4fe0ff',
+    team: ['teslarch', 'stormapex', 'fulgurex'],
+    quote: 'The grid runs hot. Can you handle the voltage?',
+    bio: 'Legendary circuit-wright who controls the electric conduits of Terra.',
+  },
+  {
+    id: 'blau', name: 'Blau', epithet: 'The Deep Frost',
+    continent: 'Noruun', worldRank: 18, continentRank: 3,
+    guildId: 'aurora_lodge', color: '#9adff2',
+    team: ['chthonix', 'erebusilk', 'phantasmoth'],
+    quote: 'The Noruun ice takes everything eventually.',
+    bio: 'Sentinel of the frozen south who has stood watch for a century.',
   },
 ];
 
@@ -318,12 +382,12 @@ export const TIERS: Record<string, TournamentTier> = {
     id: 'legends_gauntlet', name: "The Legends' Gauntlet", short: 'Legends', venue: 'The Worldring, Terra City', classKind: 'Legends',
     blurb: 'Unsanctioned, unscheduled, and only offered to a standing World Champion: the bonded Guardians of the Big Three themselves — Aljay, Greggy, Onnel — nine Aether lights that have never lost. No Tournament Points. No crowd. Just the wall every record-holder eventually walks into, to learn how far the top really is.',
     rounds: [
-      R('Onnel the Worldroot', 'known', 'legend', 3, { knownId: 'azrael' }),
-      R('Greggy the Stormheart', 'known', 'legend', 3, { knownId: 'ezekiel' }),
-      R('Aljay the Dawnflame', 'known', 'legend', 3, { knownId: 'azrin' }),
+      R('Champion Azrael', 'known', 'legend', 3, { knownId: 'azrael' }),
+      R('Champion Ezekiel', 'known', 'legend', 3, { knownId: 'ezekiel' }),
+      R('THE CHAMPION CROWN', 'known', 'legend', 3, { knownId: 'azrin' }),
     ],
     tp: { champion: 80, finalist: 0, semifinal: 0, entered: 0 }, prizeShards: 20000,
-    minMMR: 2800, onDemand: true,
+    minMMR: 2500, onDemand: true,
   },
 
   // ============================================================
@@ -366,14 +430,19 @@ export const TIERS: Record<string, TournamentTier> = {
   },
   legend_showdown: {
     id: 'legend_showdown', name: 'The Legend Showdown', short: 'Showdown', venue: 'The Worldring, Terra City', classKind: 'Legends',
-    blurb: 'The highest invitational the ladder offers a living tamer: a gauntlet of the very best the world can field, ending against the crown itself. No EXP, no mercy, no second bracket. Only the tiniest handful of tamers ever post the MMR to be asked — and fewer still walk out of the Showdown as anything but humbled. Are you one of them?',
+    blurb: 'The ultimate stage. Fight the eight legendary tamers of Aurel, one by one. Ranging from levels 180 to 225. Will you stand as the supreme tamer and claim the LEGENDS AETHERIUM?',
     rounds: [
-      R('Showdown Opener', 'known', 'champion', 3),
-      R('Showdown Semifinal', 'known', 'crown', 3, { knownId: 'ezekiel' }),
-      R('THE SHOWDOWN', 'known', 'legend', 3, { knownId: 'azrin' }),
+      R('Blau the Deep Frost', 'known', 'legend', 3, { knownId: 'blau' }),
+      R('Roydo the Storm Weaver', 'known', 'legend', 3, { knownId: 'roydo' }),
+      R('Lemon Quake the Creator', 'known', 'legend', 3, { knownId: 'lemon_quake' }),
+      R('Renzo the Sea Leviathan', 'known', 'legend', 3, { knownId: 'renzo' }),
+      R('Grand the First Shield', 'known', 'legend', 3, { knownId: 'grand' }),
+      R('Onnel the Worldroot', 'known', 'legend', 3, { knownId: 'onnel' }),
+      R('Greggy the Stormheart', 'known', 'legend', 3, { knownId: 'greggy' }),
+      R('Aljay the Dawnflame', 'known', 'legend', 3, { knownId: 'aljay' }),
     ],
-    tp: { champion: 50, finalist: 30, semifinal: 18, entered: 4 }, prizeShards: 9000,
-    minMMR: 2600, onDemand: true,
+    tp: { champion: 120, finalist: 0, semifinal: 0, entered: 0 }, prizeShards: 50000,
+    minMMR: 3200, onDemand: true,
   },
 };
 
@@ -900,7 +969,7 @@ export async function runTournament(p: Player, tier: TournamentTier, ev?: Schedu
   let placement: 'champion' | 'finalist' | 'semifinal' | 'entered' = 'entered';
   const total = rounds.length;
 
-  if (tier.id === 'legends_gauntlet') {
+  if (tier.id === 'legends_gauntlet' || tier.id === 'legend_showdown') {
     for (let i = 0; i < total; i++) {
       const round = rounds[i];
       const foe = buildFoe(round, ev);
@@ -910,8 +979,33 @@ export async function runTournament(p: Player, tier: TournamentTier, ev?: Schedu
       p.healAll();
       (window as any).__refreshHUD?.();
 
-      await say('🏟️ ' + tier.short, `${round.name} — you face ${foe.label}, ${foe.sub}.`);
-      if (foe.quote && foe.quote !== '…') await say(foe.label, foe.quote);
+      const oppId = round.knownId || 'aljay';
+
+      if (tier.id === 'legend_showdown') {
+        const runCine = (window as any).__runCinematicScene;
+        if (runCine) {
+          await runCine('ultimate_stage', async (cine: any) => {
+            cine.shot('wide');
+            await say('🏟️ Arena Announcer', `TAMERS AND GUARDIANS! Welcome to the ULTIMATE STAGE of the Worldring!`);
+            
+            cine.shot('player');
+            await say('🏟️ Arena Announcer', `In the challenger\'s corner: marching for glory, the World Champion — ${p.tamerName}!`);
+            
+            cine.shot('opponent');
+            await say('🏟️ Arena Announcer', `And in the opposing corner: the living legend — ${foe.label}, ${foe.sub}!`);
+            
+            cine.shot('wide');
+            if (foe.quote && foe.quote !== '…') {
+              await say(foe.label, `"${foe.quote}"`);
+            } else {
+              await say(foe.label, `"Let\'s see if you have the spark to stay in my ring."`);
+            }
+          }, oppId);
+        }
+      } else {
+        await say('🏟️ ' + tier.short, `${round.name} — you face ${foe.label}, ${foe.sub}.`);
+        if (foe.quote && foe.quote !== '…') await say(foe.label, foe.quote);
+      }
 
       const playerComp: BracketCompetitor = {
         id: 'player',
@@ -927,7 +1021,7 @@ export async function runTournament(p: Player, tier: TournamentTier, ev?: Schedu
       };
 
       const oppComp: BracketCompetitor = {
-        id: round.knownId || round.cityId || foe.label,
+        id: oppId,
         name: foe.label,
         sub: foe.sub,
         color: foe.color,
@@ -940,6 +1034,30 @@ export async function runTournament(p: Player, tier: TournamentTier, ev?: Schedu
       };
 
       await showTournamentMatchIntro(playerComp, oppComp, tier, round.name);
+
+      // If legend_showdown, override specs to use level 180-225 and ONLY Transcendent/Aether forms
+      if (tier.id === 'legend_showdown') {
+        const levels = [180, 185, 190, 195, 200, 210, 218, 225];
+        const currentLevel = levels[i] ?? 180;
+        
+        const showdownTeams: Record<string, string[]> = {
+          blau:        ['nihilumbra', 'cryomara', 'voidsovereign'],
+          roydo:       ['dynastorm', 'voltranscend', 'galvanyx'],
+          lemon_quake: ['solmageddon', 'solphyra', 'ashkarath'],
+          renzo:       ['maremortis', 'abyssophar', 'vormaela'],
+          grand:       ['worldwither', 'genesophar', 'gorrundax'],
+          onnel:       ['verdalune', 'gaiathorn', 'nyxroot'],
+          greggy:      ['raijura', 'voltherion', 'fulgrath'],
+          aljay:       ['firgara', 'onthrofa', 'vulfenix'],
+        };
+        const overrideTeam = showdownTeams[oppId] ?? showdownTeams.aljay;
+        
+        foe.specs = overrideTeam.map(speciesId => ({
+          speciesId,
+          level: currentLevel,
+          statMultiplier: 1.5
+        }));
+      }
 
       const winLine = isFinal ? `${round.name} — the title is yours!` : `${round.name} — you advance!`;
       const res = await runBattle(foe.specs, {
@@ -958,8 +1076,8 @@ export async function runTournament(p: Player, tier: TournamentTier, ev?: Schedu
         p.tournament.tournamentMatchesLost = (p.tournament.tournamentMatchesLost ?? 0) + 1;
         p.tournament.currentStreak = 0;
         p.save(false);
-        const oppId = round.knownId || round.cityId || 'procedural';
-        updatePlayerElo(p, oppId, false);
+        const eloOppId = round.knownId || round.cityId || 'procedural';
+        updatePlayerElo(p, eloOppId, false);
 
         placement = isFinal ? 'finalist' : isSemi ? 'semifinal' : 'entered';
         await say('Attendant Lyssa', placement === 'finalist'
@@ -974,8 +1092,8 @@ export async function runTournament(p: Player, tier: TournamentTier, ev?: Schedu
       p.tournament.currentStreak = (p.tournament.currentStreak ?? 0) + 1;
       p.tournament.bestStreak = Math.max(p.tournament.bestStreak ?? 0, p.tournament.currentStreak);
       p.save(false);
-      const oppId = round.knownId || round.cityId || 'procedural';
-      updatePlayerElo(p, oppId, true);
+      const eloOppId = round.knownId || round.cityId || 'procedural';
+      updatePlayerElo(p, eloOppId, true);
 
       if (round.stratum === 'known') {
         const k = pickKnownForRecord(round, ev, foe.label);
@@ -1441,6 +1559,36 @@ async function awardPlacement(
     if (tier.id === 'world_championship') p.flags['world_champion'] = true;
     if (tier.id === 'legends_gauntlet') p.flags['beat_legends_gauntlet'] = true;
 
+    if (tier.id === 'legend_showdown') {
+      const addedParts: string[] = [];
+      if (!p.crawler.owned.includes('hull_aetherium')) {
+        p.crawler.owned.push('hull_aetherium');
+        addedParts.push('AETHERIUM Body Chassis');
+      }
+      p.addItem('aether_shard', 3);
+      p.addItem('transcend_sigil', 3);
+      p.addItem('terra_catalyst', 3);
+      p.addItem('fish_legend', 2);
+      p.addItem('prism_gem', 3);
+      
+      const wonItems = [
+        '3x Aether Shard',
+        '3x Transcendence Sigil',
+        '3x Terra Catalyst',
+        '2x Legendary Banquet',
+        '3x Prism Gem'
+      ];
+      if (addedParts.length) {
+        wonItems.unshift('🏆 Aetherium Body Chassis');
+      }
+      
+      toast(`✨ LEGEND SHOWDOWN REWARDS UNLOCKED!`, 'gold', 6000);
+      await say('Attendant Lyssa', 
+        `Unbelievable... You have conquered the Legend Showdown! As the ultimate champion, you have been awarded: ${wonItems.join(', ')}. ` +
+        `The Aetherium Body is the most legendary chassis ever forged, available nowhere else in Aurel. Wear it as a sign of supreme taming mastery!`
+      );
+    }
+
     // Create the TrophyEarned record!
     const trophyId = `trophy_${tier.id}_${Date.now()}`;
     const newTrophy: TrophyEarned = {
@@ -1474,6 +1622,23 @@ async function awardPlacement(
   (window as any).__refreshHUD?.();
 
   if (placement === 'champion') {
+    // If we are running legend_showdown, run the epic 3D celebration!
+    if (tier.id === 'legend_showdown') {
+      const runCine = (window as any).__runCinematicScene;
+      if (runCine) {
+        await runCine('ultimate_stage', async (cine: any) => {
+          cine.shot('player');
+          await say('🏟️ Arena Announcer', `LADIES AND GENTLEMEN! THE LEGEND SHOWDOWN HAS A NEW CONQUEROR!`);
+          
+          cine.shot('trophy_zoom');
+          await say('🏟️ Arena Announcer', `Behold: the ultimate symbol of supreme taming mastery... THE LEGENDS AETHERIUM!`);
+          
+          cine.shot('player');
+          await say('🏟️ Arena Announcer', `Write ${p.tamerName}\'s name in gold! Long live the new Legend!`);
+        }, 'celebrate');
+      }
+    }
+
     // The crowning — a full-screen, per-tier banner before the spoils are counted.
     await showChampionBanner(styleFor(tier, true, _ev), { tp: tier.tp.champion, shards: tier.prizeShards, title: `${tier.short} Champion` });
     
@@ -1518,53 +1683,60 @@ export function checkTierRequirement(p: Player, tier: TournamentTier): TierLock 
 // against a rival guild's whole bench. New contestants, fresh lineups,
 // the loudest team crown on four continents.
 // ============================================================
-interface GuildWarrior { id: string; name: string; epithet: string; quote: string; team: string[]; }
+interface GuildWarrior {
+  id: string;
+  name: string;
+  rank: 'Captain' | 'Grand Chief';
+  epithet: string;
+  quote: string;
+  team: string[];
+}
 
 const GUILD_WAR_LINEUPS: Record<string, GuildWarrior[]> = {
   first_fire: [
-    { id: 'gw_ff_1', name: 'Captain Brine Halloran', epithet: 'The Reefcaller', quote: 'Aurelia\'s sand raised me. I don\'t lose on water.', team: ['maelstrike', 'reefguard', 'tidefin'] },
-    { id: 'gw_ff_2', name: 'Ysolde Marrow', epithet: 'The Steamveil', quote: 'Fire and tide, all at once. Mind the scald.', team: ['infernyx', 'tidefin', 'pyrofang'] },
-    { id: 'gw_ff_3', name: 'Oka Sunback', epithet: 'The First-Fire Heir', quote: 'For the Circle. For the very first bond.', team: ['blazemaw', 'maelstrike', 'solarex'] },
+    { id: 'gw_ff_1', name: 'Captain Brine Halloran', rank: 'Captain', epithet: 'The Reefcaller', quote: 'Aurelia\'s sand raised me. I don\'t lose on water.', team: ['maelstrike', 'reefguard', 'tidefin'] },
+    { id: 'gw_ff_2', name: 'Ysolde Marrow', rank: 'Captain', epithet: 'The Steamveil', quote: 'Fire and tide, all at once. Mind the scald.', team: ['infernyx', 'tidefin', 'pyrofang'] },
+    { id: 'gw_ff_3', name: 'Oka Sunback', rank: 'Grand Chief', epithet: 'The First-Fire Heir', quote: 'For the Circle. For the very first bond.', team: ['blazemaw', 'maelstrike', 'solarex'] },
   ],
   pearlwake: [
-    { id: 'gw_pw_1', name: 'Maren Tidecaller', epithet: 'The Deepwarden', quote: 'The trench is patient. So am I.', team: ['leviathorn', 'abyssarch', 'nacrelord'] },
-    { id: 'gw_pw_2', name: 'Coral Vane', epithet: 'The Pearl-Diver', quote: 'Down where it\'s dark, I\'m the only light.', team: ['nacrelord', 'reefguard', 'tidefin'] },
-    { id: 'gw_pw_3', name: 'Dagon Pell', epithet: 'The Trenchlord', quote: 'Veyra runs deeper than you can hold your breath.', team: ['abyssarch', 'leviathorn', 'maelstrike'] },
+    { id: 'gw_pw_1', name: 'Maren Tidecaller', rank: 'Captain', epithet: 'The Deepwarden', quote: 'The trench is patient. So am I.', team: ['leviathorn', 'abyssarch', 'nacrelord'] },
+    { id: 'gw_pw_2', name: 'Coral Vane', rank: 'Captain', epithet: 'The Pearl-Diver', quote: 'Down where it\'s dark, I\'m the only light.', team: ['nacrelord', 'reefguard', 'tidefin'] },
+    { id: 'gw_pw_3', name: 'Dagon Pell', rank: 'Grand Chief', epithet: 'The Trenchlord', quote: 'Veyra runs deeper than you can hold your breath.', team: ['abyssarch', 'leviathorn', 'maelstrike'] },
   ],
   duneward: [
-    { id: 'gw_dw_1', name: 'Sirocco Vane', epithet: 'The Sandstorm', quote: 'The desert eats the unprepared. Are you prepared?', team: ['pyrofang', 'voltrazar', 'blazemaw'] },
-    { id: 'gw_dw_2', name: 'Khalid Drey', epithet: 'The Dune-Marshal', quote: 'Heat and lightning. The Assembly fields both.', team: ['stormapex', 'infernyx', 'raidenjin'] },
-    { id: 'gw_dw_3', name: 'Tamsin Glaive', epithet: 'The Mirage', quote: 'You\'ll swear you saw the win coming. You didn\'t.', team: ['blazemaw', 'voltrazar', 'solarex'] },
+    { id: 'gw_dw_1', name: 'Sirocco Vane', rank: 'Captain', epithet: 'The Sandstorm', quote: 'The desert eats the unprepared. Are you prepared?', team: ['pyrofang', 'voltrazar', 'blazemaw'] },
+    { id: 'gw_dw_2', name: 'Khalid Drey', rank: 'Captain', epithet: 'The Dune-Marshal', quote: 'Heat and lightning. The Assembly fields both.', team: ['stormapex', 'infernyx', 'raidenjin'] },
+    { id: 'gw_dw_3', name: 'Tamsin Glaive', rank: 'Grand Chief', epithet: 'The Mirage', quote: 'You\'ll swear you saw the win coming. You didn\'t.', team: ['blazemaw', 'voltrazar', 'solarex'] },
   ],
   aurora_lodge: [
-    { id: 'gw_al_1', name: 'Frost-Warden Eika', epithet: 'The Long Night', quote: 'We hold the line in Noruun so you can sleep. Stand up.', team: ['chthonix', 'erebusilk', 'phantasmoth'] },
-    { id: 'gw_al_2', name: 'Bjorn Vael', epithet: 'The Sealkeeper', quote: 'The Ghandra seal weakens. So we never do.', team: ['phantasmoth', 'reefguard', 'erebusilk'] },
-    { id: 'gw_al_3', name: 'Nim Hollow', epithet: 'The Aurora', quote: 'Beautiful, isn\'t it? Now look away — that was the point.', team: ['erebusilk', 'chthonix', 'tidefin'] },
+    { id: 'gw_al_1', name: 'Frost-Warden Eika', rank: 'Captain', epithet: 'The Long Night', quote: 'We hold the line in Noruun so you can sleep. Stand up.', team: ['chthonix', 'erebusilk', 'phantasmoth'] },
+    { id: 'gw_al_2', name: 'Bjorn Vael', rank: 'Captain', epithet: 'The Sealkeeper', quote: 'The Ghandra seal weakens. So we never do.', team: ['phantasmoth', 'reefguard', 'erebusilk'] },
+    { id: 'gw_al_3', name: 'Nim Hollow', rank: 'Grand Chief', epithet: 'The Aurora', quote: 'Beautiful, isn\'t it? Now look away — that was the point.', team: ['erebusilk', 'chthonix', 'tidefin'] },
   ],
   grand_houses: [
-    { id: 'gw_gh_1', name: 'Sir Calden Pyrelight', epithet: 'The Bulwark', quote: 'Haven\'s walls held the Legion. I\'ll hold this ring.', team: ['blazemaw', 'magmaboar', 'pyrofang'] },
-    { id: 'gw_gh_2', name: 'Lady Verena Duskwatch', epithet: 'The Shadowcaller', quote: 'House Duskwatch fights from where you can\'t see.', team: ['chthonix', 'nyxroot', 'phantasmoth'] },
-    { id: 'gw_gh_3', name: 'Rowan Greenfell', epithet: 'The Wildwarden', quote: 'Five Houses, one banner. Let\'s grow this.', team: ['sylvigor', 'thornstag', 'thicketclaw'] },
+    { id: 'gw_gh_1', name: 'Sir Calden Pyrelight', rank: 'Captain', epithet: 'The Bulwark', quote: 'Haven\'s walls held the Legion. I\'ll hold this ring.', team: ['blazemaw', 'magmaboar', 'pyrofang'] },
+    { id: 'gw_azrael', name: 'Azrael Leodones', rank: 'Grand Chief', epithet: 'The Nightwing', quote: 'Your Guardians are afraid of mine. It\'s alright. I\'ll be gentle. …Mostly.', team: ['chthonix', 'abyssarch', 'fulgurex'] },
+    { id: 'gw_azrin', name: 'Azrin Leodones', rank: 'Grand Chief', epithet: 'The Emberlark', quote: 'Try to keep up. I never slow down for anyone — not even Father.', team: ['solarex', 'stormapex', 'leviathorn'] },
   ],
   filament_concord: [
-    { id: 'gw_fc_1', name: 'Circuit-Wright Oma', epithet: 'The Live Wire', quote: 'Old war-iron, new purpose. Output: maximum.', team: ['teslarch', 'gravemonolith', 'fulgurex'] },
-    { id: 'gw_fc_2', name: 'Volt-Smith Dane', epithet: 'The Overclock', quote: 'I run the grid hot. Hope your bench is insulated.', team: ['voltigarch', 'teslarch', 'raidenjin'] },
-    { id: 'gw_fc_3', name: 'Relay Nox', epithet: 'The Grounding', quote: 'Everything you throw, I send to earth.', team: ['gravemonolith', 'fulgurex', 'voltrazar'] },
+    { id: 'gw_fc_1', name: 'Circuit-Wright Oma', rank: 'Captain', epithet: 'The Live Wire', quote: 'Old war-iron, new purpose. Output: maximum.', team: ['teslarch', 'gravemonolith', 'fulgurex'] },
+    { id: 'gw_fc_2', name: 'Volt-Smith Dane', rank: 'Captain', epithet: 'The Overclock', quote: 'I run the grid hot. Hope your bench is insulated.', team: ['voltigarch', 'teslarch', 'raidenjin'] },
+    { id: 'gw_cosmo', name: 'Cosmo', rank: 'Grand Chief', epithet: 'The Nova-Warden', quote: 'The cosmos align, and the circuit closes. Let\'s see if you can survive the heat.', team: ['fulgurex', 'teslarch', 'solarex'] },
   ],
   worldring_conclave: [
-    { id: 'gw_wc_1', name: 'Conclave-Knight Sera', epithet: 'The Ringwarden', quote: 'The Worldring is ours to keep. Step in.', team: ['raidenjin', 'voltrazar', 'blazemaw'] },
-    { id: 'gw_wc_2', name: 'Magnus Holt', epithet: 'The Crown-Breaker', quote: 'I break the crowns the Olivars build. Yours next.', team: ['stormapex', 'infernyx', 'voltigarch'] },
-    { id: 'gw_wc_3', name: 'Pell Aurum', epithet: 'The Worldring Heir', quote: 'Terra remembers. Terra answers. For the Conclave!', team: ['voltrazar', 'solarex', 'raidenjin'] },
+    { id: 'gw_wc_1', name: 'Conclave-Knight Sera', rank: 'Captain', epithet: 'The Ringwarden', quote: 'The Worldring is ours to keep. Step in.', team: ['raidenjin', 'voltrazar', 'blazemaw'] },
+    { id: 'gw_wc_2', name: 'Magnus Holt', rank: 'Captain', epithet: 'The Crown-Breaker', quote: 'I break the crowns the Olivars build. Yours next.', team: ['stormapex', 'infernyx', 'voltigarch'] },
+    { id: 'gw_wc_3', name: 'Pell Aurum', rank: 'Grand Chief', epithet: 'The Worldring Heir', quote: 'Terra remembers. Terra answers. For the Conclave!', team: ['voltrazar', 'solarex', 'raidenjin'] },
   ],
   lumenwrights: [
-    { id: 'gw_lw_1', name: 'Lumen-Artisan Vix', epithet: 'The Neon Edge', quote: 'Even the streetlights have opinions. Mine\'s "win."', team: ['teslarch', 'stormclaw', 'voltigarch'] },
-    { id: 'gw_lw_2', name: 'Iris Gleam', epithet: 'The Lightbender', quote: 'Watch the light. No — watch the OTHER light.', team: ['empyrhawk', 'voltigarch', 'tempestrix'] },
-    { id: 'gw_lw_3', name: 'Sol Vanta', epithet: 'The Prism', quote: 'One beam in, a hundred out. Pick which one hurts.', team: ['solarex', 'teslarch', 'voltrazar'] },
+    { id: 'gw_lw_1', name: 'Lumen-Artisan Vix', rank: 'Captain', epithet: 'The Neon Edge', quote: 'Even the streetlights have opinions. Mine\'s "win."', team: ['teslarch', 'stormclaw', 'voltigarch'] },
+    { id: 'gw_lw_2', name: 'Iris Gleam', rank: 'Captain', epithet: 'The Lightbender', quote: 'Watch the light. No — watch the OTHER light.', team: ['empyrhawk', 'voltigarch', 'tempestrix'] },
+    { id: 'gw_lw_3', name: 'Sol Vanta', rank: 'Grand Chief', epithet: 'The Prism', quote: 'One beam in, a hundred out. Pick which one hurts.', team: ['solarex', 'teslarch', 'voltrazar'] },
   ],
   voltwake_runners: [
-    { id: 'gw_vr_1', name: 'Rail-Courier Zev', epithet: 'The Slipstream', quote: 'Blink and you\'ll miss the show. The rails are live!', team: ['empyrhawk', 'tempestrix', 'voltigarch'] },
-    { id: 'gw_vr_2', name: 'Gale Renke', epithet: 'The Tailwind', quote: 'I\'m already past you. You just haven\'t noticed.', team: ['tempestrix', 'empyrhawk', 'stormapex'] },
-    { id: 'gw_vr_3', name: 'Wisp Carrow', epithet: 'The Redline', quote: 'Top speed, no brakes. Try to keep up.', team: ['voltigarch', 'empyrhawk', 'raidenjin'] },
+    { id: 'gw_vr_1', name: 'Rail-Courier Zev', rank: 'Captain', epithet: 'The Slipstream', quote: 'Blink and you\'ll miss the show. The rails are live!', team: ['empyrhawk', 'tempestrix', 'voltigarch'] },
+    { id: 'gw_vr_2', name: 'Gale Renke', rank: 'Captain', epithet: 'The Tailwind', quote: 'I\'m already past you. You just haven\'t noticed.', team: ['tempestrix', 'empyrhawk', 'stormapex'] },
+    { id: 'gw_vr_3', name: 'Wisp Carrow', rank: 'Grand Chief', epithet: 'The Redline', quote: 'Top speed, no brakes. Try to keep up.', team: ['voltigarch', 'empyrhawk', 'raidenjin'] },
   ],
 };
 
@@ -1638,12 +1810,31 @@ export async function runGuildWars(p: Player, tier: TournamentTier): Promise<voi
 
     await say('🛡️ ' + tier.short, `${round.name} — ${playerGuild.name} versus ${oppGuildComp.name}! Their lineup steps up: ${lineup.map(l => l.name).join(' · ')}. Best of three.`);
 
+    const GuildTeammates: Record<string, string[]> = {
+      first_fire: ['Tamer Brine', 'Tamer Ysolde', 'Tamer Oka'],
+      pearlwake: ['Tamer Maren', 'Tamer Coral', 'Tamer Dagon'],
+      duneward: ['Tamer Sirocco', 'Tamer Khalid', 'Tamer Tamsin'],
+      aurora_lodge: ['Tamer Eika', 'Tamer Bjorn', 'Tamer Nim'],
+      grand_houses: ['Sir Calden', 'Tamer Verena', 'Tamer Rowan'],
+      filament_concord: ['Tamer Oma', 'Tamer Dane', 'Tamer Cosmo'],
+      worldring_conclave: ['Tamer Sera', 'Tamer Magnus', 'Tamer Pell'],
+      lumenwrights: ['Tamer Vix', 'Tamer Iris', 'Tamer Sol'],
+      voltwake_runners: ['Tamer Zev', 'Tamer Gale', 'Tamer Wisp'],
+    };
+
     let pWins = 0, oWins = 0;
     for (let bout = 0; bout < lineup.length && pWins < 2 && oWins < 2; bout++) {
       const member = lineup[bout];
       const pLevels = getPlayerPartyLevels(p);
       const scaling = getRoundScaling(tier, i, total, pLevels);
-      const specs = member.team.map(id => ({ speciesId: sp(id), level: scaling.level, statMultiplier: scaling.statMultiplier }));
+      
+      // Strict scaling from level 110 to 150
+      let opponentLevel = 110;
+      if (bout === 0) opponentLevel = 110;
+      else if (bout === 1) opponentLevel = 130;
+      else opponentLevel = 150;
+
+      const specs = member.team.map(id => ({ speciesId: sp(id), level: opponentLevel, statMultiplier: scaling.statMultiplier }));
 
       const playerComp: BracketCompetitor = {
         id: 'player', name: p.tamerName, sub: playerGuild.name, color: '#f2c14e', quote: '',
@@ -1656,8 +1847,87 @@ export async function runGuildWars(p: Player, tier: TournamentTier): Promise<voi
         isPlayer: false, speciesIds: member.team.map(sp),
       };
 
-      if (member.quote) await say(member.name, member.quote);
-      await showTournamentMatchIntro(playerComp, oppComp, tier, `${round.name} · Bout ${bout + 1} of 3`);
+      const opponentRank = member.rank;
+      const playerRank = RANKS[rankIndexFor(p)]?.name ?? 'Tamer';
+
+      let oppLine = member.quote;
+      if (member.id === 'gw_azrin') {
+        if (playerRank === 'Grand Chief') {
+          oppLine = `Another Grand Chief? Good! I hate easy bouts. Let's see if you can keep up with the Dawnflame's light!`;
+        } else if (playerRank === 'Captain') {
+          oppLine = `A Captain? Don't blink, tamer — you might miss the entire fight!`;
+        } else {
+          oppLine = `Try to keep up! I never slow down for anyone — especially not in the Wars!`;
+        }
+      } else if (member.id === 'gw_azrael') {
+        if (playerRank === 'Grand Chief') {
+          oppLine = `A Grand Chief... how meticulous. I've already mapped out three ways this ends. Shall we test them?`;
+        } else if (playerRank === 'Captain') {
+          oppLine = `A Captain's tactics are usually so... predictable. Let's see if you can surprise me.`;
+        } else {
+          oppLine = `Your Guardians are afraid of mine. It's alright, I'll be gentle. ...Mostly.`;
+        }
+      } else if (member.id === 'gw_cosmo') {
+        if (playerRank === 'Grand Chief') {
+          oppLine = `A fellow Grand Chief! The stars have converged for this. Let the cosmic flame collide with your banner!`;
+        } else if (playerRank === 'Captain') {
+          oppLine = `A Captain steps up to the star-gate? Let's see if your ambition can light the void.`;
+        } else {
+          oppLine = `The cosmos align, and the circuit closes. Let's see if you can survive the heat.`;
+        }
+      } else if (opponentRank === 'Grand Chief') {
+        if (playerRank === 'Grand Chief') {
+          oppLine = `A clash of Grand Chiefs! The whole Coliseum is holding its breath. Show me the strength of ${playerGuild.name}!`;
+        } else if (playerRank === 'Captain') {
+          oppLine = `A Captain trying to command the storm? You're brave, but a Grand Chief doesn't bow to a rank below.`;
+        } else {
+          oppLine = `You march for ${playerGuild.name}, but a Grand Chief's authority is absolute in this Ring. Let's see your mettle.`;
+        }
+      } else if (opponentRank === 'Captain') {
+        if (playerRank === 'Grand Chief') {
+          oppLine = `I know you're a Grand Chief, but a Captain's banner never drops without a fight. Prepare yourself!`;
+        } else if (playerRank === 'Captain') {
+          oppLine = `Captain vs Captain. A classic duel of banners. Let's see whose leadership is absolute!`;
+        } else {
+          oppLine = `A rising star. Let's see if you have what it takes to carry a Captain's banner.`;
+        }
+      }
+
+      let replyLine = '';
+      if (playerRank === 'Grand Chief') {
+        if (opponentRank === 'Grand Chief') {
+          replyLine = `Show 'em what a real Grand Chief can do! Let's go!`;
+        } else {
+          replyLine = `They're shaking! Finish this clean, Chief!`;
+        }
+      } else if (playerRank === 'Captain') {
+        if (opponentRank === 'Grand Chief') {
+          replyLine = `We aren't afraid of their Grand Chief! Show them a Captain's grit!`;
+        } else {
+          replyLine = `Make our colors fly higher, Captain! You've got this!`;
+        }
+      } else {
+        if (opponentRank === 'Grand Chief') {
+          replyLine = `Underestimate us at your own peril! Show them what we've got!`;
+        } else {
+          replyLine = `Earn that promotion right here! Take their Captain down!`;
+        }
+      }
+
+      const teammates = GuildTeammates[playerGuildId] ?? ['Guild Support'];
+      const replySpeaker = teammates[bout % teammates.length];
+
+      await showGuildWarMatchIntro(
+        playerComp,
+        oppComp,
+        tier,
+        `${round.name} · Bout ${bout + 1} of 3`,
+        playerRank,
+        opponentRank,
+        oppLine,
+        replySpeaker,
+        replyLine
+      );
 
       const res = await runBattle(specs, {
         boss: isFinal && bout >= 1,

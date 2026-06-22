@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { HOUSES, type HouseDef } from './data';
 import type { Player } from './state';
 import { RANKS, rankIndexFor, rankFor, rankBadgeCanvas } from './ranks';
+import { WORLD_GUILDS } from './lore';
 
 // the rank ladder is universal across all guilds — see src/ranks.ts
 export { rankFor };
@@ -250,7 +251,35 @@ export function guildIconCanvas(houseId: string, size = 128): HTMLCanvasElement 
   const cached = iconCache.get(key);
   if (cached) return cached;
 
-  const h = HOUSES.find(x => x.id === houseId)!;
+  let h = HOUSES.find(x => x.id === houseId);
+  let isWorldGuild = false;
+  if (!h) {
+    const wg = WORLD_GUILDS.find(x => x.id === houseId);
+    if (wg) {
+      isWorldGuild = true;
+      h = {
+        id: wg.id,
+        name: wg.name,
+        type: 'Blaze',
+        starter: '',
+        master: '',
+        motto: wg.desc,
+        color: wg.color
+      };
+    }
+  }
+  if (!h) {
+    h = {
+      id: houseId,
+      name: 'Unknown Guild',
+      type: 'Blaze',
+      starter: '',
+      master: '',
+      motto: '',
+      color: '#999999'
+    };
+  }
+
   const c = document.createElement('canvas');
   c.width = c.height = size;
   const ctx = c.getContext('2d')!;
@@ -276,7 +305,20 @@ export function guildIconCanvas(houseId: string, size = 128): HTMLCanvasElement 
   ctx.fillStyle = '#fff6e8';
   ctx.strokeStyle = '#fff6e8';
 
-  if (houseId === 'pyrelight') {
+  let drawId = houseId;
+  if (isWorldGuild) {
+    if (houseId === 'first_fire') drawId = 'pyrelight';
+    else if (houseId === 'pearlwake') drawId = 'mistveil';
+    else if (houseId === 'duneward') drawId = 'jurah';
+    else if (houseId === 'aurora_lodge') drawId = 'duskwatch';
+    else if (houseId === 'filament_concord') drawId = 'stormcall';
+    else if (houseId === 'voltwake_runners') drawId = 'stormcall';
+    else if (houseId === 'worldring_conclave') drawId = 'devas';
+    else if (houseId === 'lumenwrights') drawId = 'quazor';
+    else if (houseId === 'grand_houses') drawId = 'quazor';
+  }
+
+  if (drawId === 'pyrelight') {
     // triple-tongued flame
     ctx.beginPath();
     ctx.moveTo(m, s * 0.16);
@@ -290,7 +332,7 @@ export function guildIconCanvas(houseId: string, size = 128): HTMLCanvasElement 
     ctx.bezierCurveTo(s * 0.6, s * 0.52, s * 0.56, s * 0.6, m, s * 0.74);
     ctx.bezierCurveTo(s * 0.44, s * 0.6, s * 0.4, s * 0.52, m, s * 0.4);
     ctx.fill();
-  } else if (houseId === 'mistveil') {
+  } else if (drawId === 'mistveil') {
     // droplet over three waves
     ctx.beginPath();
     ctx.moveTo(m, s * 0.14);
@@ -306,7 +348,7 @@ export function guildIconCanvas(houseId: string, size = 128): HTMLCanvasElement 
       ctx.quadraticCurveTo(s * 0.62, y + s * 0.06, s * 0.74, y);
       ctx.stroke();
     }
-  } else if (houseId === 'thornward') {
+  } else if (drawId === 'thornward') {
     // oak leaf with thorned stem
     ctx.beginPath();
     ctx.moveTo(m, s * 0.14);
@@ -320,7 +362,7 @@ export function guildIconCanvas(houseId: string, size = 128): HTMLCanvasElement 
     ctx.closePath(); ctx.fill();
     ctx.strokeStyle = shade(h.color, -0.4); ctx.lineWidth = s * 0.025;
     ctx.beginPath(); ctx.moveTo(m, s * 0.2); ctx.lineTo(m, s * 0.86); ctx.stroke();
-  } else if (houseId === 'stormcall') {
+  } else if (drawId === 'stormcall') {
     // jagged thunderbolt
     ctx.beginPath();
     ctx.moveTo(s * 0.58, s * 0.12);
@@ -331,7 +373,7 @@ export function guildIconCanvas(houseId: string, size = 128): HTMLCanvasElement 
     ctx.lineTo(s * 0.53, s * 0.42);
     ctx.lineTo(s * 0.68, s * 0.12);
     ctx.closePath(); ctx.fill();
-  } else if (houseId === 'duskwatch') {
+  } else if (drawId === 'duskwatch') {
     // duskwatch — crescent moon and watching star
     ctx.beginPath();
     ctx.arc(m, s * 0.5, s * 0.3, Math.PI * -0.42, Math.PI * 0.92, false);
@@ -339,7 +381,7 @@ export function guildIconCanvas(houseId: string, size = 128): HTMLCanvasElement 
     ctx.closePath(); ctx.fill();
     star(ctx, s * 0.66, s * 0.3, s * 0.07);
     star(ctx, s * 0.74, s * 0.46, s * 0.045);
-  } else if (houseId === 'devas') {
+  } else if (drawId === 'devas') {
     // Devas celestial sun
     ctx.beginPath();
     ctx.arc(m, s * 0.5, s * 0.18, 0, Math.PI * 2);
@@ -351,14 +393,14 @@ export function guildIconCanvas(houseId: string, size = 128): HTMLCanvasElement 
       ctx.lineTo(m + Math.cos(a) * s * 0.3, s * 0.5 + Math.sin(a) * s * 0.3);
       ctx.lineWidth = s * 0.03; ctx.stroke();
     }
-  } else if (houseId === 'noctus') {
+  } else if (drawId === 'noctus') {
     // Noctus crescent moon enclosing a watching eye
     ctx.beginPath();
     ctx.arc(m, s * 0.5, s * 0.26, Math.PI * -0.5, Math.PI * 0.8, false);
     ctx.arc(m + s * 0.08, s * 0.44, s * 0.22, Math.PI * 0.7, Math.PI * -0.4, true);
     ctx.closePath(); ctx.fill();
     star(ctx, m - s * 0.04, s * 0.5, s * 0.06);
-  } else if (houseId === 'jurah') {
+  } else if (drawId === 'jurah') {
     // Jurah mountain peak / rock crystal
     ctx.beginPath();
     ctx.moveTo(m, s * 0.2);
@@ -370,7 +412,7 @@ export function guildIconCanvas(houseId: string, size = 128): HTMLCanvasElement 
     ctx.moveTo(m, s * 0.2);
     ctx.lineTo(m, s * 0.8);
     ctx.lineWidth = s * 0.02; ctx.stroke();
-  } else if (houseId === 'quazor') {
+  } else if (drawId === 'quazor') {
     // Quazor cosmic reactor ring + atom orbits
     ctx.beginPath();
     ctx.arc(m, s * 0.5, s * 0.22, 0, Math.PI * 2);

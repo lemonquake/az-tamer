@@ -209,14 +209,20 @@ export class Battle {
         'gauntlet_seeds',
         'sealwatch',
         'world_championship',
-        'legends_gauntlet'
+        'legends_gauntlet',
+        'legend_showdown'
       ].includes(this.opts.ring.tierId);
+      
+      const isGuildWars = this.opts.ring && this.opts.ring.tierId === 'lemon_interguild';
       
       if (isHigherTournament) {
         const playerHasLevel60 = this.player.party.some(pg => pg.level >= 60) || 
                                  this.player.reserve.some(pg => pg.level >= 60);
         g.extraHpBonus = playerHasLevel60 ? 7000 : 3000;
         g.hp = g.stats.hp; // Heal to include the extra HP bonus
+      } else if (isGuildWars) {
+        g.extraHpBonus = 3000; // Flat +3000 HP buff for Guild Wars contestants
+        g.hp = g.stats.hp;
       }
       
       this.units.push(this.spawnUnit(g, 'enemy', i));

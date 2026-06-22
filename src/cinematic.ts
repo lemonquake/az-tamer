@@ -16,8 +16,21 @@ import {
 } from './models';
 import { HOUSES, SPECIES } from './data';
 import { DAUGHTERS } from './lore';
+import { Player } from './state';
+import { VFX } from './vfx';
 
-export type CineKind = 'academy' | 'camp' | 'library' | 'bluff' | 'fountain' | 'porch' | 'pledge' | 'pond';
+export type CineKind = 'academy' | 'camp' | 'library' | 'bluff' | 'fountain' | 'porch' | 'pledge' | 'pond' | 'ultimate_stage';
+
+const LEGEND_LOOKS: Record<string, { top: number; bottom: number; cap: number | null; hair: number; hairstyle: 'long' | 'ponytail' | undefined; skin?: number }> = {
+  aljay:       { top: 0xf2884e, bottom: 0x3d2010, cap: 0xd84a3a, hair: 0x8a3a1a, hairstyle: undefined },
+  greggy:      { top: 0xf2d23a, bottom: 0x3d3d20, cap: null,     hair: 0x5a5a5a, hairstyle: undefined },
+  onnel:       { top: 0x5ad88a, bottom: 0x1a3a24, cap: null,     hair: 0x8a5a3a, hairstyle: undefined },
+  grand:       { top: 0xf2c14e, bottom: 0x3d3015, cap: 0xc49422, hair: 0x4a3010, hairstyle: undefined },
+  renzo:       { top: 0x3a9df2, bottom: 0x10283d, cap: null,     hair: 0x2d5a8a, hairstyle: 'ponytail' },
+  lemon_quake: { top: 0xff5aa8, bottom: 0x3d1028, cap: null,     hair: 0xffcc00, hairstyle: undefined },
+  roydo:       { top: 0x4fe0ff, bottom: 0x103d4a, cap: 0x102030, hair: 0xcccccc, hairstyle: undefined },
+  blau:        { top: 0x9adff2, bottom: 0x203a45, cap: null,     hair: 0x9ab0c8, hairstyle: 'long' },
+};
 
 interface Shot {
   pos: THREE.Vector3;
@@ -35,8 +48,10 @@ export class Cinematic {
   private rigs: any[] = [];
   private t = 0;
   private instantTransition = false;
+  private fx: VFX;
 
   constructor(kind: CineKind, extraId?: string) {
+    this.fx = new VFX(this.scene);
     if (kind === 'academy') this.buildAcademy();
     else if (kind === 'camp') this.buildCamp();
     else if (kind === 'library') this.buildLibrary();
@@ -45,6 +60,7 @@ export class Cinematic {
     else if (kind === 'porch') this.buildPorch();
     else if (kind === 'pledge') this.buildPledge(extraId!);
     else if (kind === 'pond') this.buildPond();
+    else if (kind === 'ultimate_stage') this.buildUltimateStage(extraId!);
     const first = Object.values(this.shots)[0];
     this.goal = first;
     this.camera.position.copy(first.pos);
@@ -69,6 +85,7 @@ export class Cinematic {
 
   update(dt: number): void {
     this.t += dt;
+    this.fx.update(dt);
     // glide + a gentle handheld sway
     const sway = new THREE.Vector3(Math.sin(this.t * 0.5) * 0.12, Math.sin(this.t * 0.33) * 0.08, 0);
     if (this.instantTransition) {
@@ -128,6 +145,27 @@ export class Cinematic {
     }
 
     // Gentle floating hover on the altar for the starter Guardian rigs
+    
+    // Animate the Mega Ultra Cool Trophy
+    const trophy = this.scene.getObjectByName('legends_trophy');
+    if (trophy) {
+      trophy.rotation.y += dt * 1.5;
+      trophy.position.y = 2.3 + Math.sin(this.t * 2.5) * 0.08;
+      
+      const r1 = trophy.getObjectByName('trophy_ring_1');
+      if (r1) r1.rotation.x += dt * 1.0;
+      
+      const r2 = trophy.getObjectByName('trophy_ring_2');
+      if (r2) r2.rotation.y += dt * 2.0;
+      
+      if (Math.random() < 0.15) {
+        this.fx.burst(
+          new THREE.Vector3(0, 2.3, 0).add(new THREE.Vector3((Math.random() - 0.5) * 0.6, (Math.random() - 0.5) * 0.6, (Math.random() - 0.5) * 0.6)),
+          0x00ffff,
+          { count: 2, speed: 0.35, up: 0.2, spread: 0.1, size: 0.06, life: 0.7 }
+        );
+      }
+    }
     this.rigs.forEach(rig => {
       rig.group.position.y = 0.85 + Math.sin(now * 0.0025) * 0.08;
     });
@@ -1012,5 +1050,156 @@ export class Cinematic {
         facings: [[hero, heroToOff], [officiant, offToHero]]
       }
     };
+  }
+
+  private buildUltimateStage(extraId: string): void {
+    const s = this.scene;
+    s.background = skyGradient('#030409', '#0e1227');
+    s.add(new THREE.AmbientLight(0xffffff, 0.45));
+    
+    // Glowing spotlights pointing down
+    const spotL = new THREE.SpotLight(0xffcc00, 2.5, 25, Math.PI / 6, 0.5, 1);
+    spotL.position.set(-3.0, 8, 0);
+    s.add(spotL);
+    
+    const spotR = new THREE.SpotLight(0xff0066, 2.5, 25, Math.PI / 6, 0.5, 1);
+    spotR.position.set(3.0, 8, 0);
+    s.add(spotR);
+
+    // Grid Floor
+    const floor = new THREE.Mesh(
+      new THREE.PlaneGeometry(24, 24),
+      new THREE.MeshStandardMaterial({ color: 0x05070f, roughness: 0.9, metalness: 0.1 })
+    );
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.y = -0.4;
+    floor.receiveShadow = true;
+    s.add(floor);
+
+    // Ultimate Stage Pedestal in Center
+    const stageGeo = new THREE.CylinderGeometry(7.0, 7.2, 0.4, 32);
+    const stageMat = new THREE.MeshStandardMaterial({
+      color: 0x0e111a,
+      roughness: 0.25,
+      metalness: 0.8,
+      emissive: 0xffaa00,
+      emissiveIntensity: 0.15
+    });
+    const stage = new THREE.Mesh(stageGeo, stageMat);
+    stage.position.set(0, -0.2, 0);
+    stage.receiveShadow = true;
+    s.add(stage);
+
+    // Outer neon glow rings
+    const ringMat = new THREE.MeshBasicMaterial({ color: 0xffaa00, side: THREE.DoubleSide });
+    const ringGeo = new THREE.RingGeometry(6.8, 6.9, 32);
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.y = 0.01;
+    s.add(ring);
+
+    // Spawn Player
+    const p = Player.activeInstance;
+    const pLook = p ? p.appearance : { skin: 0xe0a87a, hair: 0x8a5a3a, hairstyle: 'long' as const };
+    
+    const playerX = extraId === 'celebrate' ? 0 : -2.5;
+    const playerRot = extraId === 'celebrate' ? 0 : Math.PI / 2;
+    
+    const player = this.person({
+      top: 0x2a5ad8,
+      bottom: 0x32384e,
+      cap: 0xd84a3a,
+      skin: pLook.skin,
+      hair: pLook.hair,
+      hairstyle: pLook.hairstyle as any
+    }, playerX, 0, playerRot);
+
+    // Spawn Opponent if NOT celebrating
+    let opponent: THREE.Group | null = null;
+    if (extraId !== 'celebrate') {
+      const oppId = extraId || 'aljay';
+      const look = LEGEND_LOOKS[oppId] ?? LEGEND_LOOKS.aljay;
+      opponent = this.person({
+        top: look.top,
+        bottom: look.bottom,
+        cap: look.cap,
+        skin: look.skin ?? 0xe0a87a,
+        hair: look.hair,
+        hairstyle: look.hairstyle as any
+      }, 2.5, 0, -Math.PI / 2);
+    }
+
+    // Interactive Spotlight Beam Meshes
+    const beamGeo = new THREE.CylinderGeometry(0.1, 1.6, 12, 16, 1, true);
+    const pBeamMat = new THREE.MeshBasicMaterial({ color: 0xffcc00, transparent: true, opacity: 0.15, side: THREE.DoubleSide });
+    const pBeam = new THREE.Mesh(beamGeo, pBeamMat);
+    pBeam.position.set(playerX, 6, 0);
+    s.add(pBeam);
+
+    if (opponent) {
+      const oBeamMat = new THREE.MeshBasicMaterial({ color: 0xff3366, transparent: true, opacity: 0.15, side: THREE.DoubleSide });
+      const oBeam = new THREE.Mesh(beamGeo, oBeamMat);
+      oBeam.position.set(2.5, 6, 0);
+      s.add(oBeam);
+    }
+
+    // Set up camera shots
+    if (extraId === 'celebrate') {
+      // Mega Ultra Cool Trophy Spinning
+      const trophyGroup = new THREE.Group();
+      trophyGroup.name = 'legends_trophy';
+      trophyGroup.position.set(0, 2.3, 0);
+
+      const crystalGeo = new THREE.OctahedronGeometry(0.35, 0);
+      const crystalMat = new THREE.MeshStandardMaterial({
+        color: 0x00ffff,
+        roughness: 0.1,
+        metalness: 0.9,
+        emissive: 0x00aaff,
+        emissiveIntensity: 0.9
+      });
+      const crystal = new THREE.Mesh(crystalGeo, crystalMat);
+      trophyGroup.add(crystal);
+
+      const goldMat = new THREE.MeshStandardMaterial({ color: 0xffcc00, metalness: 0.9, roughness: 0.15 });
+      const ringGeo1 = new THREE.TorusGeometry(0.55, 0.04, 8, 32);
+      
+      const r1 = new THREE.Mesh(ringGeo1, goldMat);
+      r1.name = 'trophy_ring_1';
+      trophyGroup.add(r1);
+
+      const r2 = new THREE.Mesh(ringGeo1, goldMat);
+      r2.name = 'trophy_ring_2';
+      r2.rotation.x = Math.PI / 2;
+      trophyGroup.add(r2);
+
+      s.add(trophyGroup);
+
+      this.shots = {
+        player: { pos: new THREE.Vector3(0, 1.5, 3.2), look: new THREE.Vector3(0, 1.25, 0), facings: [[player, 0]] },
+        trophy_zoom: { pos: new THREE.Vector3(0, 1.7, 1.8), look: new THREE.Vector3(0, 2.1, 0), facings: [[player, 0]] }
+      };
+    } else {
+      const pToOpp = opponent ? Math.atan2(opponent.position.x - player.position.x, opponent.position.z - player.position.z) : Math.PI / 2;
+      const oppToP = opponent ? Math.atan2(player.position.x - opponent.position.x, player.position.z - opponent.position.z) : -Math.PI / 2;
+
+      this.shots = {
+        wide: {
+          pos: new THREE.Vector3(0, 2.4, 6.2),
+          look: new THREE.Vector3(0, 1.0, 0),
+          facings: [[player, pToOpp], ...(opponent ? [[opponent, oppToP] as [THREE.Group, number]] : [])]
+        },
+        player: {
+          pos: new THREE.Vector3(-1.0, 1.35, 1.5),
+          look: new THREE.Vector3(-2.5, 1.1, 0),
+          facings: [[player, pToOpp]]
+        },
+        opponent: {
+          pos: new THREE.Vector3(1.0, 1.35, 1.5),
+          look: new THREE.Vector3(2.5, 1.1, 0),
+          facings: opponent ? [[opponent, oppToP]] : []
+        }
+      };
+    }
   }
 }

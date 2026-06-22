@@ -352,29 +352,40 @@ export const TROPHIES: Record<string, TrophyDef> = {
   },
   legend_showdown: {
     id: 'legend_showdown',
-    name: 'The Showdown Blade',
-    desc: 'A champion-blade driven into a riven pedestal, wreathed in crimson-violet light. Set here by the few who walked into the Showdown and out again.',
+    name: 'The Legends Aetherium',
+    desc: 'A floating star-core of pure condensed Ghandra-light, wreathed in spinning golden rings and infinite stardust. The ultimate prize, awarded only to the tamer who defeated all eight legends.',
     renderSVG() {
       return `
         <svg viewBox="0 0 100 100" class="trophy-svg">
           <defs>
-            <linearGradient id="sdsteel" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stop-color="#eef2f8" /><stop offset="50%" stop-color="#8a93a8" /><stop offset="100%" stop-color="#3a4250" />
+            <radialGradient id="aethercore" cx="40%" cy="40%" r="60%">
+              <stop offset="0%" stop-color="#ffffff" />
+              <stop offset="30%" stop-color="#00ffff" />
+              <stop offset="70%" stop-color="#aa00ff" />
+              <stop offset="100%" stop-color="#05001a" />
+            </radialGradient>
+            <linearGradient id="aethergold" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#ffee77" />
+              <stop offset="50%" stop-color="#ffcc00" />
+              <stop offset="100%" stop-color="#b38600" />
             </linearGradient>
-            <radialGradient id="sdaura" cx="50%" cy="42%" r="60%">
-              <stop offset="0%" stop-color="#ff2d55" stop-opacity="0.85" />
-              <stop offset="60%" stop-color="#9b5cff" stop-opacity="0.45" />
-              <stop offset="100%" stop-color="#9b5cff" stop-opacity="0" />
+            <radialGradient id="aetherglow" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="#00ffff" stop-opacity="0.8" />
+              <stop offset="50%" stop-color="#7a00ff" stop-opacity="0.3" />
+              <stop offset="100%" stop-color="#7a00ff" stop-opacity="0" />
             </radialGradient>
           </defs>
-          <circle cx="50" cy="44" r="34" fill="url(#sdaura)" />
-          <path d="M 32,86 H 68 L 64,74 H 36 Z" fill="#2a3040" />
-          <ellipse cx="50" cy="74" rx="14" ry="3" fill="#3a4250" />
-          <circle cx="50" cy="12" r="3.5" fill="url(#sdsteel)" />
-          <rect x="48" y="14" width="4" height="12" fill="#5a4632" />
-          <rect x="38" y="26" width="24" height="4" rx="2" fill="url(#sdsteel)" />
-          <polygon points="50,78 45,30 55,30" fill="url(#sdsteel)" />
-          <polygon points="50,78 50,30 55,30" fill="#000" opacity="0.22" />
+          <circle cx="50" cy="50" r="45" fill="url(#aetherglow)" />
+          <path d="M 30,88 H 70 L 64,76 H 36 Z" fill="url(#aethergold)" />
+          <path d="M 46,76 H 54 V 58 H 46 Z" fill="url(#aethergold)" />
+          <path d="M 38,58 H 62 V 55 H 38 Z" fill="url(#aethergold)" />
+          <circle cx="50" cy="38" r="26" fill="none" stroke="url(#aethergold)" stroke-width="2" />
+          <ellipse cx="50" cy="38" rx="20" ry="8" fill="none" stroke="url(#aethergold)" stroke-width="1.5" transform="rotate(-30 50 38)" />
+          <ellipse cx="50" cy="38" rx="8" ry="20" fill="none" stroke="url(#aethergold)" stroke-width="1.5" transform="rotate(30 50 38)" />
+          <circle cx="50" cy="38" r="11" fill="url(#aethercore)" filter="drop-shadow(0 0 8px #00ffff)" />
+          <polygon points="50,21 51.5,25 55.5,25 52,27 53.5,31 50,29 46.5,31 48,27 44.5,25 48.5,25" fill="#ffffff" />
+          <polygon points="32,38 34,40 32,42 30,40" fill="#00ffff" />
+          <polygon points="68,38 70,40 68,42 66,40" fill="#00ffff" />
         </svg>
       `;
     }
@@ -402,7 +413,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   { id: 'centurion', name: 'Centurion', desc: 'Win 100 sanctioned tournament matches.', glyph: '⚔️', tier: 'gold', earned: p => (p.tournament.tournamentMatchesWon ?? 0) >= 100 },
   { id: 'unbroken', name: 'Unbroken', desc: 'Reach a 10-match win streak.', glyph: '🔥', tier: 'gold', earned: p => (p.tournament.bestStreak ?? 0) >= 10 },
   { id: 'guild_warlord', name: 'Guild Warlord', desc: 'Lift the Lemon Inter-Guild — Guild Wars.', glyph: '🛡️', tier: 'gold', earned: p => (p.tournament.wins['lemon_interguild'] ?? 0) >= 1 },
-  { id: 'aether_ascendant', name: 'Aether Ascendant', desc: 'Reach 2,800 peak MMR — the Showdown floor.', glyph: '💠', tier: 'platinum', earned: p => getPlayerPeakMMR(p) >= 2800 },
+  { id: 'aether_ascendant', name: 'Aether Ascendant', desc: 'Reach 3,200 peak MMR — the Showdown floor.', glyph: '💠', tier: 'platinum', earned: p => getPlayerPeakMMR(p) >= 3200 },
   { id: 'grand_slam', name: 'Grand Slam', desc: 'Win every main circuit tier at least once.', glyph: '👑', tier: 'cosmic', earned: p => MAIN_SLAM.every(t => (p.tournament.wins[t] ?? 0) >= 1) },
   { id: 'triple_crown', name: 'Triple Crown', desc: 'Hold the Worlds, the Supercup, and the Showdown.', glyph: '🏆', tier: 'cosmic', earned: p => ['world_championship', 'leodones_supercup', 'legend_showdown'].every(t => (p.tournament.wins[t] ?? 0) >= 1) },
   { id: 'untouchable', name: 'The Untouchable', desc: "Conquer the Legends' Gauntlet.", glyph: '🌌', tier: 'cosmic', earned: p => !!p.flags['beat_legends_gauntlet'] },

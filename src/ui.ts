@@ -993,7 +993,7 @@ export function openMasterDebugMenu(player: Player): Promise<void> {
       applyMMR(v);
     };
     $('db-mmr-2000').onclick = () => applyMMR(2000);
-    $('db-mmr-2800').onclick = () => applyMMR(2800);
+    $('db-mmr-3200').onclick = () => applyMMR(3200);
 
     // 5. Warp/Teleportation
     $('db-warp-btn').onclick = () => {
@@ -1138,7 +1138,7 @@ export function openMasterDebugMenu(player: Player): Promise<void> {
       $('db-tp-reset').onclick = null;
       $('db-mmr-set').onclick = null;
       $('db-mmr-2000').onclick = null;
-      $('db-mmr-2800').onclick = null;
+      $('db-mmr-3200').onclick = null;
       $('db-cine-play').onclick = null;
       $('db-fish-play').onclick = null;
       $('db-warp-btn').onclick = null;
@@ -4043,6 +4043,176 @@ export async function showTournamentMatchIntro(
       if (leftCol && rightCol) {
         leftCol.style.boxShadow = `0 15px 40px rgba(0,0,0,0.8), 0 0 30px ${playerComp.color}66`;
         rightCol.style.boxShadow = `0 15px 40px rgba(0,0,0,0.8), 0 0 30px ${opponentComp.color}66`;
+      }
+      overlay.style.animation = 'matchClashShake 0.2s';
+    }, 850);
+
+    enterBtn.onclick = () => {
+      sfx('boom');
+      flash.classList.add('flash-active');
+      setTimeout(() => {
+        overlay.remove();
+        flash.remove();
+        resolve();
+      }, 750);
+    };
+  });
+}
+
+export async function showGuildWarMatchIntro(
+  playerComp: BracketCompetitor,
+  opponentComp: BracketCompetitor,
+  tier: TournamentTier,
+  roundName: string,
+  playerRank: string,
+  opponentRank: string,
+  oppLine: string,
+  replySpeaker: string,
+  replyLine: string
+): Promise<void> {
+  return new Promise<void>(resolve => {
+    sfx('open');
+    sfx('crowd_roar');
+    sfx('whoosh');
+
+    // Create overlay
+    const overlay = document.createElement('div');
+    overlay.className = 'gvg-vs-overlay';
+
+    // Letterbox bars
+    const topBar = document.createElement('div');
+    topBar.className = 'gvg-vs-letterbox-top';
+    const bottomBar = document.createElement('div');
+    bottomBar.className = 'gvg-vs-letterbox-bottom';
+    overlay.appendChild(topBar);
+    overlay.appendChild(bottomBar);
+
+    // Header tag
+    const headerTag = document.createElement('div');
+    headerTag.className = 'gvg-vs-header-tag';
+    headerTag.innerHTML = `
+      <span class="gvg-header-clash">GUILD WARS MATCHUP</span>
+      <span class="gvg-header-sub">${tier.name} &nbsp;·&nbsp; ${roundName}</span>
+    `;
+    overlay.appendChild(headerTag);
+
+    // Get avatars
+    let playerAvatar = '';
+    const p = Player.activeInstance;
+    if (p) playerAvatar = avatarURL(p);
+    const opponentAvatar = generateTamerAvatar(opponentComp.name, opponentComp.color);
+
+    // Get crests
+    const playerCrest = playerComp.guildId ? guildIconURL(playerComp.guildId, 256) : '';
+    const opponentCrest = opponentComp.guildId ? guildIconURL(opponentComp.guildId, 256) : '';
+
+    // Build party HTML for player
+    const playerPartyHtml = playerComp.speciesIds.map(sid => {
+      const s = SPECIES[sid];
+      const typeCol = TYPE_CSS[s?.type] ?? '#999';
+      const snap = speciesSnapshotURL(sid);
+      return `
+        <div class="gvg-vs-guardian-card" style="border-color: ${typeCol}44">
+          <div class="gvg-vs-guardian-snap-wrap" style="border: 1px solid ${typeCol}">
+            <img class="gvg-vs-guardian-snap" src="${snap}" />
+          </div>
+          <div class="gvg-vs-guardian-name" style="color: ${typeCol}">${s?.name ?? sid}</div>
+        </div>
+      `;
+    }).join('');
+
+    // Build party HTML for opponent
+    const opponentPartyHtml = opponentComp.speciesIds.map(sid => {
+      const s = SPECIES[sid];
+      const typeCol = TYPE_CSS[s?.type] ?? '#999';
+      const snap = speciesSnapshotURL(sid);
+      return `
+        <div class="gvg-vs-guardian-card" style="border-color: ${typeCol}44">
+          <div class="gvg-vs-guardian-snap-wrap" style="border: 1px solid ${typeCol}">
+            <img class="gvg-vs-guardian-snap" src="${snap}" />
+          </div>
+          <div class="gvg-vs-guardian-name" style="color: ${typeCol}">${s?.name ?? sid}</div>
+        </div>
+      `;
+    }).join('');
+
+    const container = document.createElement('div');
+    container.className = 'gvg-vs-container';
+    container.innerHTML = `
+      <div class="gvg-vs-column left" style="--guild-color: ${playerComp.color}">
+        ${playerCrest ? `<div class="gvg-vs-bg-crest" style="background-image: url('${playerCrest}')"></div>` : ''}
+        <div class="gvg-rank-plate ${playerRank.toLowerCase().replace(/\s+/g, '')}">
+          ${playerRank}
+        </div>
+        <div class="gvg-vs-avatar-wrapper">
+          <img class="gvg-vs-avatar-img" src="${playerAvatar}" />
+        </div>
+        <div class="gvg-vs-name" style="color: ${playerComp.color}">${playerComp.name}</div>
+        <div class="gvg-vs-sub">${playerComp.sub}</div>
+        <div class="gvg-vs-guardians">
+          ${playerPartyHtml}
+        </div>
+      </div>
+
+      <div class="gvg-vs-center">
+        <div class="gvg-vs-clash-shield">
+          <div class="gvg-vs-clash-text">VS</div>
+        </div>
+      </div>
+
+      <div class="gvg-vs-column right" style="--guild-color: ${opponentComp.color}">
+        ${opponentCrest ? `<div class="gvg-vs-bg-crest" style="background-image: url('${opponentCrest}')"></div>` : ''}
+        <div class="gvg-rank-plate ${opponentRank.toLowerCase().replace(/\s+/g, '')}">
+          ${opponentRank}
+        </div>
+        <div class="gvg-vs-avatar-wrapper">
+          <img class="gvg-vs-avatar-img" src="${opponentAvatar}" />
+        </div>
+        <div class="gvg-vs-name" style="color: ${opponentComp.color}">${opponentComp.name}</div>
+        <div class="gvg-vs-sub">${opponentComp.sub}</div>
+        <div class="gvg-vs-guardians">
+          ${opponentPartyHtml}
+        </div>
+      </div>
+    `;
+    overlay.appendChild(container);
+
+    // Drama dialogue box
+    const dramaBox = document.createElement('div');
+    dramaBox.className = 'gvg-vs-drama-box';
+    dramaBox.innerHTML = `
+      <div class="gvg-drama-line">
+        <span class="gvg-drama-speaker" style="color: ${opponentComp.color}">${opponentComp.name} (${opponentRank})</span>
+        <span class="gvg-drama-text">"${oppLine}"</span>
+      </div>
+      <div class="gvg-drama-line">
+        <span class="gvg-drama-speaker" style="color: var(--ui-gold)">📣 ${replySpeaker} (from bench)</span>
+        <span class="gvg-drama-text">"${replyLine}"</span>
+      </div>
+    `;
+    overlay.appendChild(dramaBox);
+
+    // Enter Arena button
+    const enterBtn = document.createElement('button');
+    enterBtn.className = 'gvg-vs-btn-enter';
+    enterBtn.innerText = 'Enter Arena';
+    overlay.appendChild(enterBtn);
+
+    // Screen flash overlay
+    const flash = document.createElement('div');
+    flash.className = 'trn-screen-flash';
+    document.body.appendChild(flash);
+
+    document.body.appendChild(overlay);
+
+    // Trigger visual screen shake on clash
+    setTimeout(() => {
+      sfx('crit');
+      const leftCol = overlay.querySelector('.gvg-vs-column.left') as HTMLElement;
+      const rightCol = overlay.querySelector('.gvg-vs-column.right') as HTMLElement;
+      if (leftCol && rightCol) {
+        leftCol.style.boxShadow = `0 20px 50px rgba(0,0,0,0.8), 0 0 30px ${playerComp.color}66`;
+        rightCol.style.boxShadow = `0 20px 50px rgba(0,0,0,0.8), 0 0 30px ${opponentComp.color}66`;
       }
       overlay.style.animation = 'matchClashShake 0.2s';
     }, 850);

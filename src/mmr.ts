@@ -108,6 +108,9 @@ export const LEGEND_RECORDS: Record<string, { w: number; l: number }> = {
   grand:  { w: 1547, l: 132 },
   renzo:  { w: 1521, l: 167 },
   kulz:   { w: 1508, l: 174 },
+  lemon_quake: { w: 1533, l: 85 },
+  roydo:  { w: 1515, l: 98 },
+  blau:   { w: 1502, l: 110 },
 };
 
 /** A Known Name's deep pro career — hundreds of wins, scaled by rating. */
@@ -222,6 +225,48 @@ export function generateInitialMMR(p: Player): MMRState {
     speciesIds: ['teslarch', 'gravemonolith', 'fulgurex'],
     wins: LEGEND_RECORDS.kulz.w,
     losses: LEGEND_RECORDS.kulz.l,
+    isLegend: true
+  };
+
+  contestants['lemon_quake'] = {
+    id: 'lemon_quake',
+    name: 'Lemon Quake',
+    rating: 3150,
+    title: 'The Creator · Legend',
+    hometown: 'Terra City',
+    guildId: 'lumenwrights',
+    color: '#ff5aa8',
+    speciesIds: ['ignisar', 'solphyra', 'vulkragon'],
+    wins: LEGEND_RECORDS.lemon_quake.w,
+    losses: LEGEND_RECORDS.lemon_quake.l,
+    isLegend: true
+  };
+
+  contestants['roydo'] = {
+    id: 'roydo',
+    name: 'Roydo',
+    rating: 3120,
+    title: 'The Storm Weaver · Legend',
+    hometown: 'Terra City',
+    guildId: 'filament_concord',
+    color: '#4fe0ff',
+    speciesIds: ['teslarch', 'stormapex', 'fulgurex'],
+    wins: LEGEND_RECORDS.roydo.w,
+    losses: LEGEND_RECORDS.roydo.l,
+    isLegend: true
+  };
+
+  contestants['blau'] = {
+    id: 'blau',
+    name: 'Blau',
+    rating: 3050,
+    title: 'The Deep Frost · Legend',
+    hometown: 'Noruun',
+    guildId: 'aurora_lodge',
+    color: '#9adff2',
+    speciesIds: ['chthonix', 'erebusilk', 'phantasmoth'],
+    wins: LEGEND_RECORDS.blau.w,
+    losses: LEGEND_RECORDS.blau.l,
     isLegend: true
   };
 
@@ -471,7 +516,7 @@ export function updateBackgroundElo(p: Player, winnerId: string, loserId: string
   const loseTamer = mmrState.contestants[loserId];
   if (!winTamer || !loseTamer) return;
 
-  const skipList = ['aljay', 'greggy', 'onnel', 'grand', 'renzo', 'kulz'];
+  const skipList = ['aljay', 'greggy', 'onnel', 'grand', 'renzo', 'kulz', 'lemon_quake', 'roydo', 'blau'];
   
   const rA = winTamer.rating;
   const rB = loseTamer.rating;
@@ -535,7 +580,7 @@ export function updatePlayerElo(p: Player, opponentId: string, playerWon: boolea
     playerTamer.losses++;
   }
 
-  const skipList = ['aljay', 'greggy', 'onnel', 'grand', 'renzo', 'kulz'];
+  const skipList = ['aljay', 'greggy', 'onnel', 'grand', 'renzo', 'kulz', 'lemon_quake', 'roydo', 'blau'];
   if (!skipList.includes(opponentId)) {
     oppTamer.rating = Math.round(Math.max(100, oppTamer.rating + deltaB));
     if (playerWon) {
@@ -557,7 +602,7 @@ export function updatePlayerElo(p: Player, opponentId: string, playerWon: boolea
 export function simulateBackgroundMatches(p: Player, count: number): void {
   const mmrState = getMMRState(p);
   const contestants = Object.values(mmrState.contestants).filter(c => c.id !== 'player');
-  const skipList = ['aljay', 'greggy', 'onnel', 'grand', 'renzo', 'kulz'];
+  const skipList = ['aljay', 'greggy', 'onnel', 'grand', 'renzo', 'kulz', 'lemon_quake', 'roydo', 'blau'];
 
   for (let i = 0; i < count; i++) {
     const idxA = Math.floor(Math.random() * contestants.length);

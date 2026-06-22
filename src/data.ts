@@ -6279,6 +6279,7 @@ export const CRAWLER_PARTS: Record<string, CrawlerPart> = Object.fromEntries([
   P('hull19', 'hull', 'Void-Star Carapace', 6, 860, 15500, 'void', 'A dark matter shell composed of levitating white bone-plates around a star core. 860 Hull.', 'ultra'),
   P('hull20', 'hull', 'Plasma Reactor Chassis', 6, 880, 15800, 'plasma', 'A carbon-weave experimental chassis lined with glowing superheated fuel tubes. 880 Hull.', 'ultra'),
   P('hull21', 'hull', 'Crystalline Geode Hull', 6, 900, 16000, 'crystalline', 'A hollowed geode structure with raw amethyst crystal formations pulsing with energy. 900 Hull.', 'ultra'),
+  P('hull_aetherium', 'hull', 'Aetherium Body', 7, 1000, 30000, 'aetherium', 'The rarest of all chassis: forged from condensed Legends Aetherium. Infinite luster. 1000 Hull.', 'ultra'),
 
 
   // ===================== NEW ENGINES =====================
