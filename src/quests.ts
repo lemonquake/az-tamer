@@ -21,6 +21,7 @@
 // ============================================================
 import { ITEMS, expForLevel } from './data';
 import type { Player } from './state';
+import { recordQuestComplete } from './mmr';
 
 export interface QuestReward { shards?: number; items?: [string, number][]; }
 
@@ -509,6 +510,7 @@ export function completeQuest(p: Player, id: string): string {
     p.addItem(itemId, qty);
     parts.push(`${ITEMS[itemId].name}${qty > 1 ? ` ×${qty}` : ''}`);
   }
+  recordQuestComplete(p);
   p.save();
   return parts.join(', ');
 }

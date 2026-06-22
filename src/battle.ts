@@ -22,6 +22,7 @@ import {
 import { VFX } from './vfx';
 import type { RingVictoryStyle } from './celebrate';
 import { say, choose, toast, askName, setStoryInBattle, updateWorldStatus, refreshHUD } from './ui';
+import { recordBattleMMR } from './mmr';
 import { runBattleTutorial } from './tutorial';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
@@ -122,7 +123,7 @@ export interface BattleOptions {
   ring?: RingVictoryStyle;   // sanctioned-bout identity — drives the themed victory celebration
 }
 
-interface EnemySpec { speciesId: string; level: number; }
+interface EnemySpec { speciesId: string; level: number; statMultiplier?: number; }
 
 // ---------------- arena dressing ----------------
 
@@ -200,6 +201,24 @@ export class Battle {
     this.player.party.forEach((g, i) => this.units.push(this.spawnUnit(g, 'player', i)));
     this.enemySpecs.forEach((e, i) => {
       const g = new Guardian(e.speciesId, e.level);
+      if (e.statMultiplier) g.statMultiplier = e.statMultiplier;
+      
+      // HP scaling challenge for higher tournaments
+      const isHigherTournament = this.opts.ring && [
+        'continental_crown',
+        'gauntlet_seeds',
+        'sealwatch',
+        'world_championship',
+        'legends_gauntlet'
+      ].includes(this.opts.ring.tierId);
+      
+      if (isHigherTournament) {
+        const playerHasLevel60 = this.player.party.some(pg => pg.level >= 60) || 
+                                 this.player.reserve.some(pg => pg.level >= 60);
+        g.extraHpBonus = playerHasLevel60 ? 7000 : 3000;
+        g.hp = g.stats.hp; // Heal to include the extra HP bonus
+      }
+      
       this.units.push(this.spawnUnit(g, 'enemy', i));
     });
     this.renderCards();
@@ -676,6 +695,24 @@ export class Battle {
         this.pushLog('⚡', `<b>${g.nickname}</b>'s ${passiveName} granted speed boost!`);
         this.fx.spiral(rig.group.position.clone(), 0xf2d23a, { up: true, dur: 0.8 });
       }
+      if (passiveName === 'Aura Shield') {
+        const shieldHp = Math.floor(g.stats.hp * 0.15);
+        if (!u.statuses) u.statuses = [];
+        u.statuses.push({
+          id: 'aura_shield', name: 'Aura Shield', type: 'buff', duration: 99, effect: 'shield', value: 0.15, shieldHp, icon: '🛡️', desc: 'Protected by an aura barrier.'
+        });
+        this.pushLog('🛡️', `<b>${g.nickname}</b>'s Aura Shield granted a ${shieldHp} HP barrier!`);
+        this.fx.glow(rig.group.position.clone().setY(0.8), 0x5ad88a, { scale: 1.4, life: 0.5 });
+      }
+      if (passiveName === 'Glacial Barrier') {
+        const shieldHp = Math.floor(g.stats.hp * 0.20);
+        if (!u.statuses) u.statuses = [];
+        u.statuses.push({
+          id: 'glacial_barrier', name: 'Glacial Barrier', type: 'buff', duration: 99, effect: 'shield', value: 0.20, shieldHp, icon: '❄️', desc: 'Protected by a glacial ice barrier.'
+        });
+        this.pushLog('❄️', `<b>${g.nickname}</b>'s Glacial Barrier granted a ${shieldHp} HP barrier!`);
+        this.fx.glow(rig.group.position.clone().setY(0.8), 0x8ae2ff, { scale: 1.4, life: 0.5 });
+      }
     }
     return u;
   }
@@ -703,9 +740,38 @@ export class Battle {
 
   private getStatusMultiplier(unit: Unit, effect: 'atk' | 'def' | 'spd' | 'wis'): number {
     let mult = 1.0;
+    const passiveName = getSpeciesPassive(unit.g.species).name;
+
+    if (passiveName === 'Gale Force' && effect === 'spd' && unit.g.hp < unit.g.stats.hp * 0.5) {
+      mult += 0.20;
+    }
+    if (passiveName === 'Berserk Mode' && unit.g.hp < unit.g.stats.hp * 0.3) {
+      if (effect === 'atk') mult += 0.50;
+      if (effect === 'def') mult -= 0.30;
+    }
+    if (passiveName === 'Solar Charge' && effect === 'wis' && unit.g.elements.includes('Fire')) {
+      mult += 0.20;
+    }
+    if (passiveName === 'Wind Walker' && effect === 'spd') {
+      mult += 0.15;
+    }
+    if (passiveName === 'Spiritual Focus' && effect === 'wis') {
+      mult += 0.25;
+    }
+    if (passiveName === 'Heavy Hitter' && effect === 'spd') {
+      mult -= 0.10;
+    }
+    if (passiveName === 'Vengeful Spark' && effect === 'atk') {
+      const fallenAllies = this.units.filter(x => x.side === unit.side && x.g.fainted).length;
+      mult += fallenAllies * 0.20;
+    }
+
     if (unit.statuses) {
       for (const s of unit.statuses) {
         if (s.effect === effect) {
+          if (passiveName === 'Grounded Spirit' && effect === 'spd' && s.value < 0) {
+            continue;
+          }
           mult += s.value;
         }
         if (s.effect === 'freeze' && effect === 'def') {
@@ -1163,10 +1229,96 @@ export class Battle {
       }
     }
 
+    // Apply Evasion passive (15% chance to reduce damage by 15%)
+    if (finalDmg > 0 && getSpeciesPassive(tgt.g.species).name === 'Evasion' && Math.random() < 0.15 && (source === 'strike' || source === 'tech')) {
+      finalDmg = Math.max(1, Math.floor(finalDmg * 0.85));
+      this.log(`🛡️ <b>${tgt.g.nickname}</b>'s Evasion reduced damage by 15%!`);
+      this.fx.glow(this.chest(tgt), 0xffffff, { scale: 1.2, life: 0.3 });
+    }
+
+    // Apply Invulnerability Sphere (takes only 2 damage)
+    if (finalDmg > 0 && (tgt as any).invulnerableSphere) {
+      finalDmg = 2;
+      this.log(`🛡️ <b>${tgt.g.nickname}</b> is Invulnerable! Takes only 2 damage.`);
+    }
+
+    // Apply Aetherial Form & Shadow Veil (10% chance to dodge technique damage completely)
+    if (finalDmg > 0 && source === 'tech') {
+      const passiveName = getSpeciesPassive(tgt.g.species).name;
+      if (passiveName === 'Aetherial Form' && Math.random() < 0.10) {
+        finalDmg = 0;
+        this.log(`🛡️ <b>${tgt.g.nickname}</b>'s Aetherial Form phased through the technique!`);
+      } else if (passiveName === 'Shadow Veil' && Math.random() < 0.10) {
+        finalDmg = 0;
+        this.log(`🛡️ <b>${tgt.g.nickname}</b>'s Shadow Veil dodged the technique!`);
+      }
+    }
+
+    // Apply Tectonic Shield (takes 20% less physical damage)
+    if (finalDmg > 0 && getSpeciesPassive(tgt.g.species).name === 'Tectonic Shield' && (source === 'strike' || (source === 'tech' && techKind === 'phys'))) {
+      finalDmg = Math.max(1, Math.floor(finalDmg * 0.80));
+      this.log(`🛡️ <b>${tgt.g.nickname}</b>'s Tectonic Shield reduced physical damage by 20%!`);
+    }
+
+    // Apply Last Stand (survive fatal hit with 1 HP once per battle)
+    if (finalDmg >= tgt.g.hp && tgt.g.hp > 0 && getSpeciesPassive(tgt.g.species).name === 'Last Stand' && !(tgt as any).lastStandTriggered) {
+      (tgt as any).lastStandTriggered = true;
+      finalDmg = tgt.g.hp - 1;
+      this.log(`🛡️ <b>${tgt.g.nickname}</b>'s Last Stand triggers! Held on with 1 HP!`);
+      this.fx.glow(this.chest(tgt), 0xffe08a, { scale: 1.4, life: 0.4 });
+      sfx('guard');
+    }
+
+    // Apply Feedback Shock (reflect 10% damage back to all enemies)
+    if (finalDmg > 0 && getSpeciesPassive(tgt.g.species).name === 'Feedback Shock' && (source === 'strike' || source === 'tech')) {
+      const reflectVal = Math.floor(finalDmg * 0.10);
+      if (reflectVal > 0) {
+        setTimeout(async () => {
+          const enemies = this.alive(tgt.side === 'player' ? 'enemy' : 'player');
+          if (enemies.length > 0) {
+            this.log(`⚡ <b>${tgt.g.nickname}</b>'s Feedback Shock triggers!`);
+            for (const e of enemies) {
+              const actualRefl = await this.inflictDamage(e, reflectVal, 'reflect');
+              this.log(`💢 <b>${e.g.nickname}</b> takes ${actualRefl} reflect damage!`);
+              this.fx.glow(this.chest(e), 0xf2d23a, { scale: 1.0, life: 0.25 });
+            }
+            this.renderCards();
+          }
+        }, 300);
+      }
+    }
+
     // Apply the final damage
     if (finalDmg > 0) {
       finalDmg = Math.max(2, Math.min(9999, finalDmg));
       tgt.g.hp = Math.max(0, tgt.g.hp - finalDmg);
+
+      // Track attackedThisRound flag
+      if (source === 'strike' || source === 'tech') {
+        (tgt as any).attackedThisRound = true;
+      }
+
+      // Check Phoenix Rebirth
+      if (tgt.g.hp <= 0 && getSpeciesPassive(tgt.g.species).name === 'Phoenix Rebirth') {
+        if (!tgt.g.resCooldown || tgt.g.resCooldown <= 0) {
+          tgt.g.hp = Math.floor(tgt.g.stats.hp * 0.5);
+          tgt.g.resCooldown = 3;
+          this.log(`🔥 <b>${tgt.g.nickname}</b>'s Phoenix Rebirth triggered! Rising from the ashes with 50% HP!`);
+          this.fx.pillar(tgt.rig.group.position, 0xff5500, { height: 4, radius: 0.8, life: 1.0 });
+          this.fx.glow(this.chest(tgt), 0xffaa00, { scale: 1.8, life: 0.5 });
+          sfx('heal');
+        }
+      }
+
+      // Check Second Wind
+      if (tgt.g.hp > 0 && tgt.g.hp < tgt.g.stats.hp * 0.20 && getSpeciesPassive(tgt.g.species).name === 'Second Wind' && !(tgt as any).secondWindTriggered) {
+        (tgt as any).secondWindTriggered = true;
+        const healVal = Math.floor(tgt.g.stats.hp * 0.25);
+        tgt.g.hp = Math.min(tgt.g.stats.hp, tgt.g.hp + healVal);
+        this.log(`💨 <b>${tgt.g.nickname}</b>'s Second Wind restores ${healVal} HP!`);
+        this.fx.glow(this.chest(tgt), 0x5ad88a, { scale: 1.4, life: 0.4 });
+        sfx('heal');
+      }
     }
 
     return finalDmg;
@@ -1180,7 +1332,8 @@ export class Battle {
   }
   /** A tech the unit can actually pick this turn — enough SP and off cooldown. */
   private techReady(u: Unit, tech: Technique): boolean {
-    return u.g.sp >= tech.spCost && this.cooldownLeft(u, tech) === 0;
+    const cost = getSpeciesPassive(u.g.species).name === 'Sage Mind' ? Math.floor(tech.spCost * 0.8) : tech.spCost;
+    return u.g.sp >= cost && this.cooldownLeft(u, tech) === 0;
   }
   /** Put a tech on cooldown after use. +1 so the start-of-turn tick still leaves a full N-turn wait. */
   private startCooldown(u: Unit, tech: Technique): void {
@@ -1212,7 +1365,11 @@ export class Battle {
     const stab = elementsOf(att.g).includes(attEl) ? 1.15 : 1;
     // The Big Three's bonded lights strike on another tier — and crit far more often.
     const attIsLegend = isBig3Legend(att.g.species.id);
-    const crit = Math.random() < (attIsLegend ? 0.16 : 0.08);
+    let critChance = attIsLegend ? 0.16 : 0.08;
+    if (att.g.hp < att.g.stats.hp * 0.3 && getSpeciesPassive(att.g.species).name === 'Desperate Measure') {
+      critChance += 0.20;
+    }
+    const crit = Math.random() < critChance;
     const variance = 0.9 + Math.random() * 0.2;
 
     let dmg = 0;
@@ -1232,8 +1389,14 @@ export class Battle {
 
     if (attIsLegend) dmg = Math.floor(dmg * 1.25);        // legendary might — every blow hits noticeably harder
     if (tech.signature) dmg = Math.floor(dmg * 1.2);      // a unique signature art bites deeper still
-    if (crit) dmg = Math.floor(dmg * 1.5);
-    if (def.guarding) dmg = Math.floor(dmg * 0.45);
+    
+    // Critical Focus passive (critical hits deal 2.0x instead of 1.5x)
+    const critMult = getSpeciesPassive(att.g.species).name === 'Critical Focus' ? 2.0 : 1.5;
+    if (crit) dmg = Math.floor(dmg * critMult);
+
+    // Heavy Guard passive (guarding reduces damage by 80% instead of 55%)
+    const guardMult = getSpeciesPassive(def.g.species).name === 'Heavy Guard' ? 0.20 : 0.45;
+    if (def.guarding) dmg = Math.floor(dmg * guardMult);
 
     // Form-Block: a lower-form attacker is OUT-CLASSED — the defender shrugs
     // off 5% of the damage per form rank it stands above the attacker (capped
@@ -1252,6 +1415,48 @@ export class Battle {
     // Apply Sky Sovereign passive (increases Gale move damage by 20%)
     if (tech.type === 'Gale' && getSpeciesPassive(att.g.species).name === 'Sky Sovereign') {
       dmg = Math.floor(dmg * 1.2);
+    }
+
+    // Apply Angry Cast passive (200% damage boost if attacked first)
+    if (getSpeciesPassive(att.g.species).name === 'Angry Cast' && (att as any).attackedThisRound) {
+      dmg = Math.floor(dmg * 2.0);
+      this.log(`💢 <b>${att.g.nickname}</b>'s Angry Cast triggers! 200% damage!`);
+    }
+
+    // Apply Miracle Guard passive (takes 50% less damage from super-effective attacks)
+    if (eff > 1.0 && getSpeciesPassive(def.g.species).name === 'Miracle Guard') {
+      dmg = Math.floor(dmg * 0.5);
+      this.log(`🛡️ <b>${def.g.nickname}</b>'s Miracle Guard reduced damage taken by 50%!`);
+    }
+
+    // Apply Opportunist passive (+20% damage if target has status conditions)
+    if (def.statuses && def.statuses.length > 0 && getSpeciesPassive(att.g.species).name === 'Opportunist') {
+      dmg = Math.floor(dmg * 1.20);
+    }
+
+    // Apply Titan Might passive (+20% damage in boss battles)
+    if (getSpeciesPassive(att.g.species).name === 'Titan Might' && this.opts.boss && att.side === 'player') {
+      dmg = Math.floor(dmg * 1.20);
+    }
+
+    // Apply Vaporizer passive (+15% damage to Tide targets)
+    if (getSpeciesPassive(att.g.species).name === 'Vaporizer' && def.g.elements.includes('Water')) {
+      dmg = Math.floor(dmg * 1.15);
+    }
+
+    // Apply Overheat passive (+25% Blaze move damage)
+    if (tech.type === 'Blaze' && getSpeciesPassive(att.g.species).name === 'Overheat') {
+      dmg = Math.floor(dmg * 1.25);
+    }
+
+    // Apply Heavy Hitter passive (+15% physical damage)
+    if (tech.kind === 'phys' && getSpeciesPassive(att.g.species).name === 'Heavy Hitter') {
+      dmg = Math.floor(dmg * 1.15);
+    }
+
+    // Apply Dark Bargain passive (+30% damage)
+    if (getSpeciesPassive(att.g.species).name === 'Dark Bargain') {
+      dmg = Math.floor(dmg * 1.30);
     }
 
     // Apply Player Guild Perks / Battle Synergies
@@ -1317,8 +1522,9 @@ export class Battle {
   }
 
   // ---------- technique execution ----------
-  private async execTech(att: Unit, tech: Technique, target: Unit | null): Promise<void> {
-    att.g.sp = Math.max(0, att.g.sp - tech.spCost);
+  private async execTech(att: Unit, tech: Technique, target: Unit | null, isEcho = false): Promise<void> {
+    const spCost = getSpeciesPassive(att.g.species).name === 'Sage Mind' ? Math.floor(tech.spCost * 0.8) : tech.spCost;
+    att.g.sp = Math.max(0, att.g.sp - spCost);
     this.startCooldown(att, tech);
     const color = TYPE_COLORS[tech.type];
     const who = att.side === 'enemy' ? `Wild ${att.g.nickname}` : att.g.nickname;
@@ -1371,6 +1577,17 @@ export class Battle {
         }
 
         tgt.g.hp = Math.min(tgt.g.stats.hp, tgt.g.hp + amount);
+
+        // Symbiosis check
+        if (tgt !== att && getSpeciesPassive(att.g.species).name === 'Symbiosis') {
+          const selfHeal = Math.floor(amount * 0.30);
+          if (selfHeal > 0) {
+            att.g.hp = Math.min(att.g.stats.hp, att.g.hp + selfHeal);
+            this.log(`🍃 <b>${att.g.nickname}</b>'s Symbiosis heals itself for ${selfHeal} HP!`);
+            this.fx.glow(this.chest(att), 0x5ad88a, { scale: 1.2, life: 0.3 });
+            makeFloatingDamageText(this.scene, att.rig.group.position.clone().setY(2), `+${selfHeal}`, '#5ad88a');
+          }
+        }
 
         if (tech.id === 'genesis_bloom') {
           const hadDebuffs = tgt.statuses && tgt.statuses.some(s => s.type === 'debuff');
@@ -1494,13 +1711,37 @@ export class Battle {
           dealt += finalDmg;
           this.elementalImpact(f, tech.type, false);
           await this.hitReact(f, finalDmg, eff, crit, att.rig.group.position);
-          await this.afterHitEffects(att, f, finalDmg);
+
+          // Conductive Body / Combustion / Bash checks
+          const pass = getSpeciesPassive(f.g.species).name;
+          if (pass === 'Conductive Body' && tech.type === 'Volt') {
+            f.g.sp = Math.min(f.g.stats.sp, f.g.sp + 10);
+            this.log(`⚡ <b>${f.g.nickname}</b>'s Conductive Body absorbed energy! Restored 10 SP!`);
+            this.fx.glow(this.chest(f), 0xf2d23a, { scale: 1.2, life: 0.3 });
+          }
+          if (pass === 'Combustion' && tech.type === 'Blaze') {
+            f.stages.atk = Math.min(3, f.stages.atk + 1);
+            this.updateUnitMods(f);
+            this.log(`🔥 <b>${f.g.nickname}</b>'s Combustion ignited! Attack rose!`);
+            this.fx.spiral(f.rig.group.position.clone(), 0xff5500, { up: true, dur: 0.6 });
+          }
+          if (getSpeciesPassive(att.g.species).name === 'Bash' && Math.random() < 0.05 && !f.g.fainted) {
+            const bashStun: ActiveStatus = { id: 'bash_stun', name: 'Stunned', type: 'debuff', duration: 1, effect: 'stun', value: 0, icon: '💫', desc: 'Cannot act.' };
+            if (!f.statuses) f.statuses = [];
+            f.statuses.push(bashStun);
+            this.log(`💫 <b>${att.g.nickname}</b> bashed and stunned <b>${f.g.nickname}</b>!`);
+            this.fx.glow(this.chest(f), 0xf2d23a, { scale: 1.3, life: 0.35 });
+            makeFloatingDamageText(this.scene, f.rig.group.position.clone().setY(2.2), 'Stunned!', '#f2d23a');
+            sfx('zap');
+          }
+
+          await this.afterHitEffects(att, f, finalDmg, 'tech', tech.kind, tech.type);
         }
       }
       this.pushLog('🔽', `<b>${who}</b> used ${tech.name} — foes' ${statName} fell${dealt ? ` (${dealt} dmg)` : ''}.`);
       this.log(`The foes' ${statName} fell!`);
       this.renderCards();
-      await this.cleanupKOs();
+      await this.cleanupKOs(att);
       await wait(500);
       return;
     }
@@ -1524,7 +1765,45 @@ export class Battle {
       if (tech.effect === 'drain') this.drainFX(att, tgt, finalDmg);
       this.log(`<b>${who}</b> uses <b>${tech.name}</b>!${this.effText(eff, crit, outclassed)}`);
       await this.hitReact(tgt, finalDmg, eff, crit, att.rig.group.position);
-      await this.afterHitEffects(att, tgt, finalDmg);
+
+      // Conductive Body / Combustion / Bash checks
+      const pass = getSpeciesPassive(tgt.g.species).name;
+      if (pass === 'Conductive Body' && tech.type === 'Volt') {
+        tgt.g.sp = Math.min(tgt.g.stats.sp, tgt.g.sp + 10);
+        this.log(`⚡ <b>${tgt.g.nickname}</b>'s Conductive Body absorbed energy! Restored 10 SP!`);
+        this.fx.glow(this.chest(tgt), 0xf2d23a, { scale: 1.2, life: 0.3 });
+      }
+      if (pass === 'Combustion' && tech.type === 'Blaze') {
+        tgt.stages.atk = Math.min(3, tgt.stages.atk + 1);
+        this.updateUnitMods(tgt);
+        this.log(`🔥 <b>${tgt.g.nickname}</b>'s Combustion ignited! Attack rose!`);
+        this.fx.spiral(tgt.rig.group.position.clone(), 0xff5500, { up: true, dur: 0.6 });
+      }
+      if (getSpeciesPassive(att.g.species).name === 'Bash' && Math.random() < 0.05 && !tgt.g.fainted) {
+        const bashStun: ActiveStatus = { id: 'bash_stun', name: 'Stunned', type: 'debuff', duration: 1, effect: 'stun', value: 0, icon: '💫', desc: 'Cannot act.' };
+        if (!tgt.statuses) tgt.statuses = [];
+        tgt.statuses.push(bashStun);
+        this.log(`💫 <b>${att.g.nickname}</b> bashed and stunned <b>${tgt.g.nickname}</b>!`);
+        this.fx.glow(this.chest(tgt), 0xf2d23a, { scale: 1.3, life: 0.35 });
+        makeFloatingDamageText(this.scene, tgt.rig.group.position.clone().setY(2.2), 'Stunned!', '#f2d23a');
+        sfx('zap');
+      }
+
+      // --- Shockwave Passive (15% splash damage to other enemies for single physical tech) ---
+      if (getSpeciesPassive(att.g.species).name === 'Shockwave') {
+        const splashDmg = Math.floor(finalDmg * 0.15);
+        if (splashDmg > 0) {
+          this.log(`💥 <b>${att.g.nickname}</b>'s Shockwave sends out a tremor!`);
+          const others = this.units.filter(x => x.side === tgt.side && x !== tgt && !x.g.fainted);
+          for (const o of others) {
+            const finalSplash = await this.inflictDamage(o, splashDmg, 'dot');
+            this.log(`💥 <b>${o.g.nickname}</b> takes ${finalSplash} splash damage!`);
+            this.fx.glow(this.chest(o), 0xaaaaaa, { scale: 1.0, life: 0.2 });
+          }
+        }
+      }
+
+      await this.afterHitEffects(att, tgt, finalDmg, 'tech', tech.kind, tech.type);
       await this.meleeReturn(att, home);
     } else {
       if (targets.length === 1) this.faceTo(att, targets[0].rig.group.position);
@@ -1544,7 +1823,31 @@ export class Battle {
         if (tech.effect === 'drain') this.drainFX(att, tgt, finalDmg);
         this.log(`<b>${who}</b> uses <b>${tech.name}</b>!${this.effText(eff, crit, outclassed)}`);
         await this.hitReact(tgt, finalDmg, eff, crit, att.rig.group.position);
-        await this.afterHitEffects(att, tgt, finalDmg);
+
+        // Conductive Body / Combustion / Bash checks
+        const pass = getSpeciesPassive(tgt.g.species).name;
+        if (pass === 'Conductive Body' && tech.type === 'Volt') {
+          tgt.g.sp = Math.min(tgt.g.stats.sp, tgt.g.sp + 10);
+          this.log(`⚡ <b>${tgt.g.nickname}</b>'s Conductive Body absorbed energy! Restored 10 SP!`);
+          this.fx.glow(this.chest(tgt), 0xf2d23a, { scale: 1.2, life: 0.3 });
+        }
+        if (pass === 'Combustion' && tech.type === 'Blaze') {
+          tgt.stages.atk = Math.min(3, tgt.stages.atk + 1);
+          this.updateUnitMods(tgt);
+          this.log(`🔥 <b>${tgt.g.nickname}</b>'s Combustion ignited! Attack rose!`);
+          this.fx.spiral(tgt.rig.group.position.clone(), 0xff5500, { up: true, dur: 0.6 });
+        }
+        if (getSpeciesPassive(att.g.species).name === 'Bash' && Math.random() < 0.05 && !tgt.g.fainted) {
+          const bashStun: ActiveStatus = { id: 'bash_stun', name: 'Stunned', type: 'debuff', duration: 1, effect: 'stun', value: 0, icon: '💫', desc: 'Cannot act.' };
+          if (!tgt.statuses) tgt.statuses = [];
+          tgt.statuses.push(bashStun);
+          this.log(`💫 <b>${att.g.nickname}</b> bashed and stunned <b>${tgt.g.nickname}</b>!`);
+          this.fx.glow(this.chest(tgt), 0xf2d23a, { scale: 1.3, life: 0.35 });
+          makeFloatingDamageText(this.scene, tgt.rig.group.position.clone().setY(2.2), 'Stunned!', '#f2d23a');
+          sfx('zap');
+        }
+
+        await this.afterHitEffects(att, tgt, finalDmg, 'tech', tech.kind, tech.type);
         if (targets.length > 1) await wait(80);
       }
       this.faceHome(att);
@@ -1555,11 +1858,19 @@ export class Battle {
 
     this.pushLog(tech.kind === 'phys' ? '⚔️' : '✦', `<b>${who}</b> used ${tech.name} — ${totalDmg} dmg${targets.length > 1 ? ` to ${targets.length} foes` : ''}.`);
     this.renderCards();
-    await this.cleanupKOs();
-    await wait(420);
+    await this.cleanupKOs(att);
+
+    // --- Echoing Whispers (10% chance to cast again for free) ---
+    if (!isEcho && getSpeciesPassive(att.g.species).name === 'Echoing Whispers' && Math.random() < 0.10) {
+      this.log(`🔮 <b>${att.g.nickname}</b>'s Echoing Whispers triggers! Casting again!`);
+      await wait(300);
+      await this.execTech(att, tech, target, true);
+    } else {
+      await wait(420);
+    }
   }
 
-  private async afterHitEffects(att: Unit, tgt: Unit, dmg: number): Promise<void> {
+  private async afterHitEffects(att: Unit, tgt: Unit, dmg: number, source?: 'strike' | 'tech', techKind?: TechKind, techType?: string): Promise<void> {
     if (tgt.g.fainted) return;
     
     // Void Shield counter-curse
@@ -1615,6 +1926,133 @@ export class Battle {
           });
         await wait(250);
       }
+    }
+
+    // Lifestealer passive (Normal attacks steal 10% damage, techs steal 5% damage as HP)
+    if (getSpeciesPassive(att.g.species).name === 'Lifestealer') {
+      const mult = source === 'strike' ? 0.10 : 0.05;
+      const drainVal = Math.floor(dmg * mult);
+      if (drainVal > 0) {
+        att.g.hp = Math.min(att.g.stats.hp, att.g.hp + drainVal);
+        this.log(`🧛 <b>${att.g.nickname}</b>'s Lifestealer stole ${drainVal} HP!`);
+        this.fx.projectile(this.chest(tgt), this.chest(att), 0x5ad88a, { size: 0.12, dur: 0.45, arc: 1.3 })
+          .then(() => {
+            this.fx.glow(this.chest(att), 0x5ad88a, { scale: 1.2, life: 0.35 });
+            makeFloatingDamageText(this.scene, att.rig.group.position.clone().setY(2), `+${drainVal}`, '#5ad88a');
+          });
+        await wait(250);
+      }
+    }
+
+    // Vampiric Fangs passive (drains 12% of physical damage dealt)
+    if (getSpeciesPassive(att.g.species).name === 'Vampiric Fangs' && techKind === 'phys') {
+      const drainVal = Math.floor(dmg * 0.12);
+      if (drainVal > 0) {
+        att.g.hp = Math.min(att.g.stats.hp, att.g.hp + drainVal);
+        this.log(`🧛 <b>${att.g.nickname}</b>'s Vampiric Fangs drained ${drainVal} HP!`);
+        this.fx.projectile(this.chest(tgt), this.chest(att), 0x9a5af2, { size: 0.12, dur: 0.45, arc: 1.3 })
+          .then(() => {
+            this.fx.glow(this.chest(att), 0x5ad88a, { scale: 1.2, life: 0.35 });
+            makeFloatingDamageText(this.scene, att.rig.group.position.clone().setY(2), `+${drainVal}`, '#5ad88a');
+          });
+        await wait(250);
+      }
+    }
+
+    // Static Shock passive (20% chance to paralyze normal attacker)
+    if (getSpeciesPassive(tgt.g.species).name === 'Static Shock' && source === 'strike' && Math.random() < 0.20 && !att.g.fainted) {
+      if (getSpeciesPassive(att.g.species).name !== 'Grounded Spirit') {
+        const parStatus: ActiveStatus = { id: 'paralyze', name: 'Paralyzed', type: 'debuff', duration: 2, effect: 'paralyze', value: 0, icon: '⚡', desc: 'Cannot act.' };
+        if (!att.statuses) att.statuses = [];
+        att.statuses.push(parStatus);
+        this.log(`⚡ <b>${tgt.g.nickname}</b>'s Static Shock paralyzed <b>${att.g.nickname}</b>!`);
+        sfx('zap');
+        this.fx.glow(this.chest(att), 0xf2d23a, { scale: 1.2, life: 0.3 });
+        await wait(250);
+      }
+    }
+
+    // Poison Barb passive (25% chance to poison physical attacker)
+    if (getSpeciesPassive(tgt.g.species).name === 'Poison Barb' && techKind === 'phys' && Math.random() < 0.25 && !att.g.fainted) {
+      if (!att.g.species.id.includes('Venom') && getSpeciesPassive(att.g.species).name !== 'Iron Grit') {
+        const poisStatus: ActiveStatus = { id: 'poison', name: 'Poisoned', type: 'debuff', duration: 3, effect: 'dot', value: 0.08, icon: '🤢', desc: 'Loses 8% HP per turn.' };
+        if (!att.statuses) att.statuses = [];
+        att.statuses.push(poisStatus);
+        this.log(`🤢 <b>${tgt.g.nickname}</b>'s Poison Barb poisoned <b>${att.g.nickname}</b>!`);
+        sfx('debuff');
+        this.fx.glow(this.chest(att), 0x5ad88a, { scale: 1.2, life: 0.3 });
+        await wait(250);
+      }
+    }
+
+    // Toxic Touch passive (30% chance to poison target with normal attack)
+    if (getSpeciesPassive(att.g.species).name === 'Toxic Touch' && source === 'strike' && Math.random() < 0.30 && !tgt.g.fainted) {
+      if (!tgt.g.species.id.includes('Venom') && getSpeciesPassive(tgt.g.species).name !== 'Iron Grit') {
+        const poisStatus: ActiveStatus = { id: 'poison', name: 'Poisoned', type: 'debuff', duration: 3, effect: 'dot', value: 0.08, icon: '🤢', desc: 'Loses 8% HP per turn.' };
+        if (!tgt.statuses) tgt.statuses = [];
+        tgt.statuses.push(poisStatus);
+        this.log(`🤢 <b>${tgt.g.nickname}</b> was poisoned by <b>${att.g.nickname}</b>'s Toxic Touch!`);
+        sfx('debuff');
+        this.fx.glow(this.chest(tgt), 0x5ad88a, { scale: 1.2, life: 0.3 });
+        await wait(250);
+      }
+    }
+
+    // Decaying Touch passive (25% chance to reduce speed stage with normal attack)
+    if (getSpeciesPassive(att.g.species).name === 'Decaying Touch' && source === 'strike' && Math.random() < 0.25 && !tgt.g.fainted) {
+      if (getSpeciesPassive(tgt.g.species).name !== 'Grounded Spirit') {
+        tgt.stages.spd = Math.max(-3, tgt.stages.spd - 1);
+        this.updateUnitMods(tgt);
+        this.log(`⏳ <b>${tgt.g.nickname}</b>'s Speed fell from <b>${att.g.nickname}</b>'s Decaying Touch!`);
+        this.fx.spiral(tgt.rig.group.position.clone(), 0x9a5af2, { up: false, dur: 0.6 });
+        sfx('debuff');
+        await wait(250);
+      }
+    }
+
+    // Cursed Body passive (15% chance to curse attacker)
+    if (getSpeciesPassive(tgt.g.species).name === 'Cursed Body' && Math.random() < 0.15 && !att.g.fainted) {
+      const curseStatus: ActiveStatus = { id: 'curse', name: 'Cursed', type: 'debuff', duration: 2, effect: 'curse', value: 0.05, icon: '🔮', desc: 'Cannot heal.' };
+      if (!att.statuses) att.statuses = [];
+      att.statuses.push(curseStatus);
+      this.log(`🔮 <b>${att.g.nickname}</b> was cursed by <b>${tgt.g.nickname}</b>'s Cursed Body!`);
+      sfx('dark');
+      this.fx.glow(this.chest(att), 0x9900ee, { scale: 1.2, life: 0.3 });
+      await wait(250);
+    }
+
+    // Overheat passive (10% recoil damage on Blaze moves)
+    if (getSpeciesPassive(att.g.species).name === 'Overheat' && source === 'tech' && techType === 'Blaze') {
+      const recoil = Math.floor(dmg * 0.10);
+      if (recoil > 0) {
+        const actualRecoil = await this.inflictDamage(att, recoil, 'dot');
+        this.log(`🔥 <b>${att.g.nickname}</b> takes ${actualRecoil} recoil damage from Overheat!`);
+        this.fx.glow(this.chest(att), 0xff3300, { scale: 1.0, life: 0.25 });
+        await wait(250);
+      }
+    }
+
+    // Deep Chill passive (20% chance to freeze target on Frost moves)
+    if (getSpeciesPassive(att.g.species).name === 'Deep Chill' && source === 'tech' && techType === 'Frost' && Math.random() < 0.20 && !tgt.g.fainted) {
+      if (getSpeciesPassive(tgt.g.species).name !== 'Iron Grit') {
+        const freezeStatus: ActiveStatus = { id: 'freeze', name: 'Frozen', type: 'debuff', duration: 1, effect: 'freeze', value: 0, icon: '❄️', desc: 'Cannot act.' };
+        if (!tgt.statuses) tgt.statuses = [];
+        tgt.statuses.push(freezeStatus);
+        this.log(`❄️ <b>${tgt.g.nickname}</b> was frozen by <b>${att.g.nickname}</b>'s Deep Chill!`);
+        sfx('zap');
+        this.fx.glow(this.chest(tgt), 0x8ae2ff, { scale: 1.2, life: 0.3 });
+        await wait(250);
+      }
+    }
+
+    // Shadow Step passive (15% chance to boost Speed stage when targeted)
+    if (getSpeciesPassive(tgt.g.species).name === 'Shadow Step' && Math.random() < 0.15) {
+      tgt.stages.spd = Math.min(3, tgt.stages.spd + 1);
+      this.updateUnitMods(tgt);
+      this.log(`🍃 <b>${tgt.g.nickname}</b>'s Shadow Step boosted Speed!`);
+      this.fx.spiral(tgt.rig.group.position.clone(), 0xf2d23a, { up: true, dur: 0.6 });
+      sfx('buff');
+      await wait(250);
     }
   }
 
@@ -1727,59 +2165,228 @@ export class Battle {
       });
   }
 
-  private async basicStrike(att: Unit, target: Unit): Promise<void> {
+  private async basicStrike(att: Unit, target: Unit, isCounter = false): Promise<void> {
     const who = att.side === 'enemy' ? `Wild ${att.g.nickname}` : att.g.nickname;
     this.log(`<b>${who}</b> strikes!`);
     const color = TYPE_COLORS[att.g.species.type];
     const home = att.rig.group.position.clone();
-    await this.meleeRush(att, target, color);
-    const as = att.g.stats, ds = target.g.stats;
-    const variance = 0.9 + Math.random() * 0.2;
-    const attIsLegend = isBig3Legend(att.g.species.id);
-    const crit = Math.random() < (attIsLegend ? 0.14 : 0.06);
 
-    const attRank = formRank(att.g.species);
-    const defRank = formRank(target.g.species);
-    const attMult = STAGE_STAT_MULT[attRank]?.[0] ?? 1.0;
-    const defMult = STAGE_STAT_MULT[defRank]?.[0] ?? 1.0;
-    const formScaling = (attMult + defMult) / 2;
+    // Identify targets
+    const isBigSwing = getSpeciesPassive(att.g.species).name === 'Big Swing';
+    const targets = isBigSwing
+      ? (att.side === 'player' ? this.alive('enemy') : this.alive('player'))
+      : [target];
 
-    const levelFactor = (2 * att.g.level) / 5 + 2;
-    const atkStat = as.atk * att.mods.atk * this.getStatusMultiplier(att, 'atk');
-    const defStat = ds.def * target.mods.def * this.getStatusMultiplier(target, 'def');
-    const statRatio = atkStat / Math.max(1, defStat);
-    
-    // Virtual power of a basic strike is 12
-    let dmg = Math.floor(((levelFactor * 12 * statRatio) / 5) * formScaling * variance);
+    const primaryTarget = targets[0] ?? target;
+    await this.meleeRush(att, primaryTarget, color);
 
-    if (attIsLegend) dmg = Math.floor(dmg * 1.25);
-    if (crit) dmg = Math.floor(dmg * 1.5);
-    if (target.guarding) dmg = Math.floor(dmg * 0.45);
+    let totalDmg = 0;
 
-    // Form-Block: out-classed attackers hit softer (5% per form-rank gap, cap 40%).
-    const formGap = Math.max(0, formRank(target.g.species) - formRank(att.g.species));
-    const formBlock = Math.min(0.40, 0.05 * formGap);
-    dmg = Math.floor(dmg * (1 - formBlock));
+    for (const tgt of targets) {
+      if (tgt.g.fainted) continue;
 
-    const finalDmg = await this.inflictDamage(target, Math.max(1, dmg), 'strike');
-    this.recordHit(att, target, finalDmg);
+      const as = att.g.stats, ds = tgt.g.stats;
+      const variance = 0.9 + Math.random() * 0.2;
+      const attIsLegend = isBig3Legend(att.g.species.id);
+
+      // Desperate Measure (crit chance +20% if HP < 30%)
+      let critChance = attIsLegend ? 0.14 : 0.06;
+      if (att.g.hp < att.g.stats.hp * 0.3 && getSpeciesPassive(att.g.species).name === 'Desperate Measure') {
+        critChance += 0.20;
+      }
+      const crit = Math.random() < critChance;
+
+      const attRank = formRank(att.g.species);
+      const defRank = formRank(tgt.g.species);
+      const attMult = STAGE_STAT_MULT[attRank]?.[0] ?? 1.0;
+      const defMult = STAGE_STAT_MULT[defRank]?.[0] ?? 1.0;
+      const formScaling = (attMult + defMult) / 2;
+
+      const levelFactor = (2 * att.g.level) / 5 + 2;
+      const atkStat = as.atk * att.mods.atk * this.getStatusMultiplier(att, 'atk');
+      
+      // Piercing Strikes (ignores 25% of target's Defense)
+      let defStat = ds.def * tgt.mods.def * this.getStatusMultiplier(tgt, 'def');
+      if (getSpeciesPassive(att.g.species).name === 'Piercing Strikes') {
+        defStat = Math.floor(defStat * 0.75);
+      }
+      
+      const statRatio = atkStat / Math.max(1, defStat);
+      
+      // Virtual power of a basic strike is 12
+      let dmg = Math.floor(((levelFactor * 12 * statRatio) / 5) * formScaling * variance);
+
+      if (attIsLegend) dmg = Math.floor(dmg * 1.25);
+      
+      // Critical Focus (critical hits deal 2.0x instead of 1.5x)
+      const critMult = getSpeciesPassive(att.g.species).name === 'Critical Focus' ? 2.0 : 1.5;
+      if (crit) dmg = Math.floor(dmg * critMult);
+
+      // Heavy Guard (guarding reduces damage by 80% instead of 55%)
+      const guardMult = getSpeciesPassive(tgt.g.species).name === 'Heavy Guard' ? 0.20 : 0.45;
+      if (tgt.guarding) dmg = Math.floor(dmg * guardMult);
+
+      // Form-Block: out-classed attackers hit softer (5% per form-rank gap, cap 40%).
+      const formGap = Math.max(0, formRank(tgt.g.species) - formRank(att.g.species));
+      const formBlock = Math.min(0.40, 0.05 * formGap);
+      dmg = Math.floor(dmg * (1 - formBlock));
+
+      // Angry Attack passive (300% damage boost if attacked first)
+      if (getSpeciesPassive(att.g.species).name === 'Angry Attack' && (att as any).attackedThisRound) {
+        dmg = Math.floor(dmg * 3.0);
+        this.log(`💢 <b>${att.g.nickname}</b>'s Angry Attack triggers! 300% damage!`);
+      }
+
+      // Opportunist passive (+20% damage if target has status conditions)
+      if (tgt.statuses && tgt.statuses.length > 0 && getSpeciesPassive(att.g.species).name === 'Opportunist') {
+        dmg = Math.floor(dmg * 1.20);
+      }
+
+      // Titan Might passive (+20% damage to bosses)
+      if (getSpeciesPassive(att.g.species).name === 'Titan Might' && this.opts.boss && att.side === 'player') {
+        dmg = Math.floor(dmg * 1.20);
+      }
+
+      // Vaporizer passive (+15% damage to Tide targets)
+      if (getSpeciesPassive(att.g.species).name === 'Vaporizer' && tgt.g.elements.includes('Water')) {
+        dmg = Math.floor(dmg * 1.15);
+      }
+
+      // Dark Bargain passive (+30% damage)
+      if (getSpeciesPassive(att.g.species).name === 'Dark Bargain') {
+        dmg = Math.floor(dmg * 1.30);
+      }
+
+      // Big Swing deals only 65% damage
+      if (isBigSwing) {
+        dmg = Math.floor(dmg * 0.65);
+      }
+
+      // Apply Blind debuff to basic strike
+      if (att.statuses && att.statuses.some(st => st.effect === 'blind')) {
+        dmg = Math.floor(dmg * 0.8);
+      }
+
+      const finalDmg = await this.inflictDamage(tgt, Math.max(1, dmg), 'strike');
+      this.recordHit(att, tgt, finalDmg);
+      totalDmg += finalDmg;
+
+      this.fx.burst(this.chest(tgt), 0xfff0d0, { count: 14, speed: 2.6, gravity: -3, life: 0.45, size: 0.1 });
+      this.fx.glow(this.chest(tgt), color, { scale: 1.0, life: 0.22 });
+      await this.hitReact(tgt, finalDmg, 1, crit, att.rig.group.position);
+      await this.afterHitEffects(att, tgt, finalDmg, 'strike', 'phys');
+
+      // --- Bash Passive (15% stun chance) ---
+      if (getSpeciesPassive(att.g.species).name === 'Bash' && Math.random() < 0.15) {
+        if (!tgt.g.fainted) {
+          const bashStun: ActiveStatus = {
+            id: 'bash_stun', name: 'Stunned', type: 'debuff', duration: 1, effect: 'stun', value: 0, icon: '💫', desc: 'Cannot act.'
+          };
+          if (!tgt.statuses) tgt.statuses = [];
+          tgt.statuses.push(bashStun);
+          this.log(`💫 <b>${att.g.nickname}</b> bashed and stunned <b>${tgt.g.nickname}</b>!`);
+          this.fx.glow(this.chest(tgt), 0xf2d23a, { scale: 1.3, life: 0.35 });
+          makeFloatingDamageText(this.scene, tgt.rig.group.position.clone().setY(2.2), 'Stunned!', '#f2d23a');
+          sfx('zap');
+        }
+      }
+
+      // --- Shockwave Passive (15% splash damage to other enemies) ---
+      if (!isCounter && getSpeciesPassive(att.g.species).name === 'Shockwave') {
+        const splashDmg = Math.floor(finalDmg * 0.15);
+        if (splashDmg > 0) {
+          this.log(`💥 <b>${att.g.nickname}</b>'s Shockwave sends out a tremor!`);
+          const others = this.units.filter(x => x.side === tgt.side && x !== tgt && !x.g.fainted);
+          for (const o of others) {
+            const finalSplash = await this.inflictDamage(o, splashDmg, 'dot');
+            this.log(`💥 <b>${o.g.nickname}</b> takes ${finalSplash} splash damage!`);
+            this.fx.glow(this.chest(o), 0xaaaaaa, { scale: 1.0, life: 0.2 });
+          }
+        }
+      }
+
+      // --- Swift Counter (counter normal attacks) ---
+      if (!isCounter && !tgt.g.fainted && getSpeciesPassive(tgt.g.species).name === 'Swift Counter') {
+        const cd = tgt.cooldowns['swift_counter'] ?? 0;
+        if (cd <= 0) {
+          tgt.cooldowns['swift_counter'] = 2; // Cooldown 2 turns
+          this.log(`⚔️ <b>${tgt.g.nickname}</b>'s Swift Counter triggered!`);
+          await wait(300);
+          await this.basicStrike(tgt, att, true);
+        }
+      }
+    }
+
+    const as = att.g.stats;
     att.g.sp = Math.min(as.sp, att.g.sp + Math.max(2, Math.floor(as.sp * 0.08))); // striking builds SP
-    this.fx.burst(this.chest(target), 0xfff0d0, { count: 14, speed: 2.6, gravity: -3, life: 0.45, size: 0.1 });
-    this.fx.glow(this.chest(target), color, { scale: 1.0, life: 0.22 });
-    await this.hitReact(target, finalDmg, 1, crit, att.rig.group.position);
     await this.meleeReturn(att, home);
-    this.pushLog('👊', `<b>${who}</b> attacked ${target.g.nickname} — ${finalDmg} dmg.`);
+    this.pushLog('👊', `<b>${who}</b> attacked ${isBigSwing ? 'all foes' : target.g.nickname} — ${totalDmg} dmg.`);
     this.renderCards();
-    await this.cleanupKOs();
-    await wait(380);
+    await this.cleanupKOs(att);
+
+    // --- Double Strike (10% chance to strike again) ---
+    if (!isCounter && !target.g.fainted && getSpeciesPassive(att.g.species).name === 'Double Strike' && Math.random() < 0.10) {
+      this.log(`⚔️ <b>${att.g.nickname}</b>'s Double Strike triggers!`);
+      await wait(300);
+      await this.basicStrike(att, target, true);
+    } else {
+      await wait(380);
+    }
   }
 
-  private async cleanupKOs(): Promise<void> {
+  private async cleanupKOs(attacker?: Unit): Promise<void> {
     for (const u of this.units) {
       if (u.g.fainted && u.rig.group.visible) {
+        const hasFinalBoom = getSpeciesPassive(u.g.species).name === 'Final Boom';
         this.log(`<b>${u.g.nickname}</b> is down!`);
         this.pushLog('💀', `<b>${u.g.nickname}</b> was defeated.`);
         await this.koAnim(u);
+
+        if (hasFinalBoom) {
+          this.log(`💥 <b>${u.g.nickname}</b> detonates with Final Boom!`);
+          sfx('boom');
+          this.fx.shake(0.3, 0.8);
+          this.fx.pillar(u.rig.group.position, 0xff3300, { height: 6, radius: 1.5, life: 1.2 });
+
+          const allies = this.units.filter(x => x.side === u.side && !x.g.fainted && x !== u);
+          const enemies = this.units.filter(x => x.side !== u.side && !x.g.fainted);
+
+          for (const ally of allies) {
+            const dmg = Math.floor(ally.g.hp * 0.10);
+            if (dmg > 0) {
+              const actualDmg = Math.min(ally.g.hp - 1, dmg);
+              if (actualDmg > 0) {
+                ally.g.hp -= actualDmg;
+                this.log(`💥 <b>${ally.g.nickname}</b> takes ${actualDmg} non-fatal damage from Final Boom!`);
+                this.fx.glow(this.chest(ally), 0xff5500, { scale: 1.0, life: 0.3 });
+                makeFloatingDamageText(this.scene, ally.rig.group.position.clone().setY(2), `${actualDmg}`, '#ff5500');
+              }
+            }
+          }
+
+          for (const enemy of enemies) {
+            const dmg = Math.floor(enemy.g.stats.hp * 0.10);
+            if (dmg > 0) {
+              const actualDmg = await this.inflictDamage(enemy, dmg, 'dot');
+              this.log(`💥 <b>${enemy.g.nickname}</b> takes ${actualDmg} fatal damage from Final Boom!`);
+              this.fx.glow(this.chest(enemy), 0xff3300, { scale: 1.2, life: 0.35 });
+              makeFloatingDamageText(this.scene, enemy.rig.group.position.clone().setY(2), `${actualDmg}`, '#ff3300');
+              await this.hitReact(enemy, actualDmg, 1, false, u.rig.group.position);
+            }
+          }
+          this.renderCards();
+        }
+
+        // Venomous Retribution passive
+        if (getSpeciesPassive(u.g.species).name === 'Venomous Retribution' && attacker && !attacker.g.fainted) {
+          const poisStatus: ActiveStatus = {
+            id: 'poison', name: 'Poisoned', type: 'debuff', duration: 3, effect: 'dot', value: 0.08, icon: '🤢', desc: 'Loses 8% HP per turn.'
+          };
+          if (!attacker.statuses) attacker.statuses = [];
+          attacker.statuses.push(poisStatus);
+          this.log(`🤢 <b>${attacker.g.nickname}</b> was poisoned by <b>${u.g.nickname}</b>'s Venomous Retribution!`);
+          sfx('debuff');
+        }
       }
     }
   }
@@ -1793,7 +2400,7 @@ export class Battle {
 
       // HP Regen passives (Verdant Growth, Temporal Barrier, Rebirth Flame, Lightning Core, Lunar Blessing, Rooted Shield, or procedurals)
       let regenPercent = 0;
-      if (passive.name === 'Verdant Growth') {
+      if (passive.name === 'Verdant Growth' || passive.name === 'Photosynthesis') {
         regenPercent = 0.08;
       } else if (passive.name === 'Temporal Barrier') {
         regenPercent = 0.05;
@@ -1936,6 +2543,37 @@ export class Battle {
           }
         }
         sfx('dark');
+        this.renderCards();
+        await this.cleanupKOs();
+        await wait(450);
+      }
+      else if (passive.name === 'Flame Aura') {
+        const dotDmg = Math.floor(u.g.stats.hp * 0.05);
+        this.log(`🔥 <b>${u.g.nickname}</b>'s Flame Aura flares up!`);
+        const enemies = this.alive(u.side === 'player' ? 'enemy' : 'player');
+        for (const e of enemies) {
+          const finalDot = await this.inflictDamage(e, dotDmg, 'dot');
+          this.log(`💢 <b>${e.g.nickname}</b> takes ${finalDot} damage from Flame Aura!`);
+          this.fx.flashMaterials(e.rig.body, 0xff3b3b, 0.25);
+          makeFloatingDamageText(this.scene, e.rig.group.position.clone().setY(2), `${finalDot}`, '#ff6600');
+        }
+        sfx('boom');
+        this.renderCards();
+        await this.cleanupKOs();
+        await wait(450);
+      }
+      else if (passive.name === 'Aether Infusion') {
+        u.g.sp = Math.min(u.g.stats.sp, u.g.sp + 5);
+        this.log(`🔮 <b>${u.g.nickname}</b>'s Aether Infusion restored 5 SP!`);
+        this.fx.glow(this.chest(u), 0xa832d4, { scale: 1.1, life: 0.3 });
+        this.renderCards();
+        await wait(300);
+      }
+      else if (passive.name === 'Dark Bargain') {
+        const selfDmg = Math.floor(u.g.stats.hp * 0.05);
+        const finalDot = await this.inflictDamage(u, selfDmg, 'dot');
+        this.log(`🔮 <b>${u.g.nickname}</b> takes ${finalDot} recoil damage from Dark Bargain!`);
+        this.fx.glow(this.chest(u), 0x9900ee, { scale: 1.0, life: 0.25 });
         this.renderCards();
         await this.cleanupKOs();
         await wait(450);
@@ -3056,14 +3694,53 @@ export class Battle {
       await wait(900);
     }
 
+    // Dread Aura start of battle trigger
+    let dreadAuraTriggered = false;
+    for (const u of this.units) {
+      if (u.g.fainted) continue;
+      if (getSpeciesPassive(u.g.species).name === 'Dread Aura') {
+        const foes = this.units.filter(x => !x.g.fainted && x.side !== u.side);
+        if (foes.length > 0) {
+          dreadAuraTriggered = true;
+          this.log(`😈 <b>${u.g.nickname}</b>'s Dread Aura lowers the enemies' Defense!`);
+          sfx('debuff');
+          for (const f of foes) {
+            f.stages.def = Math.max(-3, f.stages.def - 1);
+            this.updateUnitMods(f);
+            this.fx.spiral(f.rig.group.position.clone(), 0x9a5af2, { up: false, dur: 0.7 });
+            this.fx.flashMaterials(f.rig.body, 0x9a5af2, 0.25);
+          }
+        }
+      }
+    }
+    if (dreadAuraTriggered) {
+      this.renderCards();
+      await wait(1000);
+    }
+
     while (!result) {
       this.round++;
-      this.units.forEach(u => { u.guarding = false; });
+      this.units.forEach(u => {
+        u.guarding = false;
+        (u as any).attackedThisRound = false;
+        (u as any).quickStepTriggered = getSpeciesPassive(u.g.species).name === 'Quick Steps' && Math.random() < 0.10;
+      });
+
       const queue = [...this.units]
         .filter(u => !u.g.fainted)
         .sort((a, b) => {
-          const spdB = b.g.stats.spd * b.mods.spd * this.getStatusMultiplier(b, 'spd');
-          const spdA = a.g.stats.spd * a.mods.spd * this.getStatusMultiplier(a, 'spd');
+          const getSpeedVal = (x: Unit) => {
+            const passiveName = getSpeciesPassive(x.g.species).name;
+            if (passiveName === 'Angry Attack' || passiveName === 'Angry Cast') {
+              return -999999;
+            }
+            if ((x as any).quickStepTriggered) {
+              return 999999;
+            }
+            return x.g.stats.spd * x.mods.spd * this.getStatusMultiplier(x, 'spd');
+          };
+          const spdB = getSpeedVal(b);
+          const spdA = getSpeedVal(a);
           return spdB * (0.9 + Math.random() * 0.2) - spdA * (0.9 + Math.random() * 0.2);
         });
 
@@ -3074,6 +3751,46 @@ export class Battle {
         // Tick down this unit's tech cooldowns at the start of its turn.
         for (const k in u.cooldowns) {
           if (u.cooldowns[k] > 0) u.cooldowns[k]--;
+        }
+
+        // Increment turn count
+        (u as any).turnCount = ((u as any).turnCount ?? 0) + 1;
+
+        // Check Invulnerability passive
+        const passiveName = getSpeciesPassive(u.g.species).name;
+        if (passiveName === 'Invulnerability' && (u as any).turnCount % 3 === 0) {
+          this.log(`🛡️ <b>${u.g.nickname}</b> withdrew into a metal sphere of Invulnerability!`);
+          (u as any).invulnerableSphere = true;
+          sfx('guard');
+          this.fx.ring(u.rig.group.position, 0x999999, { maxR: 1.5, life: 0.8 });
+          this.fx.glow(this.chest(u), 0x999999, { scale: 1.5, life: 0.8 });
+          await wait(800);
+          continue;
+        } else {
+          (u as any).invulnerableSphere = false;
+        }
+
+        // Purifying Light passive
+        if (passiveName === 'Purifying Light' && Math.random() < 0.25 && u.statuses) {
+          const hadDebuffs = u.statuses.some(s => s.type === 'debuff');
+          if (hadDebuffs) {
+            u.statuses = u.statuses.filter(s => s.type !== 'debuff');
+            this.log(`✨ <b>${u.g.nickname}</b>'s Purifying Light cured all debuffs!`);
+            this.fx.glow(this.chest(u), 0xffffff, { scale: 1.4, life: 0.4 });
+            sfx('heal');
+            await wait(300);
+          }
+        }
+
+        // Starlight Grace passive
+        if (passiveName === 'Starlight Grace') {
+          const heal = Math.floor(u.g.stats.hp * 0.06);
+          u.g.hp = Math.min(u.g.stats.hp, u.g.hp + heal);
+          u.g.sp = Math.min(u.g.stats.sp, u.g.sp + 3);
+          this.log(`✨ <b>${u.g.nickname}</b>'s Starlight Grace restored ${heal} HP and 3 SP!`);
+          this.fx.glow(this.chest(u), 0xffe08a, { scale: 1.2, life: 0.3 });
+          this.renderCards();
+          await wait(250);
         }
 
         // Check Stun / Paralyze / skip turn
@@ -3095,6 +3812,20 @@ export class Battle {
           await wait(350);
           await this.enemyTurn(u);
         }
+
+        // Turn ended, now check Chaotic/Sadistic
+        if (!u.g.fainted) {
+          const isChaotic = passiveName === 'Chaotic' && (u as any).turnCount % 2 === 0;
+          const isSadistic = passiveName === 'Sadistic' && (u as any).turnCount % 4 === 0;
+          if (isChaotic || isSadistic) {
+            const passLabel = isChaotic ? 'Chaotic' : 'Sadistic';
+            this.log(`🌀 <b>${u.g.nickname}</b>'s ${passLabel} triggers! Attacking everyone!`);
+            const targets = this.units.filter(x => !x.g.fainted && x !== u);
+            for (const tgt of targets) {
+              await this.basicStrike(u, tgt, true);
+            }
+          }
+        }
       }
       stunned = false;
       this.highlight(null);
@@ -3115,6 +3846,20 @@ export class Battle {
       playMusic('battle_lost');
       await say('', 'Your party was overwhelmed…');
     }
+
+    // Ladder movement for ordinary battles — a win pays +10–25 MMR, a loss
+    // costs 10–25. Sanctioned tournament bouts (opts.ring) run the richer
+    // Elo model in tournaments.ts, so they opt out here. Fleeing never counts.
+    if (!this.opts.ring && result !== 'flee') {
+      recordBattleMMR(this.player, result === 'win');
+    }
+
+    // Decrement Phoenix Rebirth cooldown for player units
+    this.units.forEach(u => {
+      if (u.side === 'player' && u.g.resCooldown > 0) {
+        u.g.resCooldown = Math.max(0, u.g.resCooldown - 1);
+      }
+    });
 
     // cleanup
     if (this.autoKeyHandler) { window.removeEventListener('keydown', this.autoKeyHandler); this.autoKeyHandler = undefined; }

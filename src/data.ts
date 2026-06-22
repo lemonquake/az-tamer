@@ -6570,55 +6570,100 @@ export function getSpeciesPassive(sp: SpeciesDef): PassiveSkill {
 
   if (custom[sp.id]) return custom[sp.id];
 
-  // Procedural generation based on Element & Archetype
-  const elemNames: Record<GType, string> = {
-    Blaze: 'Flame', Tide: 'Aqua', Verdant: 'Flora', Volt: 'Volt', Gale: 'Zephyr', Umbra: 'Shadow',
-    Lumen: 'Solar', Gaia: 'Geo', Frost: 'Glaze', Aether: 'Aether'
-  };
-  const archNames: Record<string, string> = {
-    beast: 'Instinct', serpent: 'Venom', avian: 'Swiftness', brute: 'Might', sprite: 'Aura', shell: 'Guard'
-  };
 
-  const name = `${elemNames[sp.type] || 'Aether'} ${archNames[sp.archetype] || 'Essence'}`;
-  
-  // Procedural desc based on archetype
-  let desc = 'Gains a battle advantage.';
-  const rank = formRank(sp);
-  if (rank >= 1) {
-    if (sp.type === 'Verdant' || sp.type === 'Tide') {
-      const pName = rank === 1 ? 'Springing Dew' : rank === 2 ? 'Life-Sap' : rank === 3 ? 'Nature\'s Pulse' : 'Aetherial Bloom';
-      const val = rank === 1 ? 2 : rank === 2 ? 3 : rank === 3 ? 4 : 5;
-      return { name: pName, desc: `Heals ${val}% of max HP at the end of each round.` };
-    }
-    if (sp.type === 'Blaze') {
-      const pName = rank === 1 ? 'Spark Singe' : rank === 2 ? 'Kindle' : rank === 3 ? 'Eruptive Core' : 'Solar Winds';
-      const val = rank === 1 ? 10 : rank === 2 ? 15 : rank === 3 ? 20 : 25;
-      return { name: pName, desc: `Deals ${val}% of Attack to all foes at the end of each round.` };
-    }
-    if (sp.type === 'Volt') {
-      const pName = rank === 1 ? 'Static Touch' : rank === 2 ? 'Volt Discharge' : rank === 3 ? 'Overcharged Aura' : 'Storm Core';
-      const val = rank === 1 ? 10 : rank === 2 ? 15 : rank === 3 ? 20 : 25;
-      return { name: pName, desc: `Deals ${val}% of Wisdom to all foes at the end of each round.` };
-    }
-    if (sp.type === 'Gale') {
-      const pName = rank === 1 ? 'Zephyr Breeze' : rank === 2 ? 'Slipstream' : rank === 3 ? 'Gale Aura' : 'Sky Domain';
-      const val = rank === 1 ? 2 : rank === 2 ? 3 : rank === 3 ? 4 : 5;
-      return { name: pName, desc: `Boosts Speed stage by 1 and heals ${val}% of max HP at the end of each round.` };
-    }
-    if (sp.type === 'Umbra') {
-      const pName = rank === 1 ? 'Shadow Leach' : rank === 2 ? 'Vitality Siphon' : rank === 3 ? 'Abyssal Feast' : 'Void Consumer';
-      const val = rank === 1 ? 1 : rank === 2 ? 2 : rank === 3 ? 3 : 4;
-      return { name: pName, desc: `Drains ${val}% HP from all foes at the end of each round.` };
-    }
+  // Boss species IDs
+  const BOSS_SPECIES_IDS = ['ironhusk', 'gravemaw', 'voltigarch', 'dynamaul', 'grovetyrant', 'phantasmoth', 'vormaela', 'solmageddon', 'nihilumbra'];
+
+  const bossPassivesPool: PassiveSkill[] = [
+    { name: 'Invulnerability', desc: 'Every 3 turns, enters a metal sphere, taking only 2 damage from all sources.' },
+    { name: 'Chaotic', desc: 'Every 2 turns, attacks everyone with a Normal attack on top of orders.' }
+  ];
+
+  const normalPassivesPool: PassiveSkill[] = [
+    { name: 'Phoenix Rebirth', desc: 'When fainted, rises with 50% HP. Cooldown: 3 battles.' },
+    { name: 'Swift Counter', desc: 'Counter-attacks after receiving a normal attack (cooldown 2 turns).' },
+    { name: 'Bash', desc: 'Normal attacks have a 15% chance to stun targets (5% for techniques).' },
+    { name: 'Evasion', desc: '15% chance to reduce incoming damage from strikes and techniques by 15%.' },
+    { name: 'Big Swing', desc: 'Normal attacks hit all 3 enemies for 65% damage.' },
+    { name: 'Final Boom', desc: 'When fainted, deals 10% current HP damage to allies and 10% max HP damage to enemies.' },
+    { name: 'Angry Attack', desc: 'Acts last in order, but deals 300% strike damage if attacked first.' },
+    { name: 'Angry Cast', desc: 'Acts last in order, but deals 200% tech damage if attacked first.' },
+    { name: 'Sadistic', desc: 'Every 4 turns, attacks everyone with a Normal attack on top of orders.' },
+    { name: 'Lifestealer', desc: 'Steals 10% strike / 5% tech damage as HP.' },
+    { name: 'Static Shock', desc: 'When hit by a normal attack, has a 20% chance to paralyze the attacker.' },
+    { name: 'Poison Barb', desc: 'When hit by a physical attack, has a 25% chance to poison the attacker.' },
+    { name: 'Toxic Touch', desc: 'Normal attacks have a 30% chance to poison the target.' },
+    { name: 'Flame Aura', desc: 'Deals 5% max HP damage to all foes at the end of each round.' },
+    { name: 'Frost Armor', desc: 'Defense increases by 30% when frozen, and hit attacks have a 15% chance to freeze.' },
+    { name: 'Gale Force', desc: 'Boosts Speed by 20% when HP is below 50%.' },
+    { name: 'Shadow Veil', desc: '10% chance to completely dodge any incoming technique.' },
+    { name: 'Soul Siphon', desc: 'Restores 15% of max HP when defeating an enemy.' },
+    { name: 'Iron Grit', desc: 'Immune to stun and freeze status effects.' },
+    { name: 'Inner Fire', desc: 'Immune to sleep and freeze. Boosts Attack by 10%.' },
+    { name: 'Miracle Guard', desc: 'Takes 50% less damage from super-effective attacks.' },
+    { name: 'Berserk Mode', desc: 'Under 30% HP, increases Attack by 50% but reduces Defense by 30%.' },
+    { name: 'Second Wind', desc: 'Restores 25% of max HP when HP drops below 20% (once per battle).' },
+    { name: 'Spore Spread', desc: 'When hit, has a 10% chance to inflict sleep on all enemies.' },
+    { name: 'Photosynthesis', desc: 'Heals 8% of max HP at the end of each round.' },
+    { name: 'Feedback Shock', desc: 'Deals 10% of damage taken back to all enemies.' },
+    { name: 'Adrenaline Rush', desc: 'Boosts Speed stage by 1 when defeating an enemy.' },
+    { name: 'Piercing Strikes', desc: 'Normal attacks ignore 25% of the target\'s Defense.' },
+    { name: 'Critical Focus', desc: 'Critical hits deal 2.0x damage instead of 1.5x.' },
+    { name: 'Aura Shield', desc: 'Starts battle with a barrier that absorbs 15% max HP as shield.' },
+    { name: 'Purifying Light', desc: '25% chance to cure all own debuffs at the start of the turn.' },
+    { name: 'Decaying Touch', desc: 'Normal attacks have a 25% chance to reduce target Speed stage.' },
+    { name: 'Overheat', desc: 'Blaze moves deal 25% more damage but user takes 10% recoil damage.' },
+    { name: 'Deep Chill', desc: 'Frost moves have a 20% chance to freeze the target.' },
+    { name: 'Grounded Spirit', desc: 'Immune to paralyze and speed reductions.' },
+    { name: 'Aether Infusion', desc: 'Restores 5 SP at the end of each round.' },
+    { name: 'Tectonic Shield', desc: 'Takes 20% less damage from physical attacks.' },
+    { name: 'Echoing Whispers', desc: '10% chance to cast the used technique a second time for free.' },
+    { name: 'Cursed Body', desc: 'When hit, has a 15% chance to curse the attacker for 2 turns.' },
+    { name: 'Vengeful Spark', desc: 'Boosts Attack by 20% for each fallen ally.' },
+    { name: 'Last Stand', desc: 'Survives a fatal hit with 1 HP (once per battle).' },
+    { name: 'Vampiric Fangs', desc: 'Drains 12% of physical damage dealt as HP.' },
+    { name: 'Sage Mind', desc: 'Techniques cost 20% less SP.' },
+    { name: 'Heavy Hitter', desc: 'Physical attacks deal 15% more damage but Speed is reduced by 10%.' },
+    { name: 'Quick Steps', desc: '10% chance to act first in the round regardless of speed.' },
+    { name: 'Solar Charge', desc: 'Boosts Wisdom by 20% if user has a Blaze element.' },
+    { name: 'Dread Aura', desc: 'Reduces all enemies\' Defense by 10% at the start of battle.' },
+    { name: 'Symbiosis', desc: 'When healing an ally, heals self for 30% of the amount.' },
+    { name: 'Corrosive Acid', desc: 'Attacks have a 20% chance to inflict Corrosion status.' },
+    { name: 'Starlight Grace', desc: 'Heals 6% max HP and restores 3 SP at the start of the turn.' },
+    { name: 'Wind Walker', desc: 'Immune to hazards/traps and boosts Speed by 15%.' },
+    { name: 'Dark Bargain', desc: 'Deals 30% more damage, but takes 5% of max HP as damage at the end of each round.' },
+    { name: 'Heavy Guard', desc: 'When guarding, reduces damage taken by 80%.' },
+    { name: 'Opportunist', desc: 'Deals 20% more damage to targets with status conditions.' },
+    { name: 'Venomous Retribution', desc: 'When fainted, poisons the attacker.' },
+    { name: 'Glacial Barrier', desc: 'Starts battle with a barrier that absorbs 20% max HP as shield.' },
+    { name: 'Double Strike', desc: 'Normal attacks have a 10% chance to hit twice.' },
+    { name: 'Shockwave', desc: 'Physical attacks deal 15% splash damage to other enemies.' },
+    { name: 'Spiritual Focus', desc: 'Boosts Wisdom by 25% at the start of battle.' },
+    { name: 'Desperate Measure', desc: 'Boosts Critical Hit rate by 20% when HP is under 30%.' },
+    { name: 'Oceanic Veil', desc: 'Immune to burn and melt status effects.' },
+    { name: 'Luminglow', desc: 'Normal attacks have a 20% chance to blind the target.' },
+    { name: 'Rooted Stance', desc: 'Cannot be provoked or forced to swap out.' },
+    { name: 'Combustion', desc: 'When hit by a Blaze move, boosts Attack stage by 1.' },
+    { name: 'Conductive Body', desc: 'When hit by a Volt move, gains 10 SP.' },
+    { name: 'Shadow Step', desc: '15% chance to boost Speed stage by 1 when targeted by an attack.' },
+    { name: 'Titan Might', desc: 'Deals 20% more damage in boss battles.' },
+    { name: 'Vaporizer', desc: 'Deals 15% more damage to Tide targets.' },
+    { name: 'Defiance', desc: 'Boosts Defense stage by 1 when debuffed.' },
+    { name: 'Aetherial Form', desc: '10% chance to take 0 damage from any technique.' }
+  ];
+
+  // Hash species ID deterministically to map to a passive from the pool
+  let hash = 0;
+  for (let i = 0; i < sp.id.length; i++) {
+    hash = (hash << 5) - hash + sp.id.charCodeAt(i);
+    hash |= 0;
   }
-  if (sp.archetype === 'beast') desc = '+10% Attack in battle.';
-  else if (sp.archetype === 'serpent') desc = '+10% Wisdom in battle and immune to poison status.';
-  else if (sp.archetype === 'avian') desc = '+10% Speed in battle.';
-  else if (sp.archetype === 'brute') desc = '+10% Attack & HP in battle.';
-  else if (sp.archetype === 'sprite') desc = '+15% Wisdom in battle.';
-  else if (sp.archetype === 'shell') desc = '+15% Defense in battle.';
-
-  return { name, desc };
+  const isBoss = BOSS_SPECIES_IDS.includes(sp.id);
+  if (isBoss) {
+    return bossPassivesPool[Math.abs(hash) % bossPassivesPool.length];
+  } else {
+    return normalPassivesPool[Math.abs(hash) % normalPassivesPool.length];
+  }
 }
 
 // Dynamically distribute the 60 new techniques to all species of the corresponding element
