@@ -183,6 +183,25 @@ const STORY_QUESTS: QuestDef[] = [
     reward: { shards: 2000, items: [['prism_gem', 1]] },
   }),
 
+  // ============ ACT II — THE SEARCH FOR AZRAEL (Chapter 13) ============
+  M({
+    id: 'story_azrael_clues', kind: 'story', chapter: 13, icon: '🔍', requires: 'story_aether_evo',
+    title: 'Azrael\'s Clues', giver: 'Azrin', location: 'Haven City — Fountain',
+    brief: 'Azrael has departed unexpectedly to investigate the corruption. Azrin is searching for her sister but needs you to follow Azrael\'s trail. Defeat the three newly discovered elemental dungeons (Pyrewood Depths, Glacial Abyss, and Thunderclap Ruins) to recover Azrael\'s clues, then report to Mayor Airah in Aurelian Hall.',
+    objective: 'Conquer Pyrewood Depths, Glacial Abyss, and Thunderclap Ruins, then speak to Mayor Airah',
+    hint: 'Conquer the three elemental dungeons unlocked on the overworld map, then present your findings to Mayor Airah in Haven City\'s Aurelian Hall.',
+    check: p => (p.dungeonClears['pyrewood_depths'] ?? 0) >= 1 &&
+               (p.dungeonClears['glacial_abyss'] ?? 0) >= 1 &&
+               (p.dungeonClears['thunderclap_ruins'] ?? 0) >= 1,
+    progress: p => [
+      Math.min(1, p.dungeonClears['pyrewood_depths'] ?? 0) +
+      Math.min(1, p.dungeonClears['glacial_abyss'] ?? 0) +
+      Math.min(1, p.dungeonClears['thunderclap_ruins'] ?? 0),
+      3
+    ],
+    reward: { shards: 5000, items: [['prism_gem', 2]] },
+  }),
+
   // ============ ACT V — THE FORETALES (the Anomalies Saga, Part Four) ============
   // After Ivan Lawrence's name is cleared from New Salmonan's relay
   // tower, the veil starts to fall: the Sponsors were one finger of a
@@ -192,10 +211,8 @@ const STORY_QUESTS: QuestDef[] = [
   // continental leaders since. And through it all they glaze the Big
   // Three with soft-lit documentaries… because they are not allowed
   // to touch them. Not yet. Soon.
-  // TODO(acts II–IV): re-anchor `requires` to 'story_ivan' (Ch XXI)
-  // once the intervening chapters are implemented.
   M({
-    id: 'story_veilfall', kind: 'story', chapter: 13, icon: '📡', requires: 'story_aether_evo',
+    id: 'story_veilfall', kind: 'story', chapter: 14, icon: '📡', requires: 'story_azrael_clues',
     title: 'The Veil, Falling', giver: 'Ivan Lawrence', location: 'New Salmonan',
     brief: 'Thirty-six hours. That\'s how long the truth got to breathe. Then every broadcast crystal on four continents lit up with the same calm anchors and the same swelling music: "THE LAWRENCE TAPES — A FORGERY?" The valley that watched the real broadcast go out from its own battered tower now watches the world be told it never happened. Ivan isn\'t even angry. "This is the machine, friend. I just never thought I\'d get to show somebody the gears while they turn." Find the gears: the override stamp in Esta\'s relay logs, the festival crystal Auntie Dalisay\'s nephew recorded LIVE before the aired version was rewritten — and the Foretales stringer who has been sketching the mural and asking the children questions.',
     objective: 'Gather three proofs of the Foretales override in New Salmonan, then bring them to Ivan',
@@ -206,7 +223,7 @@ const STORY_QUESTS: QuestDef[] = [
     reward: { shards: 6000, items: [['override_ledger', 1], ['elixir', 2]] },
   }),
   M({
-    id: 'story_mirrorhouse', kind: 'story', chapter: 14, icon: '🪞', requires: 'story_veilfall',
+    id: 'story_mirrorhouse', kind: 'story', chapter: 15, icon: '🪞', requires: 'story_veilfall',
     title: 'The Mirrorhouse', giver: 'Ivan Lawrence', location: 'The Mirrorhouse, above New Salmonan',
     brief: 'Every story the eastern valleys have read for sixteen years passed through one building: a relay-bastion of black glass on the ridge upriver, humming day and night. The locals call it the Mirrorhouse, because whatever you carry up that road, the world is shown something else. Esta\'s logs say the Lawrence rewrite was stamped THERE — same override signature, FT-PRIME, that wiped a certain someone\'s records once. Ivan walks you to the ridge stair and stops at the first step, fists shaking, smiling anyway. "Nine years I couldn\'t look at this building. Go in. Find the master spool — the one they print TOMORROW from. And tamer… check the date on the directive about my match-fixing. I want to know how long before my fall they wrote it."',
     objective: 'Conquer the Mirrorhouse and extract the Continuity Reel',
@@ -455,6 +472,21 @@ const SIDE_QUESTS: QuestDef[] = [
       });
     },
     reward: { shards: 500 },
+  }),
+  M({
+    id: 'side_lost_interviews', kind: 'side',
+    title: "Aljay's Lost Interviews", giver: 'Archivist Wren', location: 'University Library',
+    brief: 'You have collected all five of Aljay\'s Lost Interviews from the core dungeons. Take them to Archivist Wren in the University Library to decode the full message and claim your reward.',
+    objective: 'Present all 5 Audio Crystals to Archivist Wren in the Library',
+    check: p => p.itemCount('audio_crystal_1') > 0 && p.itemCount('audio_crystal_2') > 0 && p.itemCount('audio_crystal_3') > 0 && p.itemCount('audio_crystal_4') > 0 && p.itemCount('audio_crystal_5') > 0,
+    onComplete: p => {
+      p.removeItem('audio_crystal_1', 1);
+      p.removeItem('audio_crystal_2', 1);
+      p.removeItem('audio_crystal_3', 1);
+      p.removeItem('audio_crystal_4', 1);
+      p.removeItem('audio_crystal_5', 1);
+    },
+    reward: { shards: 2000, items: [['dawnflame_recorder', 1]] },
   }),
 ];
 

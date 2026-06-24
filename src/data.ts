@@ -942,6 +942,129 @@ export const STAT_NAMES: Record<StatKey, string> = {
   hp: 'HP', sp: 'SP', atk: 'Attack', def: 'Defense', spd: 'Speed', wis: 'Wisdom',
 };
 
+// ---------------- Seeded RNG (deterministic per-string) ----------------
+/** Tiny string hash → 32-bit int (FNV-1a-ish). Used to seed reproducible rolls. */
+export function hashStr(s: string): number {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+/** mulberry32 PRNG factory — returns a () => [0,1) generator from an integer seed. */
+export function mulberry32(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// ---------------- Genetics: Genes (IVs), Natures, Training (EVs) ----------------
+// Every Guardian carries hidden GENES (0..31 per stat) rolled at birth, a NATURE
+// that skews one stat up 10% and another down 10%, and earned TRAINING (effort).
+// All three fold into the `stats` getter (state.ts) *before* the form-rank
+// multipliers, so they scale proportionally at every rank without breaking caps.
+export const GENE_MAX = 31;
+/** Pre-multiplier stat added per gene point (HP/SP weigh more in raw points). */
+export const GENE_WEIGHT: Record<StatKey, number> = { hp: 0.9, sp: 0.5, atk: 0.4, def: 0.4, spd: 0.4, wis: 0.4 };
+/** Training (effort) caps, Pokémon-style: 252 per stat, 510 total. */
+export const TRAIN_PER_STAT_MAX = 252;
+export const TRAIN_TOTAL_MAX = 510;
+/** Effort points needed per +1 pre-multiplier stat point. */
+export const TRAIN_DIVISOR: Record<StatKey, number> = { hp: 3, sp: 6, atk: 6, def: 6, spd: 6, wis: 6 };
+
+/** Roll a deterministic gene set from any seed string (usually a Guardian id). */
+export function rollGenes(seed: string): Stats {
+  const rnd = mulberry32(hashStr(seed + ':genes'));
+  const g = () => Math.floor(rnd() * (GENE_MAX + 1));
+  return { hp: g(), sp: g(), atk: g(), def: g(), spd: g(), wis: g() };
+}
+/** A flawless 31-across gene set (bred perfection / debug). */
+export function perfectGenes(): Stats { return { hp: 31, sp: 31, atk: 31, def: 31, spd: 31, wis: 31 }; }
+export function emptyStats(): Stats { return { hp: 0, sp: 0, atk: 0, def: 0, spd: 0, wis: 0 }; }
+/** % perfection of a gene set (0–100), for the card's "potential" readout. */
+export function geneRating(genes: Stats): number {
+  const tot = genes.hp + genes.sp + genes.atk + genes.def + genes.spd + genes.wis;
+  return Math.round((tot / (GENE_MAX * 6)) * 100);
+}
+export function geneGradeLabel(pct: number): { label: string; color: string } {
+  if (pct >= 97) return { label: 'Flawless', color: '#ff5ad2' };
+  if (pct >= 88) return { label: 'Pristine', color: '#ffd25a' };
+  if (pct >= 72) return { label: 'Superb', color: '#9a6aff' };
+  if (pct >= 55) return { label: 'Strong', color: '#5ad2ff' };
+  if (pct >= 38) return { label: 'Fair', color: '#7affc4' };
+  return { label: 'Rough', color: '#9aa0b4' };
+}
+
+export interface NatureDef { id: string; name: string; up: StatKey; down: StatKey; }
+const NATURE_AFFECTED: StatKey[] = ['atk', 'def', 'spd', 'wis', 'sp'];
+const NATURE_NAMES: Record<string, string> = {
+  // diagonal = neutral (up === down → no net effect)
+  atk_atk: 'Brash', def_def: 'Stoic', spd_spd: 'Skittish', wis_wis: 'Pensive', sp_sp: 'Vital',
+  atk_def: 'Feral', atk_spd: 'Brutish', atk_wis: 'Savage', atk_sp: 'Rabid',
+  def_atk: 'Bulwark', def_spd: 'Ironclad', def_wis: 'Stonewall', def_sp: 'Bastion',
+  spd_atk: 'Fleet', spd_def: 'Nimble', spd_wis: 'Hasty', spd_sp: 'Breezy',
+  wis_atk: 'Mystic', wis_def: 'Arcane', wis_spd: 'Sage', wis_sp: 'Lucid',
+  sp_atk: 'Serene', sp_def: 'Flowing', sp_spd: 'Tranquil', sp_wis: 'Dreamy',
+};
+export const NATURES: Record<string, NatureDef> = Object.fromEntries(
+  NATURE_AFFECTED.flatMap(up => NATURE_AFFECTED.map(down => {
+    const id = `${up}_${down}`;
+    return [id, { id, name: NATURE_NAMES[id] ?? id, up, down } as NatureDef];
+  }))
+);
+export const NATURE_IDS = Object.keys(NATURES);
+/** Per-stat nature multiplier (1.1 up / 0.9 down / 1.0 otherwise; neutral natures are flat). */
+export function natureMult(natureId: string | undefined, stat: StatKey): number {
+  const n = natureId ? NATURES[natureId] : undefined;
+  if (!n || n.up === n.down) return 1.0;
+  if (stat === n.up) return 1.1;
+  if (stat === n.down) return 0.9;
+  return 1.0;
+}
+export function rollNatureId(seed: string): string {
+  const rnd = mulberry32(hashStr(seed + ':nature'));
+  return NATURE_IDS[Math.floor(rnd() * NATURE_IDS.length)];
+}
+/** Short "+Atk / -Spd" descriptor for a nature (empty for neutral). */
+export function natureBlurb(natureId: string | undefined): string {
+  const n = natureId ? NATURES[natureId] : undefined;
+  if (!n || n.up === n.down) return 'Neutral';
+  return `+${STAT_NAMES[n.up]} / −${STAT_NAMES[n.down]}`;
+}
+
+// ---------------- Natural evolution base-form lookup (for breeding) ----------------
+let _baseFormCache: Record<string, string> | null = null;
+function buildBaseFormMap(): Record<string, string> {
+  // predecessor[child] = parent, following the NATURAL evo chain only
+  // (not ascension/fusion) so an egg hatches into the lowest Novice form.
+  const pred: Record<string, string> = {};
+  for (const id in SPECIES) {
+    const s = SPECIES[id];
+    // First writer wins: canonical starter lines are defined before alternate /
+    // forge species, so convergent evolutions (e.g. cinderbat→pyrofang) don't
+    // overwrite the primary pre-form (cindcub→pyrofang).
+    if (s.evolvesTo && SPECIES[s.evolvesTo.species] && !pred[s.evolvesTo.species]) pred[s.evolvesTo.species] = id;
+    if (s.extraEvolvesTo && SPECIES[s.extraEvolvesTo.species] && !pred[s.extraEvolvesTo.species]) pred[s.extraEvolvesTo.species] = id;
+  }
+  const base: Record<string, string> = {};
+  for (const id in SPECIES) {
+    let cur = id, guard = 0;
+    while (pred[cur] && guard++ < 24) cur = pred[cur];
+    base[id] = cur;
+  }
+  return base;
+}
+/** The lowest natural form in a species' evo line — what an egg hatches into. */
+export function baseFormOf(speciesId: string): string {
+  if (!_baseFormCache) _baseFormCache = buildBaseFormMap();
+  return _baseFormCache[speciesId] ?? speciesId;
+}
+
 export function expForLevel(level: number): number {
   // total exp required to BE at `level`.
   //
@@ -6194,9 +6317,122 @@ export const ITEMS: Record<string, ItemDef> = Object.fromEntries([
   I('override_ledger', 'Override Ledger', 'relic', 0, 0, 'Three proofs bound in river-twine: Esta\'s relay logs stamped FT-PRIME, Dalisay\'s unedited festival crystal, and a Foretales stringer\'s assignment book. Together they say one thing: the news is written before it happens.'),
   I('continuity_reel', 'The Continuity Reel', 'relic', 0, 0, 'The Mirrorhouse\'s master spool — sixteen years of front pages filed BEFORE the events they report. The last frame is a standing directive on the Big Three: "GLAZE. DO NOT TOUCH. NOT YET. SOON."'),
   I('dragons_tear', "Dragon's Tear", 'relic', 0, 0, 'A pure red chrome gem recovered from the secret ancient Dungeon of Terra City. It hums with immense power, needed to upgrade the Crawler\'s Main Board.'),
+  I('audio_crystal_1', 'Audio Crystal — Ghandra\'s Echo', 'relic', 0, 0, 'A glowing crystal containing Aljay\'s recording about Ghandra and the First Dawn.'),
+  I('audio_crystal_2', 'Audio Crystal — The Reaching', 'relic', 0, 0, 'A glowing crystal containing Aljay\'s recording about forced bonds and the Guild Compact.'),
+  I('audio_crystal_3', 'Audio Crystal — The Legion War', 'relic', 0, 0, 'A glowing crystal containing Aljay\'s recording about the Legion War and his companions.'),
+  I('audio_crystal_4', 'Audio Crystal — Greggy\'s Silence', 'relic', 0, 0, 'A glowing crystal containing Aljay\'s recording about Greggy\'s retirement on Agdao.'),
+  I('audio_crystal_5', 'Audio Crystal — The Sealing', 'relic', 0, 0, 'A glowing crystal containing Aljay\'s recording about the Ghandra seal and his daughters.'),
+  I('dawnflame_recorder', 'Dawnflame Recorder', 'relic', 0, 0, 'Aljay\'s voice recorder, restored. Faint heat radiates from its brass casing. (Grants +5% XP to active Guardians when carried.)'),
   I('third_harmonik', "3rd Harmonik Notes", 'relic', 0, 0, 'A compilation of frequency notes on Ghandra and the Aether Line by Doctor Clyde. Take these to the Haven Town Sanctum for study.'),
   I('tems_backup', "Tem's Backup Logs", 'relic', 0, 0, 'A backup copy of Hyujon\'s north gate gate-records, saved by Archivist Tem in an air duct. It logs a single man passing alone with a lantern.'),
+  // ===================== EXPEDITION RELIC PRIZES =====================
+  // Rare drops awarded only deep inside the themed Guild expeditions. Never
+  // stocked in any shop — the only way to own one is to go and take it.
+  I('ember_relic', 'Emberforge Ingot', 'boost', 5, 0, 'A still-warm ingot pulled from the Caldera\'s heart. Permanently raises a Guardian\'s Attack by 5.', 'atk'),
+  I('glacial_core', 'Glacial Heart', 'feast', 3, 0, 'A frozen star that never melts, found at the roof of the world. Permanently raises ALL of a Guardian\'s stats.'),
+  I('worldstone_shard', 'Worldstone Shard', 'boost', 10, 0, 'A chip of the planet\'s own bedrock, humming with deep-earth weight. Permanently raises a Guardian\'s max HP by 10.', 'hp'),
+  I('tempest_coil', 'Tempest Coil', 'boost', 5, 0, 'A coil that still crackles with the Conduit\'s caged lightning. Permanently raises a Guardian\'s Speed by 5.', 'spd'),
+  I('abyssal_pearl', 'Abyssal Pearl', 'boost', 5, 0, 'A pearl grown in lightless water under impossible pressure. Permanently raises a Guardian\'s Wisdom by 5.', 'wis'),
+  I('zephyr_plume', 'Zephyr Plume', 'boost', 5, 0, 'A feather from a wind that never lands. Permanently raises a Guardian\'s Speed by 5.', 'spd'),
+  I('eden_seed', 'Eden Seed', 'feast', 3, 0, 'A seed from the first garden, still trying to grow. Permanently raises ALL of a Guardian\'s stats.'),
+  I('void_idol', 'Void Idol', 'feast', 3, 0, 'A little carved nothing that drinks the light around it. Permanently raises ALL of a Guardian\'s stats.'),
+  I('radiant_halo', 'Radiant Halo', 'feast', 3, 0, 'A ring of captured dawn from the Hallowed Sanctum. Permanently raises ALL of a Guardian\'s stats.'),
+  // Captain-rank elite trophies — the rarest prizes in Aurel, feast-grade.
+  I('frostbound_crown', 'Frostbound Crown', 'feast', 5, 0, 'The crown of the Glacial Throne, worn only by what you defeated to take it. Permanently raises ALL of a Guardian\'s stats — handsomely.'),
+  I('empyrean_sigil', 'Empyrean Sigil', 'feast', 5, 0, 'A sigil of pure ordered light from the Empyrean Vault. Permanently raises ALL of a Guardian\'s stats — handsomely.'),
+  I('obsidian_heart', 'Obsidian Heart', 'feast', 5, 0, 'The cold black core of the Obsidian Maw, still beating somehow. Permanently raises ALL of a Guardian\'s stats — handsomely.'),
 ].map(i => [i.id, i]));
+
+// ---------------- Held Charms (battle gear equipped to a Guardian) ----------------
+// A charm occupies one hold-slot on a Guardian and is read live by the battle
+// engine. Effects are a flat optional schema so battle.ts can cheaply check each.
+export interface CharmEffect {
+  allDamagePct?: number;       // +% to ALL damage dealt
+  elementBoost?: { element: Element; pct: number };   // +% damage of one element
+  typeBoost?: { type: GType; pct: number };            // +% damage of one school
+  kindBoost?: { kind: TechKind; pct: number };         // +% phys or art damage
+  critChance?: number;         // +flat crit chance (0..1)
+  critMultBonus?: number;      // +added to the crit multiplier (1.5 base)
+  damageTakenPct?: number;     // -% damage taken (0.10 = take 10% less)
+  superResistPct?: number;     // extra reduction vs super-effective hits
+  lifestealPct?: number;       // heal % of damage dealt
+  thornsPct?: number;          // reflect % of damage taken back to the attacker
+  firstStrikeChance?: number;  // chance to be sorted first in the round
+  endure?: boolean;            // survive one lethal blow at 1 HP (once per battle)
+  reviveOncePct?: number;      // self-revive once per battle at this % of max HP
+  spDiscountPct?: number;      // -% SP cost on techniques
+  regenPct?: number;           // heal % max HP at the end of each round
+  cleanseChance?: number;      // chance to shed one debuff each round
+  statusChanceBonus?: number;  // +chance to inflict statuses
+  statusResistPct?: number;    // -chance to be afflicted by statuses
+  startShieldPct?: number;     // entry barrier worth % of max HP
+  startStage?: { stat: 'atk' | 'def' | 'spd'; n: number };  // entry stat-stage
+  lowHpAtkPct?: number;        // +% attack while below 30% HP
+  shardBonusPct?: number;      // +% Shards from battles (holder must survive)
+  expBonusPct?: number;        // +% EXP from battles
+  bondBonus?: number;          // + gift/capture bond per gift while held
+}
+export interface CharmDef {
+  id: string; name: string; icon: string; rarity: CrawlerRarity;
+  price: number;               // 0 = never sold (drop / bounty / breeding only)
+  desc: string;
+  effect: CharmEffect;
+}
+const CH = (id: string, name: string, icon: string, rarity: CrawlerRarity, price: number, desc: string, effect: CharmEffect): CharmDef =>
+  ({ id, name, icon, rarity, price, desc, effect });
+export const CHARMS: Record<string, CharmDef> = Object.fromEntries([
+  // — Element bands: +12% damage of one element —
+  CH('ch_ember', 'Ember Band', '🔥', 'uncommon', 900, 'A coil of never-cooling forge-wire. +12% Fire damage.', { elementBoost: { element: 'Fire', pct: 0.12 } }),
+  CH('ch_tide', 'Tidal Pearl', '🌊', 'uncommon', 900, 'A pearl that always feels wet. +12% Water damage.', { elementBoost: { element: 'Water', pct: 0.12 } }),
+  CH('ch_verdant', 'Verdant Charm', '🌿', 'uncommon', 900, 'A sprig that never wilts. +12% Nature damage.', { elementBoost: { element: 'Nature', pct: 0.12 } }),
+  CH('ch_volt', 'Storm Coil', '⚡', 'uncommon', 900, 'A coil that hums before thunder. +12% Electric damage.', { elementBoost: { element: 'Electric', pct: 0.12 } }),
+  CH('ch_stone', 'Stoneheart', '🪨', 'uncommon', 900, 'A river-smoothed core of dense ore. +12% Rock damage.', { elementBoost: { element: 'Rock', pct: 0.12 } }),
+  CH('ch_frost', 'Frost Locket', '❄️', 'uncommon', 900, 'A locket of unmelting rime. +12% Ice damage.', { elementBoost: { element: 'Ice', pct: 0.12 } }),
+  CH('ch_lumen', 'Sunstone', '✨', 'uncommon', 900, 'A shard that keeps a little dawn inside. +12% Light damage.', { elementBoost: { element: 'Light', pct: 0.12 } }),
+  CH('ch_umbra', 'Void Sigil', '🌑', 'uncommon', 900, 'A sigil that drinks the lamplight near it. +12% Dark damage.', { elementBoost: { element: 'Dark', pct: 0.12 } }),
+  CH('ch_warp', 'Warpglass', '🌌', 'uncommon', 900, 'A lens that bends what is behind it. +12% Space damage.', { elementBoost: { element: 'Space', pct: 0.12 } }),
+  CH('ch_aether', 'Aether Mote', '🔮', 'rare', 1800, 'A mote of the raw stuff the Nine are made of. +12% Aether damage.', { elementBoost: { element: 'Aether', pct: 0.12 } }),
+  // — Damage style —
+  CH('ch_powerfist', 'Power Fist', '🥊', 'rare', 1600, 'Weighted knuckle-bands for honest, heavy work. +15% physical damage.', { kindBoost: { kind: 'phys', pct: 0.15 } }),
+  CH('ch_mysticlens', 'Mystic Lens', '🔭', 'rare', 1600, 'A focusing lens for channeled arts. +15% art (special) damage.', { kindBoost: { kind: 'art', pct: 0.15 } }),
+  CH('ch_keenedge', 'Keen Edge', '🗡️', 'rare', 1500, 'Whetted instinct for the soft spot. +10% critical-hit chance.', { critChance: 0.10 }),
+  CH('ch_assassin', "Assassin's Mark", '🎯', 'epic', 3000, 'Marks the killing line. Critical hits deal 2.0× instead of 1.5×.', { critMultBonus: 0.5 }),
+  // — Defense & survival —
+  CH('ch_guardplate', 'Guardian Plate', '🛡️', 'rare', 1600, 'Vault-grade weld-foam plating. Take 10% less damage from everything.', { damageTakenPct: 0.10 }),
+  CH('ch_bulwark', 'Bulwark Crest', '🧱', 'epic', 3000, 'A crest braced against your weakness. Super-effective hits do 25% less.', { superResistPct: 0.25 }),
+  CH('ch_focusband', 'Focus Band', '🎗️', 'epic', 3200, 'A band that steadies the breath at the brink. Survive one lethal blow at 1 HP (once per battle).', { endure: true }),
+  CH('ch_phoenix', 'Phoenix Feather', '🪶', 'legendary', 6000, 'A feather that remembers being fire. Once per battle, revive at 50% HP after fainting.', { reviveOncePct: 0.5 }),
+  // — Sustain —
+  CH('ch_leech', 'Leech Sigil', '🩸', 'rare', 1700, 'A sigil that feeds the wearer. Heal 12% of all damage you deal.', { lifestealPct: 0.12 }),
+  CH('ch_thorns', 'Thorn Aegis', '🌹', 'rare', 1600, 'A bramble of black roses. Reflect 20% of damage taken back to the attacker.', { thornsPct: 0.20 }),
+  CH('ch_regen', 'Verdant Locket', '💚', 'rare', 1500, 'A locket of living moss. Heal 7% of max HP at the end of each round.', { regenPct: 0.07 }),
+  CH('ch_cleanse', 'Cleansing Bell', '🔔', 'uncommon', 1100, 'A bell that rings worry away. 50% chance to shed one debuff each round.', { cleanseChance: 0.5 }),
+  // — Tempo —
+  CH('ch_quickclaw', 'Quick Claw', '⏩', 'uncommon', 1000, 'A claw that twitches before the bell. 20% chance to strike first each round.', { firstStrikeChance: 0.20 }),
+  CH('ch_swift', 'Swift Anklet', '👟', 'uncommon', 1000, 'Light on the feet from the first step. Enter battle with +1 Speed stage.', { startStage: { stat: 'spd', n: 1 } }),
+  CH('ch_warbanner', 'War Banner', '🚩', 'rare', 1400, 'A standard that stirs the blood. Enter battle with +1 Attack stage.', { startStage: { stat: 'atk', n: 1 } }),
+  CH('ch_ironwall', 'Iron Resolve', '🪖', 'rare', 1400, 'Set your stance before the first blow. Enter battle with +1 Defense stage.', { startStage: { stat: 'def', n: 1 } }),
+  // — Status —
+  CH('ch_venom', 'Venom Fang', '🐍', 'rare', 1500, 'A fang slick with old poison. +25% chance to inflict status effects.', { statusChanceBonus: 0.25 }),
+  CH('ch_ward', 'Ward Amulet', '🧿', 'uncommon', 1100, 'An eye that watches for hexes. -40% chance to be afflicted by statuses.', { statusResistPct: 0.40 }),
+  CH('ch_berserk', 'Berserker Totem', '😡', 'rare', 1700, 'A totem that loves a cornered fighter. +40% Attack while below 30% HP.', { lowHpAtkPct: 0.40 }),
+  // — Utility & economy —
+  CH('ch_lucky', 'Lucky Coin', '🪙', 'uncommon', 900, 'An old coin worn smooth by thumbs. +25% Shards from battles the holder survives.', { shardBonusPct: 0.25 }),
+  CH('ch_scholar', "Scholar's Tag", '🎓', 'uncommon', 900, 'A University study-tag. +25% EXP from battles.', { expBonusPct: 0.25 }),
+  CH('ch_charisma', 'Charisma Charm', '💞', 'uncommon', 800, 'Wild Guardians warm to its wearer. +8 bond per gift.', { bondBonus: 8 }),
+  CH('ch_sage', 'Sage Bead', '📿', 'uncommon', 1000, 'A worry-bead that slows the breath. -20% SP cost on techniques.', { spDiscountPct: 0.20 }),
+  CH('ch_aegis', 'Aegis Barrier', '🔵', 'rare', 1500, 'Hums up a skin of force on the bell. Enter battle with a shield worth 15% of max HP.', { startShieldPct: 0.15 }),
+  // — Ultra: best-in-slot, never sold (breeding / elite bounty rewards only) —
+  CH('ch_worldsoul', 'Worldsoul Locket', '🌟', 'ultra', 0, 'A locket strung with a thread of the world itself. +10% all damage and heal 5% max HP each round.', { allDamagePct: 0.10, regenPct: 0.05 }),
+  CH('ch_eternal', 'Eternal Crest', '♾️', 'ultra', 0, 'A crest that refuses the ending. Survive a lethal blow, revive once at 50%, and take 10% less damage.', { endure: true, reviveOncePct: 0.5, damageTakenPct: 0.10 }),
+  CH('ch_tempest', 'Tempest Diadem', '🌀', 'ultra', 0, 'A crown of caged storm. +8% all damage, +8% crit, and 25% chance to strike first.', { allDamagePct: 0.08, critChance: 0.08, firstStrikeChance: 0.25 }),
+  CH('ch_sovereign', 'Sovereign Sigil', '👑', 'ultra', 0, 'The mark of an unbroken champion. +8% all damage, -20% from super-effective hits, -30% status chance against you.', { allDamagePct: 0.08, superResistPct: 0.20, statusResistPct: 0.30 }),
+].map(c => [c.id, c]));
+export const CHARM_IDS = Object.keys(CHARMS);
+/** Charms stocked by the Charm Atelier, cheapest-first within rarity. */
+export const CHARM_SHOP = CHARM_IDS.filter(id => CHARMS[id].price > 0);
+/** Charms that can drop from bounties / battles — the sold ones plus the ultras. */
+export const CHARM_REWARD_POOL = CHARM_IDS.slice();
 
 // ---------------- Crawler parts ----------------
 export type CrawlerSlot = 'hull' | 'engine' | 'cargo' | 'cannon' | 'scanner' | 'legs';
@@ -6426,6 +6662,15 @@ export const HOUSES: HouseDef[] = [
 ];
 
 // ---------------- Dungeons ----------------
+/** A field hazard that flavors how an expedition is *explored* (not just fought). */
+export type HazardKind = 'frostbite' | 'blizzard' | 'blessing' | 'scorch' | 'corrosion' | 'gale' | 'unstable';
+export interface DungeonHazard {
+  kind: HazardKind;
+  icon: string;
+  name: string;
+  desc: string;                 // shown on the overworld + as an entry toast
+}
+
 export interface DungeonDef {
   id: string; name: string; floors: number;
   levelRange: [number, number];
@@ -6433,10 +6678,14 @@ export interface DungeonDef {
   boss?: string; bossLevel?: number;
   theme: 'cavern' | 'vault' | 'storm';
   unlockFlag?: string;          // story flag required
+  unlockRank?: number;          // RANKS index required (e.g. 7 = Captain) — gates elite expeditions
   rewardShards: number;
   desc: string;                 // overworld flavor text
   hidden?: boolean;             // never shown on the overworld globe (entered from elsewhere)
   drop?: { item: string; chance: number; max?: number };  // wild battles can shed a story relic
+  prize?: string;               // headline rare item id, surfaced on the overworld atlas
+  hazard?: DungeonHazard;       // elemental field hazard active while exploring
+  elite?: boolean;              // Captain-tier expedition (distinct overworld beacon)
   coords: [number, number];     // [latitude, longitude] degrees on the overworld globe
   quest?: boolean;              // story-quest dungeon (red highlight on the overworld)
   region?: string;              // overworld region id (default 'aurel')
@@ -6460,53 +6709,157 @@ export const REGIONS: RegionDef[] = [
     lockedHint: 'The Chronicle will carry you there, in time.' },
 ];
 
+/** Shared elemental field hazards — referenced by the expeditions below. */
+const HZ: Record<HazardKind, DungeonHazard> = {
+  frostbite: { kind: 'frostbite', icon: '🥶', name: 'Frostbite', desc: 'The biting cold saps extra Crawler Energy with every step.' },
+  blizzard:  { kind: 'blizzard',  icon: '🌨️', name: 'Whiteout',  desc: 'Howling snow shrinks your scanner range and chills the hull.' },
+  blessing:  { kind: 'blessing',  icon: '🌟', name: 'Hallowed Ground', desc: 'Holy light mends your Guardians a little as you walk.' },
+  scorch:    { kind: 'scorch',    icon: '🔥', name: 'Scorching Heat',  desc: 'Radiant heat scorches the Crawler hull as you press deeper.' },
+  corrosion: { kind: 'corrosion', icon: '🧪', name: 'Corrosive Air',   desc: 'Caustic spores gnaw at both hull and energy alike.' },
+  gale:      { kind: 'gale',      icon: '🌀', name: 'Razor Winds',     desc: 'Sudden gusts buffet the Crawler, costing extra energy.' },
+  unstable:  { kind: 'unstable',  icon: '⚡', name: 'Unstable Ground', desc: 'Stray arcs and cave-ins jolt the Crawler without warning.' },
+};
+
 export const DUNGEONS: DungeonDef[] = [
   { id: 'trial', name: 'Trial Caverns', floors: 2, levelRange: [3, 5], theme: 'cavern',
-    pool: ['pebblit', 'cinderbat', 'gloomite', 'sparkmote', 'ashwisp', 'cryptling', 'pyropup', 'bubbledrag', 'seedsqrl', 'flamesal', 'wavepup', 'leaffawn'], boss: 'ironhusk', bossLevel: 7, rewardShards: 300,
+    pool: ['pebblit', 'cinderbat', 'gloomite', 'sparkmote', 'ashwisp', 'cryptling', 'pyropup', 'bubbledrag', 'seedsqrl', 'flamesal', 'wavepup', 'leaffawn', 'nf01paw', 'nv01paw', 'nt01paw'], boss: 'ironhusk', bossLevel: 7, rewardShards: 300,
     desc: 'The academy\'s proving grounds, carved beneath the old citadel.', coords: [14, -28] },
   { id: 'mossdeep', name: 'Mossdeep Burrows', floors: 3, levelRange: [2, 5], theme: 'cavern',
-    pool: ['pebblit', 'sproutle', 'mistling', 'zephlet', 'gloomite', 'fernfox', 'shroomple', 'plumelet', 'coralkit', 'joltuft', 'mistpaw', 'sporepix', 'nebulet', 'snapsprout', 'shocklamb', 'spacepup'], rewardShards: 250,
+    pool: ['pebblit', 'sproutle', 'mistling', 'zephlet', 'gloomite', 'fernfox', 'shroomple', 'plumelet', 'coralkit', 'joltuft', 'mistpaw', 'sporepix', 'nebulet', 'snapsprout', 'shocklamb', 'spacepup', 'nv02paw', 'nt02paw', 'nf05paw', 'ng01paw'], rewardShards: 250,
     desc: 'Soft green tunnels dug by generations of gentle Guardians. A fine first expedition.', coords: [10, 26] },
   { id: 'sunken', name: 'Sunken Vault', floors: 4, levelRange: [9, 14], theme: 'vault',
-    pool: ['mistling', 'gloomite', 'cinderbat', 'puddla', 'shadekit', 'sparkmote', 'frostfin', 'coralkit', 'mournmoth', 'driftling', 'reefrider', 'magmatot', 'coralbud', 'rootlet', 'joltmous', 'coalbug', 'jellymote', 'barkchick'], boss: 'gravemaw', bossLevel: 17, rewardShards: 900, unlockFlag: 'joined_house',
+    pool: ['mistling', 'gloomite', 'cinderbat', 'puddla', 'shadekit', 'sparkmote', 'frostfin', 'coralkit', 'mournmoth', 'driftling', 'reefrider', 'magmatot', 'coralbud', 'rootlet', 'joltmous', 'coalbug', 'jellymote', 'barkchick', 'nd01paw', 'nf02paw', 'nt03paw', 'nu01paw'], boss: 'gravemaw', bossLevel: 17, rewardShards: 900, unlockFlag: 'joined_house', hazard: HZ.unstable,
     desc: 'A drowned treasury of the old empire. Something below still remembers being worshipped.', coords: [-18, 52], quest: true },
   { id: 'stormspire', name: 'Stormspire Depths', floors: 5, levelRange: [15, 22], theme: 'storm',
-    pool: ['sparkmote', 'zephlet', 'voltyx', 'galewing', 'duskfang', 'thornbex', 'gearmite', 'smolderhog', 'ampyre', 'skydancer', 'duskweaver', 'bramblelynx', 'sparkeef', 'galewyrm', 'voidkit', 'sparksparrow', 'starowlet', 'gloomwing'], boss: 'voltigarch', bossLevel: 26, rewardShards: 2200, unlockFlag: 'vault_cleared',
+    pool: ['sparkmote', 'zephlet', 'voltyx', 'galewing', 'duskfang', 'thornbex', 'gearmite', 'smolderhog', 'ampyre', 'skydancer', 'duskweaver', 'bramblelynx', 'sparkeef', 'galewyrm', 'voidkit', 'sparksparrow', 'starowlet', 'gloomwing', 'ne01claw', 'ng01claw', 'voltram', 'ne02claw'], boss: 'voltigarch', bossLevel: 26, rewardShards: 2200, unlockFlag: 'vault_cleared', hazard: HZ.unstable,
     desc: 'A war-spire that never stopped humming. Its last order was never rescinded.', coords: [38, 96], quest: true },
   // story chapter III — Veyl's amber lies in the wild sparks of the mire
   { id: 'thunderfen', name: 'Thunderfen Mire', floors: 3, levelRange: [8, 12], theme: 'storm',
-    pool: ['joltuft', 'sparkmote', 'gearmite', 'ampyre', 'mistling', 'shroomple', 'nimbusyl', 'puddla', 'zephlet', 'stormchick', 'flarefly', 'voltcrab'],
-    boss: 'dynamaul', bossLevel: 15, rewardShards: 700, unlockFlag: 'historian_intel',
+    pool: ['joltuft', 'sparkmote', 'gearmite', 'ampyre', 'mistling', 'shroomple', 'nimbusyl', 'puddla', 'zephlet', 'stormchick', 'flarefly', 'voltcrab', 'ne02paw', 'ng02paw', 'staticclaw'],
+    boss: 'dynamaul', bossLevel: 15, rewardShards: 700, unlockFlag: 'historian_intel', hazard: HZ.unstable,
     drop: { item: 'storm_amber', chance: 1.0, max: 1 },
     desc: 'A drowned bog that appeared overnight where lightning keeps striking the same dead trees. The wild Guardians here carry sparks fossilized in amber.', coords: [32, -18], quest: true },
   // story chapter V — Greggy's test, entered from Agdao Island itself
   { id: 'cradle', name: 'Cradle Hollow', floors: 3, levelRange: [18, 24], theme: 'cavern', hidden: true,
-    pool: ['coralkit', 'reefrider', 'fernfox', 'shroomple', 'plumelet', 'driftling', 'mournmoth', 'pearlance', 'bramblelynx', 'frostfin', 'cosmolet', 'vampbat', 'gravemini', 'cindawing', 'seaturt', 'nebwyrm', 'duskkitty', 'crypttot'],
-    boss: 'grovetyrant', bossLevel: 27, rewardShards: 1800,
+    pool: ['coralkit', 'reefrider', 'fernfox', 'shroomple', 'plumelet', 'driftling', 'mournmoth', 'pearlance', 'bramblelynx', 'frostfin', 'cosmolet', 'vampbat', 'gravemini', 'cindawing', 'seaturt', 'nebwyrm', 'duskkitty', 'crypttot', 'nd03claw', 'nf03claw', 'nv03claw'],
+    boss: 'grovetyrant', bossLevel: 27, rewardShards: 1800, hazard: HZ.blessing,
     desc: 'The sea-cave where Aurelia made the First Bond, seven hundred years ago. Something corrupted has nested in the world\'s gentlest place.', coords: [-6, -44], quest: true },
-  // Act V chapter XXIII — the Foretales relay-bastion above New Salmonan,
+  // Act V chapter XV — the Foretales relay-bastion above New Salmonan,
   // entered from the valley's ridge stair (never shown on the globe)
   { id: 'mirrorhouse', name: 'The Mirrorhouse', floors: 5, levelRange: [46, 52], theme: 'storm', hidden: true,
-    pool: ['gloomite', 'mournmoth', 'duskweaver', 'nightloom', 'cryptling', 'sarcophang', 'gearmite', 'ampyre', 'teslarch', 'voltyx', 'nocthowl'],
-    boss: 'phantasmoth', bossLevel: 54, rewardShards: 6500,
+    pool: ['gloomite', 'mournmoth', 'duskweaver', 'nightloom', 'cryptling', 'sarcophang', 'gearmite', 'ampyre', 'teslarch', 'voltyx', 'nocthowl', 'nu05slink', 'ne05slink', 'nl06slink'],
+    boss: 'phantasmoth', bossLevel: 54, rewardShards: 6500, hazard: HZ.corrosion,
     desc: 'The Foretales relay-bastion where the eastern valleys\' news is made — before it happens. Dark glass, dead-light conduits, and a print floor that has never once stopped.', coords: [12, 70], quest: true },
   { id: 'drowned_terminal', name: 'Drowned Terminal', floors: 4, levelRange: [28, 34], theme: 'vault', hidden: true,
-    pool: ['frostfin', 'coralkit', 'reefrider', 'pearlance', 'jellymote', 'abyssarch', 'seaturt', 'frostfin', 'wavepup'],
-    boss: 'vormaela', bossLevel: 36, rewardShards: 4500,
+    pool: ['frostfin', 'coralkit', 'reefrider', 'pearlance', 'jellymote', 'abyssarch', 'seaturt', 'nd04slink', 'nf04slink', 'nd02claw', 'aquafrost', 'voltmedusa'],
+    boss: 'vormaela', bossLevel: 36, rewardShards: 4500, hazard: HZ.frostbite,
     desc: 'Hyujon\'s flooded mag-rail underworks. Rusted rails, drowned machinery, and the Communion Tideling-Mother Vormaela\'s Echo lurking in the deep.', coords: [52, 12], quest: true },
   // ENDGAME — Aether trials, opened once a Tamer has walked Terra City. The
   // bosses here are uncatchable Aether-tier world-enders (captureBase 0); the
   // wild pool holds high Split/Special forms worth hunting on the way down.
   { id: 'emberthrone', name: 'The Emberthrone', floors: 5, levelRange: [70, 84], theme: 'cavern',
-    pool: ['magmaroth', 'vulkragon', 'pyrelisk', 'coalossus', 'lavaserpent', 'heliarch'],
-    boss: 'solmageddon', bossLevel: 92, rewardShards: 14000, unlockFlag: 'terra_visited',
+    pool: ['magmaroth', 'vulkragon', 'pyrelisk', 'coalossus', 'lavaserpent', 'heliarch', 'magmadrak', 'aurorafire', 'nz01lord', 'nz02lord', 'nz03lord'],
+    boss: 'solmageddon', bossLevel: 92, rewardShards: 14000, unlockFlag: 'terra_visited', hazard: HZ.scorch, prize: 'transcend_sigil',
     drop: { item: 'transcend_sigil', chance: 1.0, max: 1 },
     desc: 'A throne of magma in the grave of a dead star. Something vast is waking in the heat — and it is not glad of company.', coords: [-46, -10], quest: true },
   { id: 'lastdark', name: 'The Last Dark', floors: 5, levelRange: [74, 88], theme: 'vault',
-    pool: ['nyxmaw', 'umbraknell', 'voidgoyle', 'shadowstalker', 'sarcophang', 'umbrarch'],
-    boss: 'nihilumbra', bossLevel: 95, rewardShards: 16000, unlockFlag: 'terra_visited',
+    pool: ['nyxmaw', 'umbraknell', 'voidgoyle', 'shadowstalker', 'sarcophang', 'umbrarch', 'chthonix', 'voidreaper', 'nu01lord', 'nu02lord', 'nu03lord'],
+    boss: 'nihilumbra', bossLevel: 95, rewardShards: 16000, unlockFlag: 'terra_visited', hazard: HZ.corrosion, prize: 'aether_shard',
     drop: { item: 'aether_shard', chance: 1.0, max: 1 },
     desc: 'Beyond the deepest vault, a door opens onto nothing at all. The cold here remembers the first night, before there were stars to lose.', coords: [-60, 150], quest: true },
+
+  // ============================================================
+  // GUILD EXPEDITIONS — themed elemental dungeons unlocked by Guild
+  // Quests (see guildcard.ts). Each carries a field Hazard and a rare
+  // relic Prize that is found nowhere else in Aurel.
+  // ============================================================
+  { id: 'frostpeak', name: 'Frostpeak Hollow', floors: 3, levelRange: [16, 22], theme: 'vault',
+    pool: ['nf01paw', 'nf02paw', 'nf05paw', 'nf08paw', 'nf10paw', 'nf01claw', 'nf04claw', 'frostfin', 'frostlynx', 'glacimaw', 'mistpaw', 'nf13paw'],
+    boss: 'nf04claw', bossLevel: 25, rewardShards: 1200, unlockFlag: 'guild_frostpeak',
+    hazard: HZ.frostbite, prize: 'glacial_core', drop: { item: 'glacial_core', chance: 0.22, max: 3 },
+    desc: 'A cliffside hollow roofed in blue ice, where the snow never finishes falling. The guild charts it to keep the high passes open.', coords: [62, -70], quest: true },
+  { id: 'zephyr', name: 'Zephyr Spires', floors: 3, levelRange: [18, 24], theme: 'storm',
+    pool: ['wispry', 'zephlet', 'galewing', 'skydancer', 'nimbusyl', 'starowlet', 'ng01claw', 'ng03claw', 'ng05paw', 'driftling', 'astralpaw', 'cosmolet'],
+    boss: 'cyclonix', bossLevel: 27, rewardShards: 1300, unlockFlag: 'guild_zephyr',
+    hazard: HZ.gale, prize: 'zephyr_plume', drop: { item: 'zephyr_plume', chance: 0.22, max: 3 },
+    desc: 'Wind-scoured needle-rocks where the air itself runs in rivers. Only the surest stride keeps a Crawler on the path.', coords: [58, 30], quest: true },
+  { id: 'verdantmaze', name: 'Verdant Labyrinth', floors: 3, levelRange: [20, 26], theme: 'cavern',
+    pool: ['sproutle', 'fernfox', 'shroomple', 'thornbex', 'bramblelynx', 'sylvadeer', 'snaporchid', 'nv01claw', 'nv04claw', 'nv06paw', 'rootlet', 'snapsprout'],
+    boss: 'sylvigor', bossLevel: 29, rewardShards: 1400, unlockFlag: 'guild_verdant',
+    hazard: HZ.corrosion, prize: 'eden_seed', drop: { item: 'eden_seed', chance: 0.2, max: 3 },
+    desc: 'A living hedge-maze grown over a sunken grove. The walls breathe, the air is thick with spores, and the paths are never quite the same twice.', coords: [22, -60], quest: true },
+  { id: 'tidecatacomb', name: 'Tidal Catacombs', floors: 4, levelRange: [22, 28], theme: 'vault',
+    pool: ['puddla', 'mistling', 'coralkit', 'frostfin', 'tidefin', 'reefrider', 'pearlwyrm', 'tidehound', 'aquajelly', 'nd01claw', 'nd05claw', 'jellymote'],
+    boss: 'maelstrike', bossLevel: 31, rewardShards: 1600, unlockFlag: 'guild_tidecatacomb',
+    hazard: HZ.unstable, prize: 'abyssal_pearl', drop: { item: 'abyssal_pearl', chance: 0.2, max: 3 },
+    desc: 'Flooded ossuaries beneath the old harbor where the tide comes in regardless of the hour. The water rises while you work.', coords: [-40, 8], quest: true },
+  { id: 'emberforge', name: 'Emberforge Caldera', floors: 4, levelRange: [30, 38], theme: 'cavern',
+    pool: ['smolderhog', 'magmatot', 'flarefly', 'pyrofang', 'magmaboar', 'pyrohound', 'emberskink', 'cinderscarab', 'nz01claw', 'nz04claw', 'nz02slink', 'lavachain'],
+    boss: 'blazemaw', bossLevel: 42, rewardShards: 2200, unlockFlag: 'guild_emberforge',
+    hazard: HZ.scorch, prize: 'ember_relic', drop: { item: 'ember_relic', chance: 0.2, max: 3 },
+    desc: 'A working forge built into a live caldera, abandoned when the mountain woke. The heat alone can buckle a hull.', coords: [-38, 40], quest: true },
+  { id: 'tempest', name: 'Tempest Conduit', floors: 4, levelRange: [32, 40], theme: 'storm',
+    pool: ['voltyx', 'ampyre', 'galvanix', 'teslafalcon', 'staticclaw', 'voltram', 'ne01slink', 'ne03claw', 'ne06claw', 'stormhorn', 'zapwing', 'teslarch'],
+    boss: 'stormclaw', bossLevel: 44, rewardShards: 2400, unlockFlag: 'guild_tempest',
+    hazard: HZ.unstable, prize: 'tempest_coil', drop: { item: 'tempest_coil', chance: 0.2, max: 3 },
+    desc: 'A lightning-collection spire still wired live, generations after its keepers left. Loose current arcs between every surface.', coords: [50, -150], quest: true },
+  { id: 'gaiadepths', name: "Gaia's Roothold", floors: 4, levelRange: [34, 42], theme: 'cavern',
+    pool: ['nt01claw', 'nt03claw', 'nt05claw', 'nt08claw', 'nt02slink', 'nt09slink', 'pebblit', 'nt11paw', 'nt13paw', 'nt06claw', 'nt10claw', 'nt12claw'],
+    boss: 'nt03slink', bossLevel: 46, rewardShards: 2600, unlockFlag: 'guild_gaiadepths',
+    hazard: HZ.unstable, prize: 'worldstone_shard', drop: { item: 'worldstone_shard', chance: 0.2, max: 3 },
+    desc: 'A cathedral of living bedrock where the planet keeps its oldest roots. The stone shifts, and stones the size of carts come down without warning.', coords: [-30, -90], quest: true },
+  { id: 'umbralabyss', name: 'Umbral Abyss', floors: 5, levelRange: [40, 50], theme: 'vault',
+    pool: ['gloomite', 'duskfang', 'duskweaver', 'sarcophang', 'nocthowl', 'nightloom', 'shadowwing', 'umbraknell', 'nu03slink', 'nu07slink', 'nu04claw', 'nu09paw'],
+    boss: 'umbrelisk', bossLevel: 54, rewardShards: 3400, unlockFlag: 'guild_umbral',
+    hazard: HZ.corrosion, prize: 'void_idol', drop: { item: 'void_idol', chance: 0.18, max: 3 },
+    desc: 'A throat of pure dark that swallowed a Veiled Order watch-post whole. The walls drink your lamplight; the cold drinks the rest.', coords: [-50, 100], quest: true },
+  { id: 'sanctum', name: 'Hallowed Sanctum', floors: 5, levelRange: [44, 54], theme: 'vault',
+    pool: ['nl01claw', 'nl03claw', 'nl06claw', 'nl09claw', 'nl02slink', 'nl08slink', 'nl11slink', 'nl04paw', 'nl12paw', 'nl05claw', 'nl07slink', 'nl10claw'],
+    boss: 'nl11slink', bossLevel: 58, rewardShards: 3800, unlockFlag: 'guild_sanctum',
+    hazard: HZ.blessing, prize: 'radiant_halo', drop: { item: 'radiant_halo', chance: 0.18, max: 3 },
+    desc: 'A buried temple of ordered light that has kept its lamps lit with no hand to tend them. The very air mends what the dark below broke.', coords: [40, 150], quest: true },
+  { id: 'whiteout', name: 'Whiteout Tundra', floors: 4, levelRange: [38, 48], theme: 'vault',
+    pool: ['nf03slink', 'nf06slink', 'nf09slink', 'nf04claw', 'nf11claw', 'cyclonix', 'nimbusyl', 'glacimaw', 'frostlynx', 'ng04claw', 'nf12slink', 'aquafrost'],
+    boss: 'nf03slink', bossLevel: 52, rewardShards: 3200, unlockFlag: 'guild_whiteout',
+    hazard: HZ.blizzard, prize: 'glacial_core', drop: { item: 'glacial_core', chance: 0.28, max: 4 },
+    desc: 'An endless snowfield with no horizon, where the storm erases your tracks behind you. Beyond Frostpeak, the cold stops being weather and starts being a thing that wants you.', coords: [70, -120], quest: true },
+
+  // ============================================================
+  // CAPTAIN ELITE EXPEDITIONS — sealed until you carry a Captain's
+  // banner (rank index 7). The wild here never falls below Lv 100, the
+  // species are the rarest forms in Aurel, and the prizes are feast-grade.
+  // ============================================================
+  { id: 'glacialthrone', name: 'The Glacial Throne', floors: 5, levelRange: [100, 112], theme: 'vault',
+    pool: ['nf01lord', 'nf03lord', 'nf04lord', 'nf06lord', 'nf09lord', 'nf11lord', 'na01slink', 'na02slink', 'na01strike', 'nf12lord', 'nf14lord'],
+    boss: 'maremortis', bossLevel: 124, rewardShards: 22000, unlockRank: 7, elite: true,
+    hazard: HZ.blizzard, prize: 'frostbound_crown', drop: { item: 'frostbound_crown', chance: 0.5, max: 5 },
+    desc: 'A throne of black glacier at the absolute top of the world, where something old and patient has frozen the sky solid around itself. Only a Captain may try the climb.', coords: [80, -40], quest: true },
+  { id: 'empyreanvault', name: 'The Empyrean Vault', floors: 5, levelRange: [102, 114], theme: 'vault',
+    pool: ['nl01lord', 'nl05lord', 'nl08lord', 'nl09lord', 'nl11lord', 'nl13lord', 'na03slink', 'na04slink', 'na02strike', 'nl03lord', 'nl14lord'],
+    boss: 'aurelflare', bossLevel: 126, rewardShards: 24000, unlockRank: 7, elite: true,
+    hazard: HZ.blessing, prize: 'empyrean_sigil', drop: { item: 'empyrean_sigil', chance: 0.5, max: 5 },
+    desc: 'A vault of pure, ordered light above the cloud-deck, where the radiance is so total it has weight. A Captain\'s writ is the only shadow it will admit.', coords: [-72, -120], quest: true },
+  { id: 'obsidianmaw', name: 'The Obsidian Maw', floors: 5, levelRange: [104, 116], theme: 'vault',
+    pool: ['nu01lord', 'nu03lord', 'nu05lord', 'nu08lord', 'nu11lord', 'chthonix', 'nyxmaw', 'na01strike', 'na03strike', 'na04lord', 'nu13lord'],
+    boss: 'voidtempest', bossLevel: 128, rewardShards: 26000, unlockRank: 7, elite: true,
+    hazard: HZ.corrosion, prize: 'obsidian_heart', drop: { item: 'obsidian_heart', chance: 0.5, max: 5 },
+    desc: 'A wound in the world that goes down past where light has names, lined with breathing obsidian. Whatever beats at the bottom has been waiting for someone worth the climb.', coords: [-80, 60], quest: true },
+
+  // ============================================================
+  // STORY CHAPTER 13 — ELEMENTAL DUNGEONS FOR AZRAEL'S CLUES
+  // ============================================================
+  { id: 'pyrewood_depths', name: 'Pyrewood Depths', floors: 3, levelRange: [32, 38], theme: 'cavern',
+    pool: ['cindcub', 'pyrofang', 'blazemaw', 'cinderbat', 'smolderhog', 'magmaboar', 'ashwisp', 'flarekin', 'pyrelisk', 'vulkragon'],
+    boss: 'infernyx', bossLevel: 42, rewardShards: 2500, unlockFlag: 'story_ch13_unlocked',
+    hazard: HZ.scorch, desc: 'A searing volcanic caldera containing clues left by Azrael during her sudden departure.', coords: [-50, -40], quest: true },
+  { id: 'glacial_abyss', name: 'Glacial Abyss', floors: 3, levelRange: [32, 38], theme: 'vault',
+    pool: ['frostfin', 'glacimaw', 'mistling', 'pearlance', 'reefrider', 'coralkit', 'aquajelly', 'mistpaw'],
+    boss: 'tempestrix', bossLevel: 42, rewardShards: 2500, unlockFlag: 'story_ch13_unlocked',
+    hazard: HZ.frostbite, desc: 'A deep glacial rift where ice crystals grow on the ancient walls, hiding secrets of the Nightwing.', coords: [35, -50], quest: true },
+  { id: 'thunderclap_ruins', name: 'Thunderclap Ruins', floors: 3, levelRange: [32, 38], theme: 'storm',
+    pool: ['zaplet', 'voltyx', 'stormclaw', 'sparkmote', 'zephlet', 'gearmite', 'ampyre', 'teslarch'],
+    boss: 'fulgurex', bossLevel: 42, rewardShards: 2500, unlockFlag: 'story_ch13_unlocked',
+    hazard: HZ.unstable, desc: 'Wind-scoured ruins constantly struck by lightning, where Azrael\'s clues are hidden in the electrical discharge.', coords: [15, -75], quest: true },
 ];
 
 export const SHOP_STOCK = ['tonic', 'tonic_plus', 'soda', 'soda_plus', 'soda_max', 'berry', 'honey_roll', 'star_treat', 'aether_confit', 'revive_leaf', 'revive_bloom', 'cell', 'cell_plus', 'cell_max', 'plating', 'plating_plus', 'elixir'];

@@ -8,9 +8,9 @@
 // hill — and, up the north-east ridge, the black glass of the
 // Foretales Mirrorhouse, humming day and night.
 //
-// Act V plays out here: Chapter XXII's three proofs (Esta's
+// Act V plays out here: Chapter XIV's three proofs (Esta's
 // relay logs, Dalisay's festival crystal, the stringer Quill's
-// assignment ledger) and Chapter XXIII's ridge stair into the
+// assignment ledger) and Chapter XV's ridge stair into the
 // Mirrorhouse. Paper lanterns from the gratitude festival are
 // still strung across the plaza.
 // ============================================================
@@ -1102,7 +1102,7 @@ export class NewSalmonan {
       return;
     }
 
-    // ---- Chapter XXII turn-in: three proofs → the Mirrorhouse names itself ----
+    // ---- Chapter XIV turn-in: three proofs → the Mirrorhouse names itself ----
     if (questState(p, 'story_veilfall') === 'ready') {
       await runCinematicScene('porch', async cine => {
         cine.shot('wide');
@@ -1113,7 +1113,7 @@ export class NewSalmonan {
         await say('Ivan Lawrence', `…You know what's funny? Nine years I thought the machine that broke me was too big to see. Turns out I could see it from my porch.`);
 
         const summary = completeQuest(p, 'story_veilfall');
-        toast('✅ Chapter XXII complete: The Veil, Falling!', 'gold');
+        toast('✅ Chapter XIV complete: The Veil, Falling!', 'gold');
         if (summary) toast(`Received ${summary}`, 'gold');
         syncStoryQuests(p).forEach(n => toast(n, 'gold'));
 
@@ -1130,7 +1130,7 @@ export class NewSalmonan {
       return;
     }
 
-    // ---- Chapter XXIII turn-in: the Continuity Reel ----
+    // ---- Chapter XV turn-in: the Continuity Reel ----
     if (questState(p, 'story_mirrorhouse') === 'ready') {
       await runCinematicScene('porch', async cine => {
         cine.shot('wide');
@@ -1156,7 +1156,7 @@ export class NewSalmonan {
         await say('Ivan Lawrence', `You heard the thunderhead. Tonight the valley eats by lantern light and tomorrow the broadsheets won't know what happened to their tomorrow — because for once, NOBODY wrote it yet. First unwritten morning in sixteen years, friend. You did that.`);
 
         const summary = completeQuest(p, 'story_mirrorhouse');
-        toast('✅ Chapter XXIII complete: The Mirrorhouse!', 'gold');
+        toast('✅ Chapter XV complete: The Mirrorhouse!', 'gold');
         if (summary) toast(`Received ${summary}`, 'gold');
         toast('📖 The Chronicle — the veil is falling. Foretales knows your name now…', 'gold');
         syncStoryQuests(p).forEach(n => toast(n, 'gold'));

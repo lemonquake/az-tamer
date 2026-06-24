@@ -7,6 +7,7 @@
 // ============================================================
 import { worldClock } from './daynight';
 import { Player } from './state';
+import { ensureBounties } from './bounties';
 
 export const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as const;
 export type Weekday = typeof WEEKDAYS[number];
@@ -62,7 +63,12 @@ export function initCalendar(): void {
     const p = Player.activeInstance;
     if (!p) return;
     p.calendarDay = (p.calendarDay ?? 0) + 1;
+    // A day's incubation warms every egg; refresh the Bounty Board rotation.
+    const hatched = p.tickEggs(30);
+    ensureBounties(p);
     p.save();
+    const toast = (window as any).__azToast as ((m: string, c?: string, d?: number) => void) | undefined;
+    if (toast) for (const e of hatched) toast(`🥚 Your ${e.label} is ready to hatch at the Hatchery!`, 'gold', 4000);
     (window as any).__refreshHUD?.();
     (window as any).__onCalendarChange?.();
   });

@@ -5,7 +5,7 @@
 // ============================================================
 import * as THREE from 'three';
 import { HOUSES, DUNGEONS, ITEMS, SHOP_STOCK, GEM_STOCK, CRAWLER_PARTS, SPECIES, ELEMENTS, ELEMENT_ICONS, elementsOf, STAGE_KIND_LABEL, type DungeonDef, type HouseDef, type Element, type SpeciesDef, type EvoKind } from './data';
-import { Player, Guardian, type GuardianCustomization, type ParentSnapshot } from './state';
+import { Player, Guardian, type GuardianCustomization, type ParentSnapshot, type EggData } from './state';
 import {
   makeTamer, makeVoxelHuman, updateVoxelHuman, updateTamerFX, setVoxelSeated, makeGuardian, disposeRig, makeCrawler, disposeCrawler,
   makeTree, makeStreetLamp, makeCustomCreature, mulberry, tween,
@@ -20,6 +20,8 @@ import {
 import { LEGENDS, WORLD_CIRCUIT, LEGEND_GUARDIANS, DAUGHTERS, AIRAH, ALJAY_HIDEOUTS } from './lore';
 import { openColiseumRegistration, showCircuitStandings, talkToStatkeeper } from './tournaments';
 import { CRAWLER_SLOTS, CRAWLER_SLOT_INFO, PAINT_JOBS, ELEMENT_CSS, RARITY_INFO, ULTRA_GRADIENT, type CrawlerSlot, type CrawlerRarity } from './data';
+import { CHARMS, CHARM_SHOP, NATURES, natureBlurb, geneRating, geneGradeLabel, baseFormOf, TECHS, STAT_NAMES, rollGenes, rollNatureId, type StatKey } from './data';
+import { ensureBounties, claimBounty, claimableCount } from './bounties';
 import {
   say, conversation, choose, askName, toast, updateHUD, showInteractHint, showHotkeys,
   isDialogueOpen, isMenuOpen, openPauseMenu, openPanel, openScreen, closeMenu, type PanelKind,
@@ -2490,8 +2492,12 @@ export class Town {
     if (!p.flags['daughters_known']) return;
     const s = this.streetScene;
 
+    const azState = questState(p, 'story_azrael_clues');
+    const showAzrael = azState === 'locked' || azState === 'available';
+
     const spots: [number, number][] = [[2.8, 3.6], [4.2, 2.2]];
     const sisters = DAUGHTERS.map((d, i) => {
+      if (d.name === 'Azrael' && !showAzrael) return null;
       const [x, z] = spots[i];
       const g = makeVoxelHuman({
         skin: 0xe0a87a, hair: d.look.hair, top: d.look.top, bottom: d.look.bottom,
@@ -2505,9 +2511,43 @@ export class Town {
       this.streetColliders.push({ pos: new THREE.Vector3(x, 0, z), r: 0.55 });
       this.label3d(s, `${d.name} ${d.title}`, d.color, new THREE.Vector3(x, 2.7, z), 2.8);
       return g;
-    });
+    }).filter(g => g !== null) as THREE.Group[];
 
     const meet = async () => {
+      if (azState === 'active') {
+        if (!p.flags['story_ch13_unlocked']) {
+          await runCinematicScene('fountain', async cine => {
+            cine.shot('hero');
+            await say('Azrin', `Oh, tamer! Thank goodness you're here. Azrael... she's gone. She left in the middle of the night without a word.`);
+            await say('Azrin', `She left a note saying she found a lead on our father's old path, and something about three hidden elemental sources opening up.`);
+            await say('Azrin', `I'm incredibly worried. I tried to follow her, but the path is blocked by three sudden elemental anomalies. We need to clear those three dungeons to find the clues she left behind!`);
+            await say('Azrin', `They've appeared on the overworld map: the Pyrewood Depths, the Glacial Abyss, and the Thunderclap Ruins. Please, conquer them! Once we have the clues, we must tell my mother, Mayor Airah.`);
+          });
+          p.flags['story_ch13_unlocked'] = true;
+          p.save();
+          updateHUD(p, 'Haven City');
+          return;
+        } else {
+          const clearedCount = ((p.dungeonClears['pyrewood_depths'] ?? 0) >= 1 ? 1 : 0) +
+                               ((p.dungeonClears['glacial_abyss'] ?? 0) >= 1 ? 1 : 0) +
+                               ((p.dungeonClears['thunderclap_ruins'] ?? 0) >= 1 ? 1 : 0);
+          if (clearedCount < 3) {
+            await say('Azrin', `Please, we have to clear those three dungeons! Pyrewood Depths, Glacial Abyss, and Thunderclap Ruins. We need to find where Azrael went.`);
+          } else {
+            await say('Azrin', `You've cleared all three dungeons and found the clues! Azrael's coordinates point somewhere deeper... and she left a message for mother. Go to the Aurelian Hall and report to Mayor Airah!`);
+          }
+          return;
+        }
+      }
+      if (azState === 'ready') {
+        await say('Azrin', `You've cleared all three dungeons and found the clues! Go to the Aurelian Hall and report to my mother, Mayor Airah!`);
+        return;
+      }
+      if (azState === 'done') {
+        await say('Azrin', `Azrael is still out there, hunting the truth. I'll keep watch here. Keep training, tamer!`);
+        return;
+      }
+
       if (p.quests['story_daughters'] === 'active' && !p.flags['met_daughters']) {
         await runCinematicScene('fountain', async cine => {
           cine.shot('wide');
@@ -2558,10 +2598,12 @@ export class Town {
       await say('Azrin', 'Go on, graduate — legends don\'t keep themselves waiting. Well. Dad does. Bad example.');
     };
 
-    for (const [i, g] of sisters.entries()) {
+    for (const [i, d] of DAUGHTERS.entries()) {
+      if (d.name === 'Azrael' && !showAzrael) continue;
+      const [x, z] = spots[i];
       this.streetInteractables.push({
-        pos: g.position.clone().setY(0), radius: 2.0,
-        label: `Press <b>E</b> — talk to ${DAUGHTERS[i].name}`,
+        pos: new THREE.Vector3(x, 0, z), radius: 2.0,
+        label: `Press <b>E</b> — talk to ${d.name}`,
         handler: meet,
       });
     }
@@ -3239,6 +3281,11 @@ export class Town {
         label: 'Press <b>E</b> — browse Pina\'s wares',
         handler: () => this.openShop(),
       });
+      this.intInteractables.push({
+        pos: new THREE.Vector3(6, 0, 1.5), radius: 1.7,
+        label: 'Press <b>E</b> — the Charm Atelier',
+        handler: () => this.openCharmShop(),
+      });
       this.intMarkers = [
         { x: 0, z: -3.4, label: 'Pina', color: '#d95a8a', kind: 'npc' },
         { x: 0, z: -2.2, label: 'Counter', color: '#f2c14e', kind: 'poi' },
@@ -3658,6 +3705,8 @@ export class Town {
           const options = [
             '🧬 Guardian Fusion',
             '🧬 Extra Evolution',
+            '🥚 Hatchery (Breeding)',
+            '🎯 Training Gym',
             '📖 Fusion Book',
             '💬 Talk',
             '❌ Cancel'
@@ -3668,8 +3717,12 @@ export class Town {
           } else if (pick === 1) {
             this.openExtraEvolutionUI();
           } else if (pick === 2) {
-            this.openFusionBookUI();
+            await this.openHatchery();
           } else if (pick === 3) {
+            await this.openTrainingGym();
+          } else if (pick === 4) {
+            this.openFusionBookUI();
+          } else if (pick === 5) {
             await this.talkToAlex();
           }
         }
@@ -5460,6 +5513,32 @@ export class Town {
       handler: async () => {
         airah.rotation.y = Math.atan2(this.tamer.position.x - airah.position.x, this.tamer.position.z - airah.position.z);
         
+        // --- STORY QUEST: story_azrael_clues (Chapter 13) turn-in ---
+        const azCluesState = questState(p, 'story_azrael_clues');
+        if (azCluesState === 'ready') {
+          await conversation([
+            ['Mayor Airah', `Tamers! You're back. Azrin sent word that you were hunting down Azrael's trail. Did you find her?`],
+            ['Player', `We cleared the three elemental anomalies—Pyrewood Depths, Glacial Abyss, and Thunderclap Ruins. In each, we found old notes and coordinates that Azrael left.`],
+            ['Mayor Airah', `Ah... she left a trail. Always three moves ahead, that girl. Let me look at the map...`],
+            ['Mayor Airah', `Yes, these coordinates point towards New Salmonan. The corruption is thickening there. Azrin is already heading that way.`],
+            ['Mayor Airah', `You must follow them to New Salmonan. Take care of my daughters, tamer. Especially Azrael... she carries the weight of Ghandra itself.`],
+          ]);
+          const summary = completeQuest(p, 'story_azrael_clues');
+          toast(`Quest complete: Azrael's Clues`, 'gold');
+          if (summary) toast(`Received ${summary}`, 'gold');
+          p.save();
+          syncStoryQuests(p).forEach(n => toast(n, 'gold'));
+          updateHUD(p, 'Aurelian Hall');
+          return;
+        }
+        if (azCluesState === 'active') {
+          await conversation([
+            ['Mayor Airah', `Azrin tells me Azrael left in the night... and three elemental spires have erupted.`],
+            ['Mayor Airah', `Please, help my daughters. Find the clues in the Pyrewood Depths, Glacial Abyss, and Thunderclap Ruins.`],
+          ]);
+          return;
+        }
+
         // --- STORY QUEST: story_getup / story_christine flow ---
         const getupState = questState(p, 'story_getup');
         const christineState = questState(p, 'story_christine');
@@ -6482,7 +6561,11 @@ export class Town {
     const q = QUESTS[questId];
     const st = questState(p, questId);
     if (st === 'done') { await say(giver, lines.done); return; }
-    if (st === 'available' || st === 'locked') {
+    if (st === 'locked') {
+      await say(giver, "Check back later, tamer. You might need to prove yourself elsewhere first.");
+      return;
+    }
+    if (st === 'available') {
       await conversation(lines.offer);
       const pick = await choose(giver, `${q.objective} — will you help?`, ['Accept the quest', 'Maybe later']);
       if (pick === 0) {
@@ -6896,31 +6979,268 @@ export class Town {
     this.interiorScene.add(fresh);
   }
 
-  // ================= bounty board =================
-  private async openBounties(): Promise<void> {
+  // ================= charm atelier =================
+  private async openCharmShop(): Promise<void> {
+    await say('Charm-wright Orla', 'Mind the dust — every charm here is wound by hand. One rides on each Guardian; equip them from a Guardian\'s card. The ultra-grade work? That you earn, not buy.');
     this.busy = true;
     await new Promise<void>(resolve => {
       const render = () => {
         const p = this.player;
-        const rows = BOUNTIES.map(b => {
-          const claimed = !!p.flags[`claimed_${b.id}`];
-          const done = b.check(p);
-          const rw = b.reward.shards ? `◆${b.reward.shards}` : ITEMS[b.reward.item!].name;
-          const btn = claimed ? '<span class="tag" style="background:var(--ui-dim);color:#0c1022">CLAIMED</span>'
-            : done ? `<button class="ui-btn primary" data-claim="${b.id}">Claim ${rw}</button>`
-            : `<span class="sub">Reward: ${rw}</span>`;
-          return `<div class="list-row"><div style="flex:1"><b>${done || claimed ? '✅' : '⬜'} ${b.desc}</b></div>${btn}</div>`;
+        const rows = CHARM_SHOP.map(id => {
+          const c = CHARMS[id];
+          const info = RARITY_INFO[c.rarity];
+          const owned = p.charmCount(id);
+          return `<div class="list-row"><div style="flex:1"><b style="color:${info.color}">${c.icon} ${c.name}</b> <span class="goldcol">◆${c.price}</span> <span class="tag" style="background:${info.color};color:#0c1022;font-size:10px">${info.label}</span>
+            <div class="sub">${c.desc}${owned ? ` <b>(owned ×${owned})</b>` : ''}</div></div>
+            <button class="ui-btn" data-buy="${id}" ${p.shards < c.price ? 'disabled' : ''}>Buy</button></div>`;
         }).join('');
         const el = openScreen(`
-          <h3>📜 Haven City Bounty Board</h3>
-          <div class="sub" style="margin-bottom:8px">The city rewards brave tamers. Complete deeds, claim the spoils.</div>
-          ${rows}
+          <h3>🎴 The Charm Atelier — <span class="goldcol">◆${p.shards} Shards</span></h3>
+          <div class="sub" style="margin-bottom:8px">Held charms — one per Guardian, equipped from its card. Ultra charms aren't sold here; they drop from elite bounties and breeding.</div>
+          <div style="max-height:60vh;overflow-y:auto;padding-right:6px">${rows}</div>
+          <div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="ui-btn primary" id="charm-close">Leave</button></div>`);
+        el.querySelectorAll<HTMLElement>('[data-buy]').forEach(b => b.onclick = () => {
+          const c = CHARMS[b.dataset.buy!];
+          if (p.shards >= c.price) { p.shards -= c.price; p.addCharm(c.id); toast(`Bought ${c.name}.`, 'gold'); }
+          render();
+        });
+        (el.querySelector('#charm-close') as HTMLElement).onclick = () => { closeMenu(); resolve(); };
+      };
+      render();
+    });
+    this.busy = false;
+    updateHUD(this.player, 'Haven City');
+    this.player.save();
+  }
+
+  // ================= training gym (effort) =================
+  private async openTrainingGym(): Promise<void> {
+    const DRILL = 12, DRILL_COST = 140, RESET_COST = 500;
+    await say('Coach Bru', 'You want results? We drill. Pick a Guardian and we\'ll pound effort into whatever stat you like — up to the body\'s limit. Genes are luck; training is mine to give.');
+    this.busy = true;
+    let selId: string | null = this.player.party[0]?.id ?? this.player.reserve[0]?.id ?? null;
+    await new Promise<void>(resolve => {
+      const render = () => {
+        const p = this.player;
+        const all = [...p.party, ...p.reserve];
+        const g = all.find(x => x.id === selId) ?? all[0];
+        selId = g?.id ?? null;
+        const roster = all.map(x => `<button class="ui-btn ${x.id === selId ? 'primary' : ''}" data-sel="${x.id}" style="margin:2px">${x.nickname} <span class="sub">Lv${x.level}</span></button>`).join('') || '<div class="sub">No Guardians.</div>';
+        let body = '';
+        if (g) {
+          const total = p.trainingTotal(g);
+          const grade = geneGradeLabel(geneRating(g.genes));
+          const statRows = (['hp', 'atk', 'def', 'spd', 'wis', 'sp'] as StatKey[]).map(k => {
+            const cur = g.training[k] ?? 0;
+            const maxed = cur >= 252 || total >= 510;
+            const pctW = Math.round(cur / 252 * 100);
+            return `<div class="list-row"><div style="flex:1"><b>${STAT_NAMES[k]}</b> <span class="sub">${cur}/252</span>
+                <div style="height:6px;border-radius:3px;background:#1a2036;margin-top:4px;overflow:hidden"><div style="height:100%;width:${pctW}%;background:#5ad2ff"></div></div></div>
+              <button class="ui-btn" data-train="${k}" ${maxed || p.shards < DRILL_COST ? 'disabled' : ''}>+${DRILL} ◆${DRILL_COST}</button></div>`;
+          }).join('');
+          body = `<div class="sub" style="margin:6px 0">🧬 Genes: <b style="color:${grade.color}">${grade.label} ${geneRating(g.genes)}%</b> · 🌿 ${NATURES[g.natureId]?.name ?? '—'} <span class="sub">(${natureBlurb(g.natureId)})</span> · Effort <b>${total}/510</b></div>${statRows}`;
+        }
+        const el = openScreen(`
+          <h3>🎯 Coach Bru's Training Gym — <span class="goldcol">◆${p.shards}</span></h3>
+          <div class="sub">Spend Shards to drill earned stats (effort). Capped at 252 per stat, 510 total.</div>
+          <div style="display:flex;gap:4px;flex-wrap:wrap;margin:8px 0">${roster}</div>
+          ${body}
+          <div style="display:flex;justify-content:space-between;margin-top:10px">
+            ${g ? `<button class="ui-btn danger" id="gym-reset" ${p.shards < RESET_COST ? 'disabled' : ''}>Reset Training (◆${RESET_COST})</button>` : '<span></span>'}
+            <button class="ui-btn primary" id="gym-close">Leave</button></div>`);
+        el.querySelectorAll<HTMLElement>('[data-sel]').forEach(b => b.onclick = () => { selId = b.dataset.sel!; render(); });
+        el.querySelectorAll<HTMLElement>('[data-train]').forEach(b => b.onclick = () => {
+          if (!g) return;
+          const k = b.dataset.train as StatKey;
+          if (p.shards >= DRILL_COST) {
+            const added = p.addTraining(g, k, DRILL);
+            if (added > 0) { p.shards -= DRILL_COST; toast(`+${added} ${STAT_NAMES[k]} effort.`, 'gold'); }
+            else toast('That stat is maxed.', 'red');
+          }
+          render();
+        });
+        const rb = el.querySelector('#gym-reset') as HTMLElement | null;
+        if (rb) rb.onclick = () => { if (g && p.shards >= RESET_COST) { p.shards -= RESET_COST; p.resetTraining(g); toast('Training reset.'); render(); } };
+        (el.querySelector('#gym-close') as HTMLElement).onclick = () => { closeMenu(); resolve(); };
+      };
+      render();
+    });
+    this.busy = false;
+    updateHUD(this.player, 'Haven City');
+    this.player.save();
+  }
+
+  // ================= hatchery (breeding) =================
+  /** Build an egg from two parents: inherited genes (with mutation), nature, and egg-moves. */
+  private makeEgg(A: Guardian, B: Guardian): EggData {
+    const baseId = baseFormOf(A.speciesId);
+    const baseSp = SPECIES[baseId];
+    const fresh = rollGenes('egg' + A.id + B.id + this.player.eggs.length);
+    const inh = (k: StatKey): number => {
+      const r = Math.random();
+      let v = r < 0.45 ? A.genes[k] : r < 0.8 ? B.genes[k] : fresh[k];
+      v += Math.floor((Math.random() - 0.5) * 5); // ±2 mutation
+      return Math.max(0, Math.min(31, v));
+    };
+    const genes = { hp: inh('hp'), sp: inh('sp'), atk: inh('atk'), def: inh('def'), spd: inh('spd'), wis: inh('wis') };
+    const natureId = Math.random() < 0.5 ? A.natureId : (Math.random() < 0.5 ? B.natureId : rollNatureId('egg' + A.id + B.id));
+    const naturalBase = new Set(baseSp.techs.map(t => t.tech));
+    const eggMoves = [...new Set([...A.learnedTechs, ...B.learnedTechs])].filter(t => TECHS[t] && !naturalBase.has(t)).slice(0, 3);
+    const snap = (g: Guardian): ParentSnapshot => ({ speciesId: g.speciesId, nickname: g.nickname, level: g.level, parents: g.parents ? JSON.parse(JSON.stringify(g.parents)) : undefined });
+    const total = 180;
+    return {
+      id: 'egg' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36),
+      speciesId: baseId, label: `${baseSp.name} Egg`,
+      stepsLeft: total, totalSteps: total,
+      genes, natureId, eggMoves,
+      parents: { parentA: snap(A), parentB: snap(B) },
+    };
+  }
+
+  private async breedEgg(): Promise<boolean> {
+    const BREED_COST = 320;
+    const p = this.player;
+    if (p.shards < BREED_COST) { toast(`Breeding costs ◆${BREED_COST}.`, 'red'); return false; }
+    const eligible = [...p.party, ...p.reserve].filter(g => g.level >= 10);
+    if (eligible.length < 2) { await say('Keeper Wren', 'Breeding needs two Adept-or-higher Guardians — level 10 and up. Come back when your team has grown.'); return false; }
+    const aOpts = [...eligible.map(g => `${g.nickname} Lv${g.level} · ${elementsOf(g).join('/')}`), '❌ Cancel'];
+    const ai = await choose('Hatchery', 'Choose the first parent:', aOpts);
+    if (ai < 0 || ai >= eligible.length) return false;
+    const A = eligible[ai];
+    const compat = eligible.filter(g => g.id !== A.id && elementsOf(g).some(e => elementsOf(A).includes(e)));
+    if (!compat.length) { await say('Keeper Wren', `Nothing in your care shares an element with ${A.nickname}. Breeding pairs must share at least one element.`); return false; }
+    const bOpts = [...compat.map(g => `${g.nickname} Lv${g.level} · ${elementsOf(g).join('/')}`), '❌ Cancel'];
+    const bi = await choose('Hatchery', `Pair ${A.nickname} with:`, bOpts);
+    if (bi < 0 || bi >= compat.length) return false;
+    const B = compat[bi];
+    p.shards -= BREED_COST;
+    p.eggs.push(this.makeEgg(A, B));
+    p.save();
+    toast(`🥚 ${A.nickname} & ${B.nickname} produced an egg! Walk the world to warm it.`, 'gold');
+    sfx('fanfare');
+    return true;
+  }
+
+  private async openHatchery(): Promise<void> {
+    const MAX_EGGS = 6, SPEED_COST = 90, SPEED_STEPS = 60;
+    this.busy = true;
+    await new Promise<void>(resolve => {
+      const render = () => {
+        const p = this.player;
+        const eggRows = p.eggs.length ? p.eggs.map(e => {
+          const ready = e.stepsLeft <= 0;
+          const pctW = Math.round((1 - e.stepsLeft / e.totalSteps) * 100);
+          const moves = e.eggMoves.length ? ` · 🥚-moves: ${e.eggMoves.map(t => TECHS[t]?.name ?? t).join(', ')}` : '';
+          const btn = ready
+            ? `<button class="ui-btn primary" data-hatch="${e.id}">Hatch!</button>`
+            : `<button class="ui-btn" data-speed="${e.id}" ${p.shards < SPEED_COST ? 'disabled' : ''}>Warm ◆${SPEED_COST}</button>`;
+          return `<div class="list-row"><div style="flex:1"><b>🥚 ${e.label}</b> <span class="sub">${ready ? 'Ready to hatch!' : `${e.stepsLeft} steps left`}${moves}</span>
+              <div style="height:7px;border-radius:4px;background:#1a2036;margin:5px 0;overflow:hidden"><div style="height:100%;width:${pctW}%;background:#ffd25a"></div></div></div>${btn}</div>`;
+        }).join('') : '<div class="sub">No eggs incubating yet.</div>';
+        const el = openScreen(`
+          <h3>🥚 The Hatchery — <span class="goldcol">◆${p.shards}</span></h3>
+          <div class="sub" style="margin-bottom:6px">Pair two bonded Guardians (Adept+, sharing an element) to lay an egg. It hatches into the line's base form, carrying inherited genes, nature and egg-moves. Walk the world to warm it.</div>
+          <h3 style="margin-top:6px">Incubating (${p.eggs.length}/${MAX_EGGS})</h3>
+          ${eggRows}
+          <div style="display:flex;justify-content:space-between;margin-top:12px">
+            <button class="ui-btn primary" id="hatch-breed" ${p.eggs.length >= MAX_EGGS ? 'disabled' : ''}>🧬 Breed New Egg (◆320)</button>
+            <button class="ui-btn" id="hatch-close">Leave</button></div>`);
+        el.querySelectorAll<HTMLElement>('[data-hatch]').forEach(b => b.onclick = () => {
+          const e = p.eggs.find(x => x.id === b.dataset.hatch!);
+          if (!e) return;
+          const g = p.hatchEgg(e);
+          p.save();
+          toast(`🥚 → ${g.nickname} hatched! (${geneRating(g.genes)}% genes, ${NATURES[g.natureId]?.name ?? 'Neutral'})`, 'gold');
+          sfx('fanfare');
+          render();
+        });
+        el.querySelectorAll<HTMLElement>('[data-speed]').forEach(b => b.onclick = () => {
+          const e = p.eggs.find(x => x.id === b.dataset.speed!);
+          if (!e || p.shards < SPEED_COST) return;
+          p.shards -= SPEED_COST;
+          e.stepsLeft = Math.max(0, e.stepsLeft - SPEED_STEPS);
+          render();
+        });
+        (el.querySelector('#hatch-breed') as HTMLElement).onclick = async () => {
+          if (await this.breedEgg()) render();
+        };
+        (el.querySelector('#hatch-close') as HTMLElement).onclick = () => { closeMenu(); resolve(); };
+      };
+      render();
+    });
+    this.busy = false;
+    updateHUD(this.player, 'Haven City');
+    this.player.save();
+  }
+
+  // ================= bounty board =================
+  private rewardLabel(e: { rewardShards: number; rewardGP: number; rewardItems?: { id: string; qty: number }[]; rewardCharm?: string }): string {
+    const parts = [`<span class="goldcol">◆${e.rewardShards}</span>`];
+    if (e.rewardGP) parts.push(`🛡️${e.rewardGP}`);
+    if (e.rewardItems) parts.push(...e.rewardItems.map(it => `${ITEMS[it.id]?.name ?? it.id}×${it.qty}`));
+    if (e.rewardCharm) parts.push(`<span style="color:#ff9ad6">🎴 ${CHARMS[e.rewardCharm]?.name ?? e.rewardCharm}</span>`);
+    return parts.join(' · ');
+  }
+
+  private async openBounties(): Promise<void> {
+    this.busy = true;
+    ensureBounties(this.player);
+    await new Promise<void>(resolve => {
+      const render = () => {
+        const p = this.player;
+        ensureBounties(p);
+        const b = p.bounties!;
+        const section = (title: string, tier: 'daily' | 'weekly' | 'elite', accent: string) => {
+          const rows = b.list.filter(e => e.tier === tier).map(e => {
+            const done = e.progress >= e.target;
+            const pctW = Math.round(Math.min(1, e.progress / e.target) * 100);
+            const btn = e.claimed ? '<span class="tag" style="background:var(--ui-dim);color:#0c1022">CLAIMED</span>'
+              : done ? `<button class="ui-btn primary" data-claim="${e.id}">Claim</button>`
+                : `<span class="sub">${e.progress}/${e.target}</span>`;
+            return `<div class="list-row"><div style="flex:1">
+                <b>${e.icon} ${e.title}</b> <span class="sub">— ${e.desc}</span>
+                <div style="height:7px;border-radius:4px;background:#1a2036;margin:5px 0;overflow:hidden"><div style="height:100%;width:${pctW}%;background:${done ? '#5ad88a' : accent}"></div></div>
+                <div class="sub">🎁 ${this.rewardLabel(e)}</div>
+              </div><div style="display:flex;align-items:center">${btn}</div></div>`;
+          }).join('') || '<div class="sub">—</div>';
+          return `<h3 style="color:${accent};margin-top:10px">${title}</h3>${rows}`;
+        };
+        const legacyRows = BOUNTIES.map(bb => {
+          const claimed = !!p.flags[`claimed_${bb.id}`];
+          const done = bb.check(p);
+          const rw = bb.reward.shards ? `◆${bb.reward.shards}` : ITEMS[bb.reward.item!].name;
+          const btn = claimed ? '<span class="tag" style="background:var(--ui-dim);color:#0c1022">CLAIMED</span>'
+            : done ? `<button class="ui-btn primary" data-legacy="${bb.id}">Claim ${rw}</button>`
+              : `<span class="sub">Reward: ${rw}</span>`;
+          return `<div class="list-row"><div style="flex:1"><b>${done || claimed ? '✅' : '⬜'} ${bb.desc}</b></div>${btn}</div>`;
+        }).join('');
+        const claimable = claimableCount(p);
+        const el = openScreen(`
+          <h3>📜 Haven City Bounty Board ${claimable > 0 ? `<span class="tag" style="background:#5ad88a;color:#0c1022">${claimable} ready</span>` : ''}</h3>
+          <div class="sub" style="margin-bottom:4px">Rotating deeds for coin, standing & charms. 🔥 Daily streak: <b style="color:var(--ui-gold)">${b.streak}</b> ${b.streak > 0 ? `(+◆${Math.min(500, b.streak * 40)} streak bonus on each daily)` : ''}</div>
+          <div style="max-height:62vh;overflow-y:auto;padding-right:6px">
+            ${section('☀️ Daily Bounties', 'daily', '#5ad2ff')}
+            ${section('🗓️ Weekly Bounty', 'weekly', '#9a6aff')}
+            ${section('👑 Elite Bounty', 'elite', '#ffd25a')}
+            <h3 style="color:#7affc4;margin-top:10px">🏅 Standing Bounties</h3>
+            ${legacyRows}
+          </div>
           <div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="ui-btn primary" id="bounty-close">Close</button></div>`);
         el.querySelectorAll<HTMLElement>('[data-claim]').forEach(btn => btn.onclick = () => {
-          const b = BOUNTIES.find(x => x.id === btn.dataset.claim)!;
-          p.flags[`claimed_${b.id}`] = true;
-          if (b.reward.shards) p.shards += b.reward.shards;
-          if (b.reward.item) p.addItem(b.reward.item);
+          const res = claimBounty(p, btn.dataset.claim!);
+          if (res) {
+            const bonus = res.streakBonus ? ` (+◆${res.streakBonus} streak)` : '';
+            toast(`Bounty claimed! 🎁 ${this.rewardLabel(res.entry).replace(/<[^>]+>/g, '')}${bonus}`, 'gold');
+            sfx('fanfare');
+          }
+          p.save();
+          render();
+        });
+        el.querySelectorAll<HTMLElement>('[data-legacy]').forEach(btn => btn.onclick = () => {
+          const bb = BOUNTIES.find(x => x.id === btn.dataset.legacy)!;
+          p.flags[`claimed_${bb.id}`] = true;
+          if (bb.reward.shards) p.shards += bb.reward.shards;
+          if (bb.reward.item) p.addItem(bb.reward.item);
           toast('Bounty claimed!', 'gold');
           p.save();
           render();
@@ -6931,6 +7251,7 @@ export class Town {
     });
     this.busy = false;
     updateHUD(this.player, 'Haven City');
+    this.player.save();
   }
 
   // ================= gate =================
@@ -8467,7 +8788,13 @@ export class Town {
               spd: Math.floor(pAStats.spd * 0.15 + pBStats.spd * 0.05),
               wis: Math.floor(pAStats.wis * 0.15 + pBStats.wis * 0.05)
             };
-            
+
+            // Fusion weaves the parents' matrices together: inherit the BETTER
+            // gene per stat (plus a touch of mutation) and one parent's nature.
+            const inheritGene = (k: StatKey) => Math.min(31, Math.max(parentA!.genes[k], parentB!.genes[k]) + Math.floor(Math.random() * 3));
+            offspring.genes = { hp: inheritGene('hp'), sp: inheritGene('sp'), atk: inheritGene('atk'), def: inheritGene('def'), spd: inheritGene('spd'), wis: inheritGene('wis') };
+            offspring.natureId = Math.random() < 0.5 ? parentA!.natureId : parentB!.natureId;
+
             // Determine elements of offspring
             const parentElements = Array.from(new Set([...elementsOf(parentA!), ...elementsOf(parentB!)]));
             let offspringElements: Element[] = [];

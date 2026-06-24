@@ -231,15 +231,42 @@ interface QuestDef {
   target: number;
   reward: number;
   getVal: (p: Player) => number;
+  icon?: string;
+  /** Repeatable quests track a baseline and can be claimed over and over. */
+  repeatable?: boolean;
+  /** Story flag flipped true the first time this quest is claimed — gates a new dungeon. */
+  unlockFlag?: string;
+  /** Player-facing label for what the claim unlocks (e.g. "Frostpeak Hollow"). */
+  unlockLabel?: string;
 }
+
+const totalClears = (p: Player): number => Object.values(p.dungeonClears).reduce((a, b) => a + b, 0);
+
 const GUILD_QUESTS: QuestDef[] = [
-  { id: 'wild_skirmish', name: 'Wild Skirmish', desc: 'Win 5 battles', target: 5, reward: 50, getVal: p => p.battlesWon },
-  { id: 'tamer_bond', name: 'Tamer Bond', desc: 'Befriend 1 wild Guardian', target: 1, reward: 60, getVal: p => p.capturesMade },
-  { id: 'mossdeep', name: 'Burrows Recon', desc: 'Conquer Mossdeep Burrows', target: 1, reward: 80, getVal: p => p.dungeonClears['mossdeep'] ?? 0 },
-  { id: 'sunken', name: 'Vault Recon', desc: 'Conquer Sunken Vault', target: 1, reward: 80, getVal: p => p.dungeonClears['sunken'] ?? 0 },
-  { id: 'thunderfen', name: 'Fen Recon', desc: 'Conquer Thunderfen Mire', target: 1, reward: 100, getVal: p => p.dungeonClears['thunderfen'] ?? 0 },
-  { id: 'cradle', name: 'Cradle Recon', desc: 'Conquer Cradle Hollow', target: 1, reward: 120, getVal: p => p.dungeonClears['cradle'] ?? 0 },
-  { id: 'stormspire', name: 'Spire Recon', desc: 'Conquer Stormspire Depths', target: 1, reward: 150, getVal: p => p.dungeonClears['stormspire'] ?? 0 },
+  // ---- starter milestones (one-time, count lifetime progress) ----
+  { id: 'wild_skirmish', name: 'Wild Skirmish', icon: '⚔️', desc: 'Win 5 battles for the guild.', target: 5, reward: 60, getVal: p => p.battlesWon },
+  { id: 'tamer_bond', name: 'Tamer Bond', icon: '🤝', desc: 'Befriend your first wild Guardian.', target: 1, reward: 60, getVal: p => p.capturesMade },
+  { id: 'first_delve', name: 'First Delve', icon: '🏴', desc: 'Conquer any one expedition.', target: 1, reward: 80, getVal: totalClears },
+  { id: 'centurion', name: 'Centurion', icon: '🛡️', desc: 'Win 100 battles in the guild\'s name.', target: 100, reward: 300, getVal: p => p.battlesWon },
+  { id: 'beastfriend', name: 'Beastfriend', icon: '🌈', desc: 'Befriend 15 wild Guardians.', target: 15, reward: 280, getVal: p => p.capturesMade },
+  { id: 'cartographer', name: 'Guild Cartographer', icon: '🗺️', desc: 'Conquer expeditions 10 times.', target: 10, reward: 420, getVal: totalClears },
+
+  // ---- repeatable contracts (claim again and again) ----
+  { id: 'patrol', name: 'Guild Patrol', icon: '🔁', desc: 'Win 10 battles. Renews after each claim.', target: 10, reward: 120, repeatable: true, getVal: p => p.battlesWon },
+  { id: 'census', name: 'Wild Census', icon: '🔁', desc: 'Befriend 3 wild Guardians. Renews after each claim.', target: 3, reward: 110, repeatable: true, getVal: p => p.capturesMade },
+  { id: 'contract', name: 'Expedition Contract', icon: '🔁', desc: 'Conquer any 3 expeditions. Renews after each claim.', target: 3, reward: 180, repeatable: true, getVal: totalClears },
+
+  // ---- unlock quests: each first claim opens a new themed dungeon ----
+  { id: 'q_frostpeak', name: 'Frostbound Patrol', icon: '❄️', desc: 'Win 20 battles to earn the guild\'s Frostbound writ.', target: 20, reward: 200, getVal: p => p.battlesWon, unlockFlag: 'guild_frostpeak', unlockLabel: 'Frostpeak Hollow' },
+  { id: 'q_zephyr', name: 'Sky Patrol', icon: '🌪️', desc: 'Befriend 8 wild Guardians to chart the wind-roads.', target: 8, reward: 200, getVal: p => p.capturesMade, unlockFlag: 'guild_zephyr', unlockLabel: 'Zephyr Spires' },
+  { id: 'q_verdant', name: 'Verdant Warden', icon: '🌿', desc: 'Conquer the Mossdeep Burrows for the Greenwall.', target: 1, reward: 220, getVal: p => p.dungeonClears['mossdeep'] ?? 0, unlockFlag: 'guild_verdant', unlockLabel: 'Verdant Labyrinth' },
+  { id: 'q_tide', name: 'Tidal Recon', icon: '🌊', desc: 'Conquer the Sunken Vault for the Tidebound Circle.', target: 1, reward: 240, getVal: p => p.dungeonClears['sunken'] ?? 0, unlockFlag: 'guild_tidecatacomb', unlockLabel: 'Tidal Catacombs' },
+  { id: 'q_emberforge', name: 'Forge Trial', icon: '🔥', desc: 'Win 60 battles to be trusted with the Forge keys.', target: 60, reward: 320, getVal: p => p.battlesWon, unlockFlag: 'guild_emberforge', unlockLabel: 'Emberforge Caldera' },
+  { id: 'q_gaia', name: 'Deep Roots', icon: '🪨', desc: 'Conquer expeditions 5 times to read the deep stone.', target: 5, reward: 320, getVal: totalClears, unlockFlag: 'guild_gaiadepths', unlockLabel: "Gaia's Roothold" },
+  { id: 'q_tempest', name: 'Storm Chaser', icon: '⚡', desc: 'Conquer the Stormspire Depths for the Thunder Legion.', target: 1, reward: 360, getVal: p => p.dungeonClears['stormspire'] ?? 0, unlockFlag: 'guild_tempest', unlockLabel: 'Tempest Conduit' },
+  { id: 'q_whiteout', name: 'Whiteout Survey', icon: '🌨️', desc: 'Conquer Frostpeak Hollow to brave the deeper cold.', target: 1, reward: 420, getVal: p => p.dungeonClears['frostpeak'] ?? 0, unlockFlag: 'guild_whiteout', unlockLabel: 'Whiteout Tundra' },
+  { id: 'q_umbral', name: 'Shadow Hunt', icon: '🌑', desc: 'Conquer the Thunderfen Mire for the Veiled Order.', target: 1, reward: 420, getVal: p => p.dungeonClears['thunderfen'] ?? 0, unlockFlag: 'guild_umbral', unlockLabel: 'Umbral Abyss' },
+  { id: 'q_sanctum', name: 'Hallowed Vigil', icon: '✨', desc: 'Befriend 25 wild Guardians to be deemed worthy of the Light.', target: 25, reward: 500, getVal: p => p.capturesMade, unlockFlag: 'guild_sanctum', unlockLabel: 'Hallowed Sanctum' },
 ];
 
 interface PerkDef {
@@ -455,6 +482,19 @@ export function openGuildPerksPanel(player: Player, houseColor: string, onClose?
     .gperks-btn-claim:hover:not(:disabled) {
       background: #6bec9c;
     }
+    .gperks-done { opacity: 0.55; }
+    .gperks-done .gperks-progress-bar { background: #5ad88a; }
+    .gperks-unlock {
+      display: inline-block;
+      margin-top: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #ffd87a;
+      background: rgba(242,193,78,0.12);
+      border: 1px solid rgba(242,193,78,0.35);
+      border-radius: 4px;
+      padding: 1px 6px;
+    }
   `;
   overlay.appendChild(styleEl);
 
@@ -492,38 +532,49 @@ export function openGuildPerksPanel(player: Player, houseColor: string, onClose?
       `;
     });
 
-    let questsHtml = '';
-    GUILD_QUESTS.forEach(q => {
-      if (player.guildQuestProgress[q.id] === undefined) {
-        player.guildQuestProgress[q.id] = q.getVal(player);
+    // Build each quest's live status. One-time milestones count lifetime
+    // progress and complete forever once claimed; repeatable contracts track a
+    // baseline and renew on every claim.
+    const states = GUILD_QUESTS.map(q => {
+      const cur = q.getVal(player);
+      const claims = player.guildQuestClaims[q.id] ?? 0;
+      if (q.repeatable) {
+        if (player.guildQuestProgress[q.id] === undefined) player.guildQuestProgress[q.id] = cur;
+        const progress = Math.min(q.target, Math.max(0, cur - player.guildQuestProgress[q.id]));
+        return { q, progress, ready: progress >= q.target, done: false, claims };
       }
-      const baseline = player.guildQuestProgress[q.id];
-      const curVal = q.getVal(player);
-      const rawProgress = Math.max(0, curVal - baseline);
-      const progress = Math.min(q.target, rawProgress);
-      const pct = (progress / q.target) * 100;
-      const isReady = progress >= q.target;
+      return { q, progress: Math.min(q.target, cur), ready: claims === 0 && cur >= q.target, done: claims > 0, claims };
+    });
+    // claimable first, then in-progress, then finished one-timers
+    states.sort((a, b) => (a.ready ? 0 : a.done ? 2 : 1) - (b.ready ? 0 : b.done ? 2 : 1));
+    const claimable = states.filter(s => s.ready).length;
 
+    let questsHtml = '';
+    states.forEach(({ q, progress, ready, done, claims }) => {
+      const pct = Math.min(100, (progress / q.target) * 100);
+      const unlock = q.unlockLabel
+        ? `<span class="gperks-unlock">🗺️ ${claims > 0 ? 'Unlocked' : 'Unlocks'} ${q.unlockLabel}</span>` : '';
+      const rep = q.repeatable ? `<span class="gperks-card-badge">🔁 done ×${claims}</span>` : '';
       questsHtml += `
-        <div class="gperks-card">
+        <div class="gperks-card${done ? ' gperks-done' : ''}">
           <div class="gperks-card-info">
             <div class="gperks-card-title">
-              ${q.name}
+              ${q.icon ?? '📋'} ${q.name}
               <span class="gperks-card-badge">+${q.reward} GP</span>
+              ${rep}
             </div>
-            <div class="gperks-card-desc">${q.desc}</div>
+            <div class="gperks-card-desc">${q.desc} ${unlock}</div>
             <div class="gperks-progress-bg">
               <div class="gperks-progress-bar" style="width: ${pct}%"></div>
               <div class="gperks-progress-text">${progress} / ${q.target}</div>
             </div>
           </div>
           <div>
-            <button class="gperks-btn ${isReady ? 'gperks-btn-claim' : ''}" data-claim="${q.id}" ${isReady ? '' : 'disabled'}>
-              ${isReady ? 'Claim GP' : 'In Progress'}
-            </button>
+            ${done
+              ? `<button class="gperks-btn" disabled>✓ Done</button>`
+              : `<button class="gperks-btn ${ready ? 'gperks-btn-claim' : ''}" data-claim="${q.id}" ${ready ? '' : 'disabled'}>${ready ? 'Claim GP' : 'In Progress'}</button>`}
           </div>
-        </div>
-      `;
+        </div>`;
     });
 
     overlay.innerHTML = `
@@ -531,7 +582,7 @@ export function openGuildPerksPanel(player: Player, houseColor: string, onClose?
       <div class="gperks-header">
         <div>
           <h2 style="margin: 0; font-size: 26px; color: var(--ui-gold);">🧬 GUILD PERKS & QUESTS</h2>
-          <div style="font-size: 14px; color: #aab0c8; margin-top: 4px;">Earn Guild Points (GP) through quests to upgrade passive masteries.</div>
+          <div style="font-size: 14px; color: #aab0c8; margin-top: 4px;">Earn Guild Points (GP) through quests &amp; expeditions to upgrade passive masteries and unlock new dungeons.</div>
         </div>
         <div style="display: flex; gap: 20px; align-items: center;">
           <div style="font-size: 16px; font-weight: bold; background: rgba(255,255,255,0.05); padding: 8px 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
@@ -547,27 +598,13 @@ export function openGuildPerksPanel(player: Player, houseColor: string, onClose?
           <div class="gperks-scroll">${perksHtml}</div>
         </div>
         <div class="gperks-panel" style="flex:1;min-height:0;">
-          <h3 style="margin-top: 0; margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 8px; color: #ffffff;">📋 Repeatable Guild Quests</h3>
+          <h3 style="margin-top: 0; margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 8px; color: #ffffff;">📋 Guild Quests${claimable ? ` <span style="color:#5ad88a">(${claimable} ready)</span>` : ''}</h3>
           <div class="gperks-scroll">${questsHtml}</div>
         </div>
       </div>
     `;
 
-    const onKey = (e: KeyboardEvent) => {
-      const k = e.key.toLowerCase();
-      if (k === 'escape' || k === 'esc') {
-        window.removeEventListener('keydown', onKey);
-        overlay.remove();
-        onClose?.();
-      }
-    };
-    window.addEventListener('keydown', onKey);
-
-    (overlay.querySelector('#gperks-back') as HTMLElement).onclick = () => {
-      window.removeEventListener('keydown', onKey);
-      overlay.remove();
-      onClose?.();
-    };
+    (overlay.querySelector('#gperks-back') as HTMLElement).onclick = close;
 
     overlay.querySelectorAll<HTMLElement>('[data-upgrade]').forEach(b => {
       b.onclick = () => {
@@ -589,15 +626,34 @@ export function openGuildPerksPanel(player: Player, houseColor: string, onClose?
       b.onclick = () => {
         const id = b.dataset.claim!;
         const q = GUILD_QUESTS.find(x => x.id === id)!;
-        const curVal = q.getVal(player);
+        const cur = q.getVal(player);
         player.guildPoints = (player.guildPoints ?? 0) + q.reward;
-        player.guildQuestProgress[id] = curVal;
+        player.guildQuestClaims[id] = (player.guildQuestClaims[id] ?? 0) + 1;
+        if (q.repeatable) player.guildQuestProgress[id] = cur; // reset baseline for next cycle
+        let msg = `Claimed +${q.reward} GP from ${q.name}!`;
+        if (q.unlockFlag && !player.flags[q.unlockFlag]) {
+          player.flags[q.unlockFlag] = true;
+          if (q.unlockLabel) msg = `+${q.reward} GP — 🗺️ ${q.unlockLabel} is now open on the Overworld!`;
+        }
         player.save();
-        toast(`Claimed +${q.reward} GP from ${q.name}!`, 'gold');
+        toast(msg, 'gold', 3600);
         draw();
       };
     });
   };
+
+  // The Esc key and the Back button share one teardown — registered once so
+  // re-renders (draw) never stack duplicate listeners.
+  const close = () => {
+    window.removeEventListener('keydown', onKey);
+    overlay.remove();
+    onClose?.();
+  };
+  const onKey = (e: KeyboardEvent) => {
+    const k = e.key.toLowerCase();
+    if (k === 'escape' || k === 'esc') close();
+  };
+  window.addEventListener('keydown', onKey);
 
   draw();
   document.getElementById('app')!.appendChild(overlay);

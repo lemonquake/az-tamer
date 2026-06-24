@@ -1075,6 +1075,7 @@ export class TerraCity {
               ['Mayor Christine', "Very well! I accept the proposal. I will grant you access to the secret ancient Dungeon. The seal on it is now released. Go, defeat the boss, get that Dragon's Tear, and show the world what a Haven graduate can do!"],
             ]);
             
+            p.flags['met_christine'] = true;
             const summary = completeQuest(p, activeQuestId);
             toast(`Quest complete: The Mayor of Terra City!`, 'gold');
             if (summary) toast(`Received ${summary}`, 'gold');

@@ -22,7 +22,7 @@ import { updateTamerAppearance } from './clothes';
 import { worldOrbit } from './camorbit';
 import { tagNpc, attachNpcPicker } from './npccard';
 import { sfx } from './audio';
-import { questState, acceptQuest, completeQuest } from './quests';
+import { questState, acceptQuest, completeQuest, syncStoryQuests } from './quests';
 
 interface Interactable { pos: THREE.Vector3; radius: number; label: string; handler: () => Promise<void> | void; }
 interface Collider { pos: THREE.Vector3; r: number; }
@@ -95,7 +95,7 @@ export class HyujonCity {
   private static glow(c: number, o: number) { return new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: o, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }); }
   private static rustedMetalMat() { return new THREE.MeshStandardMaterial({ map: rustedMetalTexture('#2b2420', '#663a18', 4), metalness: 0.8, roughness: 0.7 }); }
 
-  private label3d(scene: THREE.Scene, text: string, color: string, pos: THREE.Vector3, scale = 4.4): void {
+  private label3d(scene: THREE.Scene, text: string, color: string, pos: THREE.Vector3, scale = 4.4, name?: string): void {
     const c = document.createElement('canvas');
     const ctx = c.getContext('2d')!;
     c.width = 256; c.height = 64;
@@ -108,6 +108,7 @@ export class HyujonCity {
     const sprite = new THREE.Sprite(mat);
     sprite.position.copy(pos);
     sprite.scale.set(scale, scale * 0.25, 1);
+    if (name) sprite.name = name;
     scene.add(sprite);
   }
 
@@ -175,7 +176,6 @@ export class HyujonCity {
     // Rusted tech spires (ruined towers)
     this.buildRuinedTower(s, -14, -18, 12, 3.2);
     this.buildRuinedTower(s, 16, -12, 16, 4.0);
-    this.buildRuinedTower(s, 22, 10, 10, 2.8);
     this.buildRuinedTower(s, -24, 20, 8, 2.5);
 
     // Tech glow lines in the floor
@@ -217,6 +217,7 @@ export class HyujonCity {
     this.buildStreetLantern(s, -14, -6, 0x5aff9a);  // Center-West
     this.buildStreetLantern(s, 14, 2, 0xffaa44);    // Near Gem exchange
     this.buildStreetLantern(s, -8, -18, 0x5aff9a);  // Near Terminal Gate
+    this.buildStreetLantern(s, 22, 4, 0xa0e8ff);    // Near Harbor Cells path
 
     // 2. Emergency Beacon on Bunker
     this.buildBunkerBeacon(s, 12, -22);
@@ -403,6 +404,11 @@ export class HyujonCity {
     g.rotation.y = -Math.PI / 2;
     const pad = new THREE.Mesh(new THREE.BoxGeometry(4.0, 0.2, 4.0), HyujonCity.darkConcrete());
     pad.position.y = 0.1; g.add(pad);
+    
+    // Add an atmospheric blue cell light inside
+    const cellLight = new THREE.PointLight(0xa0e8ff, 36.0, 10);
+    cellLight.position.set(0, 1.8, 0); g.add(cellLight);
+
     const barMat = HyujonCity.rustedIron();
     for (let bx = -1.8; bx <= 1.8; bx += 0.6) {
       for (let bz of [-1.8, 1.8]) {
@@ -412,6 +418,10 @@ export class HyujonCity {
     }
     for (let bz = -1.8; bz <= 1.8; bz += 0.6) {
       for (let bx of [-1.8, 1.8]) {
+        // Skip middle bars on the front wall (bx = -1.8) to create an open doorway
+        if (bx === -1.8 && Math.abs(bz) < 1.5) {
+          continue;
+        }
         const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 2.4, 6), barMat);
         bar.position.set(bx, 1.2, bz); g.add(bar);
       }
@@ -421,7 +431,19 @@ export class HyujonCity {
     const frost = new THREE.Mesh(new THREE.BoxGeometry(3.6, 2.0, 0.1), HyujonCity.glow(0xa0e8ff, 0.2));
     frost.position.set(0, 1.2, 1.7); g.add(frost);
     s.add(g);
-    this.streetColliders.push({ pos: new THREE.Vector3(x, 0, z), r: 2.5 });
+    
+    // Split wall colliders for Left, Right, and Back walls of cells (x=22, z=12)
+    // This allows walking through the open front doorway (z=10.2)
+    this.streetColliders.push({ pos: new THREE.Vector3(20, 0, 10.5), r: 0.6 });
+    this.streetColliders.push({ pos: new THREE.Vector3(20, 0, 12.0), r: 0.6 });
+    this.streetColliders.push({ pos: new THREE.Vector3(20, 0, 13.5), r: 0.6 });
+    this.streetColliders.push({ pos: new THREE.Vector3(24, 0, 10.5), r: 0.6 });
+    this.streetColliders.push({ pos: new THREE.Vector3(24, 0, 12.0), r: 0.6 });
+    this.streetColliders.push({ pos: new THREE.Vector3(24, 0, 13.5), r: 0.6 });
+    this.streetColliders.push({ pos: new THREE.Vector3(20.5, 0, 14.0), r: 0.6 });
+    this.streetColliders.push({ pos: new THREE.Vector3(22.0, 0, 14.0), r: 0.6 });
+    this.streetColliders.push({ pos: new THREE.Vector3(23.5, 0, 14.0), r: 0.6 });
+
     this.label3d(s, '❄️ Harbor Cells', '#a0e8ff', new THREE.Vector3(x, 3.2, z), 3.5);
   }
 
@@ -450,7 +472,7 @@ export class HyujonCity {
 
     const labelText = unlocked ? '↓ Enter Drowned Terminal' : '🔒 Drowned Terminal (Sealed)';
     const labelColor = unlocked ? '#11ffcc' : '#ff5555';
-    this.label3d(s, labelText, labelColor, new THREE.Vector3(x, H + 2.0, z), 4.2);
+    this.label3d(s, labelText, labelColor, new THREE.Vector3(x, H + 2.0, z), 4.2, 'terminal_gate_label');
 
     this.streetInteractables.push({
       pos: new THREE.Vector3(x, 0, z + D / 2 + 2.0), radius: 2.8,
@@ -695,6 +717,7 @@ export class HyujonCity {
     gTamer.position.set(-6, 0, 10); gTamer.rotation.y = 0.8;
     tagNpc(gTamer, 'Grieving Tamer'); s.add(gTamer);
     this.staticNpcs.push(gTamer);
+    this.label3d(s, 'Grieving Tamer', '#e8d9a8', new THREE.Vector3(-6, 2.5, 10), 2.4);
     this.streetInteractables.push({
       pos: new THREE.Vector3(-6, 0, 10), radius: 1.8,
       label: 'Press <b>E</b> — talk to Grieving Tamer',
@@ -712,6 +735,7 @@ export class HyujonCity {
     oldMech.position.set(8, 0, 14); oldMech.rotation.y = -1.2;
     tagNpc(oldMech, 'Old Machinist'); s.add(oldMech);
     this.staticNpcs.push(oldMech);
+    this.label3d(s, 'Old Machinist', '#e8d9a8', new THREE.Vector3(8, 2.5, 14), 2.4);
     this.streetInteractables.push({
       pos: new THREE.Vector3(8, 0, 14), radius: 1.8,
       label: 'Press <b>E</b> — talk to Old Machinist',
@@ -729,6 +753,7 @@ export class HyujonCity {
     kovar.position.set(8, 0, -18); kovar.rotation.y = 0.5;
     tagNpc(kovar, 'Marshal Kovar'); s.add(kovar);
     this.staticNpcs.push(kovar);
+    this.label3d(s, 'Marshal Kovar', '#e8d9a8', new THREE.Vector3(8, 2.5, -18), 2.4);
     this.streetInteractables.push({
       pos: new THREE.Vector3(8, 0, -18), radius: 2.0,
       label: 'Press <b>E</b> — talk to Marshal Kovar',
@@ -745,11 +770,21 @@ export class HyujonCity {
               ['Marshal Kovar', `Go down there, drain the Tideling-Mother, and find Clyde's logs. Don't die. Hyujon has enough ghosts.`],
             ]);
             p.flags['drowned_terminal_unlocked'] = true;
+            p.save();
             toast("Drowned Terminal unlocked!", 'gold');
             const door = this.streetScene.getObjectByName('terminal_door') as THREE.Mesh;
             if (door) {
               (door.material as any).color.setHex(CYAN);
             }
+            const gateInteractable = this.streetInteractables.find(i => i.label && i.label.includes('Terminal'));
+            if (gateInteractable) {
+              gateInteractable.label = 'Press <b>E</b> — enter Drowned Terminal';
+            }
+            const oldLabel = this.streetScene.getObjectByName('terminal_gate_label');
+            if (oldLabel) {
+              this.streetScene.remove(oldLabel);
+            }
+            this.label3d(this.streetScene, '↓ Enter Drowned Terminal', '#11ffcc', new THREE.Vector3(0, 8.0, -24), 4.2, 'terminal_gate_label');
           } else {
             await conversation([
               ['Marshal Kovar', `Clyde sent you? A rookie from the capital during a Stillwater siege. Typical.`],
@@ -757,6 +792,16 @@ export class HyujonCity {
               ['Marshal Kovar', `If you want to help, go find Archivist Tem — he's analyzing the midtown crater. And we captured a Stillwater defector in the harbor cells. Interrogate him and get the pump override code!`],
             ]);
           }
+        } else if (st === 'ready') {
+          await conversation([
+            ['Marshal Kovar', `You survived the deep waters. And you found Clyde's Harmonik notes and Tem's backup. Excellent. Tem is already starting the database restoration.`],
+            ['Marshal Kovar', `Take this Prism Gem. And get back to Clyde — he was muttering about the Sanctum in the capital. Go on, kid.`],
+          ]);
+          const summary = completeQuest(p, 'story_drowned_terminal');
+          toast("Quest complete: The Lantern of the North!", 'gold');
+          if (summary) toast(`Received ${summary}`, 'gold');
+          syncStoryQuests(p).forEach(n => toast(n, 'gold'));
+          updateHUD(p, 'Hyujon');
         } else if (p.flags['drowned_terminal_unlocked']) {
           await say('Marshal Kovar', "The gate is open. Go down the Terminal, defeat Vormaela's Echo, and retrieve the 3rd Harmonik logs.");
         } else {
@@ -770,6 +815,7 @@ export class HyujonCity {
     tem.position.set(-6, 0, -8); tem.rotation.y = 1.5;
     tagNpc(tem, 'Archivist Tem'); s.add(tem);
     this.staticNpcs.push(tem);
+    this.label3d(s, 'Archivist Tem', '#e8d9a8', new THREE.Vector3(-6, 2.5, -8), 2.4);
     this.streetInteractables.push({
       pos: new THREE.Vector3(-6, 0, -8), radius: 2.0,
       label: 'Press <b>E</b> — talk to Archivist Tem',
@@ -785,9 +831,14 @@ export class HyujonCity {
               ['Archivist Tem', `But I need the decryption cipher to align the data tracks. Marshal Kovar has a defector in the cells who might know the Stillwater signature. Please, ask him!`],
             ]);
             p.flags['tem_scanned_crater'] = true;
+            p.save();
             toast("Scanned midtown crater data.", 'gold');
           } else {
-            await say('Archivist Tem', "I've scanned the energy lines. Once we get the defector's code, we can decrypt my gate-records backup.");
+            if (p.flags['interrogated_defector']) {
+              await say('Archivist Tem', "We have the signature code and I've scanned the crater. Go speak to Marshal Kovar to input the security override!");
+            } else {
+              await say('Archivist Tem', "I've scanned the energy lines. Once we get the defector's code, we can decrypt my gate-records backup.");
+            }
           }
         } else {
           await say('Archivist Tem', "The old-empire engine-craft here is magnificent... if only we could get the power grid online again.");
@@ -797,11 +848,12 @@ export class HyujonCity {
 
     // 5. Stillwater Defector
     const defector = makeVoxelHuman({ top: 0x226688, hair: 0x4466aa, skin: 0xb0c4de, hairstyle: 'spiky' });
-    defector.position.set(22, 0, 10); defector.rotation.y = -Math.PI / 2;
+    defector.position.set(22, 0.2, 11); defector.rotation.y = -Math.PI / 2;
     tagNpc(defector, 'Stillwater Defector'); s.add(defector);
     this.staticNpcs.push(defector);
+    this.label3d(s, 'Stillwater Defector', '#e8d9a8', new THREE.Vector3(22, 3.2, 11), 2.4);
     this.streetInteractables.push({
-      pos: new THREE.Vector3(22, 0, 10), radius: 2.0,
+      pos: new THREE.Vector3(22, 0.2, 11), radius: 3.0,
       label: 'Press <b>E</b> — talk to Stillwater Defector',
       handler: async () => {
         defector.rotation.y = Math.atan2(this.tamer.position.x - defector.position.x, this.tamer.position.z - defector.position.z);
@@ -812,9 +864,25 @@ export class HyujonCity {
             await conversation([
               ['Stillwater Defector', `The water... it's so cold... and the song... Vormaela's voice, it never stops echoing in the pipes...`],
               ['Stillwater Defector', `I didn't want to drown. I wanted to stay 'kept', but not like this. Not frozen in the dark.`],
-              ['Stillwater Defector', `You want the override? The security cipher for the terminal pump is 'AETHER-99'. Tell Kovar. Just... make the Tideling-Mother stop singing... please...`],
             ]);
+            const choiceIdx = await choose('Defector Response', 'Choose your response:', [
+              'Stillness is peace. (Align with Stillwater)',
+              'We will burn that song out of the terminal. (Align with Dawnflame)',
+              'Why do you worship Ghandra\'s generals? (Align with Crownless)'
+            ]);
+            
+            if (choiceIdx === 0) {
+              p.stillwaterAlignment++;
+              await say('Stillwater Defector', `Yes... stillness. You understand the quiet. The override is 'AETHER-99'. Make it quiet...`);
+            } else if (choiceIdx === 1) {
+              p.dawnAlignment++;
+              await say('Stillwater Defector', `Fire... so bright, it hurts. The override is 'AETHER-99'. Burn the Tideling-Mother, please...`);
+            } else {
+              p.crownlessAlignment++;
+              await say('Stillwater Defector', `They are not just generals. They are the hollow crown. The override is 'AETHER-99'. Tell Kovar...`);
+            }
             p.flags['interrogated_defector'] = true;
+            p.save();
             toast("Obtained override code: AETHER-99", 'gold');
           } else {
             await say('Stillwater Defector', "AETHER-99. That's the code. Tell Kovar and stop the song... it's too loud...");
@@ -910,6 +978,7 @@ export class HyujonCity {
     clyde.position.set(0, 0, -4.2); clyde.rotation.y = 0;
     tagNpc(clyde, 'Doctor Clyde'); s.add(clyde);
     this.intNpcs.push(clyde);
+    this.label3d(s, 'Doctor Clyde', '#e8d9a8', new THREE.Vector3(0, 2.5, -4.2), 2.4);
 
     this.intInteractables.push({
       pos: new THREE.Vector3(0, 0, -1.8), radius: 2.2,
@@ -940,7 +1009,19 @@ export class HyujonCity {
           p.save();
           updateHUD(p, 'Doctor Clyde\'s Lab');
         } else if (questState(p, 'story_drowned_terminal') === 'active') {
-          await say('Doctor Clyde', "Marshal Kovar has the security override. Work with her and Tem to unlock the Drowned Terminal and reclaim the 3rd Harmonik!");
+          if (p.stillwaterAlignment > p.dawnAlignment) {
+            await conversation([
+              ['Doctor Clyde', "Marshal Kovar has the override. Work with her and Tem to unseal the terminal."],
+              ['Doctor Clyde', "By the way, tamer... you carry a very quiet, cold aura... almost like the Stillwater Communion. Don't let their quiet freeze your fire."],
+            ]);
+          } else if (p.dawnAlignment > p.stillwaterAlignment) {
+            await conversation([
+              ['Doctor Clyde', "Marshal Kovar has the override. Work with her and Tem to unseal the terminal."],
+              ['Doctor Clyde', "By the way, tamer... I can feel Aljay's spark burning hot in you. Don't let that fire burn you out; remember, even the sun needs to set."],
+            ]);
+          } else {
+            await say('Doctor Clyde', "Marshal Kovar has the security override. Work with her and Tem to unlock the Drowned Terminal and reclaim the 3rd Harmonik!");
+          }
         } else if (questState(p, 'story_aether_evo') === 'active') {
           await say('Doctor Clyde', "Deliver the 3rd Harmonik notes to the Haven City Sanctum reactor, kid! Aether-Evo is crucial.");
         } else {
@@ -1193,6 +1274,11 @@ export class HyujonCity {
         { x: 22, z: 12, label: 'Harbor Cells', color: '#a0e8ff', kind: 'poi' },
         { x: 0, z: -24, label: 'Drowned Terminal', color: '#11ffcc', kind: 'door' },
         { x: 0, z: 27, label: 'Aether-Pod Gate', color: '#4fe0ff', kind: 'door' },
+        { x: -6, z: 10, label: 'Grieving Tamer', color: '#888888', kind: 'npc' },
+        { x: 8, z: 14, label: 'Old Machinist', color: '#888888', kind: 'npc' },
+        { x: 8, z: -18, label: 'Marshal Kovar', color: '#ff5555', kind: 'npc' },
+        { x: -6, z: -8, label: 'Archivist Tem', color: '#55aaff', kind: 'npc' },
+        { x: 22, z: 11, label: 'Stillwater Defector', color: '#55aaff', kind: 'npc' },
       ];
       drawAreaMap(document.getElementById('minimap') as unknown as HTMLCanvasElement, {
         shape: 'circle', radius: 30,

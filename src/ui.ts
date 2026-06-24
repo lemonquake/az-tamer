@@ -54,6 +54,9 @@ export function toast(msg: string, kind: '' | 'gold' | 'red' = '', ms = 2400): v
     setTimeout(() => el.remove(), 420);
   }, ms);
 }
+// Expose toast to modules that must avoid a static ui<->state import cycle
+// (e.g. Player.awardGuildPoints in state.ts).
+(window as any).__azToast = toast;
 
 // ---------------- dialogue ----------------
 let screenEscHandler: ((e: KeyboardEvent) => void) | null = null;
@@ -371,7 +374,7 @@ export function showHotkeys(on: boolean, dungeon = false, regions = false): void
   el.innerHTML = [
     '<b>P</b> Tamer', '<b>I</b> Items', '<b>G</b> Guardians', '<b>C</b> Crawler', '<b>J</b> Journal', '<b>V</b> Evolutions', '<b>L</b> Leaderboard',
     ...(dungeon ? ['<b>M</b> Map'] : []),
-    ...(regions ? ['<b>T</b> Regions'] : []),
+    ...(regions ? ['<b>B</b> Expeditions', '<b>T</b> Regions'] : []),
     '<b>N</b> Sound', '<b>Esc</b> Menu',
   ].map(s => {
     const match = s.match(/<b>(.*?)<\/b>\s*(.*)/);
@@ -539,11 +542,64 @@ export async function executeCheatFlow(player: Player): Promise<void> {
   }
 }
 
+const NPC_QUESTS: Record<string, string[]> = {
+  'Archivist Wren': ['side_ledger', 'side_lost_interviews'],
+  'Old Tomas': ['side_wrench'],
+  'Chef Marlo': ['side_chef'],
+  'nervous student': ['side_niko'],
+  'Professor Lyra': ['side_quiz'],
+  'Rival Kade': ['side_spar'],
+  'Old Bait Pete': ['side_fishing'],
+  'Granny Essa': ['side_essa'],
+  'Marshal Kovar': ['story_drowned_terminal'],
+  'Archivist Tem': ['story_drowned_terminal'],
+  'Stillwater Defector': ['story_drowned_terminal'],
+  'Doctor Clyde': ['story_hyujon'],
+  'Mayor Christine': ['story_christine'],
+  'Mayor Airah': ['story_getup', 'story_christine', 'story_azrael_clues'],
+  'Greggy the Stormheart': ['story_agdao', 'story_cradle', 'story_echoes'],
+  'Azrin': ['story_daughters', 'story_azrael_clues'],
+  'Azrael': ['story_daughters'],
+  'Ivan Lawrence': ['story_veilfall', 'story_mirrorhouse'],
+  'Master Bren': ['pyrelight_m1', 'pyrelight_m2', 'pyrelight_m3', 'pyrelight_m4'],
+  'Mistress Sera': ['mistveil_m1', 'mistveil_m2', 'mistveil_m3', 'mistveil_m4'],
+  'Warden Oakes': ['thornward_m1', 'thornward_m2', 'thornward_m3', 'thornward_m4'],
+  'Captain Vex': ['stormcall_m1', 'stormcall_m2', 'stormcall_m3', 'stormcall_m4'],
+  'Keeper Nyx': ['duskwatch_m1', 'duskwatch_m2', 'duskwatch_m3', 'duskwatch_m4'],
+};
+
 export function showInteractHint(text: string | null): void {
   const el = $('interact-hint');
   if (!text) { el.style.display = 'none'; return; }
   el.style.display = 'block';
-  el.innerHTML = text;
+
+  let appended = '';
+  const p = Player.activeInstance;
+  if (p) {
+    for (const [npcName, questIds] of Object.entries(NPC_QUESTS)) {
+      if (text.includes(npcName) || (npcName === 'nervous student' && text.includes('nervous student'))) {
+        let hasReady = false;
+        let hasAvailable = false;
+        let hasActive = false;
+        for (const qid of questIds) {
+          const st = questState(p, qid);
+          if (st === 'ready') hasReady = true;
+          else if (st === 'available') hasAvailable = true;
+          else if (st === 'active') hasActive = true;
+        }
+        if (hasReady) {
+          appended = ' <span style="color:#ffd700;font-weight:bold">❓ (Quest Ready)</span>';
+        } else if (hasAvailable) {
+          appended = ' <span style="color:#ffd700;font-weight:bold">❗ (Quest Available)</span>';
+        } else if (hasActive) {
+          appended = ' <span style="color:#b18ae8;font-weight:bold">(Quest Active)</span>';
+        }
+        break;
+      }
+    }
+  }
+
+  el.innerHTML = text + appended;
 }
 
 // ---------------- screens ----------------
@@ -1562,7 +1618,7 @@ function renderInventory(p: Player): string {
   if (invSel) {
     const it = ITEMS[invSel];
     const qty = p.itemCount(invSel);
-    const usable = ['heal', 'sp', 'revive', 'boost', 'feast'].includes(it.kind);
+    const usable = ['heal', 'sp', 'revive', 'boost', 'feast'].includes(it.kind) || invSel === 'dawnflame_recorder';
     const droppable = it.kind !== 'relic';
     detail = `
       <div class="jdetail-head">
@@ -2076,7 +2132,64 @@ function showTechniqueManagement(g: Guardian, back: () => void): void {
   render();
 }
 
+async function playDawnflameRecorder(player: Player, refresh: () => void): Promise<void> {
+  closeMenu();
+  const options = [
+    '📼 Crystal 1: Ghandra\'s Echo (Mossdeep)',
+    '📼 Crystal 2: The Reaching (Sunken Vault)',
+    '📼 Crystal 3: The Legion War (Thunderfen)',
+    '📼 Crystal 4: Greggy\'s Silence (Cradle Hollow)',
+    '📼 Crystal 5: The Ghandra Seal (Stormspire)',
+    '🔓 Reconstruct Hidden Message',
+    'Cancel'
+  ];
+  const pick = await choose('Dawnflame Recorder', 'Select a recording to play back:', options);
+  if (pick === 5) {
+    await conversation([
+      ['Dawnflame Recorder', 'Realigning Ghandra frequencies... Decrypting hidden track...'],
+      ['Aljay (recording)', '...If you are hearing this hidden log, it means Wren succeeded. Good.'],
+      ['Aljay (recording)', 'I left a cache of Old-Empire alloys and Aether blueprints buried where Greggy and I first met Veyl.'],
+      ['Aljay (recording)', 'Under the shadow of the Stormspire, near the eastern ruins... look for coordinates (22.5, 10.4). There is a steel valve. Turn it.'],
+      ['System', 'Decoded secret coordinates: Stormspire ruins (22.5, 10.4). Search the area on your next expedition!']
+    ]);
+  } else if (pick < 5) {
+    const dialogues: Record<number, string[]> = {
+      0: [
+        "Aljay (recording): The First Dawn, ~3,000 years ago.",
+        "Aljay (recording): The scholars say Ghandra's veil thinned and the Guardians just... walked into our world. But it wasn't a migration, you know? It was a rescue.",
+        "Aljay (recording): Ghandra was collapsing even back then. They came here to survive. And they bonded with us because our souls were the only anchors that kept them from fading. Remember that."
+      ],
+      1: [
+        "Aljay (recording): The Reaching. That was our darkest hour.",
+        "Aljay (recording): Humans learned too much, too fast. Force-feeding Ghandra energy, chaining hearts, selling Guardians by the shipload. Power is an addiction.",
+        "Aljay (recording): When Sera, Oakes, Nyx and I stood up to end it, we didn't just write the Guild Compact. We wove it into the soil. No more chains. Only trust."
+      ],
+      2: [
+        "Aljay (recording): The Legion War. Fifteen years ago.",
+        "Aljay (recording): Nine corrupted generals, rotting the Veil from the inside. Greggy, Onnel, and I... we didn't win because we were strong. We won because we were three.",
+        "Aljay (recording): I still remember Greggy's laugh when we charged Voltrazar. And Onnel's silence when we wove the final knot. We left a piece of our hearts at that door."
+      ],
+      3: [
+        "Aljay (recording): Greggy's choice.",
+        "Aljay (recording): When it was over, Greggy went to Agdao. He said he was retired, but I knew. He climbed that bluff to watch the seal's shadow in the water. He's the lock.",
+        "Aljay (recording): I miss him. I miss his loud tea. If you're listening to this, and you see him... tell him Aljay said to take a day off. He won't, but say it anyway."
+      ],
+      4: [
+        "Aljay (recording): The Ghandra Seal and my daughters.",
+        "Aljay (recording): The seal thins a little every season. And Foretales... the network... they keep glazing us on every crystal. It's a cover. They're preparing to pull the leash.",
+        "Aljay (recording): If I don't make it back, Azrin, Azrael... I'm sorry. I had to go. The door I built needs a Dawnflame's spark. Tamer, if you're helping them... keep them safe. Please."
+      ]
+    };
+    await conversation(dialogues[pick].map(line => ['Aljay (recording)', line]));
+  }
+  refresh();
+}
+
 async function useItemFlow(player: Player, itemId: string, refresh: () => void): Promise<void> {
+  if (itemId === 'dawnflame_recorder') {
+    await playDawnflameRecorder(player, refresh);
+    return;
+  }
   const it = ITEMS[itemId];
   const targets = it.kind === 'revive' ? player.party.filter(g => g.fainted) : player.party.filter(g => !g.fainted);
   if (!targets.length) { toast('No valid target.', 'red'); return; }

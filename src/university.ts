@@ -339,7 +339,11 @@ export class University {
     const q = QUESTS[questId];
     const st = questState(p, questId);
     if (st === 'done') { await say(giver, lines.done); return; }
-    if (st === 'available' || st === 'locked') {
+    if (st === 'locked') {
+      await say(giver, "Check back later, tamer. You might need to prove yourself elsewhere first.");
+      return;
+    }
+    if (st === 'available') {
       await conversation(lines.offer);
       const pick = await choose(giver, `${q.objective} — will you help?`, ['Accept the quest', 'Maybe later']);
       if (pick === 0) {
@@ -1344,19 +1348,58 @@ export class University {
     r.interactables.push({
       pos: new THREE.Vector3(3.2, 0, -4.2), radius: 1.8,
       label: 'Press <b>E</b> — talk to Archivist Wren',
-      handler: () => this.questTalk('side_ledger', 'Archivist Wren', {
-        offer: [
-          ['Archivist Wren', 'Shhh. Thank you. Now — you may speak, quietly. You look like you have working legs and a conscience. I need both.'],
-          ['Archivist Wren', 'My Expedition Ledger — two hundred and twelve years of survey notes, irreplaceable, hand-indexed BY ME — was checked out by a student "for lunch reading".'],
-          ['Archivist Wren', 'LUNCH. READING. It is somewhere in that cafeteria, absorbing gravy. Bring it home and the Archive will be generous.'],
-        ],
-        accepted: 'The cafeteria. Red binding, brass corners, my initial on the bookplate. If anything is pressed between the pages, do not tell me what.',
-        ready: [
-          ['Archivist Wren', 'Oh — oh, there she is. Come here, you wonderful, gravy-soaked disaster.'],
-          ['Archivist Wren', '…There is a sandwich in chapter forty. I said don\'t tell me. I\'m telling myself. The Archive thanks you, tamer; take this, and may your boots always find dry ground.'],
-        ],
-        done: 'The Ledger is back under glass, with a new rule plaque: "NOT LUNCH READING." It\'s working so far.',
-      }),
+      handler: async () => {
+        const p = this.player;
+        const hasAllCrystals = p.itemCount('audio_crystal_1') > 0 &&
+                               p.itemCount('audio_crystal_2') > 0 &&
+                               p.itemCount('audio_crystal_3') > 0 &&
+                               p.itemCount('audio_crystal_4') > 0 &&
+                               p.itemCount('audio_crystal_5') > 0;
+        
+        if (hasAllCrystals && p.quests['side_lost_interviews'] !== 'done') {
+          if (questState(p, 'side_lost_interviews') === 'available') {
+            acceptQuest(p, 'side_lost_interviews');
+          }
+          
+          await conversation([
+            ['Archivist Wren', 'Wait... what are those glowing spools in your pack? Is that...'],
+            ['Archivist Wren', 'By Aurelia\'s hearth! These are Aurelian Audio Crystals. The Ghandra signature match is perfect... these are Aljay\'s lost recording spools!'],
+            ['Archivist Wren', 'Everyone thought these were destroyed when the Legion War ended. You found them deep within the core dungeons? Incredible.'],
+            ['Archivist Wren', 'Let me run them through the Archive\'s resonance decoder...'],
+            ['Archive Decoder', 'Processing spools... Frequency alignment: 100%. Reconstructing Dawnflame transmission...'],
+            ['Aljay (recording)', '...This is the Dawnflame. To whoever finds this: I left these messages because the truth has a funny habit of getting edited. Greggy knows, Onnel knows. Ghandra\'s seal is only a mirror... the real threat is already inside.'],
+            ['Archivist Wren', 'Astonishing. Aljay\'s voice recorder is still intact inside this casing. He was warning us about the News network... Foretales... years ago!'],
+            ['Archivist Wren', 'Tamer, you have done a great service to history. Take this Dawnflame Recorder — Aljay\'s own device. It still radiates his warmth. Keep it in your Crawler, and your Guardians will feel his dawn-spark.'],
+          ]);
+          
+          const summary = completeQuest(p, 'side_lost_interviews');
+          toast("Quest complete: Aljay's Lost Interviews!", 'gold');
+          if (summary) toast(`Received ${summary}`, 'gold');
+          updateHUD(p, 'Leodones University');
+          return;
+        }
+
+        if (p.quests['side_lost_interviews'] === 'done') {
+          if (questState(p, 'side_ledger') === 'done') {
+            await say('Archivist Wren', 'Aljay\'s recorder is in safe hands with you. Study his words, tamer. The future is unwritten.');
+            return;
+          }
+        }
+        
+        await this.questTalk('side_ledger', 'Archivist Wren', {
+          offer: [
+            ['Archivist Wren', 'Shhh. Thank you. Now — you may speak, quietly. You look like you have working legs and a conscience. I need both.'],
+            ['Archivist Wren', 'My Expedition Ledger — two hundred and twelve years of survey notes, irreplaceable, hand-indexed BY ME — was checked out by a student "for lunch reading".'],
+            ['Archivist Wren', 'LUNCH. READING. It is somewhere in that cafeteria, absorbing gravy. Bring it home and the Archive will be generous.'],
+          ],
+          accepted: 'The cafeteria. Red binding, brass corners, my initial on the bookplate. If anything is pressed between the pages, do not tell me what.',
+          ready: [
+            ['Archivist Wren', 'Oh — oh, there she is. Come here, you wonderful, gravy-soaked disaster.'],
+            ['Archivist Wren', '…There is a sandwich in chapter forty. I said don\'t tell me. I\'m telling myself. The Archive thanks you, tamer; take this, and may your boots always find dry ground.'],
+          ],
+          done: 'The Ledger is back under glass, with a new rule plaque: "NOT LUNCH READING." It\'s working so far.',
+        });
+      },
     });
 
     // ---- Historian Veyl — the man who maps storms (the Chronicle, ch. II–IV) ----

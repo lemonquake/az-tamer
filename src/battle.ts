@@ -10,7 +10,7 @@ import * as THREE from 'three';
 import {
   TECHS, ITEMS, TYPE_CSS, TYPE_COLORS, TYPE_ELEMENT, expForLevel,
   elementsOf, elementMult, ELEMENT_ICONS, type Technique, type GType, type Element, getSpeciesPassive, type TechStatusEffect as ActiveStatus, type TechKind, isBig3Legend, formRank,
-  STAGE_STAT_MULT
+  STAGE_STAT_MULT, CHARMS, CHARM_SHOP, type CharmEffect
 } from './data';
 import { sfx, playMusic } from './audio';
 import { Guardian, Player } from './state';
@@ -23,6 +23,7 @@ import { VFX } from './vfx';
 import type { RingVictoryStyle } from './celebrate';
 import { say, choose, toast, askName, setStoryInBattle, updateWorldStatus, refreshHUD } from './ui';
 import { recordBattleMMR } from './mmr';
+import { recordBountyEvent } from './bounties';
 import { runBattleTutorial } from './tutorial';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
@@ -164,6 +165,21 @@ const ARENA_TAGLINES: Record<string, string> = {
   mossdeep: 'Spores drift like slow green snow…',
   vault: 'Drowned light filters through the broken vaults…',
   storm: 'The spire hums — the old war-engine is listening…',
+  // Guild expeditions
+  frostpeak: 'Snow sifts down through the blue ice…',
+  whiteout: 'The blizzard closes in from every side…',
+  sanctum: 'Ordered light pours from the hallowed stone…',
+  emberforge: 'Heat shimmers off the caldera floor…',
+  tempest: 'Loose current arcs between the pylons…',
+  zephyr: 'The wind screams between the spires…',
+  verdantmaze: 'The living walls breathe around you…',
+  tidecatacomb: 'Black water laps at the catacomb steps…',
+  umbralabyss: 'The dark drinks your lamplight whole…',
+  gaiadepths: 'The bedrock groans in the deep…',
+  // Captain elite expeditions
+  glacialthrone: 'The frozen sky presses down on the throne…',
+  empyreanvault: 'The radiance here has weight…',
+  obsidianmaw: 'The obsidian breathes, and waits…',
 };
 
 export class Battle {
@@ -719,6 +735,20 @@ export class Battle {
         this.pushLog('❄️', `<b>${g.nickname}</b>'s Glacial Barrier granted a ${shieldHp} HP barrier!`);
         this.fx.glow(rig.group.position.clone().setY(0.8), 0x8ae2ff, { scale: 1.4, life: 0.5 });
       }
+
+      // Held-charm entry effects (stat-stage / barrier)
+      const entryCharm = this.charmFx(u);
+      if (entryCharm?.startStage) {
+        const st = entryCharm.startStage;
+        u.stages[st.stat] = Math.min(3, u.stages[st.stat] + st.n);
+        this.updateUnitMods(u);
+        this.pushLog('🎽', `<b>${g.nickname}</b>'s ${CHARMS[g.heldCharm!].name} set its stance (+${st.n} ${st.stat.toUpperCase()}).`);
+      }
+      if (entryCharm?.startShieldPct) {
+        const shieldHp = Math.floor(g.stats.hp * entryCharm.startShieldPct);
+        u.statuses.push({ id: 'charm_shield', name: CHARMS[g.heldCharm!].name, type: 'buff', duration: 99, effect: 'shield', value: 0, shieldHp, icon: '🔵', desc: 'A charm-spun barrier.' });
+        this.fx.glow(rig.group.position.clone().setY(0.8), 0x5ad2ff, { scale: 1.4, life: 0.5 });
+      }
     }
     return u;
   }
@@ -1191,6 +1221,7 @@ export class Battle {
 
   private async inflictDamage(tgt: Unit, rawDmg: number, source: 'strike' | 'tech' | 'reflect' | 'dot' | 'doom' | 'corrosion' | 'curse', techKind?: TechKind): Promise<number> {
     let finalDmg = Math.max(2, Math.min(9999, rawDmg));
+    const tgtCharm = this.charmFx(tgt);
 
     // 1. Waking up a sleeping unit
     if (tgt.statuses && tgt.statuses.some(s => s.effect === 'sleep')) {
@@ -1275,6 +1306,15 @@ export class Battle {
       sfx('guard');
     }
 
+    // Charm: Focus Band / Eternal Crest — endure a lethal blow at 1 HP (once per battle)
+    if (tgtCharm?.endure && finalDmg >= tgt.g.hp && tgt.g.hp > 0 && !(tgt as any).charmEndureUsed) {
+      (tgt as any).charmEndureUsed = true;
+      finalDmg = tgt.g.hp - 1;
+      this.log(`🎗️ <b>${tgt.g.nickname}</b>'s ${CHARMS[tgt.g.heldCharm!].name} let it endure at 1 HP!`);
+      this.fx.glow(this.chest(tgt), 0xffe08a, { scale: 1.4, life: 0.4 });
+      sfx('guard');
+    }
+
     // Apply Feedback Shock (reflect 10% damage back to all enemies)
     if (finalDmg > 0 && getSpeciesPassive(tgt.g.species).name === 'Feedback Shock' && (source === 'strike' || source === 'tech')) {
       const reflectVal = Math.floor(finalDmg * 0.10);
@@ -1316,6 +1356,16 @@ export class Battle {
         }
       }
 
+      // Charm: Phoenix Feather / Eternal Crest — self-revive once per battle
+      if (tgt.g.hp <= 0 && tgtCharm?.reviveOncePct && !(tgt as any).charmReviveUsed) {
+        (tgt as any).charmReviveUsed = true;
+        tgt.g.hp = Math.max(1, Math.floor(tgt.g.stats.hp * tgtCharm.reviveOncePct));
+        this.log(`🪶 <b>${tgt.g.nickname}</b>'s ${CHARMS[tgt.g.heldCharm!].name} pulled it back at ${Math.round(tgtCharm.reviveOncePct * 100)}% HP!`);
+        this.fx.pillar(tgt.rig.group.position, 0xffcf5a, { height: 4, radius: 0.8, life: 1.0 });
+        this.fx.glow(this.chest(tgt), 0xffd25a, { scale: 1.8, life: 0.5 });
+        sfx('heal');
+      }
+
       // Check Second Wind
       if (tgt.g.hp > 0 && tgt.g.hp < tgt.g.stats.hp * 0.20 && getSpeciesPassive(tgt.g.species).name === 'Second Wind' && !(tgt as any).secondWindTriggered) {
         (tgt as any).secondWindTriggered = true;
@@ -1336,10 +1386,16 @@ export class Battle {
     if (!tech.cooldown) return 0;
     return u.cooldowns?.[tech.id] ?? 0;
   }
+  /** Effective SP cost of a tech for a unit (Sage Mind passive + Sage Bead charm discounts). */
+  private spCostFor(u: Unit, tech: Technique): number {
+    let c = getSpeciesPassive(u.g.species).name === 'Sage Mind' ? Math.floor(tech.spCost * 0.8) : tech.spCost;
+    const d = this.charmFx(u)?.spDiscountPct ?? 0;
+    if (d > 0) c = Math.max(0, Math.floor(c * (1 - d)));
+    return c;
+  }
   /** A tech the unit can actually pick this turn — enough SP and off cooldown. */
   private techReady(u: Unit, tech: Technique): boolean {
-    const cost = getSpeciesPassive(u.g.species).name === 'Sage Mind' ? Math.floor(tech.spCost * 0.8) : tech.spCost;
-    return u.g.sp >= cost && this.cooldownLeft(u, tech) === 0;
+    return u.g.sp >= this.spCostFor(u, tech) && this.cooldownLeft(u, tech) === 0;
   }
   /** Put a tech on cooldown after use. +1 so the start-of-turn tick still leaves a full N-turn wait. */
   private startCooldown(u: Unit, tech: Technique): void {
@@ -1356,8 +1412,16 @@ export class Battle {
    * Nothing short of a critical super-effective ultimate can pass 70% —
    * one-shots are impossible by construction.
    */
+  /** The effect bundle of a unit's held charm, or null. */
+  private charmFx(u: Unit): CharmEffect | null {
+    const id = u.g.heldCharm;
+    return id ? (CHARMS[id]?.effect ?? null) : null;
+  }
+
   private computeDamage(att: Unit, def: Unit, tech: Technique): { dmg: number; eff: number; crit: boolean; outclassed: boolean } {
     const as = att.g.stats, ds = def.g.stats;
+    const attCharm = this.charmFx(att);
+    const defCharm = this.charmFx(def);
     const atkStatusMult = this.getStatusMultiplier(att, 'atk');
     const defStatusMult = this.getStatusMultiplier(def, 'def');
     const wisStatusMult = this.getStatusMultiplier(att, 'wis');
@@ -1371,7 +1435,7 @@ export class Battle {
     const stab = elementsOf(att.g).includes(attEl) ? 1.15 : 1;
     // The Big Three's bonded lights strike on another tier — and crit far more often.
     const attIsLegend = isBig3Legend(att.g.species.id);
-    let critChance = attIsLegend ? 0.16 : 0.08;
+    let critChance = (attIsLegend ? 0.16 : 0.08) + (attCharm?.critChance ?? 0);
     if (att.g.hp < att.g.stats.hp * 0.3 && getSpeciesPassive(att.g.species).name === 'Desperate Measure') {
       critChance += 0.20;
     }
@@ -1396,8 +1460,8 @@ export class Battle {
     if (attIsLegend) dmg = Math.floor(dmg * 1.25);        // legendary might — every blow hits noticeably harder
     if (tech.signature) dmg = Math.floor(dmg * 1.2);      // a unique signature art bites deeper still
     
-    // Critical Focus passive (critical hits deal 2.0x instead of 1.5x)
-    const critMult = getSpeciesPassive(att.g.species).name === 'Critical Focus' ? 2.0 : 1.5;
+    // Critical Focus passive (critical hits deal 2.0x instead of 1.5x); charm adds on top.
+    const critMult = (getSpeciesPassive(att.g.species).name === 'Critical Focus' ? 2.0 : 1.5) + (attCharm?.critMultBonus ?? 0);
     if (crit) dmg = Math.floor(dmg * critMult);
 
     // Heavy Guard passive (guarding reduces damage by 80% instead of 55%)
@@ -1511,6 +1575,58 @@ export class Battle {
       }
     }
 
+    // Apply Faction Alignment Resonance Perks
+    const pInstance = Player.activeInstance;
+    if (pInstance) {
+      if (att.side === 'player') {
+        // False Dawn Alignment sunfire boost (Fire or Light element moves)
+        if ((pInstance.dawnAlignment ?? 0) > 0 && (attEl === 'Fire' || attEl === 'Light')) {
+          const boost = Math.min(0.15, 0.02 * pInstance.dawnAlignment);
+          dmg = Math.floor(dmg * (1 + boost));
+          this.log(`<span style="color:#ffd23a">[False Dawn Sunfire: +${Math.round(boost * 100)}% Fire/Light damage!]</span>`);
+        }
+        // Stillwater Communion Alignment resonance (Water or Ice element moves)
+        if ((pInstance.stillwaterAlignment ?? 0) > 0 && (attEl === 'Water' || attEl === 'Ice')) {
+          const boost = Math.min(0.15, 0.02 * pInstance.stillwaterAlignment);
+          dmg = Math.floor(dmg * (1 + boost));
+          this.log(`<span style="color:#a0e8ff">[Stillwater Resonance: +${Math.round(boost * 100)}% Water/Ice damage!]</span>`);
+        }
+        // Rootless Alignment resonance (Nature or Rock element moves)
+        if ((pInstance.rootlessAlignment ?? 0) > 0 && (attEl === 'Nature' || attEl === 'Rock')) {
+          const boost = Math.min(0.15, 0.02 * pInstance.rootlessAlignment);
+          dmg = Math.floor(dmg * (1 + boost));
+          this.log(`<span style="color:#5aff9a">[Rootless Resonance: +${Math.round(boost * 100)}% Nature/Rock damage!]</span>`);
+        }
+        // Crownless Procession Alignment resonance (Dark, Electric, or Space element moves)
+        if ((pInstance.crownlessAlignment ?? 0) > 0 && (attEl === 'Dark' || attEl === 'Electric' || attEl === 'Space')) {
+          const boost = Math.min(0.15, 0.02 * pInstance.crownlessAlignment);
+          dmg = Math.floor(dmg * (1 + boost));
+          this.log(`<span style="color:#e85a6a">[Crownless Resonance: +${Math.round(boost * 100)}% Dark/Electric/Space damage!]</span>`);
+        }
+      }
+      if (def.side === 'player') {
+        // Stillwater Glacial Shield (reduces damage taken based on Stillwater alignment)
+        if ((pInstance.stillwaterAlignment ?? 0) > 0) {
+          const reduction = Math.min(0.10, 0.01 * pInstance.stillwaterAlignment);
+          dmg = Math.floor(dmg * (1 - reduction));
+          this.log(`<span style="color:#a0e8ff">[Stillwater Glacial Shield: -${Math.round(reduction * 100)}% damage taken!]</span>`);
+        }
+      }
+    }
+
+    // ---- Held-charm damage modifiers ----
+    if (attCharm) {
+      if (attCharm.allDamagePct) dmg = Math.floor(dmg * (1 + attCharm.allDamagePct));
+      if (attCharm.elementBoost && attEl === attCharm.elementBoost.element) dmg = Math.floor(dmg * (1 + attCharm.elementBoost.pct));
+      if (attCharm.typeBoost && tech.type === attCharm.typeBoost.type) dmg = Math.floor(dmg * (1 + attCharm.typeBoost.pct));
+      if (attCharm.kindBoost && tech.kind === attCharm.kindBoost.kind) dmg = Math.floor(dmg * (1 + attCharm.kindBoost.pct));
+      if (attCharm.lowHpAtkPct && att.g.hp < att.g.stats.hp * 0.3) dmg = Math.floor(dmg * (1 + attCharm.lowHpAtkPct));
+    }
+    if (defCharm) {
+      if (defCharm.damageTakenPct) dmg = Math.floor(dmg * (1 - defCharm.damageTakenPct));
+      if (defCharm.superResistPct && eff > 1.0) dmg = Math.floor(dmg * (1 - defCharm.superResistPct));
+    }
+
     return { dmg: Math.max(1, dmg), eff, crit, outclassed: formBlock > 0 };
   }
 
@@ -1529,7 +1645,7 @@ export class Battle {
 
   // ---------- technique execution ----------
   private async execTech(att: Unit, tech: Technique, target: Unit | null, isEcho = false): Promise<void> {
-    const spCost = getSpeciesPassive(att.g.species).name === 'Sage Mind' ? Math.floor(tech.spCost * 0.8) : tech.spCost;
+    const spCost = this.spCostFor(att, tech);
     att.g.sp = Math.max(0, att.g.sp - spCost);
     this.startCooldown(att, tech);
     const color = TYPE_COLORS[tech.type];
@@ -1878,6 +1994,25 @@ export class Battle {
 
   private async afterHitEffects(att: Unit, tgt: Unit, dmg: number, source?: 'strike' | 'tech', techKind?: TechKind, techType?: string): Promise<void> {
     if (tgt.g.fainted) return;
+
+    // Charm: Leech Sigil / Worldsoul — attacker heals a % of damage dealt
+    const aLeech = this.charmFx(att);
+    if (aLeech?.lifestealPct && dmg > 0 && !att.g.fainted) {
+      const heal = Math.max(1, Math.floor(dmg * aLeech.lifestealPct));
+      att.g.hp = Math.min(att.g.stats.hp, att.g.hp + heal);
+      this.fx.glow(this.chest(att), 0xff6a8a, { scale: 1.0, life: 0.25 });
+      makeFloatingDamageText(this.scene, att.rig.group.position.clone().setY(2), `+${heal}`, '#ff8aa6');
+    }
+    // Charm: Thorn Aegis — defender reflects a % of damage taken to the attacker
+    const dThorns = this.charmFx(tgt);
+    if (dThorns?.thornsPct && dmg > 0 && !att.g.fainted) {
+      const refl = Math.max(1, Math.floor(dmg * dThorns.thornsPct));
+      const actual = await this.inflictDamage(att, refl, 'reflect');
+      this.log(`🌹 <b>${tgt.g.nickname}</b>'s ${CHARMS[tgt.g.heldCharm!].name} reflected ${actual} damage to <b>${att.g.nickname}</b>!`);
+      this.fx.glow(this.chest(att), 0xff4a6a, { scale: 1.0, life: 0.25 });
+      this.renderCards();
+      await wait(200);
+    }
     
     // Void Shield counter-curse
     if (tgt.statuses && tgt.statuses.some(s => s.id === 'void_shield') && !att.g.fainted) {
@@ -2064,7 +2199,8 @@ export class Battle {
 
   private async applyTechStatus(att: Unit, tech: Technique, targets: Unit[]): Promise<void> {
     if (!tech.statusEffect) return;
-    const chance = tech.statusChance ?? 1.0;
+    // Venom Fang charm sharpens debuff infliction chance.
+    const chance = (tech.statusChance ?? 1.0) + (tech.statusEffect.type === 'debuff' ? (this.charmFx(att)?.statusChanceBonus ?? 0) : 0);
     if (Math.random() < chance) {
       const isBeneficial = tech.effect === 'heal' || tech.effect === 'flat_heal' || tech.effect === 'percent_heal' || tech.statusEffect.type === 'buff';
       const targetsToApply = tech.target === 'all'
@@ -2081,7 +2217,16 @@ export class Battle {
           this.log(`🛡️ <b>${tgt.g.nickname}</b>'s Venom passive makes it immune to poison!`);
           continue;
         }
-        
+
+        // Charm: Ward Amulet / Sovereign Sigil — resist incoming debuffs
+        if (tech.statusEffect.type === 'debuff') {
+          const resist = this.charmFx(tgt)?.statusResistPct ?? 0;
+          if (resist > 0 && Math.random() < resist) {
+            this.log(`🧿 <b>${tgt.g.nickname}</b>'s charm warded off ${tech.statusEffect.name}!`);
+            continue;
+          }
+        }
+
         if (!tgt.statuses) tgt.statuses = [];
         const statusId = tech.statusEffect.id;
         const existing = tgt.statuses.find(s => s.id === statusId);
@@ -2403,6 +2548,27 @@ export class Battle {
       if (u.g.fainted) continue;
 
       const passive = getSpeciesPassive(u.g.species);
+
+      // Held-charm round effects (regen / cleanse)
+      const rCharm = this.charmFx(u);
+      if (rCharm?.regenPct && u.g.hp < u.g.stats.hp && !(u.statuses && u.statuses.some(st => st.effect === 'curse'))) {
+        const heal = Math.floor(u.g.stats.hp * rCharm.regenPct);
+        if (heal > 0) {
+          u.g.hp = Math.min(u.g.stats.hp, u.g.hp + heal);
+          this.log(`💚 <b>${u.g.nickname}</b>'s ${CHARMS[u.g.heldCharm!].name} restored ${heal} HP!`);
+          makeFloatingDamageText(this.scene, u.rig.group.position.clone().setY(2), `+${heal}`, '#5ad88a');
+          this.renderCards();
+          await wait(220);
+        }
+      }
+      if (rCharm?.cleanseChance && u.statuses && u.statuses.some(s => s.type === 'debuff') && Math.random() < rCharm.cleanseChance) {
+        const debuff = u.statuses.find(s => s.type === 'debuff')!;
+        u.statuses = u.statuses.filter(s => s !== debuff);
+        this.log(`🔔 <b>${u.g.nickname}</b>'s ${CHARMS[u.g.heldCharm!].name} shed ${debuff.name}!`);
+        this.fx.glow(this.chest(u), 0xffffff, { scale: 1.2, life: 0.3 });
+        this.renderCards();
+        await wait(220);
+      }
 
       // HP Regen passives (Verdant Growth, Temporal Barrier, Rebirth Flame, Lightning Core, Lunar Blessing, Rooted Shield, or procedurals)
       let regenPercent = 0;
@@ -2756,8 +2922,8 @@ export class Battle {
               ? ` <span style="color:var(--ui-red)">🕒 ${cdLeft}</span>`
               : (t.cooldown ? ` <span class="sub">🕒 ${t.cooldown}t</span>` : '');
             return {
-              label: `${sig}<span style="color:${TYPE_CSS[t.type]}">${t.name}</span> <span class="sub">${t.spCost} SP · Pow ${t.power} · ${t.target}</span>${cdTag}`,
-              disabled: u.g.sp < t.spCost || cdLeft > 0,
+              label: `${sig}<span style="color:${TYPE_CSS[t.type]}">${t.name}</span> <span class="sub">${this.spCostFor(u, t)} SP · Pow ${t.power} · ${t.target}</span>${cdTag}`,
+              disabled: u.g.sp < this.spCostFor(u, t) || cdLeft > 0,
             };
           }),
           { key: 'back', label: '← Back', cls: 'danger' },
@@ -3030,7 +3196,7 @@ export class Battle {
   private async doGift(u: Unit, itemId: string, target: Unit): Promise<void> {
     const it = ITEMS[itemId];
     this.player.removeItem(itemId);
-    const gain = Math.floor(it.value * target.favor);
+    const gain = Math.floor(it.value * target.favor) + (this.charmFx(u)?.bondBonus ?? 0);
     target.bond += gain;
     const reaction = target.favor > 1.15 ? 'devours it joyfully!' : target.favor < 0.95 ? 'sniffs it cautiously…' : 'munches it happily.';
     this.log(`Wild <b>${target.g.nickname}</b> ${reaction} <span style="color:var(--ui-purple)">(bond +${gain} → ${Math.round(this.captureChance(target) * 100)}% join chance)</span>`);
@@ -3172,8 +3338,27 @@ export class Battle {
     // sanctioned tournaments: no EXP in the Ring, and the bracket — not the match — pays out
     if (this.opts.noExp) exp = 0;
     if (this.opts.noLoot) shards = 0;
+    // Charm: Lucky Coin — surviving party members boost the Shard haul (best wins, no stacking).
+    const shardSurvivors = this.player.party.filter(g => !g.fainted && !g.isTemp);
+    const shardCharmPct = Math.max(0, ...shardSurvivors.map(g => (g.heldCharm ? CHARMS[g.heldCharm]?.effect.shardBonusPct ?? 0 : 0)));
+    if (shardCharmPct > 0) shards = Math.floor(shards * (1 + shardCharmPct));
     this.player.shards += shards;
     this.player.battlesWon++;
+    // Bounty Board — field/dungeon wins count toward objectives (sanctioned ring bouts don't).
+    if (!this.opts.ring) {
+      const elemSet = new Set<Element>(); const typeSet = new Set<string>();
+      for (const e of this.units.filter(x => x.side === 'enemy')) {
+        elementsOf(e.g).forEach(el => elemSet.add(el));
+        typeSet.add(e.g.species.type);
+      }
+      recordBountyEvent(this.player, 'battleWin', { elements: [...elemSet], types: [...typeSet], boss: !!this.opts.boss, fast: this.round <= 4 });
+    }
+    // Guild Points trickle in from honest field work (never from sanctioned
+    // ring matches). Bosses are worth a visible chunk; skirmishes accrue quietly.
+    if (!this.opts.noLoot) {
+      if (this.opts.boss) this.player.awardGuildPoints(20, 'warden felled');
+      else this.player.awardGuildPoints(2, undefined, true);
+    }
 
     // a foe may drop an item (never in a sanctioned match)
     let dropName: string | null = null;
@@ -3182,14 +3367,26 @@ export class Battle {
       const drop = drops[Math.floor(Math.random() * drops.length)];
       if (this.player.addItem(drop)) dropName = ITEMS[drop].name;
     }
+    // Rare held-charm drop from field battles (bosses far likelier; never ultra, never in the Ring).
+    if (!this.opts.noLoot && Math.random() < (this.opts.boss ? 0.14 : 0.03)) {
+      const cid = CHARM_SHOP[Math.floor(Math.random() * CHARM_SHOP.length)];
+      this.player.addCharm(cid);
+      toast(`🎴 Found a charm — ${CHARMS[cid].name}!`, 'gold', 3500);
+    }
 
     // award EXP, capturing before/after so the screen can show the climb
     const winners = this.player.party.filter(g => !g.fainted && !g.isTemp);
-    const share = (this.opts.noExp || !winners.length) ? 0 : Math.floor(exp / Math.max(1, Math.ceil(winners.length * 0.75)));
+    let share = (this.opts.noExp || !winners.length) ? 0 : Math.floor(exp / Math.max(1, Math.ceil(winners.length * 0.75)));
+    if (this.player.itemCount('dawnflame_recorder') > 0) {
+      share = Math.floor(share * 1.05);
+    }
     const results: GuardianResult[] = winners.map(g => {
       const beforeLevel = g.level, beforeExp = g.exp;
-      if (share > 0) g.gainExp(share);
-      return { g, beforeLevel, afterLevel: g.level, beforeExp, gained: share, newTechs: share > 0 ? this.newlyAvailableTechs(g, beforeLevel) : [] };
+      // Charm: Scholar's Tag — the holder converts more of the battle into EXP.
+      const expPct = g.heldCharm ? CHARMS[g.heldCharm]?.effect.expBonusPct ?? 0 : 0;
+      const gShare = share > 0 ? Math.floor(share * (1 + expPct)) : 0;
+      if (gShare > 0) g.gainExp(gShare);
+      return { g, beforeLevel, afterLevel: g.level, beforeExp, gained: gShare, newTechs: gShare > 0 ? this.newlyAvailableTechs(g, beforeLevel) : [] };
     });
 
     const ring = this.opts.ring;
@@ -3593,6 +3790,8 @@ export class Battle {
 
       const where = this.player.addGuardian(newG);
       this.player.capturesMade++;
+      recordBountyEvent(this.player, 'capture', { elements: elementsOf(newG), types: [newG.species.type] });
+      this.player.awardGuildPoints(5, undefined, true); // bonding builds guild standing
       await say('', `✨ From this day on, this ${sp.name} is ${name} — bonded, not caught. ${name} joined your ${where === 'party' ? 'party' : 'reserve'}!`);
       await this.victoryCard(
         `<div class="vc-evo-emoji">💜</div>
@@ -3730,6 +3929,8 @@ export class Battle {
         u.guarding = false;
         (u as any).attackedThisRound = false;
         (u as any).quickStepTriggered = getSpeciesPassive(u.g.species).name === 'Quick Steps' && Math.random() < 0.10;
+        const fsc = this.charmFx(u)?.firstStrikeChance ?? 0;
+        (u as any).charmFirstStrike = fsc > 0 && Math.random() < fsc;
       });
 
       const queue = [...this.units]
@@ -3742,6 +3943,9 @@ export class Battle {
             }
             if ((x as any).quickStepTriggered) {
               return 999999;
+            }
+            if ((x as any).charmFirstStrike) {
+              return 888888;
             }
             return x.g.stats.spd * x.mods.spd * this.getStatusMultiplier(x, 'spd');
           };
@@ -3883,6 +4087,8 @@ export class Battle {
     $('battle-speed').onclick = null;
     $('victory-screen').style.display = 'none';
     $('evo-flash').style.display = 'none';
+    // A fought battle warms incubating eggs a little.
+    for (const e of this.player.tickEggs(6)) toast(`🥚 Your ${e.label} is ready to hatch at the Hatchery!`, 'gold');
     return result;
   }
 }

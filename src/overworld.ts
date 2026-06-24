@@ -5,8 +5,9 @@
 // world sleeps under clouds.
 // ============================================================
 import * as THREE from 'three';
-import { DUNGEONS, REGIONS, SPECIES, TYPE_CSS, type DungeonDef } from './data';
+import { DUNGEONS, REGIONS, SPECIES, TYPE_CSS, ITEMS, type DungeonDef } from './data';
 import { Player } from './state';
+import { RANKS, rankIndexFor } from './ranks';
 import { makeTamer, updateVoxelHuman, globeTexture, skyGradient, leafTexture, plankTexture } from './models';
 import { AGDAO_LORE, SALMONAN_LORE, HYUJON_LORE } from './lore';
 import { updateHUD, showInteractHint, showHotkeys, isDialogueOpen, isMenuOpen, openPauseMenu, openPanel, choose, say, type PanelKind } from './ui';
@@ -20,6 +21,25 @@ const CITY_COORDS: [number, number] = [22, 0];
 const AGDAO_COORDS: [number, number] = [-6, -44];
 const SALMONAN_COORDS: [number, number] = [8, 62];
 const HYUJON_COORDS: [number, number] = [45, 12];   // far north of Olivar
+
+/** Readable unlock requirements, keyed by a dungeon's unlockFlag (atlas hints). */
+const GUILD_UNLOCK_HINTS: Record<string, string> = {
+  guild_frostpeak: 'Guild Quest — Frostbound Patrol (win 20 battles)',
+  guild_zephyr: 'Guild Quest — Sky Patrol (befriend 8 Guardians)',
+  guild_verdant: 'Guild Quest — Verdant Warden (conquer Mossdeep Burrows)',
+  guild_tidecatacomb: 'Guild Quest — Tidal Recon (conquer Sunken Vault)',
+  guild_emberforge: 'Guild Quest — Forge Trial (win 60 battles)',
+  guild_gaiadepths: 'Guild Quest — Deep Roots (conquer 5 expeditions)',
+  guild_tempest: 'Guild Quest — Storm Chaser (conquer Stormspire Depths)',
+  guild_whiteout: 'Guild Quest — Whiteout Survey (conquer Frostpeak Hollow)',
+  guild_umbral: 'Guild Quest — Shadow Hunt (conquer Thunderfen Mire)',
+  guild_sanctum: 'Guild Quest — Hallowed Vigil (befriend 25 Guardians)',
+  joined_house: 'Join a Grand House at the University',
+  vault_cleared: 'Conquer the Sunken Vault',
+  historian_intel: 'Story — meet Historian Veyl',
+  terra_visited: 'Story — walk Terra City (endgame)',
+  story_ch13_unlocked: 'Chapter 13 — speak to Azrin by the fountain',
+};
 
 /** Where the overworld can send the player. */
 export type OverworldDest = DungeonDef | 'agdao' | 'salmonan' | 'hyujon' | { travel: string } | null;
@@ -141,14 +161,30 @@ export class Overworld {
   }
 
   private isUnlocked(d: DungeonDef): boolean {
-    return !d.unlockFlag || !!this.player.flags[d.unlockFlag];
+    if (d.unlockFlag && !this.player.flags[d.unlockFlag]) return false;
+    if (d.unlockRank !== undefined && rankIndexFor(this.player) < d.unlockRank) return false;
+    return true;
+  }
+
+  /** Human-readable reason an expedition is still sealed (for the atlas). */
+  private lockReason(d: DungeonDef): string | null {
+    if (d.unlockRank !== undefined && rankIndexFor(this.player) < d.unlockRank) {
+      return `Reach ${RANKS[d.unlockRank]?.name ?? 'a higher'} rank`;
+    }
+    if (d.unlockFlag && !this.player.flags[d.unlockFlag]) {
+      return GUILD_UNLOCK_HINTS[d.unlockFlag] ?? 'Advance the story to unlock';
+    }
+    return null;
   }
 
   private addMarker(def: DungeonDef | null, coords: [number, number]): void {
     const dir = dirFromLatLon(...coords);
     const g = new THREE.Group();
-    const quest = !!def?.quest && !this.player.dungeonClears[def.id];
-    const color = def ? (quest ? 0xe83a5a : 0x5ab8e8) : 0xf2c14e;
+    const elite = !!def?.elite;
+    const quest = !!def?.quest && !this.player.dungeonClears[def.id] && !elite;
+    const beacon = quest || elite;            // elite gates always burn a beacon
+    const beaconCol = elite ? 0xffd24e : 0xe83a5a;
+    const color = !def ? 0xf2c14e : elite ? 0xffd24e : quest ? 0xe83a5a : 0x5ab8e8;
 
     if (!def) {
       // Haven City: golden keep
@@ -182,21 +218,28 @@ export class Overworld {
       crystal.position.y = 1.05;
       crystal.name = 'crystal';
       g.add(crystal);
-      if (quest) {
-        // red quest beacon: pulsing ring + light pillar
+      if (elite) {
+        // a Captain's crown caps the gate — distinct from ordinary expeditions
+        const crown = new THREE.Mesh(new THREE.ConeGeometry(0.5, 0.5, 5),
+          new THREE.MeshStandardMaterial({ color: 0xffd24e, emissive: 0x8a6a1a, emissiveIntensity: 0.7, metalness: 0.8, roughness: 0.25 }));
+        crown.position.y = 2.3;
+        g.add(crown);
+      }
+      if (beacon) {
+        // pulsing ring + light pillar — red for story quests, gold for elites
         const ring = new THREE.Mesh(new THREE.TorusGeometry(1.5, 0.07, 8, 32),
-          new THREE.MeshBasicMaterial({ color: 0xe83a5a, transparent: true, opacity: 0.8 }));
+          new THREE.MeshBasicMaterial({ color: beaconCol, transparent: true, opacity: 0.8 }));
         ring.rotation.x = Math.PI / 2;
         ring.position.y = 0.08;
         ring.name = 'questring';
         const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.5, 7, 12, 1, true),
-          new THREE.MeshBasicMaterial({ color: 0xe83a5a, transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false }));
+          new THREE.MeshBasicMaterial({ color: beaconCol, transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false }));
         beam.position.y = 3.6;
         beam.name = 'questbeam';
         g.add(ring, beam);
       }
     }
-    const halo = new THREE.PointLight(color, quest ? 16 : 9, 9);
+    const halo = new THREE.PointLight(color, beacon ? 16 : 9, 9);
     halo.position.y = 1.6;
     halo.name = 'halo';
     g.add(halo);
@@ -488,13 +531,20 @@ export class Overworld {
       ? `<div class="row"><span class="sub">Guardian of the depths</span><b style="color:var(--ui-red)">${(d.bossLevel ?? 0) > maxLv + 4 ? '???' : SPECIES[d.boss].name + ` Lv${d.bossLevel}`}</b></div>`
       : '';
     const clears = this.player.dungeonClears[d.id];
+    const hazardRow = d.hazard
+      ? `<div class="row"><span class="sub">Field hazard</span><b style="color:var(--ui-red)">${d.hazard.icon} ${d.hazard.name}</b></div>` : '';
+    const prizeId = d.prize ?? d.drop?.item;
+    const prizeRow = prizeId && ITEMS[prizeId]
+      ? `<div class="row"><span class="sub">Rare prize</span><b style="color:#ffd24e">✦ ${ITEMS[prizeId].name}</b></div>` : '';
     panel.innerHTML = `
-      ${m.quest ? '<div class="quest-badge">★ QUEST</div>' : ''}
+      ${d.elite ? '<div class="quest-badge" style="background:linear-gradient(90deg,#f2c14e,#ffd87a);color:#3a2a08">👑 CAPTAIN ELITE</div>' : m.quest ? '<div class="quest-badge">★ QUEST</div>' : ''}
       <h3>${d.name}</h3>
       <div class="sub" style="margin-bottom:8px">${d.desc}</div>
       <div class="row"><span class="sub">Depth</span><b>${d.floors} floors</b></div>
       <div class="row"><span class="sub">Threat level</span><b>Lv ${d.levelRange[0]}–${d.levelRange[1]}</b></div>
       <div class="row"><span class="sub">Conquest bonus</span><b class="goldcol">◆${d.rewardShards}</b></div>
+      ${hazardRow}
+      ${prizeRow}
       ${clears ? `<div class="row"><span class="sub">Conquered</span><b>×${clears}</b></div>` : ''}
       ${bossRow}
       <div class="sub" style="margin-top:8px">POSSIBLE GUARDIANS</div>
@@ -548,7 +598,7 @@ export class Overworld {
       const beam = m.group.getObjectByName('questbeam') as THREE.Mesh | null;
       if (beam) (beam.material as THREE.MeshBasicMaterial).opacity = 0.16 + Math.sin(this.t * 3) * 0.08;
       const halo = m.group.getObjectByName('halo') as THREE.PointLight | null;
-      if (halo && m.quest) halo.intensity = 14 + Math.sin(this.t * 3) * 6;
+      if (halo && (m.quest || m.def?.elite)) halo.intensity = 14 + Math.sin(this.t * 3) * 6;
     }
     this.nearest = best;
     if (!isDialogueOpen() && !isMenuOpen() && !this.busy) this.updatePanel();
@@ -564,9 +614,9 @@ export class Overworld {
       mapMarkers.push({
         x: (w.x / len) * a, z: (w.z / len) * a,
         label: m.agdao ? '🏝️ Agdao Island' : m.salmonan ? '🏞️ New Salmonan' : m.hyujon ? '🏙️ Hyujon City' : m.def ? m.def.name : '🏠 Haven City',
-        color: m.agdao ? '#4ee4b8' : m.salmonan ? '#f2c14e' : m.hyujon ? '#11ffcc' : m.def ? (m.quest ? '#e85a6a' : '#5ab8e8') : '#c9a24a',
+        color: m.agdao ? '#4ee4b8' : m.salmonan ? '#f2c14e' : m.hyujon ? '#11ffcc' : m.def ? (m.def.elite ? '#ffd24e' : m.quest ? '#e85a6a' : '#5ab8e8') : '#c9a24a',
         kind: m.def ? 'poi' : 'building',
-        quest: m.quest,
+        quest: m.quest || !!m.def?.elite,
       });
     }
     drawAreaMap($('minimap') as unknown as HTMLCanvasElement, {
@@ -619,6 +669,97 @@ export class Overworld {
     this.busy = false;
   }
 
+  /**
+   * EXPEDITION ATLAS (L) — a guild ledger of every expedition in this region:
+   * status, threat, field hazard, rare prize, and how to unlock the sealed ones.
+   * Available expeditions can be launched straight from the board.
+   */
+  private openExpeditionAtlas(): void {
+    if (this.busy) return;
+    this.busy = true;
+    const dungeons = DUNGEONS.filter(d => !d.hidden && (d.region ?? 'aurel') === this.regionId);
+    const rankIdx = rankIndexFor(this.player);
+
+    type Row = { d: DungeonDef; unlocked: boolean; clears: number; reason: string | null };
+    const rows: Row[] = dungeons.map(d => ({
+      d, unlocked: this.isUnlocked(d), clears: this.player.dungeonClears[d.id] ?? 0, reason: this.lockReason(d),
+    }));
+    // available (by level) first, then locked (by level)
+    rows.sort((a, b) =>
+      (a.unlocked === b.unlocked ? a.d.levelRange[0] - b.d.levelRange[0] : a.unlocked ? -1 : 1));
+
+    const overlay = document.createElement('div');
+    overlay.id = 'exatlas-overlay';
+    overlay.style.cssText = `position:fixed;inset:0;z-index:1000;background:rgba(8,10,20,0.94);backdrop-filter:blur(10px);
+      color:#e5e9f0;font-family:'Outfit',sans-serif;display:flex;flex-direction:column;padding:24px;box-sizing:border-box;overflow-y:auto`;
+
+    const card = (r: Row): string => {
+      const d = r.d;
+      const prizeId = d.prize ?? d.drop?.item;
+      const prize = prizeId && ITEMS[prizeId] ? ITEMS[prizeId].name : null;
+      const hz = d.hazard;
+      const accent = d.elite ? '#ffd24e' : r.unlocked ? '#5ab8e8' : '#5a607a';
+      const badge = d.elite ? `<span style="color:#ffd24e;font-weight:700">👑 CAPTAIN ELITE</span>`
+        : d.quest ? `<span style="color:#e85a6a;font-weight:700">★ QUEST</span>` : '';
+      const right = r.unlocked
+        ? `<button class="exatlas-go" data-id="${d.id}" style="background:${accent}cc;border:1px solid ${accent};color:#0c1022;font-weight:700;padding:9px 16px;border-radius:7px;cursor:pointer;white-space:nowrap">⚔ Launch</button>`
+        : `<div style="text-align:right;max-width:200px"><div style="color:#e85a6a;font-weight:700;font-size:13px">🔒 Sealed</div><div class="sub" style="font-size:11px;color:#9aa0b8;margin-top:2px">${r.reason ?? 'Locked'}</div></div>`;
+      return `
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:16px;background:rgba(255,255,255,0.03);
+            border:1px solid ${r.unlocked ? accent + '55' : 'rgba(255,255,255,0.07)'};border-left:4px solid ${accent};
+            border-radius:10px;padding:13px 16px;margin-bottom:11px;${r.unlocked ? '' : 'opacity:0.78'}">
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:700;color:#fff;font-size:16px;margin-bottom:3px">${d.name} ${badge}</div>
+            <div class="sub" style="font-size:12px;color:#aab0c8;margin-bottom:6px">${d.desc}</div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px;font-size:11px">
+              <span style="background:rgba(255,255,255,0.06);border-radius:4px;padding:2px 7px">⚑ Lv ${d.levelRange[0]}–${d.levelRange[1]}</span>
+              <span style="background:rgba(255,255,255,0.06);border-radius:4px;padding:2px 7px">🏚 ${d.floors} floors</span>
+              <span style="background:rgba(255,255,255,0.06);border-radius:4px;padding:2px 7px;color:#f2c14e">◆ ${d.rewardShards}</span>
+              ${hz ? `<span style="background:rgba(232,90,106,0.14);border:1px solid rgba(232,90,106,0.4);border-radius:4px;padding:2px 7px">${hz.icon} ${hz.name}</span>` : ''}
+              ${prize ? `<span style="background:rgba(255,210,78,0.14);border:1px solid rgba(255,210,78,0.4);border-radius:4px;padding:2px 7px;color:#ffd24e">✦ ${prize}</span>` : ''}
+              ${r.clears ? `<span style="background:rgba(94,216,138,0.14);border:1px solid rgba(94,216,138,0.4);border-radius:4px;padding:2px 7px;color:#5ed88a">✓ ×${r.clears}</span>` : ''}
+            </div>
+          </div>
+          ${right}
+        </div>`;
+    };
+
+    const availCount = rows.filter(r => r.unlocked).length;
+    overlay.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid rgba(242,193,78,0.35);padding-bottom:14px;margin-bottom:18px">
+        <div>
+          <h2 style="margin:0;font-size:26px;color:var(--ui-gold);font-family:Georgia,serif">🗺️ EXPEDITION ATLAS</h2>
+          <div class="sub" style="font-size:13px;color:#aab0c8;margin-top:4px">${this.regionName} — ${availCount} of ${rows.length} expeditions open · Captain rank unlocks the elite three.</div>
+        </div>
+        <button id="exatlas-close" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:#fff;font-weight:700;padding:9px 18px;border-radius:7px;cursor:pointer">Close (Esc / B)</button>
+      </div>
+      <div style="max-width:920px;width:100%;margin:0 auto">
+        <div class="sub" style="font-size:12px;color:#8a90a8;margin-bottom:10px">Your rank: <b style="color:${RANKS[rankIdx].color}">${RANKS[rankIdx].name}</b>. Launch any open expedition straight from the board.</div>
+        ${rows.map(card).join('')}
+      </div>`;
+
+    const close = () => {
+      window.removeEventListener('keydown', onKey, true);
+      overlay.remove();
+      this.busy = false;
+    };
+    const onKey = (e: KeyboardEvent) => {
+      const k = e.key.toLowerCase();
+      if (k === 'escape' || k === 'esc' || k === 'b') { e.preventDefault(); e.stopPropagation(); close(); }
+    };
+    window.addEventListener('keydown', onKey, true);
+    (overlay.querySelector('#exatlas-close') as HTMLElement).onclick = close;
+    overlay.querySelectorAll<HTMLElement>('.exatlas-go').forEach(b => {
+      b.onclick = () => {
+        const def = DUNGEONS.find(x => x.id === b.dataset.id);
+        if (!def) return;
+        close();
+        this.finish(def);
+      };
+    });
+    document.getElementById('app')!.appendChild(overlay);
+  }
+
   private onKeyDown = (e: KeyboardEvent) => {
     const k = e.key.toLowerCase();
     this.keys.add(k);
@@ -632,7 +773,9 @@ export class Overworld {
     else if (k === 'c') this.openPanelGuarded('crawler');
     else if (k === 'j') this.openPanelGuarded('quests');
     else if (k === 'v') this.openPanelGuarded('evotree');
+    else if (k === 'l') this.openPanelGuarded('leaderboard');
     else if (k === 't') this.openAtlas();
+    else if (k === 'b') this.openExpeditionAtlas();
     else if (k === 'escape' || k === 'esc') {
       this.busy = true;
       openPauseMenu(this.player, { canSave: true }).then(() => {

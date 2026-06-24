@@ -29,6 +29,7 @@ import { prewarmVFXGlobal } from './vfx';
 import { mergeStaticScene } from './batch';
 import { updateTamerAppearance } from './clothes';
 import { recordDungeonOutcome } from './mmr';
+import { recordBountyEvent } from './bounties';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
 
@@ -470,6 +471,10 @@ async function runOverworldLoop(startRegion = 'aurel'): Promise<DungeonDef | 'ag
 
 async function handleDungeonOutcome(outcome: DungeonOutcome, dungeonDef: DungeonDef): Promise<void> {
   recordDungeonOutcome(player, outcome);
+  if (outcome === 'cleared') {
+    recordBountyEvent(player, 'dungeonClear');
+    for (const e of player.tickEggs(40)) toast(`🥚 Your ${e.label} is ready to hatch at the Hatchery!`, 'gold');
+  }
   if (outcome === 'dead') {
     // night recovery camp cinematic — the medic patches you up by the fire
     const camp = new Cinematic('camp');

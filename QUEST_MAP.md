@@ -13,7 +13,7 @@
 > before it happens, the sixteen-year interregnum, the Mirrorhouse, and the standing
 > directive about the Big Three that ends "NOT YET. SOON."
 > Parts IV–VII are the canonical design bible for the long Anomalies Saga.
-> **Chapters XII–XIII of Part VII are already built and playable** (the New Salmonan
+> **Chapters XIV–XV of Part VII are already built and playable** (the New Salmonan
 > map, the Mirrorhouse dungeon, Ivan, the three proofs, the Continuity Reel).
 >
 > **Legend** used throughout:
@@ -171,10 +171,20 @@ and opens the Expedition Gate and the Sunken Vault.
 - No dungeon. Clyde recognizes the Dawnflame's spark in you, tells the story of Ghandra's primordial deities and the fading Aether Line, and hands you the **3rd Harmonik** notes.
 - 🎁 ◆1500 · ⏭ Clyde directs you to take the notes to the Sanctum in Haven Town to unlock Aether Evo.
 
-**Chapter XI — The 3rd Harmonik** 📜
+**Chapter XI — The Drowned Terminal** 🏰
+- 🗣 **Marshal Kovar** / **Archivist Tem**, Hyujon — **Drowned Terminal**
+- Conquer the Drowned Terminal to retrieve the backup and study materials.
+- 🎁 ◆4500, **Prism Gem** · ⏭ Clyde directs you to take the notes to the Sanctum in Haven Town to study Aether Evo.
+
+**Chapter XII — The 3rd Harmonik** 📜
 - 🗣 **Sanctum Keeper** (or Reactor), Haven Town — **Sanctum**
 - Deliver the **3rd Harmonik** notes. The fusion laboratory reactor processes the Ghandra frequencies and unlocks **Aether Evo** study for your Guardians.
-- 🎁 ◆2000, **Prism Gem** · ⏭ completes Chapter 11, unlocking Chapter 12 ("The Veil, Falling").
+- 🎁 ◆2000, **Prism Gem** · ⏭ completes Chapter 12, unlocking Chapter 13 ("Azrael's Clues").
+
+**Chapter XIII — Azrael's Clues** 🔍
+- 🗣 **Azrin**, Haven City fountain, then **Mayor Airah** in Aurelian Hall.
+- Azrael has departed unexpectedly. Help Azrin investigate her trail by conquering three newly opened elemental dungeons (Pyrewood Depths, Glacial Abyss, and Thunderclap Ruins) to recover her clues, then report to Mayor Airah.
+- 🎁 ◆5000, **Prism Gem** x2 · ⏭ completes Chapter 13, unlocking Chapter 14 ("The Veil, Falling").
 
 ### GUILD MAIN QUESTS (your House's own four-quest telling of the same war)
 Every House runs the same spine with its own story: **m1** win 3 battles → **m2** conquer
@@ -693,7 +703,7 @@ else dared.
 
 ### Chapter-by-chapter — THE CHRONICLE, ACT V
 
-**Chapter XII — The Veil, Falling** 📡 *(BUILT — playable)*
+**Chapter XIV — The Veil, Falling** 📡 *(BUILT — playable)*
 - 🗺 **NEW SALMONAN** — *new map, fully built*: the Valley of Loud Kitchens. A working
   river with flat-barge piers and a plank bridge, terraced mirror-water paddies on the
   west slope, a dawn market, the Loud Kitchen Inn (free Sanctum-grade rest, forever —
@@ -713,7 +723,7 @@ else dared.
   "RELAY BASTION 9, EAST VALLEYS" — the building the locals call the **Mirrorhouse**,
   humming over the paddies the whole time. Ivan could see it from his porch.
 
-**Chapter XIII — The Mirrorhouse** 🪞 *(BUILT — playable)*
+**Chapter XV — The Mirrorhouse** 🪞 *(BUILT — playable)*
 - 🏰 **THE MIRRORHOUSE** — *new dungeon*: the Foretales relay-bastion above the valley
   (5 floors, Lv 46–52, warden **"the Anchor" — Phantasmoth Lv 54**). Dark-glass theme:
   black panels, dead-light conduits in cold white, violet print-floor seams, spark-motes
@@ -759,17 +769,17 @@ else dared.
 
 | Ch. | Title | 📍 Start | 🏰 Dungeon (boss) | 🗺 New map | Key gain | Status |
 |---|---|---|---|---|---|---|
-| XII | The Veil, Falling | Ivan's porch, New Salmonan | — (⚔️ stringer battle) | **NEW SALMONAN** | 3 proofs; **Override Ledger** | **BUILT** |
-| XIII | The Mirrorhouse | the ridge stair | **The Mirrorhouse** (Phantasmoth "the Anchor", Lv 54) | — | **The Continuity Reel**; the glaze directive | **BUILT** |
+| XIV | The Veil, Falling | Ivan's porch, New Salmonan | — (⚔️ stringer battle) | **NEW SALMONAN** | 3 proofs; **Override Ledger** | **BUILT** |
+| XV | The Mirrorhouse | the ridge stair | **The Mirrorhouse** (Phantasmoth "the Anchor", Lv 54) | — | **The Continuity Reel**; the glaze directive | **BUILT** |
 | XXIV | The Unwritten Morning | Esta's tower | relay defense gauntlets | — | the honest-relay network | design |
 | XXV | The Glazed Crown | Louie's loft / Veyl's archive | TBD | — | the Continuity Editor; the Cantor's voice | design |
 | XXVI | *(finale — next part)* | the capital press | — | — | the front-page war begins | design |
 
 ### Implementation notes (for the build)
-- **Quest ids:** `story_veilfall` (Ch XII) and `story_mirrorhouse` (Ch XIII) in
+- **Quest ids:** `story_veilfall` (Ch XIV) and `story_mirrorhouse` (Ch XV) in
   `quests.ts`. Proof flags: `salm_proof_relay`, `salm_proof_crystal`,
   `salm_proof_stringer`. Completion flags: `mirrorhouse_unlocked`, `veil_fallen`.
-- **Anchoring:** both chapters are anchored to the end of Clyde's questline — `story_veilfall` requires `story_aether_evo` (Ch XI), and `story_mirrorhouse` requires `story_veilfall`.
+- **Anchoring:** Chapter XIV is anchored to Chapter XIII (`story_azrael_clues`), and Chapter XV is anchored to Chapter XIV.
 - **New Salmonan** lives in `salmonan.ts`; the Mirrorhouse dungeon def in `data.ts`
   (id `mirrorhouse`, hidden — entered only from the valley's ridge stair) with its
   bespoke dark-glass theme in `dungeon.ts`. Lore in `lore.ts` (`SALMONAN_LORE`,

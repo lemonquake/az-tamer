@@ -16,7 +16,7 @@ import {
 } from './models';
 import { VFX } from './vfx';
 import { sfx } from './audio';
-import { say, choose, toast, updateHUD, showInteractHint, showHotkeys, isDialogueOpen, isMenuOpen, openPauseMenu, openPanel, type PanelKind, playStorySequence, hideStory } from './ui';
+import { say, conversation, choose, toast, updateHUD, showInteractHint, showHotkeys, isDialogueOpen, isMenuOpen, openPauseMenu, openPanel, type PanelKind, playStorySequence, hideStory } from './ui';
 import { worldOrbit } from './camorbit';
 import type { BattleOptions, BattleResult } from './battle';
 
@@ -102,7 +102,7 @@ interface ThemeDef {
   dir: number; dirIntensity: number;
   headlight: number;          // crawler lamp color
   accent: number;             // crystals / seams / deco glow
-  mote: { color: number; count: number; mode: 'drift' | 'rise' | 'spark' };
+  mote: { color: number; count: number; mode: 'drift' | 'rise' | 'spark' | 'fall' };
   decos: DecoKind[];
 }
 
@@ -217,6 +217,213 @@ const THEMES: Record<string, ThemeDef> = {
     mote: { color: 0x8a7ae4, count: 150, mode: 'spark' },
     decos: ['pylon', 'shard', 'rubble', 'pylon'],
   },
+
+  // ===================== GUILD EXPEDITION THEMES =====================
+  // Frostpeak Hollow — a cliff-side hollow of pale blue ice under a bright,
+  // snow-heavy sky; flakes drift down endlessly.
+  frostpeak: {
+    wall: () => new THREE.MeshStandardMaterial({ map: caveRockTexture('#aeb8cc', '#8a9ab0', '#5a6a82', 23, 1), roughness: 0.55, metalness: 0.1 }),
+    floor: () => new THREE.MeshStandardMaterial({ map: caveRockTexture('#c4d0e0', '#9aaccc', '#6a7e9a', 37, 7), roughness: 0.5 }),
+    sky: ['#cfe0f2', '#7a92b0'],
+    fog: '#b4c4d6', fogNear: 7, fogFar: 22,
+    hemi: [0xbcd0e8, 0x6a7a90], hemiIntensity: 0.75,
+    dir: 0xeaf2ff, dirIntensity: 0.6,
+    headlight: 0xeaf6ff,
+    accent: 0x9adfff,
+    mote: { color: 0xe6f0fc, count: 240, mode: 'fall' },
+    decos: ['crystal', 'stalagmite', 'rubble', 'crystal'],
+  },
+  // Whiteout Tundra — a blizzard with no horizon: heavy near-fog, grey-white
+  // light, snow driving down in sheets.
+  whiteout: {
+    wall: () => new THREE.MeshStandardMaterial({ map: caveRockTexture('#c2ccd6', '#9aa6b4', '#6e7a8a', 29, 1), roughness: 0.6 }),
+    floor: () => new THREE.MeshStandardMaterial({ map: caveRockTexture('#d4dce4', '#aeb8c4', '#7e8a98', 41, 7), roughness: 0.55 }),
+    sky: ['#c8d0d8', '#8a94a0'],
+    fog: '#cdd6de', fogNear: 4, fogFar: 12,
+    hemi: [0xcdd8e2, 0x7a8490], hemiIntensity: 0.8,
+    dir: 0xf2f6fa, dirIntensity: 0.55,
+    headlight: 0xf2f8ff,
+    accent: 0xcfe4f2,
+    mote: { color: 0xeef4fa, count: 340, mode: 'fall' },
+    decos: ['crystal', 'rubble', 'stalagmite', 'rubble'],
+  },
+  // Hallowed Sanctum — a buried temple of ordered light; warm gold air, motes
+  // of dawn rising off the stone.
+  sanctum: {
+    wall: () => new THREE.MeshStandardMaterial({ map: drownedBrickTexture('#caa86a', '#7a6038', 'rgba(255,232,150,1)', 31, 1), roughness: 0.4, metalness: 0.3 }),
+    floor: () => new THREE.MeshStandardMaterial({ map: drownedBrickTexture('#b89a5a', '#6e5a30', 'rgba(255,224,128,1)', 43, 6), roughness: 0.45, metalness: 0.25 }),
+    sky: ['#f2e6c0', '#b89a5a'],
+    fog: '#dcca94', fogNear: 8, fogFar: 24,
+    hemi: [0xfff0c8, 0x8a7a4a], hemiIntensity: 0.85,
+    dir: 0xfff2d0, dirIntensity: 0.7,
+    headlight: 0xfff4d8,
+    accent: 0xffe07a,
+    mote: { color: 0xffe8a8, count: 170, mode: 'rise' },
+    decos: ['column', 'crystal', 'shard', 'column'],
+  },
+  // Emberforge Caldera — a working forge inside a live volcano; ember motes
+  // rising on the heat.
+  emberforge: {
+    wall: () => new THREE.MeshStandardMaterial({ map: caveRockTexture('#5a3a32', '#3e2620', '#241410', 19, 1), roughness: 0.85 }),
+    floor: () => new THREE.MeshStandardMaterial({ map: caveRockTexture('#4a2820', '#341c16', '#1e100c', 53, 7), roughness: 0.88 }),
+    sky: ['#2a0e06', '#0a0402'],
+    fog: '#1a0804', fogNear: 6, fogFar: 18,
+    hemi: [0xff8a4a, 0x3a1a10], hemiIntensity: 0.6,
+    dir: 0xffaa5a, dirIntensity: 0.55,
+    headlight: 0xffc888,
+    accent: 0xff7a3a,
+    mote: { color: 0xff9a4a, count: 210, mode: 'rise' },
+    decos: ['stalagmite', 'crystal', 'rubble', 'coins'],
+  },
+  // Tempest Conduit — a live lightning-spire; bluer than the war-storm, with
+  // stray current sparking everywhere. (base theme 'storm' keeps the flashes)
+  tempest: {
+    wall: () => new THREE.MeshStandardMaterial({
+      map: stormPanelTexture('#2a3a52', '#141e30', 11, 1),
+      emissiveMap: stormSeamEmissive('#6ad8ff', 11, 1),
+      emissive: new THREE.Color(0x6ad8ff), emissiveIntensity: 0.6,
+      roughness: 0.45, metalness: 0.5,
+    }),
+    floor: () => new THREE.MeshStandardMaterial({
+      map: stormPanelTexture('#1c2838', '#0c141f', 23, 6),
+      emissiveMap: stormSeamEmissive('#4aaae0', 23, 6),
+      emissive: new THREE.Color(0x4aaae0), emissiveIntensity: 0.5,
+      roughness: 0.5, metalness: 0.45,
+    }),
+    sky: ['#0e1c2e', '#04080f'],
+    fog: '#06101c', fogNear: 6, fogFar: 20,
+    hemi: [0x5a8ac8, 0x0e1c2e], hemiIntensity: 0.55,
+    dir: 0x8ac8f2, dirIntensity: 0.5,
+    headlight: 0xb8e8ff,
+    accent: 0x6ad8ff,
+    mote: { color: 0x8adfff, count: 160, mode: 'spark' },
+    decos: ['pylon', 'shard', 'rubble', 'pylon'],
+  },
+  // Zephyr Spires — wind-scoured peaks; bright airy sky, motes drifting on the
+  // gusts. (base theme 'storm')
+  zephyr: {
+    wall: () => new THREE.MeshStandardMaterial({ map: stoneTexture('#8a9ab8', '#5a6a88', 1), roughness: 0.7 }),
+    floor: () => new THREE.MeshStandardMaterial({ map: stoneTexture('#9aaccc', '#6a7c9c', 6), roughness: 0.7 }),
+    sky: ['#bcd0f2', '#6a8ad0'],
+    fog: '#aec0e8', fogNear: 8, fogFar: 24,
+    hemi: [0xc8d8ff, 0x7a8ac8], hemiIntensity: 0.7,
+    dir: 0xeaf2ff, dirIntensity: 0.6,
+    headlight: 0xeaf2ff,
+    accent: 0xaed8ff,
+    mote: { color: 0xd8e8ff, count: 180, mode: 'drift' },
+    decos: ['shard', 'rubble', 'crystal', 'shard'],
+  },
+  // Verdant Labyrinth — a breathing hedge-maze over a sunken grove.
+  verdantmaze: {
+    wall: () => new THREE.MeshStandardMaterial({ map: caveRockTexture('#3e5a3a', '#2c4228', '#1c2c1a', 17, 1), roughness: 0.95 }),
+    floor: () => new THREE.MeshStandardMaterial({ map: caveRockTexture('#2c4028', '#22341e', '#162414', 51, 7), roughness: 0.95 }),
+    sky: ['#16281a', '#05100a'],
+    fog: '#0a160c', fogNear: 6, fogFar: 20,
+    hemi: [0x6aaa6a, 0x1c2c1c], hemiIntensity: 0.6,
+    dir: 0x9ad47a, dirIntensity: 0.45,
+    headlight: 0xd8ffc0,
+    accent: 0x6ee49a,
+    mote: { color: 0x9ae47a, count: 220, mode: 'rise' },
+    decos: ['mushroom', 'fern', 'stalagmite', 'fern'],
+  },
+  // Tidal Catacombs — flooded ossuaries; deep teal water-light, bubbles rising.
+  tidecatacomb: {
+    wall: () => new THREE.MeshStandardMaterial({ map: drownedBrickTexture('#1e3a4a', '#0e1e28', 'rgba(74,164,150,1)', 33, 1), roughness: 0.55 }),
+    floor: () => new THREE.MeshStandardMaterial({ map: drownedBrickTexture('#16303e', '#0a1820', 'rgba(58,138,128,1)', 47, 6), roughness: 0.5 }),
+    sky: ['#06181f', '#020a0e'],
+    fog: '#04121a', fogNear: 5, fogFar: 18,
+    hemi: [0x3a8aa0, 0x0e1e28], hemiIntensity: 0.55,
+    dir: 0x5ab8c4, dirIntensity: 0.5,
+    headlight: 0x9ae8ff,
+    accent: 0x5ad8d8,
+    mote: { color: 0x9ae4e0, count: 260, mode: 'rise' },
+    decos: ['column', 'algae', 'coins', 'column'],
+  },
+  // Umbral Abyss — a throat of pure dark that drinks lamplight.
+  umbralabyss: {
+    wall: () => new THREE.MeshStandardMaterial({ map: caveRockTexture('#2a2636', '#1c1a28', '#10101a', 27, 1), roughness: 0.9 }),
+    floor: () => new THREE.MeshStandardMaterial({ map: caveRockTexture('#201c2c', '#141220', '#0a0a12', 59, 7), roughness: 0.92 }),
+    sky: ['#0a0814', '#030208'],
+    fog: '#05040a', fogNear: 5, fogFar: 16,
+    hemi: [0x4a4060, 0x0a0814], hemiIntensity: 0.4,
+    dir: 0x6a5a9a, dirIntensity: 0.4,
+    headlight: 0x9a8ad0,
+    accent: 0x9a5af2,
+    mote: { color: 0x7a6ac8, count: 150, mode: 'spark' },
+    decos: ['shard', 'rubble', 'pylon', 'shard'],
+  },
+  // Gaia's Roothold — a cathedral of warm living bedrock.
+  gaiadepths: {
+    wall: () => new THREE.MeshStandardMaterial({ map: caveRockTexture('#6a5238', '#4a3a28', '#2c2218', 21, 1), roughness: 0.92 }),
+    floor: () => new THREE.MeshStandardMaterial({ map: caveRockTexture('#54402a', '#3a2c1c', '#221a10', 55, 7), roughness: 0.94 }),
+    sky: ['#1a1208', '#080502'],
+    fog: '#120c06', fogNear: 6, fogFar: 19,
+    hemi: [0xb89a6a, 0x3a2c18], hemiIntensity: 0.55,
+    dir: 0xd8b87a, dirIntensity: 0.5,
+    headlight: 0xffe0a0,
+    accent: 0xd8a85a,
+    mote: { color: 0xc4a06a, count: 160, mode: 'drift' },
+    decos: ['stalagmite', 'rubble', 'crystal', 'rubble'],
+  },
+  // The Glacial Throne — a black-glacier elite throne at the roof of the world.
+  glacialthrone: {
+    wall: () => new THREE.MeshStandardMaterial({ map: caveRockTexture('#3a4a6a', '#28344e', '#161e30', 25, 1), roughness: 0.45, metalness: 0.15 }),
+    floor: () => new THREE.MeshStandardMaterial({ map: caveRockTexture('#2c3a56', '#1e2840', '#10182a', 39, 7), roughness: 0.4, metalness: 0.1 }),
+    sky: ['#1a2438', '#05080f'],
+    fog: '#0a1220', fogNear: 5, fogFar: 18,
+    hemi: [0x6a8ad0, 0x1a2438], hemiIntensity: 0.6,
+    dir: 0x9ac0ff, dirIntensity: 0.5,
+    headlight: 0xc8e8ff,
+    accent: 0x7ab8ff,
+    mote: { color: 0xbcd8f2, count: 300, mode: 'fall' },
+    decos: ['crystal', 'stalagmite', 'shard', 'crystal'],
+  },
+  // The Empyrean Vault — light so total it has weight.
+  empyreanvault: {
+    wall: () => new THREE.MeshStandardMaterial({
+      map: stormPanelTexture('#d8c488', '#9a7e44', 31, 1),
+      emissiveMap: stormSeamEmissive('#fff0b0', 31, 1),
+      emissive: new THREE.Color(0xfff0b0), emissiveIntensity: 0.6,
+      roughness: 0.3, metalness: 0.5,
+    }),
+    floor: () => new THREE.MeshStandardMaterial({
+      map: stormPanelTexture('#c0a868', '#86702e', 43, 6),
+      emissiveMap: stormSeamEmissive('#ffe89a', 43, 6),
+      emissive: new THREE.Color(0xffe89a), emissiveIntensity: 0.5,
+      roughness: 0.35, metalness: 0.45,
+    }),
+    sky: ['#fff4d0', '#caa860'],
+    fog: '#e8d8a0', fogNear: 7, fogFar: 26,
+    hemi: [0xfff4d8, 0xb8a060], hemiIntensity: 0.95,
+    dir: 0xfffae0, dirIntensity: 0.8,
+    headlight: 0xfffbe8,
+    accent: 0xffe89a,
+    mote: { color: 0xfff0c0, count: 200, mode: 'rise' },
+    decos: ['column', 'shard', 'crystal', 'shard'],
+  },
+  // The Obsidian Maw — a wound in the world, breathing obsidian and void-seams.
+  obsidianmaw: {
+    wall: () => new THREE.MeshStandardMaterial({
+      map: stormPanelTexture('#1a1622', '#0a0810', 13, 1),
+      emissiveMap: stormSeamEmissive('#9a5af2', 13, 1),
+      emissive: new THREE.Color(0x9a5af2), emissiveIntensity: 0.5,
+      roughness: 0.4, metalness: 0.55,
+    }),
+    floor: () => new THREE.MeshStandardMaterial({
+      map: stormPanelTexture('#120e18', '#06040a', 23, 6),
+      emissiveMap: stormSeamEmissive('#6a3ac8', 23, 6),
+      emissive: new THREE.Color(0x6a3ac8), emissiveIntensity: 0.42,
+      roughness: 0.45, metalness: 0.5,
+    }),
+    sky: ['#0a0814', '#020208'],
+    fog: '#06040c', fogNear: 5, fogFar: 16,
+    hemi: [0x4a3a6a, 0x0a0814], hemiIntensity: 0.45,
+    dir: 0x8a6ad0, dirIntensity: 0.45,
+    headlight: 0xb88aff,
+    accent: 0x9a5af2,
+    mote: { color: 0x9a7af2, count: 150, mode: 'spark' },
+    decos: ['pylon', 'shard', 'rubble', 'shard'],
+  },
 };
 
 export class DungeonRun {
@@ -242,6 +449,7 @@ export class DungeonRun {
   private anim: ((dt: number) => void)[] = [];
   private envT = 0;
   private theme: ThemeDef;
+  private hazardSteps = 0; // drives periodic hazard effects (e.g. Hallowed healing)
 
   constructor(private ctx: DungeonCtx, private def: DungeonDef) {
     // your Crawler, exactly as Dax built and painted it
@@ -680,6 +888,11 @@ export class DungeonRun {
           arr[i * 3 + 1] += dt * (0.15 + (seed[i] % 1) * 0.25);
           arr[i * 3] += Math.sin(this.envT * 0.7 + seed[i]) * dt * 0.08;
           if (arr[i * 3 + 1] > 3.4) arr[i * 3 + 1] = 0.1;
+        } else if (mode === 'fall') { // drifting snow
+          arr[i * 3 + 1] -= dt * (0.35 + (seed[i] % 1) * 0.5);
+          arr[i * 3] += Math.sin(this.envT * 0.9 + seed[i] * 3) * dt * 0.22;
+          arr[i * 3 + 2] += Math.cos(this.envT * 0.7 + seed[i] * 2) * dt * 0.14;
+          if (arr[i * 3 + 1] < 0.05) arr[i * 3 + 1] = 3.6;
         } else { // spark
           arr[i * 3] += Math.sin(this.envT * 6 + seed[i] * 9) * dt * 0.5;
           arr[i * 3 + 1] += Math.cos(this.envT * 7 + seed[i] * 7) * dt * 0.4;
@@ -707,7 +920,9 @@ export class DungeonRun {
 
   // ---------------- minimap ----------------
   private reveal(): void {
-    const r = 1 + this.ctx.player.crawler.scannerTier;
+    // Whiteout blizzards choke the scanner — you see one tile less in every direction.
+    const blind = this.def.hazard?.kind === 'blizzard' ? 1 : 0;
+    const r = Math.max(1, 1 + this.ctx.player.crawler.scannerTier - blind);
     for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
       const x = this.pos.x + dx, y = this.pos.y + dy;
       if (x >= 0 && y >= 0 && x < SIZE && y < SIZE && dx * dx + dy * dy <= r * r + 1) {
@@ -851,6 +1066,7 @@ export class DungeonRun {
       p.crawler.hull = Math.max(0, p.crawler.hull - 3);
       if (p.crawler.hull % 9 === 0) toast('⚠️ Energy depleted — hull is taking strain!', 'red');
     }
+    this.applyHazardStep();
     if (p.crawler.hull <= 0) { await this.crawlerDestroyed(); return; }
 
     this.reveal();
@@ -873,16 +1089,67 @@ export class DungeonRun {
       this.vfx.burst(here.clone().setY(0.5), 0xf2c14e, { count: 26, speed: 2.2, gravity: -3, life: 0.8, size: 0.12 });
       this.vfx.glow(here.clone().setY(0.6), 0xf2d88a, { scale: 1.6, life: 0.5 });
       sfx('toast');
-      const roll = Math.random();
-      if (roll < 0.3) {
-        const amt = 40 + Math.floor(Math.random() * 80) + this.floorNum * 20;
-        p.shards += amt;
-        await say('', `📦 The chest held ◆${amt} Shards!`);
+
+      const dungeonToCrystal: Record<string, string> = {
+        mossdeep: 'audio_crystal_1',
+        sunken: 'audio_crystal_2',
+        thunderfen: 'audio_crystal_3',
+        cradle: 'audio_crystal_4',
+        stormspire: 'audio_crystal_5',
+      };
+      const crystalId = dungeonToCrystal[this.def.id];
+      if (crystalId && p.itemCount(crystalId) === 0 && p.quests['side_lost_interviews'] !== 'done') {
+        p.inventory.set(crystalId, 1);
+        sfx('fanfare');
+        await say('System', `✨ Found a rare artifact: ${ITEMS[crystalId].name}!`);
+        
+        const recordingDialogues: Record<string, string[]> = {
+          audio_crystal_1: [
+            "Aljay (recording): ...Static... Is this thing on? Alright. The First Dawn, ~3,000 years ago.",
+            "Aljay (recording): The scholars say Ghandra's veil thinned and the Guardians just... walked into our world. But it wasn't a migration, you know? It was a rescue.",
+            "Aljay (recording): Ghandra was collapsing even back then. They came here to survive. And they bonded with us because our souls were the only anchors that kept them from fading. Remember that."
+          ],
+          audio_crystal_2: [
+            "Aljay (recording): ...Static... The Reaching. That was our darkest hour.",
+            "Aljay (recording): Humans learned too much, too fast. Force-feeding Ghandra energy, chaining hearts, selling Guardians by the shipload. Power is an addiction.",
+            "Aljay (recording): When Sera, Oakes, Nyx and I stood up to end it, we didn't just write the Guild Compact. We wove it into the soil. No more chains. Only trust."
+          ],
+          audio_crystal_3: [
+            "Aljay (recording): ...Static... The Legion War. Fifteen years ago.",
+            "Aljay (recording): Nine corrupted generals, rotting the Veil from the inside. Greggy, Onnel, and I... we didn't win because we were strong. We won because we were three.",
+            "Aljay (recording): I still remember Greggy's laugh when we charged Voltrazar. And Onnel's silence when we wove the final knot. We left a piece of our hearts at that door."
+          ],
+          audio_crystal_4: [
+            "Aljay (recording): ...Static... Greggy's choice.",
+            "Aljay (recording): When it was over, Greggy went to Agdao. He said he was retired, but I knew. He climbed that bluff to watch the seal's shadow in the water. He's the lock.",
+            "Aljay (recording): I miss him. I miss his loud tea. If you're listening to this, and you see him... tell him Aljay said to take a day off. He won't, but say it anyway."
+          ],
+          audio_crystal_5: [
+            "Aljay (recording): ...Static... The Ghandra Seal and my daughters.",
+            "Aljay (recording): The seal thins a little every season. And Foretales... the network... they keep glazing us on every crystal. It's a cover. They're preparing to pull the leash.",
+            "Aljay (recording): If I don't make it back, Azrin, Azrael... I'm sorry. I had to go. The door I built needs a Dawnflame's spark. Tamer, if you're helping them... keep them safe. Please."
+          ]
+        };
+        
+        await conversation(recordingDialogues[crystalId].map(line => ['', line]));
+        
+        const hasAll = Object.values(dungeonToCrystal).every(cid => p.itemCount(cid) > 0);
+        if (hasAll) {
+          toast("✨ All 5 Aurelian Audio Crystals collected!", "gold", 5000);
+          await say('System', "You have collected all 5 of Aljay's Lost Interviews. Return to Archivist Wren in the University Library to decode them and receive your reward!");
+        }
       } else {
-        const lootPool = ['tonic', 'berry', 'cell', 'soda', 'honey_roll', 'plating', 'tonic_plus', 'revive_leaf'];
-        const id = lootPool[Math.floor(Math.random() * lootPool.length)];
-        if (p.addItem(id)) await say('', `📦 Found a ${ITEMS[id].name}!`);
-        else await say('', `📦 Found a ${ITEMS[id].name}… but the cargo hold is full!`);
+        const roll = Math.random();
+        if (roll < 0.3) {
+          const amt = 40 + Math.floor(Math.random() * 80) + this.floorNum * 20;
+          p.shards += amt;
+          await say('', `📦 The chest held ◆${amt} Shards!`);
+        } else {
+          const lootPool = ['tonic', 'berry', 'cell', 'soda', 'honey_roll', 'plating', 'tonic_plus', 'revive_leaf'];
+          const id = lootPool[Math.floor(Math.random() * lootPool.length)];
+          if (p.addItem(id)) await say('', `📦 Found a ${ITEMS[id].name}!`);
+          else await say('', `📦 Found a ${ITEMS[id].name}… but the cargo hold is full!`);
+        }
       }
       this.busy = false;
     } else if (tile === 'trap') {
@@ -961,6 +1228,7 @@ export class DungeonRun {
         if (pick === 0) {
           if (deepest) {
             p.shards += this.def.rewardShards;
+            this.grantClearGP();
             p.dungeonClears[this.def.id] = (p.dungeonClears[this.def.id] ?? 0) + 1;
             toast(`🏆 ${this.def.name} fully charted! Bonus: ◆${this.def.rewardShards}`, 'gold');
             this.finish('cleared');
@@ -981,6 +1249,7 @@ export class DungeonRun {
           );
           if (result === 'win') {
             p.shards += this.def.rewardShards;
+            this.grantClearGP();
             p.dungeonClears[this.def.id] = (p.dungeonClears[this.def.id] ?? 0) + 1;
             if (this.def.id === 'trial') {
               await say('Alex', `Holy shards, you actually did it! Ironhusk is defeated! I was half-expecting to call the recovery team, haha.`);
@@ -1003,24 +1272,55 @@ export class DungeonRun {
     this.busy = true;
     try {
       const p = this.ctx.player;
-      const n = 1 + Math.floor(Math.random() * Math.min(3, 1 + this.floorNum));
       const [lo, hi] = this.def.levelRange;
-      const specs = Array.from({ length: n }, () => ({
-        speciesId: this.def.pool[Math.floor(Math.random() * this.def.pool.length)],
-        level: lo + Math.floor(Math.random() * (hi - lo + 1)) + (this.floorNum - 1),
-      }));
+      // CHAMPION ENCOUNTER — a rare, lone, over-leveled elite worth hunting.
+      // Never in the academy Trial (keeps the tutorial fight clean).
+      const champion = this.def.id !== 'trial' && Math.random() < 0.12;
+
+      let specs: { speciesId: string; level: number }[];
+      if (champion) {
+        specs = [{
+          speciesId: this.def.pool[Math.floor(Math.random() * this.def.pool.length)],
+          level: hi + (this.floorNum - 1) + 3 + Math.floor(Math.random() * 4),
+        }];
+        sfx('boom');
+        this.vfx.pillar(new THREE.Vector3(this.pos.x, 0, this.pos.y), 0xf2c14e, { height: 4, radius: 0.6, life: 0.8 });
+        toast('⭐ A Champion Guardian blocks your path!', 'gold', 3200);
+      } else {
+        const n = 1 + Math.floor(Math.random() * Math.min(3, 1 + this.floorNum));
+        specs = Array.from({ length: n }, () => ({
+          speciesId: this.def.pool[Math.floor(Math.random() * this.def.pool.length)],
+          level: lo + Math.floor(Math.random() * (hi - lo + 1)) + (this.floorNum - 1),
+        }));
+      }
+
       const firstStrike = Math.random() < p.crawler.firstStrikeChance;
       this.vfx.shake(0.12, 0.3);
-      const result = await this.ctx.runBattle(specs, { wild: true, theme: this.def.theme, arena: this.def.id, firstStrike });
+      const result = await this.ctx.runBattle(specs, {
+        wild: true, theme: this.def.theme, arena: this.def.id, firstStrike,
+        intro: champion ? '⭐ A Champion Guardian — rare and battle-scarred — challenges you!' : undefined,
+      });
       if (result === 'lose') { this.finish('dead'); return; }
-      if (result === 'win' && this.def.drop) {
-        const d = this.def.drop;
-        if (p.itemCount(d.item) < (d.max ?? 1) && Math.random() < d.chance) {
-          if (p.addItem(d.item)) {
-            sfx('toast');
-            await say('', `✨ One of the fallen wild Guardians shed something rare: <b>${ITEMS[d.item].name}</b>!`);
-          } else {
-            await say('', `✨ One of the fallen wild Guardians tried to shed a rare item: <b>${ITEMS[d.item].name}</b>… but your inventory is full!`);
+
+      if (result === 'win') {
+        // Champions pay a tribute: bonus shards, Guild Points, and a doubled drop roll.
+        if (champion) {
+          const bonus = 60 + Math.floor(this.def.rewardShards * 0.12);
+          p.shards += bonus;
+          p.awardGuildPoints(12, 'Champion bested');
+          this.vfx.burst(new THREE.Vector3(this.pos.x, 0.6, this.pos.y), 0xf2c14e, { count: 30, speed: 2.4, gravity: -3, life: 0.9, size: 0.12 });
+          await say('', `⭐ The Champion yields! Its hoard scatters: <b>◆${bonus} Shards</b>.`);
+        }
+        if (this.def.drop) {
+          const d = this.def.drop;
+          const chance = champion ? Math.min(1, d.chance * 2) : d.chance;
+          if (p.itemCount(d.item) < (d.max ?? 1) && Math.random() < chance) {
+            if (p.addItem(d.item)) {
+              sfx('toast');
+              await say('', `✨ A rare relic was left behind: <b>${ITEMS[d.item].name}</b>!`);
+            } else {
+              await say('', `✨ A rare relic — <b>${ITEMS[d.item].name}</b> — was left behind, but your cargo hold is full!`);
+            }
           }
         }
       }
@@ -1038,6 +1338,81 @@ export class DungeonRun {
     this.vfx.shake(0.4, 0.8);
     await say('', '💥 The Crawler\'s hull gave out! An academy recovery team hauls you back to the surface…');
     this.finish('dead');
+  }
+
+  /** Elemental field hazard — fires once per successful step. Makes each
+   *  themed expedition *feel* like its element while exploring, not just in battle. */
+  private applyHazardStep(): void {
+    const hz = this.def.hazard;
+    if (!hz) return;
+    const p = this.ctx.player;
+    const here = new THREE.Vector3(this.pos.x, 0, this.pos.y);
+    this.hazardSteps++;
+    switch (hz.kind) {
+      case 'frostbite':
+      case 'blizzard':
+        // the cold bites: a chance at an extra point of energy drain
+        if (Math.random() < (hz.kind === 'blizzard' ? 0.6 : 0.45)) {
+          if (p.crawler.energy > 0) p.crawler.energy--;
+          else p.crawler.hull = Math.max(0, p.crawler.hull - 2);
+        }
+        break;
+      case 'scorch':
+        if (Math.random() < 0.28) {
+          const dmg = 2 + Math.floor(Math.random() * 3);
+          p.crawler.hull = Math.max(0, p.crawler.hull - dmg);
+          this.vfx.burst(here.clone().setY(0.5), 0xff8a3a, { count: 8, speed: 1.8, gravity: -3, life: 0.4, size: 0.08 });
+        }
+        break;
+      case 'corrosion':
+        if (Math.random() < 0.22) {
+          p.crawler.energy = Math.max(0, p.crawler.energy - 3);
+          if (Math.random() < 0.4) p.crawler.hull = Math.max(0, p.crawler.hull - 2);
+        }
+        break;
+      case 'gale':
+        if (Math.random() < 0.25 && p.crawler.energy > 0) {
+          p.crawler.energy = Math.max(0, p.crawler.energy - 2);
+        }
+        break;
+      case 'unstable':
+        if (Math.random() < 0.15) {
+          if (Math.random() < 0.5) p.crawler.hull = Math.max(0, p.crawler.hull - 3);
+          else p.crawler.energy = Math.max(0, p.crawler.energy - 4);
+          this.vfx.shake(0.1, 0.25);
+        }
+        break;
+      case 'blessing':
+        // hallowed ground knits wounds every few steps
+        if (this.hazardSteps % 6 === 0) {
+          let healed = false;
+          for (const g of p.party) {
+            if (!g.fainted && g.hp < g.stats.hp) { g.hp = Math.min(g.stats.hp, g.hp + Math.ceil(g.stats.hp * 0.05)); healed = true; }
+          }
+          if (p.crawler.hull < p.crawler.hullMax) { p.crawler.hull = Math.min(p.crawler.hullMax, p.crawler.hull + 4); healed = true; }
+          if (healed) {
+            this.vfx.glow(here.clone().setY(0.7), 0xffe8a8, { scale: 1.2, life: 0.4 });
+            sfx('heal');
+          }
+        }
+        break;
+    }
+  }
+
+  /** A one-line warning when an expedition's hazard is in play, shown on entry. */
+  private announceHazard(): void {
+    const hz = this.def.hazard;
+    if (hz) toast(`${hz.icon} ${hz.name} — ${hz.desc}`, 'red', 4200);
+  }
+
+  /** Guild Points for conquering this place — full on the first clear, a
+   *  smaller stipend on repeat runs so expeditions stay worth re-charting. */
+  private grantClearGP(): void {
+    const p = this.ctx.player;
+    const first = (p.dungeonClears[this.def.id] ?? 0) === 0;
+    const base = Math.max(30, Math.min(200, Math.round(this.def.rewardShards / 18)));
+    const gp = first ? base : Math.max(15, Math.round(base / 2));
+    p.awardGuildPoints(gp, first ? `${this.def.name} conquered` : `${this.def.name} re-charted`);
   }
 
   private finish(o: DungeonOutcome): void {
@@ -1133,6 +1508,7 @@ export class DungeonRun {
   run(): Promise<DungeonOutcome> {
     this.buildScene();
     this.newFloor();
+    this.announceHazard();
     showHotkeys(true, true);
     window.addEventListener('keydown', this.onKeyDown);
     window.addEventListener('keyup', this.onKeyUp);

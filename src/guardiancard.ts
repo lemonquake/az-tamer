@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import {
   SPECIES, TECHS, TYPE_CSS, TYPE_COLORS, STAT_NAMES, expForLevel,
   elementsOf, ELEMENT_CSS, ELEMENT_ICONS, type SpeciesDef, type StatKey, getSpeciesPassive,
+  CHARMS, NATURES, natureBlurb, geneRating, geneGradeLabel,
 } from './data';
 import { Guardian, type Player } from './state';
 import { makeGuardian, disposeRig } from './models';
@@ -315,10 +316,61 @@ export function openGuardianCard(subject: Guardian | string, player?: Player): P
       </div>
       <canvas id="pcard-canvas"></canvas>
       <div id="pcard-hint">🖱 drag to rotate — techniques & evolution line are on the back</div>
+      <div id="pcard-loadout" style="display:none"></div>
       <div id="pcard-actions">
         <button class="ui-btn primary" id="pcard-close">Close (Esc)</button>
       </div>`;
     document.getElementById('app')!.appendChild(overlay);
+
+    // ---- Genetics readout + held-charm loadout (owned Guardians only) ----
+    const loadoutEl = overlay.querySelector<HTMLElement>('#pcard-loadout')!;
+    const panelCss = 'background:rgba(8,10,22,.86);border:1px solid #2c3666;border-radius:10px;padding:10px 14px;margin:6px auto;max-width:560px;font-size:13px;color:#e8ecf6;line-height:1.5';
+    const renderLoadout = (picking = false): void => {
+      if (!owned || !player) { loadoutEl.style.display = 'none'; return; }
+      const pl = player;
+      const grade = geneGradeLabel(geneRating(g.genes));
+      const nat = NATURES[g.natureId];
+      const natTxt = nat ? `${nat.name} <span style="opacity:.7">(${natureBlurb(g.natureId)})</span>` : 'Neutral';
+      const order: StatKey[] = ['hp', 'atk', 'def', 'spd', 'wis', 'sp'];
+      const geneCells = order.map(k => {
+        const v = g.genes[k] ?? 0;
+        const col = v >= 30 ? '#ff5ad2' : v >= 22 ? '#9a6aff' : v >= 14 ? '#5ad2ff' : '#7a8090';
+        return `<div style="text-align:center;min-width:40px"><div style="font-size:10px;color:#9aa0b4">${STAT_NAMES[k]}</div><div style="font-weight:700;color:${col}">${v}</div></div>`;
+      }).join('');
+      const tt = pl.trainingTotal(g);
+      const charm = g.heldCharm ? CHARMS[g.heldCharm] : null;
+      if (!picking) {
+        loadoutEl.innerHTML = `<div style="${panelCss}">
+          <div>🧬 Genes — <b style="color:${grade.color}">${grade.label} · ${geneRating(g.genes)}%</b></div>
+          <div style="display:flex;gap:6px;justify-content:center;margin:5px 0">${geneCells}</div>
+          <div>🌿 Nature: <b>${natTxt}</b> &nbsp;·&nbsp; 🎯 Training <b>${tt}</b>/510</div>
+          <div style="margin-top:7px">🎴 Charm: ${charm ? `<b>${charm.icon} ${charm.name}</b> <span style="opacity:.7">— ${charm.desc}</span>` : '<span style="opacity:.6">none equipped</span>'}
+            <button class="ui-btn" id="pc-charm-change" style="padding:2px 9px;font-size:12px;margin-left:6px">${charm ? 'Change' : 'Equip'}</button>
+            ${charm ? `<button class="ui-btn danger" id="pc-charm-remove" style="padding:2px 9px;font-size:12px">Remove</button>` : ''}
+          </div></div>`;
+        const ch = loadoutEl.querySelector<HTMLElement>('#pc-charm-change');
+        if (ch) ch.onclick = () => renderLoadout(true);
+        const rm = loadoutEl.querySelector<HTMLElement>('#pc-charm-remove');
+        if (rm) rm.onclick = () => { pl.unequipCharm(g); pl.save(); renderLoadout(false); };
+      } else {
+        const ids = Object.keys(pl.charms).filter(id => CHARMS[id] && (pl.availableCharm(id) > 0 || g.heldCharm === id));
+        const rows = ids.length ? ids.map(id => {
+          const c = CHARMS[id]; const avail = pl.availableCharm(id); const held = g.heldCharm === id;
+          return `<button class="ui-btn" data-charm="${id}" style="display:block;width:100%;text-align:left;margin:3px 0;${held ? 'border-color:var(--ui-gold)' : ''}">${c.icon} <b>${c.name}</b> ${held ? '<span style="color:var(--ui-gold)">[equipped]</span>' : `<span style="opacity:.7">×${avail}</span>`}<br><span class="sub" style="font-size:11px">${c.desc}</span></button>`;
+        }).join('') : '<div class="sub" style="padding:8px">No charms owned. Visit the Charm Atelier in Haven City.</div>';
+        loadoutEl.innerHTML = `<div style="${panelCss}">
+          <div style="display:flex;justify-content:space-between;align-items:center"><b>🎴 Equip a Charm</b><button class="ui-btn" id="pc-charm-back" style="padding:2px 9px;font-size:12px">Back</button></div>
+          <div style="max-height:220px;overflow-y:auto;margin-top:5px">${rows}</div></div>`;
+        loadoutEl.querySelector<HTMLElement>('#pc-charm-back')!.onclick = () => renderLoadout(false);
+        loadoutEl.querySelectorAll<HTMLElement>('[data-charm]').forEach(b => b.onclick = () => {
+          const id = b.dataset.charm!;
+          if (g.heldCharm === id) pl.unequipCharm(g); else pl.equipCharm(g, id);
+          pl.save(); renderLoadout(false);
+        });
+      }
+      loadoutEl.style.display = 'block';
+    };
+    renderLoadout(false);
 
     const canvas = overlay.querySelector<HTMLCanvasElement>('#pcard-canvas')!;
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });

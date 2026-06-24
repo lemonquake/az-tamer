@@ -6,6 +6,8 @@ import {
   type SpeciesDef, type Stats, type StatKey, type Technique, type CrawlerPart,
   HOUSES, TYPE_ELEMENT, elementsOf, type Element, isBig3Legend, formRank,
   STAGE_STAT_MULT, LEVEL_CAP_BY_RANK,
+  GENE_WEIGHT, TRAIN_DIVISOR, TRAIN_PER_STAT_MAX, TRAIN_TOTAL_MAX,
+  natureMult, rollGenes, rollNatureId, emptyStats, geneRating,
 } from './data';
 import { DEFAULT_APPEARANCE, type Appearance } from './models';
 import { defaultFishingState, normalizeFishingState, type FishingState } from './fishingdata';
@@ -41,6 +43,10 @@ export interface GuardianSave {
   parents?: { parentA: ParentSnapshot; parentB: ParentSnapshot };
   evolutionPoints?: number;
   resCooldown?: number;
+  genes?: Stats;
+  natureId?: string;
+  training?: Stats;
+  heldCharm?: string;
 }
 
 export class Guardian {
@@ -64,6 +70,14 @@ export class Guardian {
   statMultiplier = 1.0;
   extraHpBonus = 0;
   resCooldown = 0;
+  /** Hidden genes (IVs, 0–31 per stat) rolled at birth; inheritable by breeding. */
+  genes: Stats = { hp: 0, sp: 0, atk: 0, def: 0, spd: 0, wis: 0 };
+  /** Nature id (see NATURES) — skews one stat +10% and another −10%. */
+  natureId = '';
+  /** Earned training (effort) points, capped per-stat and in total. */
+  training: Stats = { hp: 0, sp: 0, atk: 0, def: 0, spd: 0, wis: 0 };
+  /** Held charm id (battle gear). Charm ownership is tracked on Player. */
+  heldCharm?: string;
 
   constructor(speciesId: string, level = 1, nickname?: string) {
     this.id = uid();
@@ -73,7 +87,14 @@ export class Guardian {
     this.exp = expForLevel(level);
     this.bonus = { hp: 0, sp: 0, atk: 0, def: 0, spd: 0, wis: 0 };
     this.elements = [...elementsOf(speciesId)];
-    
+
+    // Genetics: roll a deterministic gene set + nature from this Guardian's id,
+    // and start with no training. (load() restores saved values; breeding
+    // overwrites these with inherited ones.) Must precede the stats read below.
+    this.genes = rollGenes(this.id);
+    this.natureId = rollNatureId(this.id);
+    this.training = emptyStats();
+
     // Set level cap based on form rank (Novice keeps a little random variety)
     const _rank = formRank(this.species);
     this.levelCap = _rank === 0
@@ -98,7 +119,14 @@ export class Guardian {
     const s = this.species;
     const l = this.level - 1;
     const mult = this.isStarter ? 2.025 : 1.0;
-    const calc = (k: StatKey) => Math.floor((s.base[k] + s.growth[k] * l + this.bonus[k]) * mult);
+    // Genes, training (effort) and nature fold into the base figure BEFORE the
+    // form-rank multipliers, so they scale proportionally at every rank.
+    const calc = (k: StatKey) => {
+      const gene = (this.genes?.[k] ?? 0) * GENE_WEIGHT[k];
+      const train = Math.floor((this.training?.[k] ?? 0) / TRAIN_DIVISOR[k]);
+      const raw = (s.base[k] + s.growth[k] * l + this.bonus[k] + gene + train) * mult * natureMult(this.natureId, k);
+      return Math.floor(raw);
+    };
     const baseStats = { hp: calc('hp'), sp: calc('sp'), atk: calc('atk'), def: calc('def'), spd: calc('spd'), wis: calc('wis') };
     
     // Form-rank stat multipliers — monotonic by how many times evolved:
@@ -314,6 +342,10 @@ export class Guardian {
       parents: this.parents ? JSON.parse(JSON.stringify(this.parents)) : undefined,
       evolutionPoints: this.evolutionPoints,
       resCooldown: this.resCooldown,
+      genes: { ...this.genes },
+      natureId: this.natureId,
+      training: { ...this.training },
+      heldCharm: this.heldCharm,
     };
   }
 
@@ -330,6 +362,12 @@ export class Guardian {
     g.parents = s.parents ? JSON.parse(JSON.stringify(s.parents)) : undefined;
     g.evolutionPoints = s.evolutionPoints ?? 0;
     g.resCooldown = s.resCooldown ?? 0;
+    // Genetics — older saves predate genes/nature/training; roll deterministically
+    // from the Guardian id so the same creature always gets the same legacy genes.
+    g.genes = s.genes ? { ...s.genes } : rollGenes(g.id);
+    g.natureId = s.natureId ?? rollNatureId(g.id);
+    g.training = s.training ? { ...s.training } : emptyStats();
+    g.heldCharm = s.heldCharm;
     return g;
   }
 }
@@ -500,6 +538,10 @@ export interface PlayerSave {
   inventory: Record<string, number>;
   crawler: CrawlerSaveData;
   flags: Record<string, boolean>;
+  dawnAlignment?: number;
+  stillwaterAlignment?: number;
+  rootlessAlignment?: number;
+  crownlessAlignment?: number;
   houseId: string | null;
   battlesWon: number; capturesMade: number; dungeonClears: Record<string, number>;
   tournamentPoints?: number;
@@ -514,10 +556,61 @@ export interface PlayerSave {
   guildPoints?: number;
   guildPerks?: GuildPerks;
   guildQuestProgress?: Record<string, number>;
+  guildQuestClaims?: Record<string, number>;
   savedLocation?: SavedLocation;
   mmrState?: MMRState;
+  charms?: Record<string, number>;
+  eggs?: EggData[];
+  bounties?: BountyState | null;
 }
 
+/** Level a freshly-hatched egg starts at. */
+export const EGG_HATCH_LEVEL = 5;
+
+/** An unhatched egg from the Hatchery. Ticks down by field steps, then hatches
+ *  into a level-EGG_HATCH_LEVEL Guardian carrying its inherited genes/moves. */
+export interface EggData {
+  id: string;
+  speciesId: string;         // base natural form it hatches into
+  label: string;             // display name ("Cindcub Egg")
+  stepsLeft: number;
+  totalSteps: number;
+  genes: Stats;              // inherited gene set
+  natureId: string;          // inherited nature
+  eggMoves: string[];        // inherited technique ids
+  charm?: string;            // a charm that hatches alongside it (rare)
+  nickname?: string;
+  parents?: { parentA: ParentSnapshot; parentB: ParentSnapshot };
+}
+
+/** One active Bounty Board objective (daily / weekly / elite). */
+export interface BountyEntry {
+  id: string;
+  kind: string;              // see bounties.ts BOUNTY_KINDS
+  param?: string;            // element/type/dungeon/etc. filter
+  title: string;
+  desc: string;
+  icon: string;
+  target: number;
+  progress: number;
+  tier: 'daily' | 'weekly' | 'elite';
+  rewardShards: number;
+  rewardGP: number;
+  rewardItems?: { id: string; qty: number }[];
+  rewardCharm?: string;
+  claimed: boolean;
+  expiresDay: number;
+}
+/** Persisted Bounty Board state (rolled per calendar day / week). */
+export interface BountyState {
+  dailyDay: number;          // calendarDay the daily set was last rolled
+  weeklyWeek: number;        // week index the weekly was last rolled
+  eliteDay: number;          // calendarDay the elite was last rolled
+  list: BountyEntry[];
+  streak: number;            // consecutive days with ≥1 daily claimed
+  lastStreakDay: number;     // calendarDay the streak last advanced
+  completedTotal: number;    // lifetime claimed bounties
+}
 
 export class Player {
   static activeInstance: Player | null = null;
@@ -558,6 +651,10 @@ export class Player {
   inventory = new Map<string, number>();
   crawler = new Crawler();
   flags: Record<string, boolean> = {};
+  dawnAlignment = 0;
+  stillwaterAlignment = 0;
+  rootlessAlignment = 0;
+  crownlessAlignment = 0;
   houseId: string | null = null;
   battlesWon = 0;
   capturesMade = 0;
@@ -594,9 +691,31 @@ export class Player {
     tacticalSynergy: 0,
   };
   guildQuestProgress: Record<string, number> = {};
+  /** How many times each guild quest has been claimed (one-time gating + repeatable counts). */
+  guildQuestClaims: Record<string, number> = {};
+
+  /** Owned held-charm counts (charmId → quantity). Equipping reserves from this pool. */
+  charms: Record<string, number> = {};
+  /** Unhatched eggs from the Hatchery — tick down by field steps, then hatch. */
+  eggs: EggData[] = [];
+  /** Bounty Board state (rolled lazily by bounties.ts; null until first visit). */
+  bounties: BountyState | null = null;
 
   constructor() {
     Player.activeInstance = this;
+  }
+
+  /** Award Guild Points. Central GP faucet used across the game. Pass silent
+   *  for high-frequency sources (per-battle/capture) so toasts don't spam. */
+  awardGuildPoints(amount: number, reason?: string, silent = false): void {
+    if (amount <= 0) return;
+    this.guildPoints = (this.guildPoints ?? 0) + amount;
+    if (silent) return;
+    try {
+      // global hook avoids a static state<->ui import cycle at module load
+      const ui = (window as any).__azToast as ((m: string, c?: string, d?: number) => void) | undefined;
+      if (ui) ui(`🛡️ +${amount} Guild Points${reason ? ` — ${reason}` : ''}`, 'gold', 2600);
+    } catch { /* toast is best-effort */ }
   }
 
   get alive(): Guardian[] { return this.party.filter(g => !g.fainted); }
@@ -630,6 +749,72 @@ export class Player {
     this.crawler.restock();
   }
 
+  // ---------------- Held charms ----------------
+  addCharm(id: string, n = 1): void { this.charms[id] = (this.charms[id] ?? 0) + n; }
+  charmCount(id: string): number { return this.charms[id] ?? 0; }
+  /** How many of this charm are currently equipped across party + reserve. */
+  equippedCharmCount(id: string): number {
+    return [...this.party, ...this.reserve].filter(g => g.heldCharm === id).length;
+  }
+  /** Unequipped copies of a charm available to assign. */
+  availableCharm(id: string): number { return this.charmCount(id) - this.equippedCharmCount(id); }
+  /** Equip a charm onto a Guardian if a free copy is owned. Returns success. */
+  equipCharm(g: Guardian, id: string): boolean {
+    if (g.heldCharm === id) return true;
+    if (this.availableCharm(id) <= 0) return false;
+    g.heldCharm = id;
+    return true;
+  }
+  unequipCharm(g: Guardian): void { g.heldCharm = undefined; }
+  /** Total charm copies owned across all charm ids (for UI counts). */
+  totalCharmsOwned(): number { return Object.values(this.charms).reduce((a, b) => a + b, 0); }
+
+  // ---------------- Training (effort) ----------------
+  trainingTotal(g: Guardian): number {
+    const t = g.training; return t.hp + t.sp + t.atk + t.def + t.spd + t.wis;
+  }
+  /** Add training to one stat, clamped to per-stat (252) and total (510) caps. Returns points actually added. */
+  addTraining(g: Guardian, stat: StatKey, amount: number): number {
+    const cur = g.training[stat] ?? 0;
+    const perRoom = TRAIN_PER_STAT_MAX - cur;
+    const totalRoom = TRAIN_TOTAL_MAX - this.trainingTotal(g);
+    const add = Math.max(0, Math.min(amount, perRoom, totalRoom));
+    g.training[stat] = cur + add;
+    if (add > 0) { g.hp = Math.min(g.hp, g.stats.hp); g.sp = Math.min(g.sp, g.stats.sp); }
+    return add;
+  }
+  resetTraining(g: Guardian): void { g.training = emptyStats(); g.hp = Math.min(g.hp, g.stats.hp); }
+
+  // ---------------- Eggs / Hatchery ----------------
+  /** Advance every egg by `steps` field-steps; returns the ones that just hit 0. */
+  tickEggs(steps = 1): EggData[] {
+    const hatched: EggData[] = [];
+    for (const e of this.eggs) {
+      if (e.stepsLeft <= 0) continue;
+      e.stepsLeft = Math.max(0, e.stepsLeft - steps);
+      if (e.stepsLeft === 0) hatched.push(e);
+    }
+    return hatched;
+  }
+  /** Turn a (ready) egg into a Guardian, carry over genes/nature/egg-moves, and remove it. */
+  hatchEgg(e: EggData): Guardian {
+    const g = new Guardian(e.speciesId, EGG_HATCH_LEVEL, e.nickname);
+    g.genes = { ...e.genes };
+    g.natureId = e.natureId || g.natureId;
+    g.training = emptyStats();
+    for (const tid of e.eggMoves) {
+      if (TECHS[tid] && !g.learnedTechs.includes(tid)) g.learnedTechs.push(tid);
+    }
+    if (e.parents) g.parents = JSON.parse(JSON.stringify(e.parents));
+    g.healFull();
+    if (e.charm) this.addCharm(e.charm);
+    this.eggs = this.eggs.filter(x => x.id !== e.id);
+    this.addGuardian(g);
+    return g;
+  }
+  /** Gene-perfection % of a Guardian (0–100) — convenience for UIs. */
+  geneRatingOf(g: Guardian): number { return geneRating(g.genes); }
+
   save(isAutosave = true): void {
     if (this.inDungeon) return; // Cannot save inside a dungeon
 
@@ -649,6 +834,10 @@ export class Player {
       party: this.party.map(g => g.save()), reserve: this.reserve.map(g => g.save()),
       inventory: Object.fromEntries(this.inventory),
       crawler: this.crawler.save(), flags: { ...this.flags },
+      dawnAlignment: this.dawnAlignment,
+      stillwaterAlignment: this.stillwaterAlignment,
+      rootlessAlignment: this.rootlessAlignment,
+      crownlessAlignment: this.crownlessAlignment,
       houseId: this.houseId, battlesWon: this.battlesWon,
       capturesMade: this.capturesMade, dungeonClears: { ...this.dungeonClears },
       tournamentPoints: this.tournamentPoints,
@@ -663,8 +852,12 @@ export class Player {
       guildPoints: this.guildPoints,
       guildPerks: { ...this.guildPerks },
       guildQuestProgress: { ...this.guildQuestProgress },
+      guildQuestClaims: { ...this.guildQuestClaims },
       savedLocation: this.savedLocation,
       mmrState: this.mmrState ? JSON.parse(JSON.stringify(this.mmrState)) : undefined,
+      charms: { ...this.charms },
+      eggs: JSON.parse(JSON.stringify(this.eggs)),
+      bounties: this.bounties ? JSON.parse(JSON.stringify(this.bounties)) : null,
     };
     localStorage.setItem(slotKey(activeSlot), JSON.stringify(data));
   }
@@ -717,6 +910,10 @@ export class Player {
       p.inventory = new Map(Object.entries(d.inventory));
       p.crawler = Crawler.load(d.crawler);
       p.flags = { ...d.flags }; p.houseId = d.houseId;
+      p.dawnAlignment = d.dawnAlignment ?? 0;
+      p.stillwaterAlignment = d.stillwaterAlignment ?? 0;
+      p.rootlessAlignment = d.rootlessAlignment ?? 0;
+      p.crownlessAlignment = d.crownlessAlignment ?? 0;
       p.battlesWon = d.battlesWon ?? 0; p.capturesMade = d.capturesMade ?? 0;
       p.dungeonClears = d.dungeonClears ?? {};
       p.tournamentPoints = d.tournamentPoints ?? 0;
@@ -760,8 +957,12 @@ export class Player {
         tacticalSynergy: 0,
       };
       p.guildQuestProgress = d.guildQuestProgress ? { ...d.guildQuestProgress } : {};
+      p.guildQuestClaims = d.guildQuestClaims ? { ...d.guildQuestClaims } : {};
       p.savedLocation = d.savedLocation;
       p.mmrState = d.mmrState ? JSON.parse(JSON.stringify(d.mmrState)) : null;
+      p.charms = d.charms ? { ...d.charms } : {};
+      p.eggs = d.eggs ? JSON.parse(JSON.stringify(d.eggs)) : [];
+      p.bounties = d.bounties ?? null;
 
       // Retroactive stat adjustment for existing starter Guardians
       if (!p.flags['starter_stats_migrated_v2']) {
