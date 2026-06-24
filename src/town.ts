@@ -20,6 +20,7 @@ import {
 import { LEGENDS, WORLD_CIRCUIT, LEGEND_GUARDIANS, DAUGHTERS, AIRAH, ALJAY_HIDEOUTS } from './lore';
 import { openColiseumRegistration, showCircuitStandings, talkToStatkeeper } from './tournaments';
 import { CRAWLER_SLOTS, CRAWLER_SLOT_INFO, PAINT_JOBS, ELEMENT_CSS, RARITY_INFO, ULTRA_GRADIENT, type CrawlerSlot, type CrawlerRarity } from './data';
+import { elementIcon } from './icons';
 import { CHARMS, CHARM_SHOP, NATURES, natureBlurb, geneRating, geneGradeLabel, baseFormOf, TECHS, STAT_NAMES, rollGenes, rollNatureId, type StatKey } from './data';
 import { ensureBounties, claimBounty, claimableCount } from './bounties';
 import {
@@ -8341,7 +8342,7 @@ export class Town {
                 ${unlocked ? `
                   <div style="margin-bottom:10px">
                     <b>Elements:</b> 
-                    ${els.map(e => `<span style="background:${ELEMENT_CSS[e]};color:#000;padding:2px 6px;border-radius:4px;font-size:11px;font-weight:bold;margin-right:4px">${ELEMENT_ICONS[e]} ${e}</span>`).join('')}
+                    ${els.map(e => `<span style="background:${ELEMENT_CSS[e]};color:#000;padding:2px 6px;border-radius:4px;font-size:11px;font-weight:bold;margin-right:4px">${elementIcon(e, { size: 12, color: '#000' })} ${e}</span>`).join('')}
                   </div>
                   <div style="margin-bottom:10px">
                     <b>Archetype:</b> <span style="text-transform:capitalize">${sp.archetype}</span>
@@ -8852,7 +8853,7 @@ export class Town {
 
                 const elChips = offspring.elements.map(el => 
                   `<span style="display:inline-flex;align-items:center;gap:4px;padding:6px 12px;background:${ELEMENT_CSS[el]}22;border:1.5px solid ${ELEMENT_CSS[el]};border-radius:20px;color:${ELEMENT_CSS[el]};font-size:14px;font-weight:bold;box-shadow:0 0 10px ${ELEMENT_CSS[el]}33">
-                    ${ELEMENT_ICONS[el]} ${el.toUpperCase()}
+                    ${elementIcon(el, { size: 13 })} ${el.toUpperCase()}
                   </span>`
                 ).join(' ');
 

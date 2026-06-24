@@ -21,8 +21,13 @@ import { CLOTHES_DATABASE, updateTamerAppearance } from './clothes';
 import { WORLD_GUILDS } from './lore';
 import { speciesSnapshotURL } from './snapshots';
 import { renderLeaderboardPanel, wireLeaderboardPanel, getPlayerMMR, setPlayerMMR } from './mmr';
+import { mountTablet, enableDragScroll, type TabletTab, type TabletHandle } from './tablet';
+import { icon, elementIcon, statIcon, itemKindIcon } from './icons';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
+
+/** Custom shard-currency glyph (replaces the old ${SHARD} throughout the UI). */
+const SHARD = icon('shard', { size: 13 });
 
 // every UI button clicks audibly
 document.addEventListener('click', e => {
@@ -259,7 +264,7 @@ export function updateHUD(player: Player, zone: string, extra?: { floor?: number
       <div class="hud-name">${player.tamerName}</div>
       <div class="hud-rank">${rankBadgeHTML(rIdx, 17)}<b style="color:${RANKS[rIdx].color}">${RANKS[rIdx].name}</b>${house ? `<img src="${guildIconURL(house.id, 32)}" alt="" title="${house.name}">` : ''}</div>
     </div>
-    <span class="goldcol" style="white-space:nowrap">◆ ${player.shards}</span>
+    <span class="goldcol" style="white-space:nowrap">${SHARD} ${player.shards}</span>
   </div>`;
   if (extra?.floor !== undefined) {
     html += `<div class="row"><span class="label">Hull</span><span>${c.hull}/${c.hullMax}</span></div>`;
@@ -1216,6 +1221,7 @@ export function openMasterDebugMenu(player: Player): Promise<void> {
 
 export function closeMenu(): void {
   $('menu-screen').style.display = 'none';
+  $('menu-content').className = 'inner panel'; // reset any device/glass skin between screens
   menuOpen = false;
   if (screenEscHandler) {
     window.removeEventListener('keydown', screenEscHandler, true);
@@ -1256,6 +1262,9 @@ function openScreen(html: string): HTMLElement {
   };
   window.addEventListener('keydown', screenEscHandler, true);
 
+  // touch-style click-hold vertical drag to scroll (the Tablet manages its own)
+  enableDragScroll(content);
+
   return content;
 }
 export { openScreen };
@@ -1269,85 +1278,106 @@ export interface PanelCtx { canSave: boolean; }
 
 const PANEL_KEYS: Record<string, PanelKind> = { p: 'player', i: 'inventory', g: 'guardians', c: 'crawler', j: 'quests', v: 'evotree', l: 'leaderboard' };
 const PANEL_TITLES: Record<PanelKind, string> = {
-  player: '🧭 Tamer Data', inventory: '🎒 Inventory', guardians: '🐾 Guardians', crawler: '🛞 Crawler', quests: '📖 Quest Journal', evotree: '🧬 Evolutions', leaderboard: '🏆 Leaderboard',
+  player: 'Tamer Data', inventory: 'Inventory', guardians: 'Guardians', crawler: 'Crawler', quests: 'Quest Journal', evotree: 'Evolutions', leaderboard: 'Leaderboard',
+};
+const PANEL_ICON: Record<PanelKind, string> = {
+  player: 'tamer', inventory: 'items', guardians: 'guardians', crawler: 'crawler', quests: 'journal', evotree: 'evolutions', leaderboard: 'leaderboard',
 };
 const PANEL_HOTKEY: Record<PanelKind, string> = { player: 'P', inventory: 'I', guardians: 'G', crawler: 'C', quests: 'J', evotree: 'V', leaderboard: 'L' };
 
-/** Open a dedicated panel. Esc or the panel's own hotkey closes it (hotkeys also switch panels). */
+/** True if the player has an unseen active main/story quest (drives the Journal tab's attention dot). */
+function hasUnseenMainQuest(player: Player): boolean {
+  const { story, main } = journalEntries(player);
+  for (const [q, st] of [...story, ...main]) {
+    if ((st === 'active' || st === 'ready') && !player.flags['seen_quest_' + q.id]) return true;
+  }
+  return false;
+}
+
+/** Open the Tablet on a given panel. Esc or the panel's own hotkey closes it (hotkeys also switch panels). */
 export function openPanel(kind: PanelKind, player: Player, ctx: PanelCtx): Promise<void> {
   return new Promise(resolve => {
-    let current = kind;
+    let handle: TabletHandle | null = null;
+    let curTab: PanelKind = kind;
 
-    const close = () => {
+    const buildTabs = (): TabletTab[] => {
+      const newQuest = hasUnseenMainQuest(player);
+      return (Object.keys(PANEL_TITLES) as PanelKind[]).map(p => ({
+        key: p, icon: PANEL_ICON[p], label: PANEL_TITLES[p], hotkey: PANEL_HOTKEY[p],
+        flashNew: p === 'quests' && newQuest,
+      }));
+    };
+
+    // Flag active quests as seen the moment the Journal screen is shown.
+    const markQuestsSeen = (key: string) => {
+      if (key !== 'quests') return;
+      const { story, main } = journalEntries(player);
+      let changed = false;
+      for (const [q, st] of [...story, ...main]) {
+        if ((st === 'active' || st === 'ready') && !player.flags['seen_quest_' + q.id]) {
+          player.flags['seen_quest_' + q.id] = true; changed = true;
+        }
+      }
+      if (changed) player.save();
+    };
+
+    const checkTut = (key: string) => {
+      if (key === 'guardians' && !player.flags['tut_guardian_ui']) {
+        runGuardianTutorial(player).then(refresh);
+      }
+    };
+
+    // Bodies call refresh() after acting. Some of them open a sub-screen via
+    // openScreen() (guardian detail, technique manager, guild card) which REPLACES
+    // the content host and tears the Tablet out of the DOM. If that happened,
+    // rebuild the device on the current tab; otherwise just re-render the body.
+    const refresh = () => {
+      if (handle && document.body.contains(handle.el)) handle.rerender();
+      else mountAt(curTab, true);
+    };
+
+    const onClose = () => {
       closeMenu();
       window.removeEventListener('keydown', onKey);
       refreshHotkeys();
       resolve();
     };
+
     const onKey = (e: KeyboardEvent) => {
-      if (isTutorialOpen()) return;
+      if (isTutorialOpen() || !handle) return;
       const k = e.key.toLowerCase();
-      if (k === 'escape' || k === 'esc') { close(); return; }
+      if (k === 'escape' || k === 'esc') { handle.close(); return; }
       const target = PANEL_KEYS[k];
       if (target && !(e.target instanceof HTMLInputElement)) {
-        if (target === current) close();
-        else { current = target; render(); }
+        if (target === handle.current()) handle.close();
+        else handle.setTab(target);
       }
     };
+
+    // Show the overlay via the shared machinery (sets menuOpen + Esc→#panel-close
+    // routing), then mount the Tablet into the now-visible content host. `silent`
+    // skips the boot animation/sound on rebuilds (e.g. returning from a sub-screen).
+    const mountAt = (tab: PanelKind, silent: boolean) => {
+      curTab = tab;
+      const content = openScreen('');
+      handle = mountTablet(content, {
+        tabs: buildTabs(),
+        initial: tab,
+        renderPage: (key) => renderPanelBody(key as PanelKind, player, refresh, ctx),
+        wirePage: (key, page) => wirePanelBody(key as PanelKind, page, player, refresh, ctx),
+        onTab: (key) => { curTab = key as PanelKind; markQuestsSeen(key); checkTut(key); handle!.refreshTabs(buildTabs()); },
+        sysButtons: ctx.canSave
+          ? [{ id: 'panel-save', icon: 'save', title: 'Save game', onClick: () => { player.save(false); toast('Game saved.', 'gold'); } }]
+          : [],
+        onClose,
+        noBoot: silent,
+      });
+      markQuestsSeen(tab);
+      checkTut(tab);
+    };
+
     window.addEventListener('keydown', onKey);
-
-    const tabsHtml = () => (Object.keys(PANEL_TITLES) as PanelKind[]).map(p =>
-      `<button class="ui-btn tab ${p === current ? 'primary' : ''}" data-tab="${p}">${PANEL_TITLES[p]} <span class="sub">(${PANEL_HOTKEY[p]})</span></button>`
-    ).join('');
-
-    const shell = (inner: string) => `
-      <div class="panel-tabs">${tabsHtml()}</div>
-      ${inner}
-      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:12px">
-        ${ctx.canSave ? '<button class="ui-btn" id="panel-save">💾 Save</button>' : ''}
-        <button class="ui-btn primary" id="panel-close">Close (Esc)</button>
-      </div>`;
-
-    const wire = (el: HTMLElement) => {
-      el.querySelectorAll<HTMLElement>('[data-tab]').forEach(b => b.onclick = () => { current = b.dataset.tab as PanelKind; render(); });
-      const save = el.querySelector<HTMLElement>('#panel-save');
-      if (save) save.onclick = () => { player.save(false); toast('Game saved.', 'gold'); };
-      (el.querySelector('#panel-close') as HTMLElement).onclick = close;
-    };
-
-    const checkTut = async () => {
-      if (current === 'guardians' && !player.flags['tut_guardian_ui']) {
-        await runGuardianTutorial(player);
-        render();
-      }
-    };
-
-    const markQuestsAsSeen = () => {
-      if (current === 'quests') {
-        const { story, main } = journalEntries(player);
-        let changed = false;
-        for (const [q, st] of [...story, ...main]) {
-          if (st === 'active' || st === 'ready') {
-            if (!player.flags['seen_quest_' + q.id]) {
-              player.flags['seen_quest_' + q.id] = true;
-              changed = true;
-            }
-          }
-        }
-        if (changed) {
-          player.save();
-        }
-      }
-    };
-
-    const render = () => {
-      markQuestsAsSeen();
-      const el = openScreen(shell(renderPanelBody(current, player, render, ctx)));
-      wire(el);
-      wirePanelBody(current, el, player, render, ctx);
-      checkTut();
-    };
-    render();
+    mountAt(kind, false);
   });
 }
 
@@ -1373,10 +1403,10 @@ function renderPanelBody(kind: PanelKind, p: Player, refresh: () => void, ctx: P
               ${house ? `<span class="tag" style="background:${house.color};color:#0c1022;margin-left:6px">${house.type}</span>` : ''}
               <div class="sub">${house && lore ? `${house.name} · ${lore.epithet}` : 'Unaffiliated graduate'}</div>
               <div class="sub" style="display:flex;align-items:center;gap:5px;margin-top:3px">${rankBadgeHTML(rankIndexFor(p), 20, true)}${house ? ` · No. ${p.cardNo || '—'}` : ''}</div>
-              ${house ? `<button class="ui-btn primary" id="open-guild-card" style="margin-top:8px;font-size:13px;padding:6px 14px">🪪 View Guild Card</button>` : '<div class="sub" style="margin-top:6px">Pledge to a Grand House to receive your guild Effigy & Sigil card.</div>'}
+              ${house ? `<button class="ui-btn primary" id="open-guild-card" style="margin-top:8px;font-size:13px;padding:6px 14px">${icon('card', { size: 15 })} View Guild Card</button>` : '<div class="sub" style="margin-top:6px">Pledge to a Grand House to receive your guild Effigy & Sigil card.</div>'}
             </div>
           </div>
-          <div class="list-row"><div style="flex:1"><span class="sub">Shards</span></div><b class="goldcol">◆ ${p.shards}</b></div>
+          <div class="list-row"><div style="flex:1"><span class="sub">Shards</span></div><b class="goldcol">${SHARD} ${p.shards}</b></div>
           <div class="list-row"><div style="flex:1"><span class="sub">Battles won</span></div><b>${p.battlesWon}</b></div>
           <div class="list-row"><div style="flex:1"><span class="sub">Guardians befriended</span></div><b>${p.capturesMade}</b></div>
           <div class="list-row"><div style="flex:1"><span class="sub">Guardians owned</span></div><b>${p.party.length + p.reserve.length}</b></div>
@@ -1560,16 +1590,14 @@ let invTab: InvTab = 'all';
 let invSort: InvSort = 'kind';
 let invSel: string | null = null;
 
+// `icon` holds an icons.ts glyph NAME (rendered to SVG at display time).
 const INV_TABS: Record<InvTab, { label: string; icon: string; kinds: string[] }> = {
-  all:     { label: 'All',         icon: '🎒', kinds: [] },
-  consume: { label: 'Consumables', icon: '🧪', kinds: ['heal', 'sp', 'revive'] },
-  gift:    { label: 'Gifts',       icon: '🎁', kinds: ['gift'] },
-  crawler: { label: 'Crawler',     icon: '🛞', kinds: ['fuel', 'repair'] },
-  gem:     { label: 'Gems',        icon: '💎', kinds: ['boost', 'feast', 'evo'] },
-  key:     { label: 'Key & Quest', icon: '📜', kinds: ['relic'] },
-};
-const KIND_ICONS: Record<string, string> = {
-  heal: '🧪', sp: '🥤', revive: '🍃', gift: '🎁', fuel: '🔋', repair: '🛠️', boost: '💎', feast: '🍱', evo: '🧬', relic: '📜',
+  all:     { label: 'All',         icon: 'bagSmall', kinds: [] },
+  consume: { label: 'Consumables', icon: 'flask',    kinds: ['heal', 'sp', 'revive'] },
+  gift:    { label: 'Gifts',       icon: 'gift',     kinds: ['gift'] },
+  crawler: { label: 'Crawler',     icon: 'crawler',  kinds: ['fuel', 'repair'] },
+  gem:     { label: 'Gems',        icon: 'gem',      kinds: ['boost', 'feast', 'evo'] },
+  key:     { label: 'Key & Quest', icon: 'scroll',   kinds: ['relic'] },
 };
 const ITEM_ICONS: Record<string, string> = {
   tonic: '🧪', tonic_plus: '⚗️', elixir: '✨', soda: '🥤', soda_plus: '🧋', soda_max: '🍶', revive_leaf: '🍃',
@@ -1579,7 +1607,7 @@ const ITEM_ICONS: Record<string, string> = {
   storm_amber: '🟠', sea_chart: '🗺️', stormheart_coil: '🌀',
   fish_grill: '🐟', fish_smoke: '🍥', fish_stew: '🍲', fish_sashimi: '🍣', fish_roe: '🍱', fish_legend: '🎏',
 };
-export const itemIcon = (id: string): string => ITEM_ICONS[id] ?? KIND_ICONS[ITEMS[id]?.kind] ?? '📦';
+export const itemIcon = (id: string): string => itemKindIcon(ITEMS[id]?.kind ?? 'all', { size: 26 });
 
 const KIND_LABEL: Record<string, string> = {
   heal: 'Consumable · Healing', sp: 'Consumable · Spirit', revive: 'Consumable · Revival',
@@ -1603,7 +1631,7 @@ function renderInventory(p: Player): string {
 
   const tabs = (Object.keys(INV_TABS) as InvTab[]).map(t => {
     const count = t === 'all' ? entries.length : entries.filter(([id]) => INV_TABS[t].kinds.includes(ITEMS[id].kind)).length;
-    return `<button class="jtab ${invTab === t ? 'on' : ''}" data-itab="${t}">${INV_TABS[t].icon} ${INV_TABS[t].label} <span class="jcount">${count}</span></button>`;
+    return `<button class="jtab ${invTab === t ? 'on' : ''}" data-itab="${t}">${icon(INV_TABS[t].icon, { size: 15 })} ${INV_TABS[t].label} <span class="jcount">${count}</span></button>`;
   }).join('');
 
   const tiles = list.map(([id, qty]) => `
@@ -1629,7 +1657,7 @@ function renderInventory(p: Player): string {
         </div>
       </div>
       <div class="jdetail-brief">${it.desc}</div>
-      ${it.price ? `<div class="jrow"><span class="jkey">Value</span><span class="jval goldcol">◆ ${it.price} (sells nowhere — yet)</span></div>` : ''}
+      ${it.price ? `<div class="jrow"><span class="jkey">Value</span><span class="jval goldcol">${SHARD} ${it.price} (sells nowhere — yet)</span></div>` : ''}
       <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
         ${usable ? `<button class="ui-btn primary" data-use="${invSel}">Use</button>` : ''}
         ${droppable ? `<button class="ui-btn danger" data-drop="${invSel}">Drop</button>` : '<span class="sub" style="align-self:center">Quest relics stay with you.</span>'}
@@ -1697,13 +1725,13 @@ function questBadge(st: QuestState): string {
 }
 
 function questIcon(q: QuestDef, st: QuestState): string {
-  if (st === 'locked') return '🔒';
-  return q.icon ?? (q.kind === 'main' ? '⚔️' : q.kind === 'side' ? '🤝' : '📖');
+  if (st === 'locked') return icon('lock', { size: 15 });
+  return q.icon ?? (q.kind === 'main' ? icon('leaderboard', { size: 15 }) : q.kind === 'side' ? icon('card', { size: 15 }) : icon('journal', { size: 15 }));
 }
 
 function rewardChips(q: QuestDef): string {
   const chips: string[] = [];
-  if (q.reward.shards) chips.push(`<span class="jreward-chip">◆ ${q.reward.shards} Shards</span>`);
+  if (q.reward.shards) chips.push(`<span class="jreward-chip">${SHARD} ${q.reward.shards} Shards</span>`);
   for (const [id, qty] of q.reward.items ?? []) {
     chips.push(`<span class="jreward-chip">${ITEMS[id]?.name ?? id}${qty > 1 ? ` ×${qty}` : ''}</span>`);
   }
@@ -2245,39 +2273,41 @@ export function openPauseMenu(
     let menuHtml = '';
     if (opts.inDungeon) {
       menuHtml = `
-        <h3>🛞 Crawler Mode Menu</h3>
-        <div class="sub" style="margin-bottom:10px"><span class="goldcol">◆ ${player.shards} Shards</span> ${opts.floorNum ? `· Floor B${opts.floorNum}F` : ''}</div>
+        <h3>${icon('crawler', { size: 18 })} Crawler Mode Menu</h3>
+        <div class="sub" style="margin-bottom:10px"><span class="goldcol">${SHARD} ${player.shards} Shards</span> ${opts.floorNum ? `· Floor B${opts.floorNum}F` : ''}</div>
         <div class="hub-grid">
-          <button class="ui-btn" data-hub="inventory">🎒 Use Item <span class="sub">(I)</span></button>
-          <button class="ui-btn" data-hub="guardians">🐾 Party Setup <span class="sub">(G)</span></button>
-          <button class="ui-btn danger" id="hub-retreat">🌀 Teleport Back</button>
-          <button class="ui-btn" id="hub-options">⚙️ Options</button>
+          <button class="ui-btn" data-hub="inventory">${icon('items', { size: 16 })} Use Item <span class="sub">(I)</span></button>
+          <button class="ui-btn" data-hub="guardians">${icon('guardians', { size: 16 })} Party Setup <span class="sub">(G)</span></button>
+          <button class="ui-btn danger" id="hub-retreat">${icon('regions', { size: 16 })} Teleport Back</button>
+          <button class="ui-btn" id="hub-options">${icon('gear', { size: 16 })} Options</button>
         </div>
         <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px">
           <button class="ui-btn primary" id="hub-close">Resume (Esc)</button>
         </div>`;
     } else {
       menuHtml = `
-        <h3>⛺ ${player.tamerName} — Field Menu</h3>
-        <div class="sub" style="margin-bottom:10px"><span class="goldcol">◆ ${player.shards} Shards</span> · Battles won: ${player.battlesWon} · Befriended: ${player.capturesMade}</div>
+        <h3>${icon('tamer', { size: 18 })} ${player.tamerName} — Field Menu</h3>
+        <div class="sub" style="margin-bottom:10px"><span class="goldcol">${SHARD} ${player.shards} Shards</span> · Battles won: ${player.battlesWon} · Befriended: ${player.capturesMade}</div>
         <div class="hub-grid">
-          <button class="ui-btn" data-hub="player">🧭 Tamer Data <span class="sub">(P)</span></button>
-          <button class="ui-btn" data-hub="inventory">🎒 Inventory <span class="sub">(I)</span></button>
-          <button class="ui-btn" data-hub="guardians">🐾 Guardians <span class="sub">(G)</span></button>
-          <button class="ui-btn" data-hub="crawler">🛞 Crawler <span class="sub">(C)</span></button>
-          <button class="ui-btn" data-hub="quests">📖 Quest Journal <span class="sub">(J)</span></button>
-          <button class="ui-btn" data-hub="evotree">🧬 Evolution Atlas <span class="sub">(V)</span></button>
-          <button class="ui-btn" data-hub="leaderboard">🏆 Leaderboard <span class="sub">(L)</span></button>
-          <button class="ui-btn" id="hub-tutorial">🎓 Field Manual <span class="sub">(replay tutorials)</span></button>
-          <button class="ui-btn" id="hub-options">⚙️ Game Options</button>
+          <button class="ui-btn" data-hub="player">${icon('tamer', { size: 16 })} Tamer Data <span class="sub">(P)</span></button>
+          <button class="ui-btn" data-hub="inventory">${icon('items', { size: 16 })} Inventory <span class="sub">(I)</span></button>
+          <button class="ui-btn" data-hub="guardians">${icon('guardians', { size: 16 })} Guardians <span class="sub">(G)</span></button>
+          <button class="ui-btn" data-hub="crawler">${icon('crawler', { size: 16 })} Crawler <span class="sub">(C)</span></button>
+          <button class="ui-btn" data-hub="quests">${icon('journal', { size: 16 })} Quest Journal <span class="sub">(J)</span></button>
+          <button class="ui-btn" data-hub="evotree">${icon('evolutions', { size: 16 })} Evolution Atlas <span class="sub">(V)</span></button>
+          <button class="ui-btn" data-hub="leaderboard">${icon('leaderboard', { size: 16 })} Leaderboard <span class="sub">(L)</span></button>
+          <button class="ui-btn" id="hub-tutorial">${icon('journal', { size: 16 })} Field Manual <span class="sub">(replay tutorials)</span></button>
+          <button class="ui-btn" id="hub-options">${icon('gear', { size: 16 })} Game Options</button>
         </div>
         <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px">
-          ${opts.canSave ? '<button class="ui-btn" id="hub-save">💾 Save Game</button>' : ''}
+          ${opts.canSave ? `<button class="ui-btn" id="hub-save">${icon('save', { size: 16 })} Save Game</button>` : ''}
           <button class="ui-btn primary" id="hub-close">Resume (Esc)</button>
         </div>`;
     }
 
     const el = openScreen(menuHtml);
+    el.classList.add('glass-frame', 'opening'); // obsidian-glass "home screen" to match the Tablet
+    sfx('open');
     el.querySelectorAll<HTMLElement>('[data-hub]').forEach(b => b.onclick = async () => {
       window.removeEventListener('keydown', esc);
       closeMenu();
@@ -2295,7 +2325,7 @@ export function openPauseMenu(
     if (player.flags['tut_basics'] && !player.flags['tut_replay_hint']) {
       player.flags['tut_replay_hint'] = true;
       player.save();
-      toast('🎓 New: replay any Field Manual chapter from this menu.', 'gold', 3600);
+      toast('New: replay any Field Manual chapter from this menu.', 'gold', 3600);
     }
     const save = el.querySelector<HTMLElement>('#hub-save');
     if (save) save.onclick = () => { player.save(false); toast('Game saved.', 'gold'); };
@@ -2504,7 +2534,7 @@ function initDebugTamerPreview3D(
 
 export async function openDebugBoutique(player: Player): Promise<void> {
   return new Promise<void>(resolve => {
-    const SLOT_ICONS: Record<string, string> = { hat: '🎩', shirt: '👕', pants: '👖', gloves: '🧤', backpack: '🎒', shoes: '👟' };
+    const SLOT_ICONS: Record<string, string> = { hat: 'hat', shirt: 'shirt', pants: 'pants', gloves: 'glove', backpack: 'bagSmall', shoes: 'boot' };
     type Tab = 'hat' | 'shirt' | 'pants' | 'gloves' | 'backpack' | 'shoes' | 'style';
     let activeTab: Tab = 'shirt';
 
@@ -2539,8 +2569,8 @@ export async function openDebugBoutique(player: Player): Promise<void> {
       const slots: Tab[] = ['hat', 'shirt', 'pants', 'gloves', 'backpack', 'shoes'];
       const tabsEl = el.querySelector('#boutique-tabs-container') as HTMLElement;
       tabsEl.innerHTML = slots.map(slot =>
-        `<button class="ui-btn tab ${slot === activeTab ? 'primary' : ''}" data-tab-select="${slot}">${SLOT_ICONS[slot]} ${slot.toUpperCase()}</button>`
-      ).join('') + `<button class="ui-btn tab ${activeTab === 'style' ? 'primary' : ''}" data-tab-select="style" style="border-color:var(--ui-purple)">✨ STYLE</button>`;
+        `<button class="ui-btn tab ${slot === activeTab ? 'primary' : ''}" data-tab-select="${slot}">${icon(SLOT_ICONS[slot], { size: 15 })} ${slot.toUpperCase()}</button>`
+      ).join('') + `<button class="ui-btn tab ${activeTab === 'style' ? 'primary' : ''}" data-tab-select="style" style="border-color:var(--ui-purple)">${icon('star', { size: 15 })} STYLE</button>`;
       tabsEl.querySelectorAll<HTMLElement>('[data-tab-select]').forEach(b => b.onclick = () => {
         activeTab = b.dataset.tabSelect as Tab;
         updateUI();
@@ -2553,7 +2583,7 @@ export async function openDebugBoutique(player: Player): Promise<void> {
         const item = id && id !== 'none' ? CLOTHES_DATABASE[id] : null;
         const changed = previewState[slot] !== player.equippedClothes[slot];
         return `<div class="row" style="display:flex;justify-content:space-between">
-          <span class="sub">${SLOT_ICONS[slot]} ${slot}</span>
+          <span class="sub">${icon(SLOT_ICONS[slot], { size: 14 })} ${slot}</span>
           <b style="${changed ? 'color:var(--ui-gold)' : ''}">${item ? item.name : '—'}</b></div>`;
       }).join('');
 
@@ -3344,7 +3374,7 @@ export async function showBracketTreeScreen(
             ${comp.speciesIds.map(sid => {
               const s = SPECIES[sid];
               const typeCol = TYPE_CSS[s?.type] ?? '#999';
-              const elIcon = s ? (ELEMENT_ICONS[TYPE_ELEMENT[s.type]] ?? '❓') : '❓';
+              const elIcon = s ? elementIcon(TYPE_ELEMENT[s.type], { size: 13 }) : '';
               return `
                 <div class="trn-guardian-mini-icon-polished" style="border-color:${typeCol}; background:${typeCol}18" title="${s?.name ?? sid} (${s?.type ?? ''})">
                   <span class="g-el-icon">${elIcon}</span>
@@ -3546,7 +3576,7 @@ export async function showBracketTreeScreen(
                   ${comp.speciesIds.map(sid => {
                     const s = SPECIES[sid];
                     const typeCol = TYPE_CSS[s?.type] ?? '#999';
-                    const elIcon = s ? (ELEMENT_ICONS[TYPE_ELEMENT[s.type]] ?? '❓') : '❓';
+                    const elIcon = s ? elementIcon(TYPE_ELEMENT[s.type], { size: 13 }) : '';
                     return `
                       <div class="trn-guardian-mini-icon-polished" style="border-color:${typeCol}; background:${typeCol}18" title="${s?.name ?? sid} (${s?.type ?? ''})">
                         <span class="g-el-icon">${elIcon}</span>
@@ -3605,7 +3635,7 @@ export async function showBracketTreeScreen(
         <div class="trn-predict-banner">
           <div class="trn-predict-title-wrap">
             <div class="trn-predict-banner-title">✨ Bracket Predictions open!</div>
-            <div class="trn-predict-banner-desc">Click on the tamers you predict will win to build your prediction slip. Correct guesses earn ◆150 Shards!</div>
+            <div class="trn-predict-banner-desc">Click on the tamers you predict will win to build your prediction slip. Correct guesses earn ${SHARD}150 Shards!</div>
           </div>
           <div class="trn-predict-actions">
             <button class="ui-btn" id="trn-lock-predictions" style="border: 1px solid var(--ui-gold); color: var(--ui-gold); font-size:11px; padding: 4px 12px; height:auto; cursor:pointer;">Lock Predictions</button>

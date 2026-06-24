@@ -2,6 +2,7 @@
 // AZ Tamer — static game data
 // 6 Guardian types, ~30 species, techniques, items, exp curve
 // ============================================================
+import { elementIcon, icon } from './icons';
 
 export type GType = 'Blaze' | 'Tide' | 'Verdant' | 'Volt' | 'Gale' | 'Umbra' | 'Lumen' | 'Gaia' | 'Frost' | 'Aether';
 
@@ -928,10 +929,10 @@ export function elementMult(attack: Element, defenders: Element[]): number {
   return Math.max(0.25, Math.min(3.0, m));
 }
 
-/** Small inline element chips (icons + colors) for HTML UIs. */
+/** Small inline element chips (custom glyph + colors) for HTML UIs. */
 export function elementChipsHTML(speciesId: string, size = 12): string {
   return elementsOf(speciesId).map(el =>
-    `<span class="el-chip" style="background:${ELEMENT_CSS[el]}22;border-color:${ELEMENT_CSS[el]};color:${ELEMENT_CSS[el]};font-size:${size}px" title="${el}">${ELEMENT_ICONS[el]} ${el}</span>`
+    `<span class="el-chip" style="background:${ELEMENT_CSS[el]}22;border-color:${ELEMENT_CSS[el]};color:${ELEMENT_CSS[el]};font-size:${size}px" title="${el}">${elementIcon(el, { size: size + 3 })} ${el}</span>`
   ).join('');
 }
 
@@ -6438,12 +6439,12 @@ export const CHARM_REWARD_POOL = CHARM_IDS.slice();
 export type CrawlerSlot = 'hull' | 'engine' | 'cargo' | 'cannon' | 'scanner' | 'legs';
 export const CRAWLER_SLOTS: CrawlerSlot[] = ['hull', 'engine', 'cargo', 'cannon', 'scanner', 'legs'];
 export const CRAWLER_SLOT_INFO: Record<CrawlerSlot, { icon: string; label: string; blurb: string }> = {
-  hull:    { icon: '🛡️', label: 'Hull',    blurb: 'The carapace. More Hull means more punishment your Crawler can shrug off.' },
-  engine:  { icon: '⚙️', label: 'Engine',  blurb: 'The abdomen core. Energy is fuel — every step in the field drinks from it.' },
-  cargo:   { icon: '📦', label: 'Cargo',   blurb: 'Saddlebags and trunks. Determines how many item stacks you can haul.' },
-  cannon:  { icon: '💥', label: 'Cannon',  blurb: 'Top-mounted artillery. Breaks rocks; better models stun foes for a free first strike.' },
-  scanner: { icon: '📡', label: 'Scanner', blurb: 'The all-seeing mast. Reveals dungeon floors, pings chests and stairways.' },
-  legs:    { icon: '🦿', label: 'Legs',    blurb: 'The stride itself. Finer legwork wastes less Energy with every step.' },
+  hull:    { icon: icon('st_def', { size: 18 }),  label: 'Hull',    blurb: 'The carapace. More Hull means more punishment your Crawler can shrug off.' },
+  engine:  { icon: icon('gear', { size: 18 }),    label: 'Engine',  blurb: 'The abdomen core. Energy is fuel — every step in the field drinks from it.' },
+  cargo:   { icon: icon('bagSmall', { size: 18 }),label: 'Cargo',   blurb: 'Saddlebags and trunks. Determines how many item stacks you can haul.' },
+  cannon:  { icon: icon('cannon', { size: 18 }),  label: 'Cannon',  blurb: 'Top-mounted artillery. Breaks rocks; better models stun foes for a free first strike.' },
+  scanner: { icon: icon('scanner', { size: 18 }), label: 'Scanner', blurb: 'The all-seeing mast. Reveals dungeon floors, pings chests and stairways.' },
+  legs:    { icon: icon('mechleg', { size: 18 }), label: 'Legs',    blurb: 'The stride itself. Finer legwork wastes less Energy with every step.' },
 };
 
 // Six-step rarity ladder. Drives shop badges, display placards and the

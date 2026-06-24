@@ -231,7 +231,9 @@ export type SfxName =
   | 'blip' | 'toast' | 'toastBad' | 'fanfare' | 'achievement' | 'crowd_roar' | 'champion_fanfare'
   // battle orchestra
   | 'whoosh' | 'hit' | 'crit' | 'boom' | 'zap' | 'splash'
-  | 'leaf' | 'dark' | 'heal' | 'buff' | 'debuff' | 'charge' | 'ko' | 'guard';
+  | 'leaf' | 'dark' | 'heal' | 'buff' | 'debuff' | 'charge' | 'ko' | 'guard'
+  // Tablet / Digivice interface
+  | 'power' | 'lock' | 'swipe' | 'tabHover';
 
 export function sfx(name: SfxName): void {
   switch (name) {
@@ -336,6 +338,30 @@ export function sfx(name: SfxName): void {
       [523, 659, 784].forEach((f, i) => tone(f, 0.22, { type: 'sine', vol: 0.06, when: 0.5 + i * 0.04 }));
       tone(1568, 0.7, { type: 'triangle', vol: 0.1, when: 0.56 });
       tone(2093, 0.7, { type: 'sine', vol: 0.05, when: 0.6 });
+      break;
+    // ---- Tablet / Digivice interface ----
+    case 'power':
+      // boot-up whir: a rising hum, an energising sweep, and a soft confirm chime.
+      tone(110, 0.5, { type: 'sine', vol: 0.06, slideTo: 440 });
+      tone(220, 0.46, { type: 'triangle', vol: 0.04, slideTo: 660, when: 0.04 });
+      noiseBurst(0.42, { vol: 0.03, freq: 300, slideTo: 2600, q: 1.4 });
+      tone(880, 0.16, { type: 'sine', vol: 0.05, when: 0.34 });
+      tone(1320, 0.2, { type: 'sine', vol: 0.045, when: 0.42 });
+      break;
+    case 'lock':
+      // mechanical thunk as the screen drops and the bezel latches shut.
+      tone(190, 0.13, { type: 'square', vol: 0.07, slideTo: 70 });
+      noiseBurst(0.06, { vol: 0.08, freq: 520, type: 'lowpass' });
+      tone(88, 0.2, { type: 'sine', vol: 0.06, slideTo: 48, when: 0.03 });
+      break;
+    case 'swipe':
+      // a quick glassy slide between screens.
+      noiseBurst(0.14, { vol: 0.045, freq: 1100, slideTo: 3200, q: 0.6, type: 'bandpass' });
+      tone(560, 0.05, { type: 'triangle', vol: 0.04, slideTo: 760 });
+      break;
+    case 'tabHover':
+      // barely-there capacitive tick when a tab arms.
+      tone(1280, 0.03, { type: 'sine', vol: 0.02 });
       break;
   }
 }

@@ -8,6 +8,7 @@ import {
   SPECIES, TYPE_CSS, ELEMENTS, ELEMENT_CHART, ELEMENT_CSS, ELEMENT_ICONS,
   elementsOf, type GType, type SpeciesDef,
 } from './data';
+import { elementIcon, icon } from './icons';
 import type { Player } from './state';
 import { speciesSnapshotURL, legendSnapshotURL } from './snapshots';
 import { openGuardianCard } from './guardiancard';
@@ -78,7 +79,7 @@ function nodeHTML(sp: SpeciesDef, owned: Map<string, { level: number; nickname: 
       </div>
       <div class="evo-name" style="color:${TYPE_CSS[sp.type]}">${sp.name}</div>
       <div class="evo-stage">${sp.stage}${own ? ` · Lv${own.level}` : ''}</div>
-      <div class="evo-els" title="${elementsOf(sp.id).join(' · ')}">${elementsOf(sp.id).map(e => ELEMENT_ICONS[e]).join('')}</div>
+      <div class="evo-els" title="${elementsOf(sp.id).join(' · ')}">${elementsOf(sp.id).map(e => elementIcon(e, { size: 14 })).join('')}</div>
     </div>`;
 }
 
@@ -91,9 +92,9 @@ function damageTableHTML(): string {
     : m >= 0.75 ? 'background:rgba(90,123,216,0.20);color:#9ab0e8'
     : 'background:rgba(90,123,216,0.40);color:#c0d0ff';
   let html = `<table class="el-table"><tr><th>ATK ↓ / DEF →</th>${ELEMENTS.map(e =>
-    `<th style="color:${ELEMENT_CSS[e]}" title="${e}">${ELEMENT_ICONS[e]}</th>`).join('')}</tr>`;
+    `<th style="color:${ELEMENT_CSS[e]}" title="${e}">${elementIcon(e, { size: 14 })}</th>`).join('')}</tr>`;
   for (const a of ELEMENTS) {
-    html += `<tr><th style="color:${ELEMENT_CSS[a]};text-align:left">${ELEMENT_ICONS[a]} ${a}</th>`;
+    html += `<tr><th style="color:${ELEMENT_CSS[a]};text-align:left">${elementIcon(a, { size: 14 })} ${a}</th>`;
     for (const d of ELEMENTS) {
       const m = ELEMENT_CHART[a]?.[d] ?? 1.0;
       html += `<td style="${cellColor(m)}">${m === 1 ? '–' : `×${m}`}</td>`;
@@ -103,7 +104,7 @@ function damageTableHTML(): string {
   html += '</table>';
   return `
     <details class="el-details">
-      <summary>⚖️ Elemental Damage Table — how the ten elements interact (click to expand)</summary>
+      <summary>${icon('gem', { size: 15 })} Elemental Damage Table — how the ten elements interact (click to expand)</summary>
       <div class="sub" style="margin:6px 0">Attacks multiply against <i>every</i> element a defender carries.
       <b style="color:${ELEMENT_CSS.Aether}">Aether</b> is special: it strikes all elements harder and resists everything except Light and Dark.</div>
       ${html}
@@ -219,7 +220,7 @@ export function evoTreeHTML(p: Player): string {
               </div>
               <div class="evo-name" style="color:${legend.color}">${g.name}</div>
               <div class="evo-stage">${g.epithet}</div>
-              <div class="evo-els" title="${g.elements.join(' · ')}">${g.elements.map(e => ELEMENT_ICONS[e]).join('')}</div>
+              <div class="evo-els" title="${g.elements.join(' · ')}">${g.elements.map(e => elementIcon(e, { size: 14 })).join('')}</div>
             </div>`;
         }
         sectionsHTML += `</div>`;
@@ -258,20 +259,20 @@ export function evoTreeHTML(p: Player): string {
         </div>
         <div class="evo-name" style="color:#ff8a9a">${sp.name}</div>
         <div class="evo-stage">${gen.title}</div>
-        <div class="evo-els" title="${elementsOf(sp.id).join(' · ')}">${elementsOf(sp.id).map(e => ELEMENT_ICONS[e]).join('')}</div>
+        <div class="evo-els" title="${elementsOf(sp.id).join(' · ')}">${elementsOf(sp.id).map(e => elementIcon(e, { size: 14 })).join('')}</div>
       </div>`;
   }
   sectionsHTML += `</div></div>`;
 
   return `
-    <h3>🧬 Evolution Atlas</h3>
+    <h3>${icon('evolutions', { size: 18 })} Evolution Atlas</h3>
     <div class="sub" style="margin-bottom:10px">
       Every known Guardian line of Aurel — click any form to open its Guardian Card.
       Forms in your care glow gold. <b class="goldcol">${ownedCount}/${total}</b> forms collected.
     </div>
     ${damageTableHTML()}
     <details class="el-details" style="margin-top:6px; margin-bottom:15px">
-      <summary>🪜 Forms & the Form-Block — why a beginner can't dent a god</summary>
+      <summary>${icon('leaderboard', { size: 15 })} Forms & the Form-Block — why a beginner can't dent a god</summary>
       <div class="sub" style="margin:6px 0">Every Guardian has a <b>form rank</b> (0–8), set by how far it has evolved:
       Novice → Adept → Elite → Apex → <b style="color:#ffd24e">Split</b> (branches into two) →
       <b style="color:#ffd24e">Special</b> → <b style="color:#ffd24e">Terra</b> →
@@ -310,7 +311,7 @@ function openLegendLore(guardianName: string): void {
           <div style="opacity:0.85;font-style:italic;margin:2px 0 6px">${g.epithet}</div>
           <div style="font-size:0.85em;opacity:0.8">Bonded to <b style="color:${owner.color}">${owner.name} ${owner.title}</b></div>
           <div style="margin-top:6px;font-size:1.05em" title="${g.elements.join(' · ')}">
-            ${g.elements.map(e => `<span style="color:${ELEMENT_CSS[e]}">${ELEMENT_ICONS[e]} ${e}</span>`).join(' &nbsp;')}
+            ${g.elements.map(e => `<span style="color:${ELEMENT_CSS[e]}">${elementIcon(e, { size: 14 })} ${e}</span>`).join(' &nbsp;')}
           </div>
         </div>
       </div>

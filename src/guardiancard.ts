@@ -10,6 +10,7 @@ import {
   elementsOf, ELEMENT_CSS, ELEMENT_ICONS, type SpeciesDef, type StatKey, getSpeciesPassive,
   CHARMS, NATURES, natureBlurb, geneRating, geneGradeLabel,
 } from './data';
+import { elementIcon } from './icons';
 import { Guardian, type Player } from './state';
 import { makeGuardian, disposeRig } from './models';
 import { speciesSnapshot } from './snapshots';
@@ -146,7 +147,7 @@ function cardFront(g: Guardian, owned: boolean): HTMLCanvasElement {
   };
   const els = elementsOf(g);
   const pills: { text: string; bg: string; fg: string }[] = [
-    ...els.map(el => ({ text: `${ELEMENT_ICONS[el]} ${el.toUpperCase()}`, bg: ELEMENT_CSS[el], fg: '#0c1022' })),
+    ...els.map(el => ({ text: el.toUpperCase(), bg: ELEMENT_CSS[el], fg: '#0c1022' })),
     { text: sp.stage.toUpperCase(), bg: 'rgba(255,255,255,0.12)', fg: '#e8ecff' },
   ];
   const widths = pills.map(pl => Math.max(86, pl.text.length * 11 + 28));
@@ -312,7 +313,7 @@ export function openGuardianCard(subject: Guardian | string, player?: Player): P
     overlay.innerHTML = `
       <div id="pcard-head">
         <div id="pcard-title" style="color:${shade(tc, 0.45)}">${g.nickname.toUpperCase()}</div>
-        <div id="pcard-sub">${sp.name} · ${sp.stage} · ${elementsOf(g).map(e => `${ELEMENT_ICONS[e]} ${e}`).join(' / ')} ${inCare ? '· <b style="color:var(--ui-green)">IN YOUR CARE</b>' : ''}</div>
+        <div id="pcard-sub">${sp.name} · ${sp.stage} · ${elementsOf(g).map(e => `${elementIcon(e, { size: 14 })} ${e}`).join(' / ')} ${inCare ? '· <b style="color:var(--ui-green)">IN YOUR CARE</b>' : ''}</div>
       </div>
       <canvas id="pcard-canvas"></canvas>
       <div id="pcard-hint">🖱 drag to rotate — techniques & evolution line are on the back</div>

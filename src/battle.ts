@@ -12,6 +12,7 @@ import {
   elementsOf, elementMult, ELEMENT_ICONS, type Technique, type GType, type Element, getSpeciesPassive, type TechStatusEffect as ActiveStatus, type TechKind, isBig3Legend, formRank,
   STAGE_STAT_MULT, CHARMS, CHARM_SHOP, type CharmEffect
 } from './data';
+import { elementIcon } from './icons';
 import { sfx, playMusic } from './audio';
 import { Guardian, Player } from './state';
 import {
@@ -839,7 +840,7 @@ export class Battle {
       el.className = `unit-card${u.g.fainted ? ' dead' : ''}`;
       const s = u.g.stats;
       const side = u.side === 'enemy' ? `<span style="color:var(--ui-red)">FOE</span> ` : '';
-      const els = elementsOf(u.g).map(e => ELEMENT_ICONS[e]).join('');
+      const els = elementsOf(u.g).map(e => elementIcon(e, { size: 13 })).join('');
       // wild foes show their bond meter: the live chance they join you after victory
       const chance = this.captureChance(u);
       const bondRow = u.wild && u.g.species.captureBase > 0
